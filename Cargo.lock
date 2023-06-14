@@ -1645,7 +1645,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.20.0",
- "bitcoin",
+ "bitcoin 0.29.2",
  "clap",
  "devimint",
  "fedimint-build",

@@ -1,6 +1,5 @@
 use std::io::Write;
 
-use async_channel;
 use bitcoin_hashes::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode, IoReader};
 

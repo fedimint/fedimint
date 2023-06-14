@@ -92,7 +92,7 @@ impl aleph_bft::MultiKeychain for Keychain {
         index: aleph_bft::NodeIndex,
     ) -> Self::PartialMultisignature {
         let mut partial = aleph_bft::NodeMap::with_size(self.peer_count.into());
-        partial.insert(index, signature.clone());
+        partial.insert(index, *signature);
         partial
     }
 

@@ -6,8 +6,8 @@ use fedimint_atomic_broadcast::{Decision, Keychain, Message, OrderedItem, Recipi
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::PeerId;
 use fedimint_core::task::sleep;
+use fedimint_core::PeerId;
 use secp256k1::{rand, Secp256k1, SecretKey};
 use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
@@ -29,7 +29,7 @@ pub fn bootstrap_keychains(peer_count: usize) -> Vec<Keychain> {
 
     let public_keys = secret_keys
         .iter()
-        .map(|(peer_id, secret_key)| (peer_id.clone(), secret_key.x_only_public_key(&secp).0));
+        .map(|(peer_id, secret_key)| (*peer_id, secret_key.x_only_public_key(&secp).0));
 
     let public_keys = BTreeMap::from_iter(public_keys);
 

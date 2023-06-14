@@ -4,7 +4,8 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use async_channel::{Receiver, Sender};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_core::{task::sleep, encoding::Encodable};
+use fedimint_core::encoding::Encodable;
+use fedimint_core::task::sleep;
 use tokio::sync::{oneshot, watch};
 
 use crate::conversion::{to_node_index, to_peer_id};
@@ -21,6 +22,7 @@ use crate::{db, AcceptedItem, Block, Decision, Message, OrderedItem, Recipient, 
 // - combine the accepted items into a block until we reach a preset number of
 //   ordered batches or a signed block arrives
 // - collect signatures until we reach the threshold or a signed block arrives
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     index: u64,
     keychain: Keychain,
@@ -38,11 +40,8 @@ pub async fn run(
     const BASE: f64 = 1.01;
     const BLOCK_REQUEST_DELAY: Duration = Duration::from_secs(10);
 
-    let mut config = aleph_bft::default_config(
-        keychain.peer_count.into(),
-        keychain.peer_id.into(),
-        index.into(),
-    );
+    let mut config =
+        aleph_bft::default_config(keychain.peer_count.into(), keychain.peer_id.into(), index);
 
     // In order to bound a sessions RAM consumption we need to bound its number of
     // units and therefore its number of rounds. Since we use a session to
@@ -165,7 +164,7 @@ pub async fn run(
                         ordered_item_sender.try_send(OrderedItem{
                             item: item.clone(),
                             block_index: index,
-                            peer_id: peer_id.clone(),
+                            peer_id: *peer_id,
                             decision_sender
                         })?;
 
@@ -236,5 +235,5 @@ pub async fn run(
     aleph_handle.await.ok();
     block_request_handle.await.ok();
 
-    return Ok(SignedBlock { block, signature });
+    Ok(SignedBlock { block, signature })
 }

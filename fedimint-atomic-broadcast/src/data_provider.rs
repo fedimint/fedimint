@@ -46,7 +46,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         const BYTE_LIMIT: usize = 10_000;
 
         // we only attach our signature as no more items can be ordered in this session
-        if let Some(signature) = self.signature_receiver.borrow().clone() {
+        if let Some(signature) = *self.signature_receiver.borrow() {
             return Some(UnitData::Signature(signature, self.keychain.peer_id.into()));
         }
 
@@ -66,7 +66,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         }
 
         while let Ok(item) = self.mempool_item_receiver.try_recv() {
-            if n_items + 1 <= ITEM_LIMIT && batch_size + item.len() <= BYTE_LIMIT {
+            if n_items < ITEM_LIMIT && batch_size + item.len() <= BYTE_LIMIT {
                 n_items += 1;
                 batch_size += item.len();
                 items.push(item);

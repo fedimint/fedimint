@@ -1,7 +1,8 @@
 use std::time::Duration;
 
-use fedimint_core::{db::Database, PeerId, task::sleep};
-
+use fedimint_core::db::Database;
+use fedimint_core::task::sleep;
+use fedimint_core::PeerId;
 use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::keychain::Keychain;
@@ -50,7 +51,7 @@ async fn process_signed_block(
         ordered_item_sender.try_send(OrderedItem {
             item: item.clone(),
             block_index: signed_block.block.index,
-            peer_id: peer_id.clone(),
+            peer_id: *peer_id,
             decision_sender,
         })?;
 
