@@ -7,6 +7,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::PeerId;
+use fedimint_core::task::sleep;
 use secp256k1::{rand, Secp256k1, SecretKey};
 use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
@@ -150,7 +151,7 @@ impl Federation {
                 .is_ok()
             {
                 item += 1;
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                sleep(std::time::Duration::from_millis(100)).await;
             }
         });
 
@@ -199,7 +200,7 @@ async fn crash_recovery() {
             federation.start_broadcast(2, 0),
         ];
 
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        sleep(Duration::from_secs(60)).await;
 
         for (broadcast_handle, decision_handle) in handles {
             decision_handle.abort();
@@ -289,7 +290,7 @@ async fn shuts_down_on_drop() {
     std::mem::drop(incoming_message_sender);
     std::mem::drop(outgoing_message_receiver);
 
-    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    sleep(std::time::Duration::from_millis(1000)).await;
 
     assert!(!broadcast_handle.is_finished());
 

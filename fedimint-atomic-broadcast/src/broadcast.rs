@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use fedimint_core::db::Database;
-use fedimint_core::PeerId;
+use fedimint_core::{db::Database, PeerId, task::sleep};
+
 use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::keychain::Keychain;
@@ -138,7 +138,7 @@ pub async fn run(
                 signed_block_receiver.close();
 
                 // we delay the shutdown to allow lagging nodes to complete the session as well
-                tokio::time::sleep(shutdown_delay).await;
+                sleep(shutdown_delay).await;
 
                 relay_handle.abort();
                 relay_handle.await.ok();

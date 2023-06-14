@@ -4,7 +4,7 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use async_channel::{Receiver, Sender};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_core::encoding::Encodable;
+use fedimint_core::{task::sleep, encoding::Encodable};
 use tokio::sync::{oneshot, watch};
 
 use crate::conversion::{to_node_index, to_peer_id};
@@ -100,7 +100,7 @@ pub async fn run(
                 break;
             }
 
-            tokio::time::sleep(BLOCK_REQUEST_DELAY).await;
+            sleep(BLOCK_REQUEST_DELAY).await;
         }
     });
 
