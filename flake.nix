@@ -46,7 +46,7 @@
           clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
             configureFlags = [ "--enable-developer" "--disable-valgrind" ];
           } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-            NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
+            NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -Wno-error=maybe-uninitialized";
           });
 
           # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
