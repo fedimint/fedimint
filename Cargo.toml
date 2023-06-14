@@ -15,6 +15,7 @@ members = [
     "fedimint-derive",
     "fedimint-dbtool",
     "fedimint-rocksdb",
+    "fedimint-load-test-tool",
     "fedimint-logging",
     "fedimint-testing",
     "fedimint-server",

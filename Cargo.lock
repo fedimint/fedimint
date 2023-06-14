@@ -1482,6 +1482,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-load-test-tool"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.20.0",
+ "bitcoin",
+ "clap",
+ "devimint",
+ "fedimint-build",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-ln-client",
+ "fedimint-logging",
+ "fedimint-mint-client",
+ "fedimint-rocksdb",
+ "fedimint-wallet-client",
+ "futures",
+ "jsonrpsee-core 0.18.2",
+ "jsonrpsee-types 0.18.2",
+ "jsonrpsee-ws-client",
+ "lightning-invoice",
+ "rand",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "fedimint-logging"
 version = "0.1.0"
 dependencies = [
