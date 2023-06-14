@@ -45,7 +45,7 @@ impl FakeBitcoinFactory {
 }
 
 impl IBitcoindRpcFactory for FakeBitcoinFactory {
-    fn create(&self, _url: &Url, _handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
+    fn create_connection(&self, _url: &Url, _handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
         Ok(self.bitcoin.clone().into())
     }
 }
@@ -257,16 +257,13 @@ impl IBitcoindRpc for FakeBitcoinTest {
         *pending = filtered.into_values().collect();
     }
 
-    async fn was_transaction_confirmed_in(
-        &self,
-        transaction: &Transaction,
-        height: u64,
-    ) -> BitcoinRpcResult<bool> {
-        let block = &self.blocks.lock().unwrap()[(height - 1) as usize];
-        Ok(block
-            .txdata
-            .iter()
-            .any(|tx| tx.txid() == transaction.txid()))
+    async fn get_tx_block_height(&self, txid: &Txid) -> BitcoinRpcResult<Option<u64>> {
+        for (height, block) in self.blocks.lock().unwrap().iter().enumerate() {
+            if block.txdata.iter().any(|tx| tx.txid() == *txid) {
+                return Ok(Some(height as u64));
+            }
+        }
+        Ok(None)
     }
 }
 

@@ -960,17 +960,14 @@ impl Wallet {
                 .find_by_prefix(&PendingTransactionPrefixKey)
                 .await
                 .map(|(key, transaction)| (key.0, transaction))
-                .collect::<HashMap<_, _>>()
+                .collect::<HashMap<Txid, PendingTransaction>>()
                 .await;
 
-            for transaction in &pending_transactions {
-                if self
-                    .btc_rpc
-                    .was_transaction_confirmed_in(&transaction.1.tx, height as u64)
-                    .await
-                    .expect("bitcoin rpc backend failed")
-                {
-                    self.recognize_change_utxo(dbtx, transaction.1).await;
+            for (txid, tx) in &pending_transactions {
+                if let Ok(Some(tx_height)) = self.btc_rpc.get_tx_block_height(txid).await {
+                    if tx_height == height as u64 {
+                        self.recognize_change_utxo(dbtx, tx).await;
+                    }
                 }
             }
 

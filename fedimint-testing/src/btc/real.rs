@@ -51,12 +51,15 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             .expect(Self::ERROR)
             .last()
         {
-            let block = self.client.get_block(block_hash).expect("rpc failed");
+            let block = self
+                .client
+                .get_block_header_info(block_hash)
+                .expect("rpc failed");
             // waits for the rpc client to catch up to bitcoind
             loop {
                 let height = self.rpc.get_block_height().await.expect("rpc failed");
 
-                if height >= block.bip34_block_height().expect("has height") {
+                if height >= block.height as u64 {
                     break;
                 }
             }
@@ -140,7 +143,7 @@ impl RealBitcoinTest {
 
     pub fn new(url: &Url, rpc: DynBitcoindRpc) -> Self {
         let (host, auth) =
-            fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(url).expect("correct url");
+            fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect("correct url");
         let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));
 
         Self {
