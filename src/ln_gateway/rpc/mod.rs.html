@@ -219,18 +219,6 @@
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -238,13 +226,13 @@
 <span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>anyhow::{anyhow, Error};
-<span class="kw">use </span>bitcoin::{Address, Transaction};
+<span class="kw">use </span>bitcoin::{Address, Txid};
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
-<span class="kw">use </span>fedimint_client_legacy::ln::PayInvoicePayload;
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<span class="kw">use </span>fedimint_core::{Amount, TransactionId};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::contracts::Preimage;
+<span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::{serde_routing_fees, LightningGateway};
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
@@ -321,17 +309,6 @@
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>DepositPayload {
-    <span class="kw">pub </span>federation_id: FederationId,
-    <span class="kw">pub </span>txout_proof: TxOutProof,
-    <span class="attr">#[serde(
-        deserialize_with = <span class="string">&quot;serde_hex_deserialize&quot;</span>,
-        serialize_with = <span class="string">&quot;serde_hex_serialize&quot;
-    </span>)]
-    </span><span class="kw">pub </span>transaction: Transaction,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>WithdrawPayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
@@ -365,7 +342,6 @@
     PayInvoice(GatewayRequestInner&lt;PayInvoicePayload&gt;),
     Balance(GatewayRequestInner&lt;BalancePayload&gt;),
     DepositAddress(GatewayRequestInner&lt;DepositAddressPayload&gt;),
-    Deposit(GatewayRequestInner&lt;DepositPayload&gt;),
     Withdraw(GatewayRequestInner&lt;WithdrawPayload&gt;),
     Backup(GatewayRequestInner&lt;BackupPayload&gt;),
     Restore(GatewayRequestInner&lt;RestorePayload&gt;),
@@ -411,8 +387,7 @@
     Address,
     GatewayRequest::DepositAddress
 );
-<span class="macro">impl_gateway_request_trait!</span>(DepositPayload, TransactionId, GatewayRequest::Deposit);
-<span class="macro">impl_gateway_request_trait!</span>(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
+<span class="macro">impl_gateway_request_trait!</span>(WithdrawPayload, Txid, GatewayRequest::Withdraw);
 <span class="macro">impl_gateway_request_trait!</span>(BackupPayload, (), GatewayRequest::Backup);
 <span class="macro">impl_gateway_request_trait!</span>(RestorePayload, (), GatewayRequest::Restore);
 
@@ -423,14 +398,15 @@
 {
     <span class="kw">pub async fn </span>handle&lt;
         <span class="lifetime">&#39;gateway</span>,
-        F: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;gateway </span><span class="kw-2">mut </span>Gateway, T) -&gt; FF,
+        F: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;gateway </span><span class="kw-2">mut </span>Gateway, <span class="kw-2">&amp;</span><span class="lifetime">&#39;gateway </span><span class="kw-2">mut </span>TaskGroup, T) -&gt; FF,
         FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T::Response&gt;&gt; + Send + <span class="lifetime">&#39;gateway</span>,
     &gt;(
         <span class="self">self</span>,
         gateway: <span class="kw-2">&amp;</span><span class="lifetime">&#39;gateway </span><span class="kw-2">mut </span>Gateway,
+        tg: <span class="kw-2">&amp;</span><span class="lifetime">&#39;gateway </span><span class="kw-2">mut </span>TaskGroup,
         handler: F,
     ) {
-        <span class="kw">let </span>result = handler(gateway, <span class="self">self</span>.request).<span class="kw">await</span>;
+        <span class="kw">let </span>result = handler(gateway, tg, <span class="self">self</span>.request).<span class="kw">await</span>;
         <span class="kw">if </span><span class="self">self</span>.sender.send(result).is_err() {
             <span class="comment">// TODO: figure out how to log the result
             </span><span class="macro">tracing::error!</span>(<span class="string">&quot;Plugin hung up&quot;</span>);

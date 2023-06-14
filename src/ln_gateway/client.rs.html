@@ -115,329 +115,121 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
-<span class="kw">use </span>fedimint_client_legacy::{module_decode_stubs, Client, GatewayClientConfig};
+<span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
+<span class="kw">use </span>fedimint_client::ClientBuilder;
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
-<span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_core::dyn_newtype_define;
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_dummy_client::DummyClientGen;
+<span class="kw">use </span>fedimint_mint_client::MintClientGen;
+<span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
-<span class="kw">use </span>secp256k1::{KeyPair, PublicKey};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
+<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
+<span class="kw">use </span><span class="kw">crate</span>::ng::GatewayClientGen;
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
-
-<span class="kw">pub trait </span>IDbFactory: Debug {
-    <span class="kw">fn </span>create_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        federation_id: FederationId,
-        path: PathBuf,
-        decoders: ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt;;
-}
-
-<span class="macro">dyn_newtype_define!</span>(
-    <span class="doccomment">/// Arc reference to a database factory
-    </span><span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>DynDbFactory(Arc&lt;IDbFactory&gt;)
-);
-
-<span class="doccomment">/// A factory that creates in-memory databases
-</span><span class="attr">#[derive(Default, Debug, Clone)]
-</span><span class="kw">pub struct </span>MemDbFactory;
-
-<span class="kw">impl </span>IDbFactory <span class="kw">for </span>MemDbFactory {
-    <span class="kw">fn </span>create_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _federation_id: FederationId,
-        _path: PathBuf,
-        decoders: ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt; {
-        <span class="prelude-val">Ok</span>(Database::new(MemDatabase::new(), decoders))
-    }
-}
-
-<span class="doccomment">/// A factory that creates RocksDb database instances
-</span><span class="attr">#[derive(Default, Debug, Clone)]
-</span><span class="kw">pub struct </span>RocksDbFactory;
-
-<span class="kw">impl </span>IDbFactory <span class="kw">for </span>RocksDbFactory {
-    <span class="kw">fn </span>create_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        federation_id: FederationId,
-        path: PathBuf,
-        decoders: ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Database&gt; {
-        <span class="kw">let </span>db_path = path.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
-        <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path).expect(<span class="string">&quot;Error opening new rocks DB&quot;</span>);
-        <span class="prelude-val">Ok</span>(Database::new(db, decoders))
-    }
-}
-
-<span class="doccomment">/// Trait for gateway federation client builders
-</span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>IGatewayClientBuilder: Debug {
-    <span class="doccomment">/// Build a new gateway federation client
-    </span><span class="kw">async fn </span>build(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        config: GatewayClientConfig,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt;;
-
-    <span class="doccomment">/// Create a new gateway federation client config from connect info
-    </span><span class="kw">async fn </span>create_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connect: WsClientConnectInfo,
-        mint_channel_id: u64,
-        node_pubkey: PublicKey,
-        fees: RoutingFees,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt;;
-
-    <span class="doccomment">/// Save and persist the configuration of the gateway federation client
-    </span><span class="kw">async fn </span>save_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        config: GatewayClientConfig,
-        connection_string: String,
-        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
-
-    <span class="doccomment">/// Load all gateway client configs from the work directory
-    </span><span class="kw">async fn </span>load_configs(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        node_pub_key: PublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt;;
-}
-
-<span class="macro">dyn_newtype_define! </span>{
-    <span class="doccomment">/// dyn newtype for a Gateway federation client builder
-    </span><span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>DynGatewayClientBuilder(Arc&lt;IGatewayClientBuilder&gt;)
-}
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>StandardGatewayClientBuilder {
     work_dir: PathBuf,
-    db_factory: DynDbFactory,
-    gateway_api: Url,
 }
 
 <span class="kw">impl </span>StandardGatewayClientBuilder {
-    <span class="kw">pub fn </span>new(work_dir: PathBuf, db_factory: DynDbFactory, gateway_api: Url) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            work_dir,
-            db_factory,
-            gateway_api,
-        }
+    <span class="kw">pub fn </span>new(work_dir: PathBuf) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ work_dir }
     }
 }
 
-<span class="attr">#[async_trait]
-</span><span class="kw">impl </span>IGatewayClientBuilder <span class="kw">for </span>StandardGatewayClientBuilder {
-    <span class="kw">async fn </span>build(
+<span class="kw">impl </span>StandardGatewayClientBuilder {
+    <span class="kw">pub async fn </span>build(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        config: GatewayClientConfig,
-        decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Client&lt;GatewayClientConfig&gt;&gt; {
-        <span class="kw">let </span>federation_id = config.client_config.federation_id;
+        config: FederationConfig,
+        lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
+        tg: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::Client&gt; {
+        <span class="kw">let </span>federation_id = config.config.federation_id;
 
-        <span class="kw">let </span>db = <span class="self">self</span>.db_factory.create_database(
-            federation_id,
-            <span class="self">self</span>.work_dir.clone(),
-            module_decode_stubs(),
-        )<span class="question-mark">?</span>;
-        <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
+        <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
 
-        <span class="prelude-val">Ok</span>(Client::new(config, decoders, module_gens, db, ctx).<span class="kw">await</span>)
+        <span class="kw">let </span>db =
+            fedimint_rocksdb::RocksDb::open(db_path).map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)<span class="question-mark">?</span>;
+
+        <span class="comment">// TODO: This should come from the outside and should not include the dummy
+        // module
+        </span><span class="kw">let </span><span class="kw-2">mut </span>registry = ClientModuleGenRegistry::new();
+        registry.attach(MintClientGen);
+        registry.attach(DummyClientGen);
+        registry.attach(WalletClientGen);
+        registry.attach(GatewayClientGen {
+            lightning_client: lnrpc,
+            fees: config.fees,
+            timelock_delta: config.timelock_delta,
+            mint_channel_id: config.mint_channel_id,
+        });
+
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
+        client_builder.with_module_gens(registry);
+        client_builder.with_primary_module(<span class="number">1</span>);
+        client_builder.with_config(config.config);
+        client_builder.with_database(db);
+
+        <span class="macro">tracing::info!</span>(<span class="string">&quot;STANDARD CLIENT BUILDING&quot;</span>);
+        client_builder
+            <span class="comment">// TODO: make this configurable?
+            </span>.build::&lt;PlainRootSecretStrategy&gt;(tg)
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| GatewayError::ClientNgError)
     }
 
-    <span class="kw">async fn </span>create_config(
+    <span class="kw">pub async fn </span>create_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
-        node_pubkey: PublicKey,
         fees: RoutingFees,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayClientConfig&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationConfig&gt; {
         <span class="kw">let </span>api: DynGlobalApi = WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect.clone()]).into();
-
         <span class="kw">let </span>client_config = api.download_client_config(<span class="kw-2">&amp;</span>connect).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
-        <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
-        <span class="kw">let </span>kp_fed = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>rng);
-
-        <span class="prelude-val">Ok</span>(GatewayClientConfig {
+        <span class="prelude-val">Ok</span>(FederationConfig {
             mint_channel_id,
-            client_config,
-            redeem_key: kp_fed,
             timelock_delta: <span class="number">10</span>,
-            node_pub_key: node_pubkey,
-            api: <span class="self">self</span>.gateway_api.clone(),
             fees,
+            config: client_config,
         })
     }
 
-    <span class="kw">async fn </span>save_config(
+    <span class="kw">pub async fn </span>save_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        config: GatewayClientConfig,
-        connection_string: String,
+        config: FederationConfig,
         <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>id = config.client_config.federation_id;
-        <span class="kw">let </span>federation_config = FederationConfig {
-            mint_channel_id: config.mint_channel_id,
-            redeem_key: config.redeem_key,
-            timelock_delta: config.timelock_delta,
-            connection_string,
-            fees: config.fees,
-        };
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, <span class="kw-2">&amp;</span>federation_config)
+        <span class="kw">let </span>id = config.config.federation_id;
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, <span class="kw-2">&amp;</span>config)
             .<span class="kw">await</span>;
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)
     }
 
-    <span class="kw">async fn </span>load_configs(
+    <span class="kw">pub async fn </span>load_configs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        node_pub_key: PublicKey,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;GatewayClientConfig&gt;&gt; {
-        <span class="kw">let </span>federations = dbtx
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;FederationConfig&gt;&gt; {
+        <span class="prelude-val">Ok</span>(dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
             .<span class="kw">await
-            </span>.collect::&lt;Vec&lt;(FederationIdKey, FederationConfig)&gt;&gt;()
-            .<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>configs = Vec::new();
-        <span class="kw">for </span>(_id, config) <span class="kw">in </span>federations {
-            <span class="kw">let </span>connect =
-                WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>config.connection_string).map_err(|e| {
-                    GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid federation member string {}&quot;</span>, e))
-                })<span class="question-mark">?</span>;
-
-            <span class="kw">let </span>gateway_config = <span class="self">self
-                </span>.create_config(connect, config.mint_channel_id, node_pub_key, config.fees)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-            configs.push(gateway_config);
-        }
-
-        <span class="prelude-val">Ok</span>(configs)
+            </span>.collect::&lt;BTreeMap&lt;FederationIdKey, FederationConfig&gt;&gt;()
+            .<span class="kw">await
+            </span>.values()
+            .cloned()
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;())
     }
 }
 </code></pre></div>

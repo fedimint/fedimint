@@ -50,16 +50,13 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
-<a href="#53" id="53">53</a>
-<a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Map `gatewaylnrpc` protobuf types to rust types
 
 </span><span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>secp256k1::PublicKey;
 
 <span class="kw">impl </span>TryFrom&lt;<span class="kw">crate</span>::gatewaylnrpc::get_route_hints_response::RouteHintHop&gt;
-    <span class="kw">for </span>fedimint_client_legacy::modules::ln::route_hints::RouteHintHop
+    <span class="kw">for </span>fedimint_ln_common::route_hints::RouteHintHop
 {
     <span class="kw">type </span>Error = anyhow::Error;
 
@@ -85,13 +82,12 @@
 }
 
 <span class="kw">impl </span>TryFrom&lt;<span class="kw">crate</span>::gatewaylnrpc::GetRouteHintsResponse&gt;
-    <span class="kw">for </span>Vec&lt;fedimint_client_legacy::modules::ln::route_hints::RouteHint&gt;
+    <span class="kw">for </span>Vec&lt;fedimint_ln_common::route_hints::RouteHint&gt;
 {
     <span class="kw">type </span>Error = anyhow::Error;
 
     <span class="kw">fn </span>try_from(res: <span class="kw">crate</span>::gatewaylnrpc::GetRouteHintsResponse) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>route_hints =
-            Vec::&lt;fedimint_client_legacy::modules::ln::route_hints::RouteHint&gt;::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>route_hints = Vec::&lt;fedimint_ln_common::route_hints::RouteHint&gt;::new();
 
         <span class="kw">for </span>route_hint <span class="kw">in </span>res.route_hints {
             <span class="kw">let </span><span class="kw-2">mut </span>hops = Vec::new();
@@ -100,9 +96,7 @@
                 hops.push(hop.try_into()<span class="question-mark">?</span>);
             }
 
-            route_hints.push(fedimint_client_legacy::modules::ln::route_hints::RouteHint(
-                hops,
-            ));
+            route_hints.push(fedimint_ln_common::route_hints::RouteHint(hops));
         }
 
         <span class="prelude-val">Ok</span>(route_hints)

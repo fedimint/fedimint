@@ -663,6 +663,13 @@
 <a href="#663" id="663">663</a>
 <a href="#664" id="664">664</a>
 <a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>register;
 
@@ -719,11 +726,18 @@
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>GatewayExtPayStates {
     Created,
-    Preimage { preimage: Preimage },
-    Success { preimage: Preimage },
+    Preimage {
+        preimage: Preimage,
+    },
+    Success {
+        preimage: Preimage,
+        outpoint: OutPoint,
+    },
     Canceled,
     Fail,
-    OfferDoesNotExist { contract_id: ContractId },
+    OfferDoesNotExist {
+        contract_id: ContractId,
+    },
 }
 
 <span class="doccomment">/// The high-level state of an intercepted HTLC operation started with
@@ -859,7 +873,7 @@
                         <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
                         <span class="kw">if </span><span class="self">self</span>.await_primary_module_output(operation_id, outpoint).<span class="kw">await</span>.is_ok() {
-                            <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone() };
+                            <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
                             <span class="kw">return</span>;
                         }
 
@@ -1104,7 +1118,7 @@
 </span><span class="kw">pub struct </span>GatewayClientModule {
     cfg: LightningClientConfig,
     <span class="kw">pub </span>notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
-    redeem_key: KeyPair,
+    <span class="kw">pub </span>redeem_key: KeyPair,
     node_pub_key: PublicKey,
     timelock_delta: u64,
     mint_channel_id: u64,

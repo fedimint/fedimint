@@ -94,25 +94,21 @@
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
 <a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::LightningGateway;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>ln_gateway::client::{DynGatewayClientBuilder, MemDbFactory, StandardGatewayClientBuilder};
+<span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lnrpc_client::ILnRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
 <span class="kw">use </span>ln_gateway::{Gateway, DEFAULT_FEES};
 <span class="kw">use </span>tempfile::TempDir;
-<span class="kw">use </span>tracing::log::warn;
+<span class="kw">use </span>tracing::warn;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
@@ -153,7 +149,6 @@
         password: String,
         lightning: <span class="kw">impl </span>ILnRpcClient + <span class="lifetime">&#39;static</span>,
         decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>address: Url = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
@@ -161,19 +156,17 @@
         <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="string">&quot;gateway-cfg&quot;</span>);
 
         <span class="comment">// Create federation client builder for the gateway
-        </span><span class="kw">let </span>client_builder: DynGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(path.clone(), MemDbFactory.into(), address.clone())
-                .into();
+        </span><span class="kw">let </span>client_builder: StandardGatewayClientBuilder =
+            StandardGatewayClientBuilder::new(path.clone());
 
         <span class="kw">let </span>gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
         <span class="kw">let </span>gateway = Gateway::new_with_lightning_connection(
             Arc::new(lightning),
             client_builder.clone(),
-            decoders.clone(),
-            module_gens.clone(),
             DEFAULT_FEES,
             gatewayd_db,
             <span class="kw-2">&amp;mut </span>task,
+            address.clone(),
         )
         .<span class="kw">await
         </span>.unwrap();
@@ -181,8 +174,9 @@
         gateway
             .spawn_webserver(listen, password.clone(), <span class="kw-2">&amp;mut </span>task)
             .<span class="kw">await</span>;
-        task.spawn(<span class="string">&quot;gatewayd&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async </span>{
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = gateway.run(handle).<span class="kw">await </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>subgroup = task.make_subgroup().<span class="kw">await</span>;
+        task.spawn(<span class="string">&quot;gatewayd&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = gateway.run(<span class="kw-2">&amp;mut </span>subgroup).<span class="kw">await </span>{
                 <span class="macro">warn!</span>(<span class="string">&quot;Gateway stopped with error {:?}&quot;</span>, err);
             }
         })

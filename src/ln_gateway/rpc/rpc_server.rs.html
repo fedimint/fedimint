@@ -143,18 +143,6 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -162,8 +150,8 @@
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
-<span class="kw">use </span>fedimint_client_legacy::ln::PayInvoicePayload;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tower_http::auth::RequireAuthorizationLayer;
@@ -171,8 +159,8 @@
 <span class="kw">use </span>tracing::{error, instrument};
 
 <span class="kw">use super</span>::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, DepositPayload,
-    GatewayRpcSender, InfoPayload, RestorePayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayRpcSender,
+    InfoPayload, RestorePayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::GatewayError;
 
@@ -190,7 +178,6 @@
         .route(<span class="string">&quot;/info&quot;</span>, post(info))
         .route(<span class="string">&quot;/balance&quot;</span>, post(balance))
         .route(<span class="string">&quot;/address&quot;</span>, post(address))
-        .route(<span class="string">&quot;/deposit&quot;</span>, post(deposit))
         .route(<span class="string">&quot;/withdraw&quot;</span>, post(withdraw))
         .route(<span class="string">&quot;/connect-fed&quot;</span>, post(connect_fed))
         .route(<span class="string">&quot;/backup&quot;</span>, post(backup))
@@ -250,17 +237,6 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>address = rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(address)))
-}
-
-<span class="doccomment">/// Deposit into a gateway federation.
-</span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>deposit(
-    Extension(rpc): Extension&lt;GatewayRpcSender&gt;,
-    Json(payload): Json&lt;DepositPayload&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    <span class="kw">let </span>txid = rpc.send(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
 }
 
 <span class="doccomment">/// Withdraw from a gateway federation.
