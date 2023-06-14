@@ -168,6 +168,24 @@ impl FederationId {
     fn try_from_bytes(bytes: [u8; 48]) -> Option<Self> {
         Some(Self(threshold_crypto::PublicKey::from_bytes(bytes).ok()?))
     }
+
+    /// Converts a federation id to a public key to which we know but discard
+    /// the private key.
+    ///
+    /// Clients MUST never use this private key for any signing operations!
+    ///
+    /// That is ok because we only use the public key for adding a route
+    /// hint to LN invoices that tells fedimint clients that the invoice can
+    /// only be paid internally. Since no LN node with that pub key can exist
+    /// other LN senders will know that they cannot pay the invoice.
+    pub fn to_fake_ln_pub_key(
+        &self,
+        secp: &secp256k1::Secp256k1<secp256k1_zkp::All>,
+    ) -> anyhow::Result<secp256k1::PublicKey> {
+        let bytes = <Sha256 as bitcoin_hashes::Hash>::hash(&self.0.to_bytes()[..]);
+        let sk = secp256k1::SecretKey::from_slice(&bytes)?;
+        Ok(secp256k1::PublicKey::from_secret_key(secp, &sk))
+    }
 }
 
 impl FromStr for FederationId {
