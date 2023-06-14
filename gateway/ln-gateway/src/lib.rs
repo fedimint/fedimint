@@ -26,6 +26,7 @@ use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
+use client::StandardGatewayClientBuilder;
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
@@ -53,7 +54,6 @@ use tokio::sync::mpsc;
 use tracing::{error, info};
 use url::Url;
 
-use crate::client::DynGatewayClientBuilder;
 use crate::gatewaylnrpc::intercept_htlc_response::{Forward, Settle};
 use crate::lnd::GatewayLndClient;
 use crate::lnrpc_client::NetworkLnRpcClient;
@@ -141,7 +141,7 @@ pub struct Gateway {
     lightning_mode: Option<LightningMode>,
     clients: Arc<RwLock<BTreeMap<FederationId, Arc<fedimint_client::Client>>>>,
     scid_to_federation: Arc<RwLock<BTreeMap<u64, FederationId>>>,
-    client_builder: DynGatewayClientBuilder,
+    client_builder: StandardGatewayClientBuilder,
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
     channel_id_generator: AtomicU64,
@@ -154,7 +154,7 @@ impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         lightning_mode: LightningMode,
-        client_builder: DynGatewayClientBuilder,
+        client_builder: StandardGatewayClientBuilder,
         task_group: &mut TaskGroup,
         fees: RoutingFees,
         gatewayd_db: Database,
@@ -188,7 +188,7 @@ impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new_with_lightning_connection(
         lnrpc: Arc<dyn ILnRpcClient>,
-        client_builder: DynGatewayClientBuilder,
+        client_builder: StandardGatewayClientBuilder,
         fees: RoutingFees,
         gatewayd_db: Database,
         task_group: &mut TaskGroup,
@@ -517,11 +517,11 @@ impl Gateway {
             {
                 Ok(gw_client_cfg) => break gw_client_cfg,
                 Err(_) => {
-                    let random_delay = rand::thread_rng().gen_range(1..=3);
+                    let random_delay: f64 = rand::thread_rng().gen();
                     tracing::warn!(
                         "Error downloading client config, trying again in {random_delay}"
                     );
-                    sleep(Duration::from_secs(random_delay)).await;
+                    sleep(Duration::from_secs_f64(random_delay)).await;
                 }
             }
         };

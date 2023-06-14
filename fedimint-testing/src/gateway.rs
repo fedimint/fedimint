@@ -6,7 +6,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use ln_gateway::client::{DynGatewayClientBuilder, StandardGatewayClientBuilder};
+use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::ConnectFedPayload;
@@ -60,8 +60,8 @@ impl GatewayTest {
         let (path, _config_dir) = test_dir("gateway-cfg");
 
         // Create federation client builder for the gateway
-        let client_builder: DynGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(path.clone()).into();
+        let client_builder: StandardGatewayClientBuilder =
+            StandardGatewayClientBuilder::new(path.clone());
 
         let gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
         let gateway = Gateway::new_with_lightning_connection(

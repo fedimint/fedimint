@@ -3,14 +3,13 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::ClientBuilder;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::dyn_newtype_define;
 use fedimint_core::task::TaskGroup;
+use fedimint_dummy_client::DummyClientGen;
 use fedimint_mint_client::MintClientGen;
 use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
@@ -20,42 +19,6 @@ use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::lnrpc_client::ILnRpcClient;
 use crate::ng::GatewayClientGen;
 use crate::{GatewayError, Result};
-
-/// Trait for gateway federation client builders
-#[async_trait]
-pub trait IGatewayClientBuilder: Debug {
-    /// Build a new gateway federation client
-    async fn build(
-        &self,
-        config: FederationConfig,
-        lnrpc: Arc<dyn ILnRpcClient>,
-        tg: &mut TaskGroup,
-    ) -> Result<fedimint_client::Client>;
-
-    /// Create a new gateway federation client config from connect info
-    async fn create_config(
-        &self,
-        connect: WsClientConnectInfo,
-        mint_channel_id: u64,
-        fees: RoutingFees,
-    ) -> Result<FederationConfig>;
-
-    /// Save and persist the configuration of the gateway federation client
-    async fn save_config(
-        &self,
-        config: FederationConfig,
-        dbtx: DatabaseTransaction<'_>,
-    ) -> Result<()>;
-
-    /// Load all gateway client configs from the work directory
-    async fn load_configs(&self, dbtx: DatabaseTransaction<'_>) -> Result<Vec<FederationConfig>>;
-}
-
-dyn_newtype_define! {
-    /// dyn newtype for a Gateway federation client builder
-    #[derive(Clone)]
-    pub DynGatewayClientBuilder(Arc<IGatewayClientBuilder>)
-}
 
 #[derive(Debug, Clone)]
 pub struct StandardGatewayClientBuilder {
@@ -68,9 +31,8 @@ impl StandardGatewayClientBuilder {
     }
 }
 
-#[async_trait]
-impl IGatewayClientBuilder for StandardGatewayClientBuilder {
-    async fn build(
+impl StandardGatewayClientBuilder {
+    pub async fn build(
         &self,
         config: FederationConfig,
         lnrpc: Arc<dyn ILnRpcClient>,
@@ -83,9 +45,11 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         let db =
             fedimint_rocksdb::RocksDb::open(db_path).map_err(|_| GatewayError::DatabaseError)?;
 
-        // TODO: Should this come from outside?
+        // TODO: This should come from the outside and should not include the dummy
+        // module
         let mut registry = ClientModuleGenRegistry::new();
         registry.attach(MintClientGen);
+        registry.attach(DummyClientGen);
         registry.attach(WalletClientGen);
         registry.attach(GatewayClientGen {
             lightning_client: lnrpc,
@@ -100,6 +64,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         client_builder.with_config(config.config);
         client_builder.with_database(db);
 
+        tracing::info!("STANDARD CLIENT BUILDING");
         client_builder
             // TODO: make this configurable?
             .build::<PlainRootSecretStrategy>(tg)
@@ -107,7 +72,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
             .map_err(|_| GatewayError::ClientNgError)
     }
 
-    async fn create_config(
+    pub async fn create_config(
         &self,
         connect: WsClientConnectInfo,
         mint_channel_id: u64,
@@ -123,7 +88,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
         })
     }
 
-    async fn save_config(
+    pub async fn save_config(
         &self,
         config: FederationConfig,
         mut dbtx: DatabaseTransaction<'_>,
@@ -136,7 +101,7 @@ impl IGatewayClientBuilder for StandardGatewayClientBuilder {
             .map_err(|_| GatewayError::DatabaseError)
     }
 
-    async fn load_configs(
+    pub async fn load_configs(
         &self,
         mut dbtx: DatabaseTransaction<'_>,
     ) -> Result<Vec<FederationConfig>> {

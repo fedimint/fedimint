@@ -18,7 +18,7 @@ use fedimint_ln_common::LightningModuleTypes;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::{MintCommonGen, MintModuleTypes};
 use fedimint_wallet_client::{WalletCommonGen, WalletModuleTypes};
-use ln_gateway::client::{DynGatewayClientBuilder, StandardGatewayClientBuilder};
+use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
 use tracing::{error, info};
 use url::Url;
@@ -87,8 +87,7 @@ async fn main() -> Result<(), anyhow::Error> {
     );
 
     // Create federation client builder
-    let client_builder: DynGatewayClientBuilder =
-        StandardGatewayClientBuilder::new(data_dir.clone()).into();
+    let client_builder = StandardGatewayClientBuilder::new(data_dir.clone());
 
     // Create task group for controlled shutdown of the gateway
     let mut task_group = TaskGroup::new();

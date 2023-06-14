@@ -298,12 +298,6 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         }
     };
 
-    // Wait till the gateway has registered itself
-    while fixtures.user.fetch_active_gateway().await.is_err() {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        info!("Waiting for gateway to register");
-    }
-
     Ok(fixtures)
 }
 
