@@ -237,6 +237,9 @@
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -290,12 +293,15 @@
             .expect(<span class="self">Self</span>::ERROR)
             .last()
         {
-            <span class="kw">let </span>block = <span class="self">self</span>.client.get_block(block_hash).expect(<span class="string">&quot;rpc failed&quot;</span>);
+            <span class="kw">let </span>block = <span class="self">self
+                </span>.client
+                .get_block_header_info(block_hash)
+                .expect(<span class="string">&quot;rpc failed&quot;</span>);
             <span class="comment">// waits for the rpc client to catch up to bitcoind
             </span><span class="kw">loop </span>{
                 <span class="kw">let </span>height = <span class="self">self</span>.rpc.get_block_height().<span class="kw">await</span>.expect(<span class="string">&quot;rpc failed&quot;</span>);
 
-                <span class="kw">if </span>height &gt;= block.bip34_block_height().expect(<span class="string">&quot;has height&quot;</span>) {
+                <span class="kw">if </span>height &gt;= block.height <span class="kw">as </span>u64 {
                     <span class="kw">break</span>;
                 }
             }
@@ -379,7 +385,7 @@
 
     <span class="kw">pub fn </span>new(url: <span class="kw-2">&amp;</span>Url, rpc: DynBitcoindRpc) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>(host, auth) =
-            fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(url).expect(<span class="string">&quot;correct url&quot;</span>);
+            fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect(<span class="string">&quot;correct url&quot;</span>);
         <span class="kw">let </span>client = Arc::new(Client::new(<span class="kw-2">&amp;</span>host, auth).expect(<span class="self">Self</span>::ERROR));
 
         <span class="self">Self </span>{

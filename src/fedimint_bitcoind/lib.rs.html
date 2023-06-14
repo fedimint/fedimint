@@ -198,6 +198,10 @@
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -207,27 +211,41 @@
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">pub use </span>anyhow::Result;
-<span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, Transaction};
+<span class="kw">use </span>bitcoin::{BlockHash, Network, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
-<span class="kw">use </span>fedimint_core::{dyn_newtype_define, Feerate};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 <span class="kw">use </span>fedimint_logging::LOG_BLOCKCHAIN;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
+<span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
+</span><span class="kw">pub mod </span>bitcoincore;
+<span class="attr">#[cfg(feature = <span class="string">&quot;electrum-client&quot;</span>)]
+</span><span class="kw">mod </span>electrum;
+<span class="attr">#[cfg(feature = <span class="string">&quot;esplora-client&quot;</span>)]
+</span><span class="kw">mod </span>esplora;
 
-<span class="kw">use </span><span class="kw">crate</span>::bitcoincore_rpc::{BitcoindFactory, ElectrumFactory, EsploraFactory};
-
-<span class="kw">pub mod </span>bitcoincore_rpc;
+<span class="comment">// &lt;https://blockstream.info/api/block-height/0&gt;
+</span><span class="kw">const </span>MAINNET_GENESIS_BLOCK_HASH: <span class="kw-2">&amp;</span>str =
+    <span class="string">&quot;000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f&quot;</span>;
+<span class="comment">// &lt;https://blockstream.info/testnet/api/block-height/0&gt;
+</span><span class="kw">const </span>TESTNET_GENESIS_BLOCK_HASH: <span class="kw-2">&amp;</span>str =
+    <span class="string">&quot;000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943&quot;</span>;
+<span class="comment">// &lt;https://mempool.space/signet/api/block-height/0&gt;
+</span><span class="kw">const </span>SIGNET_GENESIS_BLOCK_HASH: <span class="kw-2">&amp;</span>str =
+    <span class="string">&quot;00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6&quot;</span>;
 
 <span class="macro">lazy_static! </span>{
     <span class="doccomment">/// Global factories for creating bitcoin RPCs
     </span><span class="kw">static </span><span class="kw-2">ref </span>BITCOIN_RPC_REGISTRY: Mutex&lt;BTreeMap&lt;String, DynBitcoindRpcFactory&gt;&gt; =
         Mutex::new(BTreeMap::from([
-            (<span class="string">&quot;esplora&quot;</span>.to_string(), EsploraFactory.into()),
-            (<span class="string">&quot;electrum&quot;</span>.to_string(), ElectrumFactory.into()),
-            (<span class="string">&quot;bitcoind&quot;</span>.to_string(), BitcoindFactory.into()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;esplora-client&quot;</span>)]
+            </span>(<span class="string">&quot;esplora&quot;</span>.to_string(), esplora::EsploraFactory.into()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;electrum-client&quot;</span>)]
+            </span>(<span class="string">&quot;electrum&quot;</span>.to_string(), electrum::ElectrumFactory.into()),
+            <span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
+            </span>(<span class="string">&quot;bitcoind&quot;</span>.to_string(), bitcoincore::BitcoindFactory.into()),
         ]));
 }
 
@@ -235,8 +253,8 @@
 </span><span class="kw">pub fn </span>create_bitcoind(config: <span class="kw-2">&amp;</span>BitcoinRpcConfig, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
     <span class="kw">let </span>registry = BITCOIN_RPC_REGISTRY.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
     <span class="kw">let </span>maybe_factory = registry.get(<span class="kw-2">&amp;</span>config.kind);
-    <span class="kw">let </span>factory = maybe_factory.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;{} bitcoind not registered&quot;</span>, config.kind))<span class="question-mark">?</span>;
-    factory.create(<span class="kw-2">&amp;</span>config.url, handle)
+    <span class="kw">let </span>factory = maybe_factory.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;{} rpc not registered&quot;</span>, config.kind))<span class="question-mark">?</span>;
+    factory.create_connection(<span class="kw-2">&amp;</span>config.url, handle)
 }
 
 <span class="doccomment">/// Register a new factory for creating bitcoin RPCs
@@ -245,8 +263,10 @@
     registry.insert(kind, factory);
 }
 
-<span class="kw">pub trait </span>IBitcoindRpcFactory: Debug {
-    <span class="kw">fn </span>create(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt;;
+<span class="doccomment">/// Trait for creating new bitcoin RPC clients
+</span><span class="kw">pub trait </span>IBitcoindRpcFactory: Debug + Send + Sync {
+    <span class="doccomment">/// Creates a new bitcoin RPC client connection
+    </span><span class="kw">fn </span>create_connection(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -257,8 +277,8 @@
 <span class="doccomment">/// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if the bitcoind node is not reachable.
-</span><span class="attr">#[async_trait]
-</span><span class="kw">pub trait </span>IBitcoindRpc: Debug + Send + Sync {
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>IBitcoindRpc: Debug {
     <span class="doccomment">/// Returns the Bitcoin network the node is connected to
     </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Network&gt;;
 
@@ -300,12 +320,8 @@
     /// when it makes sense.
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction);
 
-    <span class="doccomment">/// Check if a transaction was included in a given (only electrum)
-    </span><span class="kw">async fn </span>was_transaction_confirmed_in(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        transaction: <span class="kw-2">&amp;</span>Transaction,
-        height: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt;;
+    <span class="doccomment">/// Check if a transaction is included in a block
+    </span><span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -356,10 +372,10 @@
     }
 }
 
-<span class="attr">#[async_trait]
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;C&gt; IBitcoindRpc <span class="kw">for </span>RetryClient&lt;C&gt;
 <span class="kw">where
-    </span>C: IBitcoindRpc,
+    </span>C: IBitcoindRpc + Sync + Send,
 {
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Network&gt; {
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_network().<span class="kw">await </span>})
@@ -385,17 +401,9 @@
         <span class="self">self</span>.inner.submit_transaction(transaction.clone()).<span class="kw">await</span>;
     }
 
-    <span class="kw">async fn </span>was_transaction_confirmed_in(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        transaction: <span class="kw-2">&amp;</span>Transaction,
-        height: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
-        <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{
-            <span class="self">self</span>.inner
-                .was_transaction_confirmed_in(transaction, height)
-                .<span class="kw">await
-        </span>})
-        .<span class="kw">await
+    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
+        <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await </span>})
+            .<span class="kw">await
     </span>}
 }
 </code></pre></div>
