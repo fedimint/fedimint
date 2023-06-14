@@ -45,7 +45,7 @@ impl FakeBitcoinFactory {
 }
 
 impl IBitcoindRpcFactory for FakeBitcoinFactory {
-    fn create(&self, _url: &Url, _handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
+    fn create_connection(&self, _url: &Url, _handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
         Ok(self.bitcoin.clone().into())
     }
 }

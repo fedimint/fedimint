@@ -7,27 +7,41 @@ use std::time::Duration;
 
 use anyhow::format_err;
 pub use anyhow::Result;
-use async_trait::async_trait;
 use bitcoin::{BlockHash, Network, Transaction, Txid};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
-use fedimint_core::{dyn_newtype_define, Feerate};
+use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
 use lazy_static::lazy_static;
 use tracing::info;
 use url::Url;
+#[cfg(feature = "bitcoincore-rpc")]
+pub mod bitcoincore;
+#[cfg(feature = "electrum-client")]
+mod electrum;
+#[cfg(feature = "esplora-client")]
+mod esplora;
 
-use crate::bitcoincore_rpc::{BitcoindFactory, ElectrumFactory, EsploraFactory};
-
-pub mod bitcoincore_rpc;
+// <https://blockstream.info/api/block-height/0>
+const MAINNET_GENESIS_BLOCK_HASH: &str =
+    "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+// <https://blockstream.info/testnet/api/block-height/0>
+const TESTNET_GENESIS_BLOCK_HASH: &str =
+    "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943";
+// <https://mempool.space/signet/api/block-height/0>
+const SIGNET_GENESIS_BLOCK_HASH: &str =
+    "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6";
 
 lazy_static! {
     /// Global factories for creating bitcoin RPCs
     static ref BITCOIN_RPC_REGISTRY: Mutex<BTreeMap<String, DynBitcoindRpcFactory>> =
         Mutex::new(BTreeMap::from([
-            ("esplora".to_string(), EsploraFactory.into()),
-            ("electrum".to_string(), ElectrumFactory.into()),
-            ("bitcoind".to_string(), BitcoindFactory.into()),
+            #[cfg(feature = "esplora-client")]
+            ("esplora".to_string(), esplora::EsploraFactory.into()),
+            #[cfg(feature = "electrum-client")]
+            ("electrum".to_string(), electrum::ElectrumFactory.into()),
+            #[cfg(feature = "bitcoincore-rpc")]
+            ("bitcoind".to_string(), bitcoincore::BitcoindFactory.into()),
         ]));
 }
 
@@ -35,8 +49,8 @@ lazy_static! {
 pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {
     let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
     let maybe_factory = registry.get(&config.kind);
-    let factory = maybe_factory.ok_or(format_err!("{} bitcoind not registered", config.kind))?;
-    factory.create(&config.url, handle)
+    let factory = maybe_factory.ok_or(format_err!("{} rpc not registered", config.kind))?;
+    factory.create_connection(&config.url, handle)
 }
 
 /// Register a new factory for creating bitcoin RPCs
@@ -45,8 +59,10 @@ pub fn register_bitcoind(kind: String, factory: DynBitcoindRpcFactory) {
     registry.insert(kind, factory);
 }
 
-pub trait IBitcoindRpcFactory: Debug {
-    fn create(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc>;
+/// Trait for creating new bitcoin RPC clients
+pub trait IBitcoindRpcFactory: Debug + Send + Sync {
+    /// Creates a new bitcoin RPC client connection
+    fn create_connection(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc>;
 }
 
 dyn_newtype_define! {
@@ -57,8 +73,8 @@ dyn_newtype_define! {
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if the bitcoind node is not reachable.
-#[async_trait]
-pub trait IBitcoindRpc: Debug + Send + Sync {
+#[apply(async_trait_maybe_send!)]
+pub trait IBitcoindRpc: Debug {
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 
@@ -152,10 +168,10 @@ impl<C> RetryClient<C> {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl<C> IBitcoindRpc for RetryClient<C>
 where
-    C: IBitcoindRpc,
+    C: IBitcoindRpc + Sync + Send,
 {
     async fn get_network(&self) -> Result<Network> {
         self.retry_call(|| async { self.inner.get_network().await })

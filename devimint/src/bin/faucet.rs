@@ -33,7 +33,7 @@ struct Faucet {
 impl Faucet {
     async fn new(cmd: &Cmd) -> anyhow::Result<Self> {
         let url = cmd.bitcoind_rpc.parse()?;
-        let (host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(&url)?;
+        let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
         let bitcoin = Arc::new(bitcoincore_rpc::Client::new(&host, auth)?);
         let ln_rpc = Arc::new(Mutex::new(ClnRpc::new(&cmd.cln_socket).await?));
         Ok(Faucet { bitcoin, ln_rpc })

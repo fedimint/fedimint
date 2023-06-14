@@ -143,7 +143,7 @@ impl RealBitcoinTest {
 
     pub fn new(url: &Url, rpc: DynBitcoindRpc) -> Self {
         let (host, auth) =
-            fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(url).expect("correct url");
+            fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect("correct url");
         let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));
 
         Self {
