@@ -89,6 +89,8 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
             assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
+            assert_eq!(sub1.ok().await?, LnReceiveState::AwaitingFunds);
+            assert_eq!(sub1.ok().await?, LnReceiveState::Claimed);
         }
         _ => panic!("Expected internal payment!"),
     }
