@@ -4,7 +4,6 @@ pub mod rpc_server;
 use std::borrow::Cow;
 use std::io::Cursor;
 
-use anyhow::{anyhow, Error};
 use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_core::config::FederationId;
@@ -16,48 +15,9 @@ use fedimint_ln_common::{serde_routing_fees, LightningGateway};
 use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use tokio::sync::{mpsc, oneshot};
-use tracing::error;
+use tokio::sync::oneshot;
 
-use crate::{Gateway, GatewayError, Result};
-
-#[derive(Debug, Clone)]
-pub struct GatewayRpcSender {
-    sender: mpsc::Sender<GatewayRequest>,
-}
-
-/// A two-way rpc channel for [`GatewayRequest`]s.
-///
-/// The channel consists of a long lived sender and receiver used to pass along
-/// the original message And a short lived (oneshot tx, rx) is used to receive a
-/// response in the opposite direction as the original message.
-impl GatewayRpcSender {
-    pub fn new(sender: mpsc::Sender<GatewayRequest>) -> Self {
-        Self { sender }
-    }
-
-    pub async fn send<R>(&self, message: R) -> std::result::Result<R::Response, Error>
-    where
-        R: GatewayRequestTrait,
-    {
-        let (sender, receiver) = oneshot::channel::<Result<R::Response>>();
-        let msg = message.to_enum(sender);
-
-        if let Err(e) = self.sender.send(msg).await {
-            error!("Failed to send message over channel: {}", e);
-            return Err(e.into());
-        }
-
-        receiver
-            .await
-            .unwrap_or_else(|_| {
-                Err(GatewayError::Other(anyhow!(
-                    "Failed to receive response over channel"
-                )))
-            })
-            .map_err(|e| e.into())
-    }
-}
+use crate::{Gateway, Result};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
