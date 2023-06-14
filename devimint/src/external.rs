@@ -36,7 +36,7 @@ impl Bitcoind {
             .await?;
 
         let url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
-        let (host, auth) = fedimint_bitcoind::bitcoincore_rpc::from_url_to_url_auth(&url)?;
+        let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
         let client = Arc::new(bitcoincore_rpc::Client::new(&host, auth)?);
 
         Self::init(&client).await?;
