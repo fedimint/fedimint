@@ -157,9 +157,24 @@ pub enum LnReceiveState {
     Claimed,
 }
 
-async fn is_internal_payment(invoice: &Invoice, gateways: Vec<LightningGateway>) -> bool {
-    // Asserts that the first hop of the invoice route hints
-    // leads through a registered gateway into the current federation
+async fn invoice_has_internal_payment_markers(
+    invoice: &Invoice,
+    markers: (secp256k1::PublicKey, u64),
+) -> bool {
+    // Asserts that the invoice src_node_id and short_channel_id match known
+    // values used as internal payment markers
+    invoice
+        .route_hints()
+        .first()
+        .and_then(|rh| rh.0.last())
+        .map(|hop| (hop.src_node_id, hop.short_channel_id))
+        == Some(markers)
+}
+
+async fn invoice_routes_back_to_federation(
+    invoice: &Invoice,
+    gateways: Vec<LightningGateway>,
+) -> bool {
     gateways.into_iter().any(|gateway| {
         invoice
             .route_hints()
@@ -219,8 +234,16 @@ impl LightningClientExt for Client {
         let payment_hash = invoice.payment_hash();
         let operation_id = OperationId(payment_hash.into_inner());
 
-        let gateways = self.fetch_registered_gateways().await?;
-        let (pay_type, output, contract_id) = if is_internal_payment(&invoice, gateways).await {
+        let is_internal_payment =
+            invoice_has_internal_payment_markers(&invoice, self.get_internal_payment_markers()?)
+                .await
+                || invoice_routes_back_to_federation(
+                    &invoice,
+                    self.fetch_registered_gateways().await?,
+                )
+                .await;
+
+        let (pay_type, output, contract_id) = if is_internal_payment {
             let (output, contract_id) = lightning
                 .create_incoming_output(operation_id, invoice.clone())
                 .await?;
