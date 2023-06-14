@@ -132,9 +132,17 @@ impl Federation {
             .context("address must be a string")?
             .to_owned();
         self.bitcoind.send_to(pegin_addr, amt).await?;
-        self.bitcoind.mine_blocks(11).await?;
-        self.await_block_sync().await?;
-        cmd!(self, "fetch").run().await?;
+        self.bitcoind.mine_blocks(21).await?;
+        poll("gateway pegin", || async {
+            let gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+                .out_json()
+                .await?
+                .as_u64()
+                .unwrap();
+
+            Ok(gateway_balance == (amt * 1000))
+        })
+        .await?;
         Ok(())
     }
 
