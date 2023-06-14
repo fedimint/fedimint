@@ -967,6 +967,11 @@
 <a href="#967" id="967">967</a>
 <a href="#968" id="968">968</a>
 <a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -978,6 +983,7 @@
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateJson;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, task};
@@ -1321,7 +1327,11 @@
             }
         };
 
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>state, <span class="question-mark">?</span>transition_outcome, <span class="string">&quot;Executing state transition&quot;</span>);
+        <span class="macro">debug!</span>(
+            <span class="question-mark">?</span>state,
+            transition_outcome = <span class="question-mark">?</span>AbbreviateJson(<span class="kw-2">&amp;</span>transition_outcome),
+            <span class="string">&quot;Executing state transition&quot;
+        </span>);
 
         <span class="kw">let </span>new_state = <span class="self">self
             </span>.db
