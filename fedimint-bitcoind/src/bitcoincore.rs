@@ -1,8 +1,13 @@
+use std::io::Cursor;
+
 use anyhow::anyhow as format_err;
-use bitcoin::{BlockHash, Network, Transaction, Txid};
+use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
+use fedimint_core::encoding::Decodable;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, TaskHandle};
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::info;
 use url::Url;
@@ -72,6 +77,34 @@ impl IBitcoindRpc for BitcoinClient {
             Some(hash) => Some(block_in_place(|| self.0.get_block_header_info(&hash))?.height),
         };
         Ok(height.map(|h| h as u64))
+    }
+
+    async fn watch_script_history(&self, script: &Script) -> anyhow::Result<Vec<Transaction>> {
+        // start watching for this script in our wallet to avoid the need to rescan the
+        // blockchain, labeling it so we can reference it later
+        block_in_place(|| {
+            self.0
+                .import_address_script(script, Some(&script.to_string()), Some(false), None)
+        })?;
+
+        let mut results = vec![];
+        let list = block_in_place(|| {
+            self.0
+                .list_transactions(Some(&script.to_string()), None, None, Some(true))
+        })?;
+        for tx in list {
+            let raw_tx = block_in_place(|| self.0.get_raw_transaction(&tx.info.txid, None))?;
+            results.push(raw_tx);
+        }
+        Ok(results)
+    }
+
+    async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
+        TxOutProof::consensus_decode(
+            &mut Cursor::new(block_in_place(|| self.0.get_tx_out_proof(&[txid], None))?),
+            &ModuleDecoderRegistry::default(),
+        )
+        .map_err(|error| format_err!("Could not decode tx: {}", error))
     }
 }
 

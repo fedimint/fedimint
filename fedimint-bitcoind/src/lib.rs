@@ -7,14 +7,16 @@ use std::time::Duration;
 
 use anyhow::format_err;
 pub use anyhow::Result;
-use bitcoin::{BlockHash, Network, Transaction, Txid};
+use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
 use lazy_static::lazy_static;
 use tracing::info;
 use url::Url;
+
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
 #[cfg(feature = "electrum-client")]
@@ -118,6 +120,15 @@ pub trait IBitcoindRpc: Debug {
 
     /// Check if a transaction is included in a block
     async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>>;
+
+    /// Watches for a script and returns any transactions associated with it
+    ///
+    /// Should be called once prior to transactions being submitted or watching
+    /// may not occur
+    async fn watch_script_history(&self, script: &Script) -> Result<Vec<Transaction>>;
+
+    /// Returns a prooft that a tx is included in the bitcoin blockchain
+    async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof>;
 }
 
 dyn_newtype_define! {
@@ -199,6 +210,16 @@ where
 
     async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
         self.retry_call(|| async { self.inner.get_tx_block_height(txid).await })
+            .await
+    }
+
+    async fn watch_script_history(&self, script: &Script) -> Result<Vec<Transaction>> {
+        self.retry_call(|| async { self.inner.watch_script_history(script).await })
+            .await
+    }
+
+    async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof> {
+        self.retry_call(|| async { self.inner.get_txout_proof(txid).await })
             .await
     }
 }

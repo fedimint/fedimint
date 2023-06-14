@@ -1,12 +1,9 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::anyhow;
-use bitcoin::{Script, Txid};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
@@ -109,7 +106,7 @@ async fn await_created_btc_transaction_submitted(
         .tweak(&tweak.public_key().to_x_only_pubkey(), &context.secp)
         .script_pubkey();
     loop {
-        match get_script_history(&context.esplora_server, &script).await {
+        match context.rpc.watch_script_history(&script).await {
             Ok(received) => {
                 // TODO: fix
                 if received.len() > 1 {
@@ -142,23 +139,6 @@ async fn await_created_btc_transaction_submitted(
 
         sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
     }
-}
-
-async fn get_script_history(
-    esplora_server: &str,
-    script: &Script,
-) -> anyhow::Result<Vec<bitcoin::Transaction>> {
-    let esplora_client = esplora_client(esplora_server)?;
-    let script = script.clone();
-
-    let transactions = esplora_client
-        .scripthash_txs(&script, None)
-        .await?
-        .into_iter()
-        .map(|tx| tx.to_tx())
-        .collect::<Vec<_>>();
-
-    Ok(transactions)
 }
 
 async fn transition_tx_seen(
@@ -211,8 +191,7 @@ async fn await_btc_transaction_confirmed(
         // TODO: make everything subscriptions
         // Wait for confirmation
         let consensus_height = match global_context
-            .api()
-            .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .module_api()
             .fetch_consensus_block_height()
             .await
         {
@@ -224,11 +203,10 @@ async fn await_btc_transaction_confirmed(
             }
         };
 
-        let confirmation_height = match get_tx_block_height(
-            &context.esplora_server,
-            waiting_state.btc_transaction.txid(),
-        )
-        .await
+        let confirmation_height = match context
+            .rpc
+            .get_tx_block_height(&waiting_state.btc_transaction.txid())
+            .await
         {
             Ok(confirmation_height) => confirmation_height,
             Err(e) => {
@@ -248,11 +226,10 @@ async fn await_btc_transaction_confirmed(
         }
 
         // Get txout proof
-        let txout_proof = match get_txout_proof(
-            &context.esplora_server,
-            waiting_state.btc_transaction.txid(),
-        )
-        .await
+        let txout_proof = match context
+            .rpc
+            .get_txout_proof(waiting_state.btc_transaction.txid())
+            .await
         {
             Ok(txout_proof) => txout_proof,
             Err(e) => {
@@ -264,35 +241,6 @@ async fn await_btc_transaction_confirmed(
 
         return txout_proof;
     }
-}
-
-async fn get_tx_block_height(esplora_server: &str, txid: Txid) -> anyhow::Result<Option<u64>> {
-    let esplora_client = esplora_client(esplora_server)?;
-    let confirmation_height = esplora_client
-        .get_tx_status(&txid)
-        .await?
-        .block_height
-        .map(|height| height as u64);
-
-    Ok(confirmation_height)
-}
-
-async fn get_txout_proof(esplora_server: &str, txid: Txid) -> anyhow::Result<TxOutProof> {
-    let esplora_client = esplora_client(esplora_server)?;
-    let proof = esplora_client
-        .get_merkle_block(&txid)
-        .await?
-        .ok_or(anyhow!("No merkle proof found"))?;
-
-    Ok(TxOutProof {
-        block_header: proof.header,
-        merkle_proof: proof.txn,
-    })
-}
-
-fn esplora_client(esplora_server: &str) -> anyhow::Result<esplora_client::AsyncClient> {
-    let without_trailing = esplora_server.trim_end_matches('/');
-    Ok(esplora_client::Builder::new(without_trailing).build_async()?)
 }
 
 async fn transition_btc_tx_confirmed(

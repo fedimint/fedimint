@@ -50,7 +50,7 @@ impl StandardGatewayClientBuilder {
         let mut registry = ClientModuleGenRegistry::new();
         registry.attach(MintClientGen);
         registry.attach(DummyClientGen);
-        registry.attach(WalletClientGen);
+        registry.attach(WalletClientGen::default());
         registry.attach(GatewayClientGen {
             lightning_client: lnrpc,
             fees: config.fees,

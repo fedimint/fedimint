@@ -661,7 +661,7 @@ impl FedimintCli {
     pub fn with_default_modules(self) -> Self {
         self.with_module(LightningClientGen)
             .with_module(MintClientGen)
-            .with_module(WalletClientGen)
+            .with_module(WalletClientGen::default())
     }
 
     pub async fn run(self) {

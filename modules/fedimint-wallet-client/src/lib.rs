@@ -9,6 +9,7 @@ use std::time::SystemTime;
 use anyhow::{anyhow, bail, ensure};
 use async_stream::stream;
 use bitcoin::{Address, Network};
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -18,12 +19,14 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State,
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
+use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
 };
+use fedimint_core::task::TaskGroup;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 use fedimint_wallet_common::config::WalletClientConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -33,6 +36,7 @@ use miniscript::ToPublicKey;
 use rand::{thread_rng, Rng};
 use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::api::WalletFederationApi;
 use crate::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
@@ -115,6 +119,11 @@ impl WalletClientExt for Client {
                     Box::pin(async move {
                         let (operation_id, sm, address) =
                             wallet_client.get_deposit_address(valid_until);
+                        // Begin watching the script address
+                        wallet_client
+                            .rpc
+                            .watch_script_history(&address.script_pubkey())
+                            .await?;
 
                         self.add_state_machines(dbtx, vec![DynState::from_typed(instance.id, sm)])
                             .await?;
@@ -358,8 +367,15 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct WalletClientGen;
+#[derive(Debug, Clone, Default)]
+// TODO: should probably move to DB
+pub struct WalletClientGen(pub Option<BitcoinRpcConfig>);
+
+impl WalletClientGen {
+    pub fn new(rpc: BitcoinRpcConfig) -> Self {
+        Self(Some(rpc))
+    }
+}
 
 impl ExtendsCommonModuleGen for WalletClientGen {
     type Common = WalletCommonGen;
@@ -379,11 +395,35 @@ impl ClientModuleGen for WalletClientGen {
         _api: DynGlobalApi,
         module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
+        let rpc_config = self
+            .0
+            .clone()
+            .unwrap_or(default_esplora_server(cfg.network));
         Ok(WalletClientModule {
             cfg,
             module_api,
             notifier,
+            rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
         })
+    }
+}
+
+pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
+    let url = match network {
+        Network::Bitcoin => Url::parse("https://blockstream.info/api/")
+            .expect("Failed to parse default esplora server"),
+        Network::Testnet => Url::parse("https://blockstream.info/testnet/api/")
+            .expect("Failed to parse default esplora server"),
+        Network::Regtest => {
+            Url::parse("http://127.0.0.1:50002/").expect("Failed to parse default esplora server")
+        }
+        network => {
+            panic!("Don't know an electrs server for network: {network}");
+        }
+    };
+    BitcoinRpcConfig {
+        kind: "esplora".to_string(),
+        url,
     }
 }
 
@@ -407,6 +447,7 @@ pub struct WalletClientModule {
     cfg: WalletClientConfig,
     module_api: DynModuleApi,
     notifier: ModuleNotifier<DynGlobalClientContext, WalletClientStates>,
+    rpc: DynBitcoindRpc,
 }
 
 impl ClientModule for WalletClientModule {
@@ -416,7 +457,7 @@ impl ClientModule for WalletClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         WalletClientContext {
-            esplora_server: "http://127.0.0.1:50002".to_string(),
+            rpc: self.rpc.clone(),
             wallet_descriptor: self.cfg.peg_in_descriptor.clone(),
             wallet_decoder: self.decoder(),
             secp: Default::default(),
@@ -443,7 +484,7 @@ impl ClientModule for WalletClientModule {
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {
-    esplora_server: String,
+    rpc: DynBitcoindRpc,
     wallet_descriptor: PegInDescriptor,
     wallet_decoder: Decoder,
     secp: Secp256k1<All>,

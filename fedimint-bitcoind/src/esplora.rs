@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use bitcoin::{BlockHash, Network, Transaction, Txid};
+use anyhow::format_err;
+use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::TaskHandle;
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::{info, warn};
 use url::Url;
@@ -88,5 +90,33 @@ impl IBitcoindRpc for EsploraClient {
             .await?
             .block_height
             .map(|height| height as u64))
+    }
+
+    async fn watch_script_history(
+        &self,
+        script: &Script,
+    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
+        let transactions = self
+            .0
+            .scripthash_txs(script, None)
+            .await?
+            .into_iter()
+            .map(|tx| tx.to_tx())
+            .collect::<Vec<_>>();
+
+        Ok(transactions)
+    }
+
+    async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
+        let proof = self
+            .0
+            .get_merkle_block(&txid)
+            .await?
+            .ok_or(format_err!("No merkle proof found"))?;
+
+        Ok(TxOutProof {
+            block_header: proof.header,
+            merkle_proof: proof.txn,
+        })
     }
 }

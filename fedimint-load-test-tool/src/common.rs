@@ -132,7 +132,7 @@ pub async fn build_client(
     let mut client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientGen);
     client_builder.with_module(LightningClientGen);
-    client_builder.with_module(WalletClientGen);
+    client_builder.with_module(WalletClientGen::default());
     client_builder.with_primary_module(1);
     client_builder.with_config(cfg.clone());
     if let Some(rocksdb) = rocksdb {

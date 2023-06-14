@@ -144,7 +144,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut module_gens_params = ServerModuleGenParamsRegistry::default();
 
     let client_module_inits = ClientModuleGenRegistry::from(vec![
-        DynClientModuleGen::from(WalletClientGen),
+        DynClientModuleGen::from(WalletClientGen::default()),
         DynClientModuleGen::from(MintClientGen),
         DynClientModuleGen::from(LightningClientGen),
     ]);

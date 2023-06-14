@@ -54,11 +54,13 @@ impl State for DummyStateMachine {
                     context.dummy_decoder.clone(),
                 ),
                 move |dbtx, res, _state: Self| match res {
-                    Ok(_) => Box::pin(async move { DummyStateMachine::OutputDone(amount, id) }),
-                    Err(_) => Box::pin(async move {
+                    // output accepted, add funds
+                    Ok(_) => Box::pin(async move {
                         add_funds(amount, dbtx.module_tx()).await;
-                        DummyStateMachine::Refund(id)
+                        DummyStateMachine::OutputDone(amount, id)
                     }),
+                    // output rejected, do not add funds
+                    Err(_) => Box::pin(async move { DummyStateMachine::Refund(id) }),
                 },
             )],
             DummyStateMachine::InputDone(_) => vec![],
