@@ -9,6 +9,7 @@ use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{maybe_add_send_sync, task};
@@ -352,7 +353,11 @@ where
             }
         };
 
-        debug!(?state, ?transition_outcome, "Executing state transition");
+        debug!(
+            ?state,
+            transition_outcome = ?AbbreviateJson(&transition_outcome),
+            "Executing state transition"
+        );
 
         let new_state = self
             .db
