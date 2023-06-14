@@ -92,6 +92,26 @@ jobs:
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
         run: nix build -L .#ci.cli-test.all
 
+  wasm-tests:
+    name: "Wasm tests"
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: cachix/install-nix-action@v21
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v12
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+
+      - name: Tests
+        run: nix develop .#crossWasm -c ./scripts/wasm-tests.sh
+
   audit:
     name: "Audit"
     runs-on: buildjet-2vcpu-ubuntu-2004
@@ -298,7 +318,7 @@ jobs:
 
   notifications:
     # if: github.ref == 'refs/heads/master'
-    if: always()                              
+    if: always()
     name: "Notifications"
     timeout-minutes: 1
     runs-on: ubuntu-22.04
@@ -307,7 +327,7 @@ jobs:
     needs: [ build, cross, ccov, containers, pkgs ]
 
     steps:
-    - name: Discord notifications on failure                                                         
+    - name: Discord notifications on failure
       # https://stackoverflow.com/a/74562058/134409
       if: ${{ always() && contains(needs.*.result, 'failure') }}
       # https://github.com/marketplace/actions/actions-status-discord
