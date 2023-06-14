@@ -57,6 +57,7 @@ jsonrpsee-ws-client = { version = "0.18.0", features = ["webpki-tls"], default-f
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = { version = "0.18.0" }
+ring = { version = "0.16.20", features = ["wasm32_unknown_unknown_js"] }
 
 [dev-dependencies]
 tokio = { version = "1.26.0", features = ["full"] }
