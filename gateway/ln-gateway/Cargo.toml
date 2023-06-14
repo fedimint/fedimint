@@ -51,6 +51,7 @@ fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
+fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"
 lightning = "0.0.113"
@@ -72,7 +73,6 @@ tracing = { version = "0.1.37", default-features = false, features= ["log", "att
 url = { version = "2.3.1", features = ["serde"] }
 
 [dev-dependencies]
-fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
 fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
