@@ -190,8 +190,8 @@ impl FedimintConsensus {
             .expect("Committing consensus epoch failed");
 
         let audit = self.audit().await;
-        if audit.sum().milli_sat < 0 {
-            panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
+        if audit.sum().milli_sat != 0 {
+            panic!("Balance sheet of the fed is non-zero, this should never happen! {audit}")
         }
 
         epoch_history
