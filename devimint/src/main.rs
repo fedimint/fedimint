@@ -1023,23 +1023,29 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
     assert!(0 < pre_balance);
 
     // without existing backup
-    {
-        let _ = cmd!(fed_cli, "ng", "wipe", "--force",).out_json().await?;
+    // TODO: Change this test and make them exercise more scenarios.
+    // Currently (and probably indefinitely) we can support only one
+    // restoration per client state (datadir), as it only makes sense to do
+    // once (at the very beginning) and we used a fixed operation id for it.
+    // Testing restore in different setups would require multiple clients,
+    // which is a larger refactor.
+    // {
+    //     let _ = cmd!(fed_cli, "ng", "wipe", "--force",).out_json().await?;
 
-        assert_eq!(
-            0,
-            cmd!(fed_cli, "ng", "info").out_json().await?["total_msat"]
-                .as_u64()
-                .unwrap()
-        );
-        let _ = cmd!(fed_cli, "ng", "restore", &secret,).out_json().await?;
+    //     assert_eq!(
+    //         0,
+    //         cmd!(fed_cli, "ng", "info").out_json().await?["total_msat"]
+    //             .as_u64()
+    //             .unwrap()
+    //     );
+    //     let _ = cmd!(fed_cli, "ng", "restore", &secret,).out_json().await?;
 
-        let post_notes = cmd!(fed_cli, "ng", "info").out_json().await?;
-        let post_balance = post_notes["total_msat"].as_u64().unwrap();
+    //     let post_notes = cmd!(fed_cli, "ng", "info").out_json().await?;
+    //     let post_balance = post_notes["total_msat"].as_u64().unwrap();
 
-        debug!(%post_notes, post_balance, "State after backup");
-        assert_eq!(pre_balance, post_balance);
-    }
+    //     debug!(%post_notes, post_balance, "State after backup");
+    //     assert_eq!(pre_balance, post_balance);
+    // }
 
     // with a backup
     {
