@@ -5,14 +5,13 @@ use fedimint_client_legacy::modules::ln::LightningGateway;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::TaskGroup;
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
+use ln_gateway::rpc::rpc_server::run_webserver;
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::{Gateway, DEFAULT_FEES};
 use tempfile::TempDir;
-use tracing::warn;
 use url::Url;
 
 use crate::federation::FederationTest;
@@ -22,7 +21,6 @@ pub struct GatewayTest {
     api: Url,
     password: String,
     _config_dir: Option<TempDir>,
-    _task: TaskGroup,
 }
 
 impl GatewayTest {
@@ -56,7 +54,6 @@ impl GatewayTest {
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: Url = format!("http://{listen}").parse().unwrap();
-        let mut task = TaskGroup::new();
         let (path, _config_dir) = test_dir("gateway-cfg");
 
         // Create federation client builder for the gateway
@@ -69,28 +66,19 @@ impl GatewayTest {
             client_builder.clone(),
             DEFAULT_FEES,
             gatewayd_db,
-            &mut task,
             address.clone(),
         )
         .await
         .unwrap();
 
-        gateway
-            .spawn_webserver(listen, password.clone(), &mut task)
-            .await;
-        let mut subgroup = task.make_subgroup().await;
-        task.spawn("gatewayd", |_| async move {
-            if let Err(err) = gateway.run(&mut subgroup).await {
-                warn!("Gateway stopped with error {:?}", err);
-            }
-        })
-        .await;
+        run_webserver(password.clone(), listen, gateway)
+            .await
+            .expect("Failed to start webserver");
 
         Self {
             password,
             api: address,
             _config_dir,
-            _task: task,
         }
     }
 }

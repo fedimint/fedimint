@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
-use std::time::Duration;
 
 use clap::Parser;
 use fedimint_core::core::{
@@ -11,7 +10,6 @@ use fedimint_core::core::{
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleGen, ModuleCommon};
-use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningCommonGen;
 use fedimint_ln_common::config::GatewayFee;
 use fedimint_ln_common::LightningModuleTypes;
@@ -20,10 +18,9 @@ use fedimint_mint_client::{MintCommonGen, MintModuleTypes};
 use fedimint_wallet_client::{WalletCommonGen, WalletModuleTypes};
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
-use tracing::{error, info};
+use tracing::info;
 use url::Url;
 
-const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 const DB_FILE: &str = "gatewayd.db";
 
 #[derive(Parser)]
@@ -89,9 +86,6 @@ async fn main() -> Result<(), anyhow::Error> {
     // Create federation client builder
     let client_builder = StandardGatewayClientBuilder::new(data_dir.clone());
 
-    // Create task group for controlled shutdown of the gateway
-    let mut task_group = TaskGroup::new();
-
     // Create module decoder registry
     let decoders = ModuleDecoderRegistry::from_iter([
         (
@@ -121,7 +115,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let gateway = Gateway::new(
         mode,
         client_builder,
-        &mut task_group,
         fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
         gatewayd_db,
         api_addr,
@@ -132,15 +125,7 @@ async fn main() -> Result<(), anyhow::Error> {
         exit(1)
     });
 
-    gateway
-        .spawn_webserver(listen, password, &mut task_group)
-        .await;
-    if let Err(e) = gateway.run(&mut task_group).await {
-        task_group.shutdown_join_all(Some(SHUTDOWN_TIMEOUT)).await?;
-
-        error!("Gateway stopped with error: {}", e);
-        return Err(e.into());
-    }
+    gateway.spawn_blocking_webserver(listen, password).await;
 
     Ok(())
 }

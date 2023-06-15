@@ -64,7 +64,6 @@ impl StandardGatewayClientBuilder {
         client_builder.with_config(config.config);
         client_builder.with_database(db);
 
-        tracing::info!("STANDARD CLIENT BUILDING");
         client_builder
             // TODO: make this configurable?
             .build::<PlainRootSecretStrategy>(tg)
