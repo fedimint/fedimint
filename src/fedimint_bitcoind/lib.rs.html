@@ -202,6 +202,27 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -211,14 +232,16 @@
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">pub use </span>anyhow::Result;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
+<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 <span class="kw">use </span>fedimint_logging::LOG_BLOCKCHAIN;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
+
 <span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
 </span><span class="kw">pub mod </span>bitcoincore;
 <span class="attr">#[cfg(feature = <span class="string">&quot;electrum-client&quot;</span>)]
@@ -322,6 +345,15 @@
 
     <span class="doccomment">/// Check if a transaction is included in a block
     </span><span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;;
+
+    <span class="doccomment">/// Watches for a script and returns any transactions associated with it
+    ///
+    /// Should be called once prior to transactions being submitted or watching
+    /// may not occur
+    </span><span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Transaction&gt;&gt;;
+
+    <span class="doccomment">/// Returns a prooft that a tx is included in the bitcoin blockchain
+    </span><span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; <span class="prelude-ty">Result</span>&lt;TxOutProof&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -403,6 +435,16 @@
 
     <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await </span>})
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Transaction&gt;&gt; {
+        <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.watch_script_history(script).<span class="kw">await </span>})
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; <span class="prelude-ty">Result</span>&lt;TxOutProof&gt; {
+        <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_txout_proof(txid).<span class="kw">await </span>})
             .<span class="kw">await
     </span>}
 }

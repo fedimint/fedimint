@@ -1877,7 +1877,7 @@
     <span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.with_module(LightningClientGen)
             .with_module(MintClientGen)
-            .with_module(WalletClientGen)
+            .with_module(WalletClientGen::default())
     }
 
     <span class="kw">pub async fn </span>run(<span class="self">self</span>) {

@@ -167,7 +167,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>registry = ClientModuleGenRegistry::new();
         registry.attach(MintClientGen);
         registry.attach(DummyClientGen);
-        registry.attach(WalletClientGen);
+        registry.attach(WalletClientGen::default());
         registry.attach(GatewayClientGen {
             lightning_client: lnrpc,
             fees: config.fees,

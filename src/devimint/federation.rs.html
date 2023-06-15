@@ -346,7 +346,7 @@
         <span class="kw">let </span>decoders = module_decode_stubs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), module_decode_stubs());
         <span class="kw">let </span>module_gens = ClientModuleGenRegistry::from(<span class="macro">vec!</span>[
-            DynClientModuleGen::from(WalletClientGen),
+            DynClientModuleGen::from(WalletClientGen::default()),
             DynClientModuleGen::from(MintClientGen),
             DynClientModuleGen::from(LightningClientGen),
         ]);

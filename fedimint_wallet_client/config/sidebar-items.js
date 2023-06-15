@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["default_esplora_server",""]],"struct":[["FeeConsensus",""],["WalletClientConfig",""],["WalletConfig",""],["WalletConfigConsensus",""],["WalletConfigLocal",""],["WalletConfigPrivate",""],["WalletGenParams",""],["WalletGenParamsConsensus",""],["WalletGenParamsLocal",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["FeeConsensus",""],["WalletClientConfig",""],["WalletConfig",""],["WalletConfigConsensus",""],["WalletConfigLocal",""],["WalletConfigPrivate",""],["WalletGenParams",""],["WalletGenParamsConsensus",""],["WalletGenParamsLocal",""]]};

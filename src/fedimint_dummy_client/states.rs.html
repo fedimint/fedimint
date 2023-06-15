@@ -123,6 +123,8 @@
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{DynState, OperationId, State, StateTransition};
@@ -179,11 +181,13 @@
                     context.dummy_decoder.clone(),
                 ),
                 <span class="kw">move </span>|dbtx, res, _state: <span class="self">Self</span>| <span class="kw">match </span>res {
-                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::OutputDone(amount, id) }),
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{
+                    <span class="comment">// output accepted, add funds
+                    </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{
                         add_funds(amount, dbtx.module_tx()).<span class="kw">await</span>;
-                        DummyStateMachine::Refund(id)
+                        DummyStateMachine::OutputDone(amount, id)
                     }),
+                    <span class="comment">// output rejected, do not add funds
+                    </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::Refund(id) }),
                 },
             )],
             DummyStateMachine::InputDone(<span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],

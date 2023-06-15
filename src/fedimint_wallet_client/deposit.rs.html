@@ -319,67 +319,12 @@
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
-<span class="kw">use </span>anyhow::anyhow;
-<span class="kw">use </span>bitcoin::{Script, Txid};
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -482,7 +427,7 @@
         .tweak(<span class="kw-2">&amp;</span>tweak.public_key().to_x_only_pubkey(), <span class="kw-2">&amp;</span>context.secp)
         .script_pubkey();
     <span class="kw">loop </span>{
-        <span class="kw">match </span>get_script_history(<span class="kw-2">&amp;</span>context.esplora_server, <span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
+        <span class="kw">match </span>context.rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(received) =&gt; {
                 <span class="comment">// TODO: fix
                 </span><span class="kw">if </span>received.len() &gt; <span class="number">1 </span>{
@@ -515,23 +460,6 @@
 
         sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
     }
-}
-
-<span class="kw">async fn </span>get_script_history(
-    esplora_server: <span class="kw-2">&amp;</span>str,
-    script: <span class="kw-2">&amp;</span>Script,
-) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
-    <span class="kw">let </span>esplora_client = esplora_client(esplora_server)<span class="question-mark">?</span>;
-    <span class="kw">let </span>script = script.clone();
-
-    <span class="kw">let </span>transactions = esplora_client
-        .scripthash_txs(<span class="kw-2">&amp;</span>script, <span class="prelude-val">None</span>)
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_iter()
-        .map(|tx| tx.to_tx())
-        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-
-    <span class="prelude-val">Ok</span>(transactions)
 }
 
 <span class="kw">async fn </span>transition_tx_seen(
@@ -584,8 +512,7 @@
         <span class="comment">// TODO: make everything subscriptions
         // Wait for confirmation
         </span><span class="kw">let </span>consensus_height = <span class="kw">match </span>global_context
-            .api()
-            .with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .module_api()
             .fetch_consensus_block_height()
             .<span class="kw">await
         </span>{
@@ -597,11 +524,10 @@
             }
         };
 
-        <span class="kw">let </span>confirmation_height = <span class="kw">match </span>get_tx_block_height(
-            <span class="kw-2">&amp;</span>context.esplora_server,
-            waiting_state.btc_transaction.txid(),
-        )
-        .<span class="kw">await
+        <span class="kw">let </span>confirmation_height = <span class="kw">match </span>context
+            .rpc
+            .get_tx_block_height(<span class="kw-2">&amp;</span>waiting_state.btc_transaction.txid())
+            .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(confirmation_height) =&gt; confirmation_height,
             <span class="prelude-val">Err</span>(e) =&gt; {
@@ -621,11 +547,10 @@
         }
 
         <span class="comment">// Get txout proof
-        </span><span class="kw">let </span>txout_proof = <span class="kw">match </span>get_txout_proof(
-            <span class="kw-2">&amp;</span>context.esplora_server,
-            waiting_state.btc_transaction.txid(),
-        )
-        .<span class="kw">await
+        </span><span class="kw">let </span>txout_proof = <span class="kw">match </span>context
+            .rpc
+            .get_txout_proof(waiting_state.btc_transaction.txid())
+            .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(txout_proof) =&gt; txout_proof,
             <span class="prelude-val">Err</span>(e) =&gt; {
@@ -637,35 +562,6 @@
 
         <span class="kw">return </span>txout_proof;
     }
-}
-
-<span class="kw">async fn </span>get_tx_block_height(esplora_server: <span class="kw-2">&amp;</span>str, txid: Txid) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
-    <span class="kw">let </span>esplora_client = esplora_client(esplora_server)<span class="question-mark">?</span>;
-    <span class="kw">let </span>confirmation_height = esplora_client
-        .get_tx_status(<span class="kw-2">&amp;</span>txid)
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.block_height
-        .map(|height| height <span class="kw">as </span>u64);
-
-    <span class="prelude-val">Ok</span>(confirmation_height)
-}
-
-<span class="kw">async fn </span>get_txout_proof(esplora_server: <span class="kw-2">&amp;</span>str, txid: Txid) -&gt; anyhow::Result&lt;TxOutProof&gt; {
-    <span class="kw">let </span>esplora_client = esplora_client(esplora_server)<span class="question-mark">?</span>;
-    <span class="kw">let </span>proof = esplora_client
-        .get_merkle_block(<span class="kw-2">&amp;</span>txid)
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No merkle proof found&quot;</span>))<span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(TxOutProof {
-        block_header: proof.header,
-        merkle_proof: proof.txn,
-    })
-}
-
-<span class="kw">fn </span>esplora_client(esplora_server: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;esplora_client::AsyncClient&gt; {
-    <span class="kw">let </span>without_trailing = esplora_server.trim_end_matches(<span class="string">&#39;/&#39;</span>);
-    <span class="prelude-val">Ok</span>(esplora_client::Builder::new(without_trailing).build_async()<span class="question-mark">?</span>)
 }
 
 <span class="kw">async fn </span>transition_btc_tx_confirmed(

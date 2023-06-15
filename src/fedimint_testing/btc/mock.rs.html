@@ -274,16 +274,40 @@
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
 
+<span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hash_types::Txid;
 <span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{
-    Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Transaction, TxOut,
+    Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Script, Transaction,
+    TxOut,
 };
 <span class="kw">use </span>fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
@@ -335,6 +359,10 @@
     <span class="doccomment">/// Tracks how much bitcoin was sent to an address (doesn&#39;t track sending
     /// out of it)
     </span>addresses: Arc&lt;Mutex&lt;BTreeMap&lt;Txid, Amount&gt;&gt;&gt;,
+    <span class="doccomment">/// Simulates the merkle tree proofs
+    </span>proofs: Arc&lt;Mutex&lt;BTreeMap&lt;Txid, TxOutProof&gt;&gt;&gt;,
+    <span class="doccomment">/// Simulates the script history
+    </span>scripts: Arc&lt;Mutex&lt;BTreeMap&lt;Script, Vec&lt;Transaction&gt;&gt;&gt;&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>FakeBitcoinTest {
@@ -349,6 +377,8 @@
             blocks: Arc::new(Mutex::new(<span class="macro">vec!</span>[])),
             pending: Arc::new(Mutex::new(<span class="macro">vec!</span>[])),
             addresses: Arc::new(Mutex::new(Default::default())),
+            proofs: Arc::new(Mutex::new(Default::default())),
+            scripts: Arc::new(Mutex::new(Default::default())),
         }
     }
 
@@ -426,6 +456,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>blocks = <span class="self">self</span>.blocks.lock().unwrap();
         <span class="kw">let </span><span class="kw-2">mut </span>pending = <span class="self">self</span>.pending.lock().unwrap();
         <span class="kw">let </span><span class="kw-2">mut </span>addresses = <span class="self">self</span>.addresses.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>scripts = <span class="self">self</span>.scripts.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>proofs = <span class="self">self</span>.proofs.lock().unwrap();
 
         <span class="kw">let </span>transaction = FakeBitcoinTest::new_transaction(<span class="macro">vec!</span>[TxOut {
             value: amount.to_sat(),
@@ -438,14 +470,14 @@
 
         FakeBitcoinTest::mine_block(<span class="kw-2">&amp;mut </span>blocks, <span class="kw-2">&amp;mut </span>pending);
         <span class="kw">let </span>block_header = blocks.last().unwrap().header;
+        <span class="kw">let </span>proof = TxOutProof {
+            block_header,
+            merkle_proof,
+        };
+        proofs.insert(transaction.txid(), proof.clone());
+        scripts.insert(address.payload.script_pubkey(), <span class="macro">vec!</span>[transaction.clone()]);
 
-        (
-            TxOutProof {
-                block_header,
-                merkle_proof,
-            },
-            transaction,
-        )
+        (proof, transaction)
     }
 
     <span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address {
@@ -540,6 +572,18 @@
             }
         }
         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+    }
+
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; BitcoinRpcResult&lt;Vec&lt;Transaction&gt;&gt; {
+        <span class="kw">let </span>scripts = <span class="self">self</span>.scripts.lock().unwrap();
+        <span class="kw">let </span>script = scripts.get(script);
+        <span class="prelude-val">Ok</span>(script.unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[]).clone())
+    }
+
+    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; BitcoinRpcResult&lt;TxOutProof&gt; {
+        <span class="kw">let </span>proofs = <span class="self">self</span>.proofs.lock().unwrap();
+        <span class="kw">let </span>proof = proofs.get(<span class="kw-2">&amp;</span>txid);
+        <span class="prelude-val">Ok</span>(proof.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;No proof stored&quot;</span>))<span class="question-mark">?</span>.clone())
     }
 }
 

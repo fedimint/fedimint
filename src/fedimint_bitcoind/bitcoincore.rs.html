@@ -103,11 +103,49 @@
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::anyhow <span class="kw">as </span>format_err;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, Transaction, Txid};
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>anyhow::anyhow <span class="kw">as </span>format_err;
+<span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <span class="kw">use </span>bitcoincore_rpc::{Auth, RpcApi};
+<span class="kw">use </span>fedimint_core::encoding::Decodable;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskHandle};
+<span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
@@ -177,6 +215,34 @@
             <span class="prelude-val">Some</span>(hash) =&gt; <span class="prelude-val">Some</span>(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_block_header_info(<span class="kw-2">&amp;</span>hash))<span class="question-mark">?</span>.height),
         };
         <span class="prelude-val">Ok</span>(height.map(|h| h <span class="kw">as </span>u64))
+    }
+
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; anyhow::Result&lt;Vec&lt;Transaction&gt;&gt; {
+        <span class="comment">// start watching for this script in our wallet to avoid the need to rescan the
+        // blockchain, labeling it so we can reference it later
+        </span>block_in_place(|| {
+            <span class="self">self</span>.<span class="number">0
+                </span>.import_address_script(script, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>script.to_string()), <span class="prelude-val">Some</span>(<span class="bool-val">false</span>), <span class="prelude-val">None</span>)
+        })<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
+        <span class="kw">let </span>list = block_in_place(|| {
+            <span class="self">self</span>.<span class="number">0
+                </span>.list_transactions(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>script.to_string()), <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="bool-val">true</span>))
+        })<span class="question-mark">?</span>;
+        <span class="kw">for </span>tx <span class="kw">in </span>list {
+            <span class="kw">let </span>raw_tx = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_raw_transaction(<span class="kw-2">&amp;</span>tx.info.txid, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
+            results.push(raw_tx);
+        }
+        <span class="prelude-val">Ok</span>(results)
+    }
+
+    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; anyhow::Result&lt;TxOutProof&gt; {
+        TxOutProof::consensus_decode(
+            <span class="kw-2">&amp;mut </span>Cursor::new(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_tx_out_proof(<span class="kw-2">&amp;</span>[txid], <span class="prelude-val">None</span>))<span class="question-mark">?</span>),
+            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+        )
+        .map_err(|error| <span class="macro">format_err!</span>(<span class="string">&quot;Could not decode tx: {}&quot;</span>, error))
     }
 }
 
