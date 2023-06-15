@@ -728,7 +728,7 @@ async fn limits_client_config_downloads() -> Result<()> {
         let connect = &fed.connect_info.clone();
         let api = WsFederationApi::from_connect_info(&[connect.clone()]);
 
-        // consensus hash should be the same amoung all peers
+        // consensus hash should be the same among all peers
         let res = api.consensus_config_hash().await;
         assert!(res.is_ok());
 

@@ -445,7 +445,7 @@ pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDa
     open_channel(&bitcoind, &cln, &lnd).await?;
     info!(
         LOG_DEVIMINT,
-        "starting base deamons took {:?}",
+        "starting base daemons took {:?}",
         start_time.elapsed()?
     );
     Ok(ExternalDaemons {

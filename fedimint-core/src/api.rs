@@ -136,7 +136,7 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
     /// List of all federation members for the purpose of iterating each member
     /// in the federation.
     ///
-    /// The underlying implementation is resonsible for knowing how many
+    /// The underlying implementation is responsible for knowing how many
     /// and `PeerId`s of each. The caller of this interface most probably
     /// have some idea as well, but passing this set across every
     /// API call to the federation would be inconvenient.

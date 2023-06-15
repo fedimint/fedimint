@@ -549,7 +549,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
-    // # Clinet-NG tests
+    // # Client-NG tests
     info!("Testing Client-NG");
     // ## reissue e-cash
     info!("Testing reissuing e-cash");
@@ -585,7 +585,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .out_json()
         .await?
         .get("notes")
-        .expect("Output didn't containe e-cash notes")
+        .expect("Output didn't contain e-cash notes")
         .as_str()
         .unwrap()
         .to_owned();
@@ -616,7 +616,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_object()
         .unwrap()
         .get("notes")
-        .expect("Output didn't containe e-cash notes")
+        .expect("Output didn't contain e-cash notes")
         .as_str()
         .unwrap();
 

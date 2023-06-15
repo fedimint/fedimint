@@ -407,7 +407,7 @@ impl ServerModule for Wallet {
                 amount: fedimint_core::Amount::from_sats(input.tx_output().value),
                 fee: self.cfg.consensus.fee_consensus.peg_in_abs,
             },
-            puk_keys: vec![*input.tweak_contract_key()],
+            pub_keys: vec![*input.tweak_contract_key()],
         })
     }
 

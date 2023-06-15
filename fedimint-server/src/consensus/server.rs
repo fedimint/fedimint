@@ -383,7 +383,7 @@ impl ConsensusServer {
 
                     info!(
                         target: LOG_CONSENSUS,
-                        "Verifing missing epoch {}", epoch_num
+                        "Verifying missing epoch {}", epoch_num
                     );
                     epoch.verify_hash(&prev_epoch)?;
                     prev_epoch = Some(epoch.clone());

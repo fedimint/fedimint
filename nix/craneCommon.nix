@@ -1,4 +1,4 @@
-# Functionality w.r.t. common (but overrideable)  Nix/crane settings like:
+# Functionality w.r.t. common (but overridable)  Nix/crane settings like:
 #
 # * source file filtering
 # * CARGO_PROFILE
