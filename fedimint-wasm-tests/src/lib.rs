@@ -12,7 +12,7 @@ async fn client(connect_info: &WsClientConnectInfo) -> Result<fedimint_client::C
     let mut builder = fedimint_client::ClientBuilder::default();
     builder.with_module(LightningClientGen);
     builder.with_module(MintClientGen);
-    builder.with_module(WalletClientGen);
+    builder.with_module(WalletClientGen::default());
     builder.with_primary_module(1);
     builder.with_config(cfg);
     builder.with_database(MemDatabase::default());
