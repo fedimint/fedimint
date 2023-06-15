@@ -576,7 +576,7 @@ impl FedimintConsensus {
                 )
                 .await
                 .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
-            pub_keys.push(meta.puk_keys);
+            pub_keys.push(meta.pub_keys);
             funding_verifier.add_input(meta.amount);
         }
         transaction.validate_signature(pub_keys.into_iter().flatten())?;

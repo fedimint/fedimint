@@ -78,7 +78,7 @@ impl std::fmt::Display for LightningInput {
 /// patching in a second way of letting clients submit consensus items outside
 /// of transactions we let offers be a 0-amount output. We need to take care to
 /// allow 0-input, 1-output transactions for that to allow users to receive
-/// their fist notes via LN without already having notes.
+/// their first notes via LN without already having notes.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum LightningOutput {
     /// Fund contract

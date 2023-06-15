@@ -258,7 +258,7 @@ impl DecryptingPreimageState {
             Err(e) => IncomingStateMachine {
                 common: old_state.common,
                 state: IncomingSmStates::Failure(format!(
-                    "Unexpected internal error occured while decrypting the preimage: {e:?}"
+                    "Unexpected internal error occurred while decrypting the preimage: {e:?}"
                 )),
             },
         }

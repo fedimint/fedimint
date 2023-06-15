@@ -311,7 +311,7 @@ impl ServerModule for Dummy {
                     fee: self.cfg.consensus.tx_fee,
                 },
                 // IMPORTANT: include the pubkey to validate the user signed this tx
-                puk_keys: vec![input.account],
+                pub_keys: vec![input.account],
             });
         }
 

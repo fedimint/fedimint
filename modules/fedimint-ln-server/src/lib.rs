@@ -425,7 +425,7 @@ impl ServerModule for Lightning {
                 amount: input.amount,
                 fee: self.cfg.consensus.fee_consensus.contract_input,
             },
-            puk_keys: vec![pub_key],
+            pub_keys: vec![pub_key],
         })
     }
 

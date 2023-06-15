@@ -428,7 +428,7 @@ impl ServerModule for Mint {
                 amount: input.total_amount(),
                 fee: self.cfg.consensus.fee_consensus.note_spend_abs * (input.count_items() as u64),
             },
-            puk_keys: input
+            pub_keys: input
                 .iter_items()
                 .map(|(_, note)| *note.spend_key())
                 .collect(),
