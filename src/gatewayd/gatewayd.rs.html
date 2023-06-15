@@ -129,25 +129,9 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_core::core::{
@@ -157,7 +141,6 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon};
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::LightningCommonGen;
 <span class="kw">use </span>fedimint_ln_common::config::GatewayFee;
 <span class="kw">use </span>fedimint_ln_common::LightningModuleTypes;
@@ -166,10 +149,9 @@
 <span class="kw">use </span>fedimint_wallet_client::{WalletCommonGen, WalletModuleTypes};
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
-<span class="kw">use </span>tracing::{error, info};
+<span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
-<span class="kw">const </span>SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
 <span class="kw">const </span>DB_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;gatewayd.db&quot;</span>;
 
 <span class="attr">#[derive(Parser)]
@@ -235,9 +217,6 @@
     <span class="comment">// Create federation client builder
     </span><span class="kw">let </span>client_builder = StandardGatewayClientBuilder::new(data_dir.clone());
 
-    <span class="comment">// Create task group for controlled shutdown of the gateway
-    </span><span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
-
     <span class="comment">// Create module decoder registry
     </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
         (
@@ -267,7 +246,6 @@
     </span><span class="kw">let </span>gateway = Gateway::new(
         mode,
         client_builder,
-        <span class="kw-2">&amp;mut </span>task_group,
         fees.unwrap_or(GatewayFee(DEFAULT_FEES)).<span class="number">0</span>,
         gatewayd_db,
         api_addr,
@@ -278,15 +256,7 @@
         exit(<span class="number">1</span>)
     });
 
-    gateway
-        .spawn_webserver(listen, password, <span class="kw-2">&amp;mut </span>task_group)
-        .<span class="kw">await</span>;
-    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = gateway.run(<span class="kw-2">&amp;mut </span>task_group).<span class="kw">await </span>{
-        task_group.shutdown_join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="macro">error!</span>(<span class="string">&quot;Gateway stopped with error: {}&quot;</span>, e);
-        <span class="kw">return </span><span class="prelude-val">Err</span>(e.into());
-    }
+    gateway.spawn_blocking_webserver(listen, password).<span class="kw">await</span>;
 
     <span class="prelude-val">Ok</span>(())
 }

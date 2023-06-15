@@ -114,7 +114,6 @@
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -181,7 +180,6 @@
         client_builder.with_config(config.config);
         client_builder.with_database(db);
 
-        <span class="macro">tracing::info!</span>(<span class="string">&quot;STANDARD CLIENT BUILDING&quot;</span>);
         client_builder
             <span class="comment">// TODO: make this configurable?
             </span>.build::&lt;PlainRootSecretStrategy&gt;(tg)

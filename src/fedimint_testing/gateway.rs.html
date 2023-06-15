@@ -82,18 +82,6 @@
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -101,14 +89,13 @@
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lnrpc_client::ILnRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
+<span class="kw">use </span>ln_gateway::rpc::rpc_server::run_webserver;
 <span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
 <span class="kw">use </span>ln_gateway::{Gateway, DEFAULT_FEES};
 <span class="kw">use </span>tempfile::TempDir;
-<span class="kw">use </span>tracing::warn;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
@@ -118,7 +105,6 @@
     api: Url,
     password: String,
     _config_dir: <span class="prelude-ty">Option</span>&lt;TempDir&gt;,
-    _task: TaskGroup,
 }
 
 <span class="kw">impl </span>GatewayTest {
@@ -152,7 +138,6 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>address: Url = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
-        <span class="kw">let </span><span class="kw-2">mut </span>task = TaskGroup::new();
         <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="string">&quot;gateway-cfg&quot;</span>);
 
         <span class="comment">// Create federation client builder for the gateway
@@ -165,28 +150,19 @@
             client_builder.clone(),
             DEFAULT_FEES,
             gatewayd_db,
-            <span class="kw-2">&amp;mut </span>task,
             address.clone(),
         )
         .<span class="kw">await
         </span>.unwrap();
 
-        gateway
-            .spawn_webserver(listen, password.clone(), <span class="kw-2">&amp;mut </span>task)
-            .<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>subgroup = task.make_subgroup().<span class="kw">await</span>;
-        task.spawn(<span class="string">&quot;gatewayd&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = gateway.run(<span class="kw-2">&amp;mut </span>subgroup).<span class="kw">await </span>{
-                <span class="macro">warn!</span>(<span class="string">&quot;Gateway stopped with error {:?}&quot;</span>, err);
-            }
-        })
-        .<span class="kw">await</span>;
+        run_webserver(password.clone(), listen, gateway)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Failed to start webserver&quot;</span>);
 
         <span class="self">Self </span>{
             password,
             api: address,
             _config_dir,
-            _task: task,
         }
     }
 }
