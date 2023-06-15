@@ -2396,7 +2396,7 @@
                 amount: fedimint_core::Amount::from_sats(input.tx_output().value),
                 fee: <span class="self">self</span>.cfg.consensus.fee_consensus.peg_in_abs,
             },
-            puk_keys: <span class="macro">vec!</span>[<span class="kw-2">*</span>input.tweak_contract_key()],
+            pub_keys: <span class="macro">vec!</span>[<span class="kw-2">*</span>input.tweak_contract_key()],
         })
     }
 

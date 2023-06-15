@@ -5,7 +5,7 @@
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An API (module or global) that can query a federation</p>
 </div></details><h2 id="required-methods" class="small-section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.all_members" class="method"><a class="srclink rightside" href="../../src/fedimint_core/api.rs.html#143">source</a><h4 class="code-header">fn <a href="#tymethod.all_members" class="fn">all_members</a>(&amp;self) -&gt; &amp;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/collections/btree/set/struct.BTreeSet.html" title="struct alloc::collections::btree::set::BTreeSet">BTreeSet</a>&lt;<a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>&gt;</h4></section></summary><div class="docblock"><p>List of all federation members for the purpose of iterating each member
 in the federation.</p>
-<p>The underlying implementation is resonsible for knowing how many
+<p>The underlying implementation is responsible for knowing how many
 and <code>PeerId</code>s of each. The caller of this interface most probably
 have some idea as well, but passing this set across every
 API call to the federation would be inconvenient.</p>
