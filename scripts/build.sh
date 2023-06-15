@@ -30,7 +30,10 @@ touch "$FM_PID_FILE"
 SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 cd $SRC_DIR || exit 1
 # Note: Respect 'CARGO_PROFILE' that crane uses
-cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
+
+if [ -z "${SKIP_CARGO_BUILD:-}" ]; then
+  cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
+fi
 export PATH="$PWD/target/${CARGO_PROFILE:-debug}:$PATH"
 
 

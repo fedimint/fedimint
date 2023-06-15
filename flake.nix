@@ -174,6 +174,11 @@
             always-fail = craneLib.cliTestAlwaysFail;
           };
 
+          wasm-tests = { craneLibNative, craneLibCross }: craneLibCross.wasmTests {
+            nativeWorkspaceBuild = craneLibNative.workspaceBuild;
+            wasmTarget = toolchain.crossTargets.wasm32-unknown-unknown;
+          };
+
           # packages we expose from our flake (note: we also expose `legacyPackages` for hierarchical outputs)
           packages = (workspaceOutputs craneLibNative) //
             # replace git hash in the final binaries
@@ -227,6 +232,12 @@
               debug = (workspaceOutputs craneLibDebug) // { cli-test = cli-test craneLibDebug; };
 
               ci = (workspaceOutputs craneLibCi) // {
+                wasm-tests = wasm-tests {
+                  craneLibCross = (craneLibCross "wasm32-unknown-unknown").overrideScope' (self: prev: {
+                    commonProfile = "ci";
+                  });
+                  craneLibNative = craneLibCi;
+                };
                 cli-test = cli-test craneLibCi;
               };
 
