@@ -46,7 +46,7 @@ impl Federation {
         let decoders = module_decode_stubs();
         let db = Database::new(MemDatabase::new(), module_decode_stubs());
         let module_gens = ClientModuleGenRegistry::from(vec![
-            DynClientModuleGen::from(WalletClientGen),
+            DynClientModuleGen::from(WalletClientGen::default()),
             DynClientModuleGen::from(MintClientGen),
             DynClientModuleGen::from(LightningClientGen),
         ]);

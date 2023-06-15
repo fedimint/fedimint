@@ -2,12 +2,14 @@ use std::collections::BTreeMap;
 use std::iter::repeat;
 use std::sync::{Arc, Mutex};
 
+use anyhow::format_err;
 use async_trait::async_trait;
 use bitcoin::hash_types::Txid;
 use bitcoin::hashes::Hash;
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
-    Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Transaction, TxOut,
+    Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Script, Transaction,
+    TxOut,
 };
 use fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
@@ -59,6 +61,10 @@ pub struct FakeBitcoinTest {
     /// Tracks how much bitcoin was sent to an address (doesn't track sending
     /// out of it)
     addresses: Arc<Mutex<BTreeMap<Txid, Amount>>>,
+    /// Simulates the merkle tree proofs
+    proofs: Arc<Mutex<BTreeMap<Txid, TxOutProof>>>,
+    /// Simulates the script history
+    scripts: Arc<Mutex<BTreeMap<Script, Vec<Transaction>>>>,
 }
 
 impl Default for FakeBitcoinTest {
@@ -73,6 +79,8 @@ impl FakeBitcoinTest {
             blocks: Arc::new(Mutex::new(vec![])),
             pending: Arc::new(Mutex::new(vec![])),
             addresses: Arc::new(Mutex::new(Default::default())),
+            proofs: Arc::new(Mutex::new(Default::default())),
+            scripts: Arc::new(Mutex::new(Default::default())),
         }
     }
 
@@ -150,6 +158,8 @@ impl BitcoinTest for FakeBitcoinTest {
         let mut blocks = self.blocks.lock().unwrap();
         let mut pending = self.pending.lock().unwrap();
         let mut addresses = self.addresses.lock().unwrap();
+        let mut scripts = self.scripts.lock().unwrap();
+        let mut proofs = self.proofs.lock().unwrap();
 
         let transaction = FakeBitcoinTest::new_transaction(vec![TxOut {
             value: amount.to_sat(),
@@ -162,14 +172,14 @@ impl BitcoinTest for FakeBitcoinTest {
 
         FakeBitcoinTest::mine_block(&mut blocks, &mut pending);
         let block_header = blocks.last().unwrap().header;
+        let proof = TxOutProof {
+            block_header,
+            merkle_proof,
+        };
+        proofs.insert(transaction.txid(), proof.clone());
+        scripts.insert(address.payload.script_pubkey(), vec![transaction.clone()]);
 
-        (
-            TxOutProof {
-                block_header,
-                merkle_proof,
-            },
-            transaction,
-        )
+        (proof, transaction)
     }
 
     async fn get_new_address(&self) -> Address {
@@ -264,6 +274,18 @@ impl IBitcoindRpc for FakeBitcoinTest {
             }
         }
         Ok(None)
+    }
+
+    async fn watch_script_history(&self, script: &Script) -> BitcoinRpcResult<Vec<Transaction>> {
+        let scripts = self.scripts.lock().unwrap();
+        let script = scripts.get(script);
+        Ok(script.unwrap_or(&vec![]).clone())
+    }
+
+    async fn get_txout_proof(&self, txid: Txid) -> BitcoinRpcResult<TxOutProof> {
+        let proofs = self.proofs.lock().unwrap();
+        let proof = proofs.get(&txid);
+        Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
 }
 

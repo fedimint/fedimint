@@ -1800,7 +1800,6 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "erased-serde",
- "esplora-client",
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",

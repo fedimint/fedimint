@@ -1,10 +1,11 @@
 use std::fmt;
 
 use anyhow::anyhow as format_err;
-use bitcoin::{BlockHash, Network, Transaction, Txid};
+use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
 use fedimint_core::task::{block_in_place, TaskHandle};
+use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::{info, warn};
 use url::Url;
@@ -96,5 +97,23 @@ impl IBitcoindRpc for ElectrumClient {
                 Ok(history.first().map(|history| history.height as u64))
             }
         }
+    }
+
+    async fn watch_script_history(
+        &self,
+        script: &Script,
+    ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
+        let mut results = vec![];
+        let transactions = block_in_place(|| self.0.script_get_history(script))?;
+        for history in transactions.into_iter() {
+            results.push(block_in_place(|| self.0.transaction_get(&history.tx_hash))?);
+        }
+        Ok(results)
+    }
+
+    async fn get_txout_proof(&self, _txid: Txid) -> anyhow::Result<TxOutProof> {
+        // FIXME: Not sure how to implement for electrum yet, but the client cannot use
+        // electrum regardless right now
+        unimplemented!()
     }
 }
