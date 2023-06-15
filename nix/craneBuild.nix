@@ -164,6 +164,15 @@ craneLib.overrideScope' (self: prev: {
     buildPhaseCargoCommand = "patchShebangs ./scripts ; ./scripts/always-fail-test.sh";
   });
 
+  wasmTests = { nativeWorkspaceBuild, wasmTarget }: self.mkCargoDerivation (self.commonCliTestArgs // {
+    pname = "wasm-tests";
+    version = "0.0.1";
+    cargoArtifacts = nativeWorkspaceBuild;
+    nativeBuildInputs = self.commonCliTestArgs.nativeBuildInputs ++ [ pkgs.firefox pkgs.wasm-bindgen-cli pkgs.geckodriver pkgs.wasm-pack ];
+    buildPhaseCargoCommand = "patchShebangs ./scripts; SKIP_CARGO_BUILD=1 ./scripts/wasm-tests.sh";
+    preBuild = wasmTarget.extraEnvs;
+  });
+
 
   # Compile a group of packages together
   #
