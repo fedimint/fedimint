@@ -69,6 +69,7 @@
               inherit pkgs pkgs-kitman clightning-dev advisory-db lib moreutils-ts;
 
               src = ./.;
+              srcDotCargo = ./.cargo;
             };
 
           craneExtendBuild = import ./nix/craneBuild.nix

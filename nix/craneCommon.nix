@@ -5,7 +5,7 @@
 # * build inputs
 # * env variables
 
-{ src, pkgs, lib, clightning-dev, pkgs-kitman, moreutils-ts, ... }:
+{ src, srcDotCargo, pkgs, lib, clightning-dev, pkgs-kitman, moreutils-ts, ... }:
 craneLib:
 craneLib.overrideScope' (self: prev: {
 
@@ -141,7 +141,7 @@ craneLib.overrideScope' (self: prev: {
     dummySrc = self.mkDummySrc {
       src = self.filterWorkspaceDepsBuildFiles self.commonSrc;
       extraDummyScript = ''
-        cp -ar ${src}/.cargo --no-target-directory $out/.cargo
+        cp -ar ${srcDotCargo} --no-target-directory $out/.cargo
       '';
     };
   };
