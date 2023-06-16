@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"fedimint_atomic_broadcast":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"fedimint_atomic_broadcast/db/struct.UnitSaver.html\" title=\"struct fedimint_atomic_broadcast::db::UnitSaver\">UnitSaver</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

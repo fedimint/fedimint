@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"fedimint_atomic_broadcast":[["impl DataProvider&lt;<a class=\"enum\" href=\"fedimint_atomic_broadcast/data_provider/enum.UnitData.html\" title=\"enum fedimint_atomic_broadcast::data_provider::UnitData\">UnitData</a>&gt; for <a class=\"struct\" href=\"fedimint_atomic_broadcast/data_provider/struct.DataProvider.html\" title=\"struct fedimint_atomic_broadcast::data_provider::DataProvider\">DataProvider</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

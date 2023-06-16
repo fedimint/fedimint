@@ -1,0 +1,131 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This module implements fedimints custom atomic broadcast abstraction. A such, it is responsible for ordering serialized items in the form of byte vectors. The Broadcast is able to recover from a crash at any time via a backup that it maintains in the servers [fedimint_core::db::Database]. In Addition, it stores the history of accepted items in the form of [SignedBlock]s in the database as well in order to catch up fellow guardians which have been offline for a prolonged period of time."><title>fedimint_atomic_broadcast - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="logo-container" href="../fedimint_atomic_broadcast/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2></h2></nav><nav class="sidebar"><a class="logo-container" href="../fedimint_atomic_broadcast/index.html"><img class="rust-logo" src="../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><h2 class="location"><a href="#">Crate fedimint_atomic_broadcast</a></h2><div class="sidebar-elems"><ul class="block"><li class="version">Version 0.1.0</li><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#functions">Functions</a></li></ul></section></div></nav><main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">fedimint_atomic_broadcast</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="srclink" href="../src/fedimint_atomic_broadcast/lib.rs.html#1-240">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This module implements fedimints custom atomic broadcast abstraction. A
+such, it is responsible for ordering serialized items in the form of byte
+vectors. The Broadcast is able to recover from a crash at any time via a
+backup that it maintains in the servers <a href="../fedimint_core/db/struct.Database.html" title="fedimint_core::db::Database">fedimint_core::db::Database</a>. In
+Addition, it stores the history of accepted items in the form of
+<a href="struct.SignedBlock.html" title="SignedBlock">SignedBlock</a>s in the database as well in order to catch up fellow guardians
+which have been offline for a prolonged period of time.</p>
+<p>Though the broadcast depends on <a href="../fedimint_core/index.html" title="fedimint_core">fedimint_core</a> for <a href="../fedimint_core/struct.PeerId.html" title="fedimint_core::PeerId">fedimint_core::PeerId</a>,
+<a href="../fedimint_core/encoding/trait.Encodable.html" title="fedimint_core::encoding::Encodable">fedimint_core::encoding::Encodable</a> and <a href="../fedimint_core/db/struct.Database.html" title="fedimint_core::db::Database">fedimint_core::db::Database</a>
+it implements no consensus logic specific to Fedimint, to which we will
+refer as Fedimint Consensus going forward. To the broadcast a consensus item
+is merely a vector of bytes without any further structure.</p>
+<h2 id="example-setup"><a href="#example-setup">Example Setup</a></h2>
+<div class="example-wrap ignore"><div class='tooltip'>ⓘ</div><pre class="rust rust-example-rendered"><code><span class="kw">let </span>block_index = <span class="number">0</span>;
+<span class="kw">let </span>(mempool_item_sender, mempool_item_receiver) = async_channel::bounded(<span class="number">256</span>);
+<span class="kw">let </span>(incoming_message_sender, incoming_message_receiver) = async_channel::bounded(<span class="number">256</span>);
+<span class="kw">let </span>(outgoing_message_sender, outgoing_message_receiver) = async_channel::bounded(<span class="number">256</span>);
+<span class="kw">let </span>(ordered_item_sender, ordered_item_receiver) = mpsc::channel(<span class="number">32</span>);
+<span class="kw">let </span>(shutdown_sender, shutdown_receiver) = watch::channel(<span class="prelude-val">None</span>);
+
+<span class="kw">let </span>broadcast_handle = tokio::spawn(fedimint_atomic_broadcast::run(
+   keychain,
+   db,
+   block_index,
+   mempool_item_receiver,
+   incoming_message_receiver,
+   outgoing_message_sender,
+   ordered_item_sender,
+   shutdown_receiver,
+));</code></pre></div>
+<h2 id="the-journey-of-a-consensusitem"><a href="#the-journey-of-a-consensusitem">The journey of a ConsensusItem</a></h2>
+<p>Let us sketch the journey of an <a href="../fedimint_core/epoch/enum.ConsensusItem.html" title="fedimint_core::epoch::ConsensusItem">fedimint_core::epoch::ConsensusItem</a> into a
+signed block.</p>
+<ul>
+<li>The node which wants to order the item calls consensus_encode to serialize
+it and sends the resulting serialization to its running atomic broadcast
+instance via the mempool item sender.</li>
+<li>Every 250ms the broadcasts currently running session instance creates a
+new batch from its mempool and attaches it to a unit in the form of a
+UnitData::Batch. The size of a batch and therefore the size of a
+serialization is limited to 10kB.</li>
+<li>The unit is then included in a <a href="enum.Message.html" title="Message">Message</a> and send to the network layer via
+the outgoing message sender.</li>
+<li>The network layer receives the message, serializes it via consensus_encode
+and sends it to its peers, which in turn deserialize it via
+consensus_decode and relay it to their broadcast instance via their
+incoming message sender.</li>
+<li>The unit is added to the local subgraph of a common directed acyclic graph
+of units generated cooperatively by all peers for every session.</li>
+<li>As the local subgraph grows the units within it are ordered and so are the
+attached batches. As soon as it is ordered the broadcast instances unpacks
+our batch sends the serialization to Fedimint Consensus in the form of an
+<a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a> .</li>
+<li>Fedimint Consensus then deserializes the item and either accepts the item
+bases on its current consensus state or discards it otherwise. Fedimint
+Consensus transmits its decision to its broadcast instance via the
+decision_sender and processes the next item.</li>
+<li>Assuming our item has been accepted the broadcast instance appends its
+deserialization is added to the block corresponding to the current
+session.</li>
+<li>Roughly every five minutes the session completes. Then the broadcast
+creates a threshold signature for the blocks header and saves both in the
+form of a <a href="struct.SignedBlock.html" title="SignedBlock">SignedBlock</a> in the local database.</li>
+</ul>
+<h2 id="interplay-with-fedimint-consensus"><a href="#interplay-with-fedimint-consensus">Interplay with Fedimint Consensus</a></h2>
+<p>As an item is only recorded in a block if it has been accepted the decision
+has to be consisted for all correct nodes in order for them to create
+identical blocks for every session. We introduce this complexity in order to
+prevent a critical DOS vector were a client submits conflicting items, like
+double spending an ecash note for example, to different peers. If Fedimint
+Consensus would not be able to discard the conflicting items in such a way
+that they do not become part of the broadcasts history all of those items
+would need to be maintained on disk indefinitely.</p>
+<p>Therefore it cannot be guaranteed that all broadcast instances return the
+exact stream of ordered items. However, if two correct peers obtain two
+ordered items from their broadcast instances they are guaranteed to be in
+the same order. Furthermore, an ordered items is guaranteed to be seen by
+all correct nodes if a correct peer accepts it. Those two guarantees are
+sufficient to build consistent replicated state machines like Fedimint
+Consensus on top of the broadcast. Such a state machine has to accept an
+item if it changes the machines state and should discard it otherwise. Let
+us consider the case of an ecash note being double spend by the items
+A and B while one peer is offline. First, item A is ordered and all correct
+peers include the note as spent in their state. Therfore they also accept
+the item A. Then, item B is ordered and all correct nodes notice the double
+spend and make no changes to their state. Now they can safely discard the
+item B as it did not cause a state transition. When the session completes
+only item A is part of the corresponding block. When the offline peer comes
+back online it downloads the block. Therefore the recovering peer will only
+see Item A but arrives at the same state as its peers at the end of the
+session regardless. However, it did so by processing one less ordered item
+and without realizing that a double spend had occured.</p>
+<p>Since a state machine may process only a subsequence of a sessions items we
+can not simply rely on the last processed items index when recovering from a
+crash mid session in order to know how many items from the session have
+already been applied to our state. Furthermore, the broadcast instance does
+not save the decisions for items processed before the crash to disk so
+Fedimint Consensus either has to keep track of the decisions on disk or
+recompute them. I think the simplest solution to this is to use a single
+database transaction for the entire session for all consensus critical state
+and maintain the index of the current session as part of the state machine.
+If we crash mid session all intermediate state changes are lost and we
+simply process the returned ordered items again without any recovery
+specific logic. At the end of a session all state machines will arrive at
+the same state regardless of the exact number of ordered items they
+processed to arrive there. Hence, when we receive the first ordered item of
+the next session which indicates that the current session is complete we can
+bump the index of current session and finally commit the transaction.</p>
+</div></details><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="mod" href="broadcast/index.html" title="mod fedimint_atomic_broadcast::broadcast">broadcast</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="conversion/index.html" title="mod fedimint_atomic_broadcast::conversion">conversion</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="data_provider/index.html" title="mod fedimint_atomic_broadcast::data_provider">data_provider</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="db/index.html" title="mod fedimint_atomic_broadcast::db">db</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="finalization_handler/index.html" title="mod fedimint_atomic_broadcast::finalization_handler">finalization_handler</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="keychain/index.html" title="mod fedimint_atomic_broadcast::keychain">keychain</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="network/index.html" title="mod fedimint_atomic_broadcast::network">network</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="session/index.html" title="mod fedimint_atomic_broadcast::session">session</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="mod" href="spawner/index.html" title="mod fedimint_atomic_broadcast::spawner">spawner</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div></div><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="struct" href="struct.Block.html" title="struct fedimint_atomic_broadcast::Block">Block</a></div><div class="item-right docblock-short">All items ordered in a session that have been accepted by Fedimint Consensus
+are recorded in the corresponding block. A running Federation produces a
+<a href="struct.Block.html" title="Block">Block</a> roughly every five minutes.  Therefore, just like in Bitcoin, a
+<a href="struct.Block.html" title="Block">Block</a> might be empty if no items are ordered in that time or all ordered
+items are discarded by Fedimint Consensus.</div></div><div class="item-row"><div class="item-left"><a class="struct" href="struct.Keychain.html" title="struct fedimint_atomic_broadcast::Keychain">Keychain</a></div><div class="item-right docblock-short">This keychain implements naive threshold schnorr signatures over secp256k1.
+The broadcasts uses this keychain to sign messages for peers and create
+the threshold signatures for the signed blocks.</div></div><div class="item-row"><div class="item-left"><a class="struct" href="struct.OrderedItem.html" title="struct fedimint_atomic_broadcast::OrderedItem">OrderedItem</a></div><div class="item-right docblock-short">If two correct nodes obtain two ordered items from the broadcast they
+are guaranteed to be in the same order. However, an ordered items is
+only guaranteed to be seen by all correct nodes if a correct node decides to
+accept it.</div></div><div class="item-row"><div class="item-left"><a class="struct" href="struct.SignedBlock.html" title="struct fedimint_atomic_broadcast::SignedBlock">SignedBlock</a></div><div class="item-right docblock-short">A signed block combines a block with the naive threshold secp schnorr
+signature for its header created by the federation. The signed blocks allow
+clients and recovering guardians to verify the federations consensus
+history. After a signed block has been created it is stored in the database.</div></div></div><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="enum" href="enum.Decision.html" title="enum fedimint_atomic_broadcast::Decision">Decision</a></div><div class="item-right docblock-short">This enum specifies wether an <a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a> has been accepted or discarded
+by Fedimint Consensus.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Message.html" title="enum fedimint_atomic_broadcast::Message">Message</a></div><div class="item-right docblock-short">The majority of these messages need to be delivered to the intended
+<a href="enum.Recipient.html" title="Recipient">Recipient</a> in order for the broadcast to make progress. However, the
+broadcast does not assume a reliable network layer and implements all
+necessary retry logic. Therefore, the caller can discard a message
+immediatly if its intended recipient is offline.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Recipient.html" title="enum fedimint_atomic_broadcast::Recipient">Recipient</a></div><div class="item-right docblock-short">This enum defines the intented destination of a <a href="enum.Message.html" title="Message">Message</a>.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Shutdown.html" title="enum fedimint_atomic_broadcast::Shutdown">Shutdown</a></div><div class="item-right docblock-short">A clean shutdown can be initiated at the end of every session via the
+shutdown sender passed to <a href="broadcast/fn.run.html" title="run">run</a>. This can be used for a coordinated shutdown
+of a federation in order to upgrade. A mid session shutdown is triggered if
+the receiver for the <a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a>s is dropped. This mechanism can be used
+if one wants to shut down a single guardian immediatly.</div></div></div><h2 id="functions" class="small-section-header"><a href="#functions">Functions</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="fn" href="fn.consensus_hash_sha256.html" title="fn fedimint_atomic_broadcast::consensus_hash_sha256">consensus_hash_sha256</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="fn" href="fn.run.html" title="fn fedimint_atomic_broadcast::run">run</a></div><div class="item-right docblock-short">This function runs the broadcast until a shutdown is intiated either via the
+shutdown sender or the <a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a> receiver is dropped.</div></div></div></section></div></main><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="fedimint_atomic_broadcast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

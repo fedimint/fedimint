@@ -3,6 +3,7 @@ var sourcesIndex = JSON.parse('{\
 "devimint":["",[],["external.rs","federation.rs","lib.rs","util.rs","vars.rs"]],\
 "faucet":["",[],["faucet.rs"]],\
 "fedimint_aead":["",[],["lib.rs"]],\
+"fedimint_atomic_broadcast":["",[],["broadcast.rs","conversion.rs","data_provider.rs","db.rs","finalization_handler.rs","keychain.rs","lib.rs","network.rs","session.rs","spawner.rs"]],\
 "fedimint_bip39":["",[],["lib.rs"]],\
 "fedimint_bitcoind":["",[],["bitcoincore.rs","electrum.rs","esplora.rs","lib.rs"]],\
 "fedimint_build":["",[],["lib.rs"]],\
