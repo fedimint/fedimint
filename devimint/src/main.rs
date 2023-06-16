@@ -945,7 +945,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     let data_dir = env::var("FM_DATA_DIR")?;
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
-    dev_fed.fed.pegin(10_000).await?;
+    dev_fed.fed.pegin_ng(10_000).await?;
     let output = cmd!(
         "fedimint-load-test-tool",
         "--archive-dir",
