@@ -6,6 +6,7 @@ members = [
     "crypto/tbs",
     "gateway/ln-gateway",
     "gateway/cli",
+    "fedimint-atomic-broadcast",
     "fedimintd",
     "fedimint-bip39",
     "fedimint-bitcoind",
