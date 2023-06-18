@@ -18,7 +18,7 @@ use tracing::{trace, warn};
 use crate::api::WalletFederationApi;
 use crate::{WalletClientContext, WalletClientStates};
 
-const TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(10);
+const TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(1);
 
 // FIXME: deal with RBF
 // FIXME: deal with multiple deposits
@@ -217,7 +217,7 @@ async fn await_btc_transaction_confirmed(
         };
 
         if !confirmation_height
-            .map(|confirmation_height| consensus_height > confirmation_height)
+            .map(|confirmation_height| consensus_height >= confirmation_height)
             .unwrap_or(false)
         {
             trace!("Not confirmed yet, confirmation height={confirmation_height:?}, consensus_height={consensus_height}");

@@ -23,7 +23,7 @@ use lightning_invoice::Invoice;
 fn fixtures() -> Fixtures {
     // TODO: Remove dependency on mint (legacy gw client)
     let fixtures = Fixtures::new_primary(1, MintClientGen, MintGen, MintGenParams::default());
-    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_rpc());
+    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
     fixtures
         .with_module(3, DummyClientGen, DummyGen, DummyGenParams::default())
         .with_module(0, LightningClientGen, LightningGen, ln_params)

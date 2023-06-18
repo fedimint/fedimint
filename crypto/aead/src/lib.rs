@@ -3,8 +3,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::{bail, format_err, Result};
-use argon2::password_hash::{Salt, SaltString};
-use argon2::{Argon2, Params, PasswordHasher};
+use argon2::password_hash::SaltString;
+use argon2::{Argon2, Params};
 use rand::rngs::OsRng;
 use rand::Rng;
 use ring::aead::Nonce;
@@ -98,19 +98,6 @@ pub fn get_encryption_key(password: &str, salt: &str) -> Result<LessSafeKey> {
     Ok(LessSafeKey::new(key))
 }
 
-/// Memory-hard Argon2 key stretching for password-based authentication
-///
-/// * `password` - Strong user-created password
-/// * `salt` - B64 encoded nonce between 4 and 64 bytes
-pub fn get_password_hash(password: &str, salt_string: &str) -> Result<String> {
-    let salt =
-        Salt::from_b64(salt_string).map_err(|e| format_err!("could not create salt").context(e))?;
-    argon2()
-        .hash_password(password.as_bytes(), salt)
-        .map(|password| password.to_string())
-        .map_err(|e| format_err!("could not hash password").context(e))
-}
-
 /// Generates a B64-encoded random salt string of the recommended 16 byte length
 pub fn random_salt() -> String {
     SaltString::generate(OsRng).to_string()
@@ -128,7 +115,7 @@ fn argon2() -> Argon2<'static> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{decrypt, encrypt, get_encryption_key, get_password_hash, random_salt};
+    use crate::{decrypt, encrypt, get_encryption_key};
 
     #[test]
     fn encrypts_and_decrypts() {
@@ -141,18 +128,5 @@ mod tests {
         let decrypted = decrypt(&mut cipher_text, &key).unwrap();
 
         assert_eq!(decrypted, message.as_bytes());
-    }
-
-    #[test]
-    fn password_hashing_works() {
-        let password = "test1";
-        let salt1 = random_salt();
-        let salt2 = "HVwJovQIaTEXAkPyXl3MqQ";
-
-        let key1 = get_password_hash(password, salt1.as_str()).unwrap();
-        let key2 = get_password_hash(password, salt2).unwrap();
-
-        assert_ne!(key1, key2);
-        assert_eq!(key2, "$argon2id$v=19$m=19456,t=2,p=1$HVwJovQIaTEXAkPyXl3MqQ$pQ1T/qsHMGBWxQFLSZ4hqBUfLInIAQzPWIQiVNt4UNI");
     }
 }

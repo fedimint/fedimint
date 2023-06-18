@@ -14,7 +14,6 @@ use fedimint_core::db::Database;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
-use fedimint_logging::TracingSetup;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::ConsensusServer;
@@ -96,9 +95,6 @@ impl FederationTest {
         client_gen: ClientModuleGenRegistry,
         primary_client: ModuleInstanceId,
     ) -> Self {
-        // Ensure tracing has been set once
-        let _ = TracingSetup::default().init();
-
         let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
         let params =
             local_config_gen_params(&peers, base_port, params).expect("Generates local config");

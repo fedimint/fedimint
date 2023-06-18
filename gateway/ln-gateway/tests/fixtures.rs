@@ -23,7 +23,7 @@ pub async fn fixtures(
     // TODO: use new client modules without legacy instances
     let mut fixtures =
         Fixtures::new_primary(1, DummyClientGen, DummyGen, DummyGenParams::default());
-    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_rpc());
+    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
     fixtures = fixtures.with_module(0, LightningClientGen, LightningGen, ln_params);
 
     let gateway = fixtures.new_gateway(password).await;
