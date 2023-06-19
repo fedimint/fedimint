@@ -21,23 +21,29 @@ use crate::gatewaylnrpc::{
     GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
-use crate::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
+use crate::lnrpc_client::{ILnRpcClient, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
 use crate::GatewayError;
 
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
 
 pub struct GatewayLndClient {
     /// LND client
-    client: LndClient,
+    address: String,
+    tls_cert: String,
+    macaroon: String,
 }
 
 impl GatewayLndClient {
-    pub async fn new(address: String, tls_cert: String, macaroon: String) -> crate::Result<Self> {
-        let client = Self::connect(address, tls_cert, macaroon).await?;
-
-        let gw_rpc = GatewayLndClient { client };
-
-        Ok(gw_rpc)
+    pub async fn new(address: String, tls_cert: String, macaroon: String) -> Self {
+        info!(
+            "Gateway configured to connect to LND LnRpcClient at \n address: {},\n tls cert path: {},\n macaroon path: {} ",
+            address, tls_cert, macaroon
+        );
+        GatewayLndClient {
+            address,
+            tls_cert,
+            macaroon,
+        }
     }
 
     async fn connect(
@@ -45,12 +51,21 @@ impl GatewayLndClient {
         tls_cert: String,
         macaroon: String,
     ) -> crate::Result<LndClient> {
+        let mut retries = 0;
         let client = loop {
+            if retries >= MAX_LIGHTNING_RETRIES {
+                return Err(GatewayError::Other(anyhow::anyhow!(
+                    "Failed to connect to LND"
+                )));
+            }
+
+            retries += 1;
+
             match connect(address.clone(), tls_cert.clone(), macaroon.clone()).await {
                 Ok(client) => break client,
                 Err(_) => {
-                    tracing::warn!("Couldn't connect to LND, retrying in 5 seconds...");
-                    sleep(Duration::from_secs(5)).await;
+                    tracing::warn!("Couldn't connect to LND, retrying in 1 second...");
+                    sleep(Duration::from_secs(1)).await;
                 }
             }
         };
@@ -64,8 +79,13 @@ impl GatewayLndClient {
         lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
         lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
         actor_sender: HtlcSubscriptionSender,
-    ) {
-        let mut client = self.client.clone();
+    ) -> crate::Result<()> {
+        let mut client = Self::connect(
+            self.address.clone(),
+            self.tls_cert.clone(),
+            self.macaroon.clone(),
+        )
+        .await?;
         task_group
             .spawn("LND HTLC Subscription", move |_handle| async move {
                 let mut htlc_stream = match client
@@ -124,6 +144,8 @@ impl GatewayLndClient {
                 }
             })
             .await;
+
+        Ok(())
     }
 
     async fn forward_htlc(
@@ -192,7 +214,12 @@ impl fmt::Debug for GatewayLndClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLndClient {
     async fn info(&self) -> crate::Result<GetNodeInfoResponse> {
-        let mut client = self.client.clone();
+        let mut client = Self::connect(
+            self.address.clone(),
+            self.tls_cert.clone(),
+            self.macaroon.clone(),
+        )
+        .await?;
         let info = client
             .lightning()
             .get_info(GetInfoRequest {})
@@ -219,7 +246,12 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn routehints(&self) -> crate::Result<GetRouteHintsResponse> {
-        let mut client = self.client.clone();
+        let mut client = Self::connect(
+            self.address.clone(),
+            self.tls_cert.clone(),
+            self.macaroon.clone(),
+        )
+        .await?;
         let channels = client
             .lightning()
             .list_channels(ListChannelsRequest {
@@ -287,7 +319,12 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
-        let mut client = self.client.clone();
+        let mut client = Self::connect(
+            self.address.clone(),
+            self.tls_cert.clone(),
+            self.macaroon.clone(),
+        )
+        .await?;
         let send_response = client
             .lightning()
             .send_payment_sync(SendRequest {
@@ -325,7 +362,7 @@ impl ILnRpcClient for GatewayLndClient {
 
         let (lnd_sender, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(CHANNEL_SIZE);
         self.spawn_interceptor(task_group, lnd_sender.clone(), lnd_rx, actor_sender.clone())
-            .await;
+            .await?;
 
         let mut stream = events.into_inner();
         task_group.spawn("LND Route HTLCs", |_handle| async move {

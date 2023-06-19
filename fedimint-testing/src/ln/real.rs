@@ -130,9 +130,8 @@ impl ClnLightningTest {
             .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
             .parse::<Url>()
             .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
-        let lnrpc: Arc<RwLock<dyn ILnRpcClient>> = Arc::new(RwLock::new(
-            NetworkLnRpcClient::new(lnrpc_addr).await.unwrap(),
-        ));
+        let lnrpc: Arc<RwLock<dyn ILnRpcClient>> =
+            Arc::new(RwLock::new(NetworkLnRpcClient::new(lnrpc_addr).await));
 
         ClnLightningTest {
             rpc_cln,
@@ -283,9 +282,8 @@ impl LndLightningTest {
         let initial_balance = Self::channel_balance(rpc_lnd.clone()).await;
         let node_pub_key = Self::pubkey(rpc_lnd.clone()).await;
 
-        let gateway_lnd_client = GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
-            .await
-            .unwrap();
+        let gateway_lnd_client =
+            GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon).await;
         let lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
         LndLightningTest {
             rpc_lnd,
