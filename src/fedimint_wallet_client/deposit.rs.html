@@ -339,7 +339,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
 <span class="kw">use crate</span>::{WalletClientContext, WalletClientStates};
 
-<span class="kw">const </span>TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(<span class="number">10</span>);
+<span class="kw">const </span>TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="comment">// FIXME: deal with RBF
 // FIXME: deal with multiple deposits
@@ -538,7 +538,7 @@
         };
 
         <span class="kw">if </span>!confirmation_height
-            .map(|confirmation_height| consensus_height &gt; confirmation_height)
+            .map(|confirmation_height| consensus_height &gt;= confirmation_height)
             .unwrap_or(<span class="bool-val">false</span>)
         {
             <span class="macro">trace!</span>(<span class="string">&quot;Not confirmed yet, confirmation height={confirmation_height:?}, consensus_height={consensus_height}&quot;</span>);

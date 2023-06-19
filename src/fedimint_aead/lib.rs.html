@@ -130,39 +130,13 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::{bail, format_err, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>argon2::password_hash::{Salt, SaltString};
-<span class="kw">use </span>argon2::{Argon2, Params, PasswordHasher};
+<span class="kw">use </span>argon2::password_hash::SaltString;
+<span class="kw">use </span>argon2::{Argon2, Params};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>ring::aead::Nonce;
@@ -256,19 +230,6 @@
     <span class="prelude-val">Ok</span>(LessSafeKey::new(key))
 }
 
-<span class="doccomment">/// Memory-hard Argon2 key stretching for password-based authentication
-///
-/// * `password` - Strong user-created password
-/// * `salt` - B64 encoded nonce between 4 and 64 bytes
-</span><span class="kw">pub fn </span>get_password_hash(password: <span class="kw-2">&amp;</span>str, salt_string: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-    <span class="kw">let </span>salt =
-        Salt::from_b64(salt_string).map_err(|e| <span class="macro">format_err!</span>(<span class="string">&quot;could not create salt&quot;</span>).context(e))<span class="question-mark">?</span>;
-    argon2()
-        .hash_password(password.as_bytes(), salt)
-        .map(|password| password.to_string())
-        .map_err(|e| <span class="macro">format_err!</span>(<span class="string">&quot;could not hash password&quot;</span>).context(e))
-}
-
 <span class="doccomment">/// Generates a B64-encoded random salt string of the recommended 16 byte length
 </span><span class="kw">pub fn </span>random_salt() -&gt; String {
     SaltString::generate(OsRng).to_string()
@@ -286,7 +247,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use crate</span>::{decrypt, encrypt, get_encryption_key, get_password_hash, random_salt};
+    <span class="kw">use crate</span>::{decrypt, encrypt, get_encryption_key};
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>encrypts_and_decrypts() {
@@ -299,19 +260,6 @@
         <span class="kw">let </span>decrypted = decrypt(<span class="kw-2">&amp;mut </span>cipher_text, <span class="kw-2">&amp;</span>key).unwrap();
 
         <span class="macro">assert_eq!</span>(decrypted, message.as_bytes());
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>password_hashing_works() {
-        <span class="kw">let </span>password = <span class="string">&quot;test1&quot;</span>;
-        <span class="kw">let </span>salt1 = random_salt();
-        <span class="kw">let </span>salt2 = <span class="string">&quot;HVwJovQIaTEXAkPyXl3MqQ&quot;</span>;
-
-        <span class="kw">let </span>key1 = get_password_hash(password, salt1.as_str()).unwrap();
-        <span class="kw">let </span>key2 = get_password_hash(password, salt2).unwrap();
-
-        <span class="macro">assert_ne!</span>(key1, key2);
-        <span class="macro">assert_eq!</span>(key2, <span class="string">&quot;$argon2id$v=19$m=19456,t=2,p=1$HVwJovQIaTEXAkPyXl3MqQ$pQ1T/qsHMGBWxQFLSZ4hqBUfLInIAQzPWIQiVNt4UNI&quot;</span>);
     }
 }
 </code></pre></div>

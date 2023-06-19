@@ -207,10 +207,6 @@
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
@@ -227,7 +223,6 @@
 <span class="kw">use </span>fedimint_core::module::ApiAuth;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::PeerId;
-<span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenParamsLocal;
 <span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::consensus::server::ConsensusServer;
@@ -309,9 +304,6 @@
         client_gen: ClientModuleGenRegistry,
         primary_client: ModuleInstanceId,
     ) -&gt; <span class="self">Self </span>{
-        <span class="comment">// Ensure tracing has been set once
-        </span><span class="kw">let _ </span>= TracingSetup::default().init();
-
         <span class="kw">let </span>peers = (<span class="number">0</span>..num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>params =
             local_config_gen_params(<span class="kw-2">&amp;</span>peers, base_port, params).expect(<span class="string">&quot;Generates local config&quot;</span>);
