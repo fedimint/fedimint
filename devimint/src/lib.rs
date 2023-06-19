@@ -47,7 +47,7 @@ pub struct DevFed {
 #[derive(Clone)]
 pub struct Gatewayd {
     _process: ProcessHandle,
-    ln: Option<LightningNode>,
+    pub ln: Option<LightningNode>,
 }
 
 impl Gatewayd {
@@ -95,14 +95,6 @@ impl Gatewayd {
             ln: Some(ln),
             _process: process,
         })
-    }
-
-    pub fn lightning_name(&self) -> String {
-        if let Some(ln) = &self.ln {
-            return ln.name().to_string();
-        }
-
-        "None".to_string()
     }
 
     pub fn set_lightning_node(&mut self, ln_node: LightningNode) {
