@@ -75,14 +75,35 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let _gateway = gateway(&fixtures, &fed, &client1).await;
 
     // Print money for client2
     let (op, outpoint) = client2.print_money(sats(1000)).await?;
     client2.await_primary_module_output(op, outpoint).await?;
 
+    // TEST internal payment when there are no gateways registered
     let (op, invoice) = client1
-        .create_bolt11_invoice(sats(250), "description".to_string(), None)
+        .create_bolt11_invoice(sats(250), "with-markers".to_string(), None)
+        .await?;
+    let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
+    assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+    assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
+
+    let (pay_type, _) = client2.pay_bolt11_invoice(invoice).await?;
+    match pay_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
+
+    // TEST internal payment when there is a registered gateway
+    let _gateway = gateway(&fixtures, &fed, &client1).await;
+
+    let (op, invoice) = client1
+        .create_bolt11_invoice(sats(250), "with-gateway-hint".to_string(), None)
         .await?;
     let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);

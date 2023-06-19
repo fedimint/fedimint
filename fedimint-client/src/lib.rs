@@ -92,7 +92,7 @@ pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use futures::StreamExt;
 use rand::thread_rng;
-use secp256k1_zkp::Secp256k1;
+use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
 use tracing::info;
@@ -483,6 +483,14 @@ impl Client {
 
     pub fn federation_id(&self) -> FederationId {
         self.inner.federation_id
+    }
+
+    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+        Ok((
+            self.federation_id()
+                .to_fake_ln_pub_key(&self.inner.secp_ctx)?,
+            0,
+        ))
     }
 
     pub fn get_meta(&self, key: &str) -> Option<String> {

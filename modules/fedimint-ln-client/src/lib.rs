@@ -157,9 +157,24 @@ pub enum LnReceiveState {
     Claimed,
 }
 
-async fn is_internal_payment(invoice: &Invoice, gateways: Vec<LightningGateway>) -> bool {
-    // Asserts that the first hop of the invoice route hints
-    // leads through a registered gateway into the current federation
+async fn invoice_has_internal_payment_markers(
+    invoice: &Invoice,
+    markers: (secp256k1::PublicKey, u64),
+) -> bool {
+    // Asserts that the invoice src_node_id and short_channel_id match known
+    // values used as internal payment markers
+    invoice
+        .route_hints()
+        .first()
+        .and_then(|rh| rh.0.last())
+        .map(|hop| (hop.src_node_id, hop.short_channel_id))
+        == Some(markers)
+}
+
+async fn invoice_routes_back_to_federation(
+    invoice: &Invoice,
+    gateways: Vec<LightningGateway>,
+) -> bool {
     gateways.into_iter().any(|gateway| {
         invoice
             .route_hints()
@@ -219,8 +234,16 @@ impl LightningClientExt for Client {
         let payment_hash = invoice.payment_hash();
         let operation_id = OperationId(payment_hash.into_inner());
 
-        let gateways = self.fetch_registered_gateways().await?;
-        let (pay_type, output, contract_id) = if is_internal_payment(&invoice, gateways).await {
+        let is_internal_payment =
+            invoice_has_internal_payment_markers(&invoice, self.get_internal_payment_markers()?)
+                .await
+                || invoice_routes_back_to_federation(
+                    &invoice,
+                    self.fetch_registered_gateways().await?,
+                )
+                .await;
+
+        let (pay_type, output, contract_id) = if is_internal_payment {
             let (output, contract_id) = lightning
                 .create_incoming_output(operation_id, invoice.clone())
                 .await?;
@@ -265,7 +288,18 @@ impl LightningClientExt for Client {
         expiry_time: Option<u64>,
     ) -> anyhow::Result<(OperationId, Invoice)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
-        let active_gateway = self.select_active_gateway().await?;
+        let (src_node_id, short_channel_id, route_hints) = match self.select_active_gateway().await
+        {
+            Ok(active_gateway) => (
+                active_gateway.node_pub_key,
+                active_gateway.mint_channel_id,
+                active_gateway.route_hints,
+            ),
+            Err(_) => {
+                let markers = self.get_internal_payment_markers()?;
+                (markers.0, markers.1, vec![])
+            }
+        };
 
         let (operation_id, invoice, output) = lightning
             .create_lightning_receive_output(
@@ -273,7 +307,9 @@ impl LightningClientExt for Client {
                 description,
                 rand::rngs::OsRng,
                 expiry_time,
-                active_gateway,
+                src_node_id,
+                short_channel_id,
+                route_hints,
                 lightning.cfg.network,
             )
             .await?;
@@ -792,13 +828,16 @@ impl LightningClientModule {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_lightning_receive_output<'a>(
         &'a self,
         amount: Amount,
         description: String,
         mut rng: impl RngCore + CryptoRng + 'a,
         expiry_time: Option<u64>,
-        gateway: LightningGateway,
+        src_node_id: secp256k1::PublicKey,
+        short_channel_id: u64,
+        route_hints: Vec<fedimint_ln_common::route_hints::RouteHint>,
         network: Network,
     ) -> anyhow::Result<(
         OperationId,
@@ -814,8 +853,8 @@ impl LightningClientModule {
 
         // Route hint instructing payer how to route to gateway
         let route_hint_last_hop = RouteHintHop {
-            src_node_id: gateway.node_pub_key,
-            short_channel_id: gateway.mint_channel_id,
+            src_node_id,
+            short_channel_id,
             fees: RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
@@ -824,11 +863,10 @@ impl LightningClientModule {
             htlc_minimum_msat: None,
             htlc_maximum_msat: None,
         };
-        let route_hints = if gateway.route_hints.is_empty() {
+        let route_hints = if route_hints.is_empty() {
             vec![RouteHint(vec![route_hint_last_hop])]
         } else {
-            gateway
-                .route_hints
+            route_hints
                 .iter()
                 .map(|rh| {
                     RouteHint(
