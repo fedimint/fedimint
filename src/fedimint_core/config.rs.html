@@ -808,6 +808,24 @@
 <a href="#808" id="808">808</a>
 <a href="#809" id="809">809</a>
 <a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -977,6 +995,24 @@
 
     <span class="kw">fn </span>try_from_bytes(bytes: [u8; <span class="number">48</span>]) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Some</span>(<span class="self">Self</span>(threshold_crypto::PublicKey::from_bytes(bytes).ok()<span class="question-mark">?</span>))
+    }
+
+    <span class="doccomment">/// Converts a federation id to a public key to which we know but discard
+    /// the private key.
+    ///
+    /// Clients MUST never use this private key for any signing operations!
+    ///
+    /// That is ok because we only use the public key for adding a route
+    /// hint to LN invoices that tells fedimint clients that the invoice can
+    /// only be paid internally. Since no LN node with that pub key can exist
+    /// other LN senders will know that they cannot pay the invoice.
+    </span><span class="kw">pub fn </span>to_fake_ln_pub_key(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        secp: <span class="kw-2">&amp;</span>secp256k1::Secp256k1&lt;secp256k1_zkp::All&gt;,
+    ) -&gt; anyhow::Result&lt;secp256k1::PublicKey&gt; {
+        <span class="kw">let </span>bytes = &lt;Sha256 <span class="kw">as </span>bitcoin_hashes::Hash&gt;::hash(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.to_bytes()[..]);
+        <span class="kw">let </span>sk = secp256k1::SecretKey::from_slice(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(secp256k1::PublicKey::from_secret_key(secp, <span class="kw-2">&amp;</span>sk))
     }
 }
 
