@@ -25,6 +25,7 @@ pub const LOG_WALLET: &str = "wallet";
 pub const LOG_CLIENT: &str = "client";
 pub const LOG_CLIENT_BACKUP: &str = "client::backup";
 pub const LOG_CLIENT_RECOVERY: &str = "client::recovery";
+pub const LOG_CLIENT_RECOVERY_MINT: &str = "client::recovery::mint";
 
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]
