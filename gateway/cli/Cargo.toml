@@ -27,6 +27,7 @@ serde_json = "1.0.91"
 tokio = {version = "1.26", features = ["full"]}
 tracing = { version = "0.1.37", default-features = false, features= ["log", "attributes", "std"] }
 url = { version = "2.3.1", features = ["serde"] }
+clap_complete = "4.3.1"
 
 [build-dependencies]
 fedimint-build = { path = "../../fedimint-build" }

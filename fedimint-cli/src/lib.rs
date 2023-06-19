@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::{fs, result};
 
 use bitcoin::{secp256k1, Address, Network, Transaction};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
 use fedimint_client::secret::PlainRootSecretStrategy;
@@ -309,7 +309,7 @@ struct Opts {
     workdir: Option<PathBuf>,
 
     /// Peer id of the guardian
-    #[arg(env = "FM_OUR_ID", value_parser = parse_peer_id)]
+    #[arg(env = "FM_OUR_ID", long, value_parser = parse_peer_id)]
     our_id: Option<PeerId>,
 
     /// Guardian password for authentication
@@ -487,7 +487,9 @@ enum Command {
     },
 
     /// Pay a lightning invoice via a gateway
-    LnPay { bolt11: lightning_invoice::Invoice },
+    LnPay {
+        bolt11: lightning_invoice::Invoice,
+    },
 
     /// Fetch (re-)issued notes and finalize issuance process
     Fetch,
@@ -506,13 +508,19 @@ enum Command {
     },
 
     /// Wait for incoming invoice to be paid
-    WaitInvoice { invoice: lightning_invoice::Invoice },
+    WaitInvoice {
+        invoice: lightning_invoice::Invoice,
+    },
 
     /// Wait for the fed to reach a consensus block height
-    WaitBlockHeight { height: u64 },
+    WaitBlockHeight {
+        height: u64,
+    },
 
     /// Decode connection info into its JSON representation
-    DecodeConnectInfo { connect_info: WsClientConnectInfo },
+    DecodeConnectInfo {
+        connect_info: WsClientConnectInfo,
+    },
 
     /// Encode connection info from its constituent parts
     EncodeConnectInfo {
@@ -528,7 +536,9 @@ enum Command {
     ConnectInfo,
 
     /// Join a federation using it's ConnectInfo
-    JoinFederation { connect: String },
+    JoinFederation {
+        connect: String,
+    },
 
     /// List registered gateways
     ListGateways,
@@ -567,7 +577,9 @@ enum Command {
     WipeNotes,
 
     /// Decode a transaction hex string and print it to stdout
-    DecodeTransaction { hex_string: String },
+    DecodeTransaction {
+        hex_string: String,
+    },
 
     /// Signal a consensus upgrade
     SignalUpgrade,
@@ -579,7 +591,9 @@ enum Command {
     LastEpoch,
 
     /// Force processing an epoch
-    ForceEpoch { hex_outcome: String },
+    ForceEpoch {
+        hex_outcome: String,
+    },
 
     /// Show the status according to the `status` endpoint
     Status,
@@ -618,6 +632,10 @@ enum Command {
 
     #[clap(subcommand)]
     Ng(ng::ClientNg),
+
+    Completion {
+        shell: clap_complete::Shell,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1161,6 +1179,16 @@ impl FedimintCli {
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
+            }
+            Command::Completion { shell } => {
+                clap_complete::generate(
+                    shell,
+                    &mut Opts::command(),
+                    "fedimint-cli",
+                    &mut std::io::stdout(),
+                );
+                // HACK: prints true to stdout which is fine for shells
+                Ok(CliOutput::Raw(serde_json::Value::Bool(true)))
             }
         }
     }

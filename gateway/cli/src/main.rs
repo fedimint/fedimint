@@ -1,5 +1,5 @@
 use bitcoin::{Address, Amount};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -65,6 +65,9 @@ pub enum Commands {
         #[clap(long)]
         federation_id: FederationId,
     },
+    Completion {
+        shell: clap_complete::Shell,
+    },
 }
 
 #[tokio::main]
@@ -124,6 +127,14 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Restore { federation_id } => {
             client().restore(RestorePayload { federation_id }).await?;
+        }
+        Commands::Completion { shell } => {
+            clap_complete::generate(
+                shell,
+                &mut Cli::command(),
+                "gateway-cli",
+                &mut std::io::stdout(),
+            );
         }
     }
 

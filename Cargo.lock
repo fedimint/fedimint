@@ -692,6 +692,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6b5c519bab3ea61843a7923d074b04245624bb84a64a8c150f5deb014e388b"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1238,6 +1247,7 @@ dependencies = [
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
  "clap",
+ "clap_complete",
  "fedimint-aead",
  "fedimint-build",
  "fedimint-client",
@@ -2291,6 +2301,7 @@ dependencies = [
  "axum-macros",
  "bitcoin 0.29.2",
  "clap",
+ "clap_complete",
  "fedimint-build",
  "fedimint-client-legacy",
  "fedimint-core",
