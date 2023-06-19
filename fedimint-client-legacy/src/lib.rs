@@ -150,7 +150,7 @@ impl GatewayClientConfig {
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
-            mint_pub_key: self.redeem_key.x_only_public_key().0,
+            gateway_pub_key: self.redeem_key.x_only_public_key().0,
             node_pub_key: self.node_pub_key,
             api: self.api.clone(),
             route_hints,
