@@ -701,6 +701,20 @@
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -733,7 +747,7 @@
 <span class="kw">use </span>fedimint_core::api::{FederationError, WsClientConnectInfo};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::util::NextOrPending;
 <span class="kw">use </span>fedimint_core::Amount;
@@ -753,6 +767,7 @@
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio::sync::{mpsc, Mutex};
 <span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>url::Url;
@@ -863,7 +878,7 @@
         gatewayd_db: Database,
         api: Url,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>lnrpc = <span class="self">Self</span>::create_lightning_client(lightning_mode.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>lnrpc = <span class="self">Self</span>::create_lightning_client(lightning_mode.clone()).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>gw = <span class="self">Self </span>{
             lnrpc,
@@ -911,159 +926,69 @@
         <span class="prelude-val">Ok</span>(gw)
     }
 
-    <span class="kw">async fn </span>create_lightning_client(mode: LightningMode) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt; {
-        <span class="kw">let </span>lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = <span class="kw">match </span>mode {
+    <span class="kw">async fn </span>create_lightning_client(mode: LightningMode) -&gt; Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
+        <span class="kw">match </span>mode {
             LightningMode::Cln { cln_extension_addr } =&gt; {
-                <span class="macro">info!</span>(
-                    <span class="string">&quot;Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} &quot;</span>,
-                    cln_extension_addr
-                );
-                Arc::new(NetworkLnRpcClient::new(cln_extension_addr).<span class="kw">await</span><span class="question-mark">?</span>)
+                Arc::new(NetworkLnRpcClient::new(cln_extension_addr).<span class="kw">await</span>)
             }
             LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,
-            } =&gt; {
-                <span class="macro">info!</span>(
-                    <span class="string">&quot;Gateway configured to connect to LND LnRpcClient at \n address: {:?},\n tls cert path: {:?},\n macaroon path: {} &quot;</span>,
-                    lnd_rpc_addr, lnd_tls_cert, lnd_macaroon
-                );
-                Arc::new(GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon).<span class="kw">await</span><span class="question-mark">?</span>)
-            }
-        };
-
-        <span class="prelude-val">Ok</span>(lnrpc)
+            } =&gt; Arc::new(GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon).<span class="kw">await</span>),
+        }
     }
 
-    <span class="kw">pub async fn </span>route_htlcs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="comment">// Create a stream used to communicate with the Lightning implementation
-        </span><span class="kw">let </span>(sender, ln_receiver) = mpsc::channel::&lt;InterceptHtlcResponse&gt;(<span class="number">100</span>);
-
-        <span class="kw">let </span><span class="kw-2">mut </span>lnrpc: Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.lightning_mode {
-            <span class="prelude-val">Some</span>(LightningMode::Cln { cln_extension_addr }) =&gt; {
-                <span class="macro">info!</span>(
-                    <span class="string">&quot;Gateway configured to connect to remote LnRpcClient at \n cln extension address: {:?} &quot;</span>,
-                    cln_extension_addr
-                );
-                Box::new(NetworkLnRpcClient::new(cln_extension_addr.clone()).<span class="kw">await</span><span class="question-mark">?</span>)
+    <span class="kw">async fn </span>create_boxxed_lightning_client(mode: LightningMode) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
+        <span class="kw">match </span>mode {
+            LightningMode::Cln { cln_extension_addr } =&gt; {
+                Box::new(NetworkLnRpcClient::new(cln_extension_addr).<span class="kw">await</span>)
             }
-            <span class="prelude-val">Some</span>(LightningMode::Lnd {
+            LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,
-            }) =&gt; Box::new(
-                GatewayLndClient::new(
-                    lnd_rpc_addr.clone(),
-                    lnd_tls_cert.clone(),
-                    lnd_macaroon.clone(),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>,
-            ),
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
-        };
+            } =&gt; Box::new(GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon).<span class="kw">await</span>),
+        }
+    }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>stream: RouteHtlcStream = lnrpc
-            .route_htlcs(ln_receiver.into(), <span class="kw-2">&amp;mut </span><span class="self">self</span>.task_group)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
+    <span class="kw">pub async fn </span>route_htlcs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>scid_to_federation = <span class="self">self</span>.scid_to_federation.clone();
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.clone();
+        <span class="kw">let </span>ln_mode = <span class="self">self</span>.lightning_mode.clone();
         <span class="self">self</span>.task_group
             .spawn(
                 <span class="string">&quot;Subscribe to intercepted HTLCs in stream&quot;</span>,
                 <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-                    <span class="comment">// TODO: Need to recreate the lightning connection if it breaks while processing
-                    // HTLCs
-                    </span><span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) = stream.next().<span class="kw">await </span>{
+                    <span class="kw">loop </span>{
                         <span class="kw">if </span>handle.is_shutting_down() {
                             <span class="kw">break</span>;
                         }
 
-                        <span class="kw">let </span>scid_to_feds = scid_to_federation.read().<span class="kw">await</span>;
-                        <span class="kw">let </span>federation_id = scid_to_feds.get(<span class="kw-2">&amp;</span>htlc_request.short_channel_id);
-                        <span class="comment">// Just forward the HTLC if we do not have a federation that
-                        // corresponds to the short channel id
-                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
-                            <span class="kw">let </span>clients = clients.read().<span class="kw">await</span>;
-                            <span class="kw">let </span>client = clients.get(federation_id);
-                            <span class="comment">// Just forward the HTLC if we do not have a client that
-                            // corresponds to the federation id
-                            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
-                                <span class="kw">let </span>htlc: <span class="prelude-ty">Result</span>&lt;Htlc&gt; = htlc_request.clone().try_into().map_err(|<span class="kw">_</span>| GatewayError::ClientNgError);
-                                <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
-                                    <span class="kw">let </span>intercept_op = client.gateway_handle_intercepted_htlc(htlc).<span class="kw">await</span>;
-                                    <span class="comment">// TODO: Refactor this into the state machine so we don&#39;t need to wait here
-                                    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(intercept_op) = intercept_op {
+                        <span class="comment">// Create a stream used to communicate with the Lightning implementation
+                        </span><span class="kw">let </span>(sender, ln_receiver) = mpsc::channel::&lt;InterceptHtlcResponse&gt;(<span class="number">100</span>);
 
-                                        <span class="kw">let </span>intercept_sub = client
-                                            .gateway_subscribe_ln_receive(intercept_op)
-                                            .<span class="kw">await</span>;
-                                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(intercept_sub) = intercept_sub {
-                                            <span class="kw">let </span><span class="kw-2">mut </span>intercept_sub = intercept_sub.into_stream();
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(ln_mode) = ln_mode.clone() {
+                            <span class="kw">let </span><span class="kw-2">mut </span>lnrpc = <span class="self">Self</span>::create_boxxed_lightning_client(ln_mode).<span class="kw">await</span>;
 
-                                            <span class="kw">let </span>outcome = <span class="kw">loop </span>{
-                                                <span class="kw">if let </span><span class="prelude-val">Ok</span>(state) = intercept_sub.ok().<span class="kw">await </span>{
-                                                    <span class="kw">match </span>state {
-                                                        GatewayExtReceiveStates::Preimage(preimage) =&gt; {
-                                                            <span class="kw">break </span>InterceptHtlcResponse {
-                                                                action: <span class="prelude-val">Some</span>(Action::Settle(Settle {
-                                                                    preimage: preimage.<span class="number">0</span>.to_vec(),
-                                                                })),
-                                                                incoming_chan_id: htlc_request.incoming_chan_id,
-                                                                htlc_id: htlc_request.htlc_id,
-                                                            };
-                                                        }
-                                                        GatewayExtReceiveStates::FundingFailed(failed) =&gt; {
-                                                            <span class="kw">break </span>InterceptHtlcResponse {
-                                                                action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
-                                                                    reason: failed,
-                                                                })),
-                                                                incoming_chan_id: htlc_request.incoming_chan_id,
-                                                                htlc_id: htlc_request.htlc_id,
-                                                            }
-                                                        }
-                                                        GatewayExtReceiveStates::RefundSuccess(<span class="kw">_</span>) =&gt; {
-                                                            <span class="kw">break </span>InterceptHtlcResponse {
-                                                                action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
-                                                                    reason: <span class="string">&quot;Gateway is being refunded&quot;</span>.to_string(),
-                                                                })),
-                                                                incoming_chan_id: htlc_request.incoming_chan_id,
-                                                                htlc_id: htlc_request.htlc_id,
-                                                            }
-                                                        }
-                                                        GatewayExtReceiveStates::RefundError(failed) =&gt; {
-                                                            <span class="kw">break </span>InterceptHtlcResponse {
-                                                                action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
-                                                                    reason: failed,
-                                                                })),
-                                                                incoming_chan_id: htlc_request.incoming_chan_id,
-                                                                htlc_id: htlc_request.htlc_id,
-                                                            }
-                                                        }
-                                                        <span class="kw">_ </span>=&gt; {}
-                                                    }
-                                                }
-                                            };
-
-                                            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = sender.send(outcome).<span class="kw">await </span>{
-                                                <span class="macro">error!</span>(<span class="string">&quot;Error sending HTLC response to lightning node: {error:?}&quot;</span>);
-                                            }
-                                            <span class="kw">continue</span>;
-                                        }
-                                    }
+                            <span class="comment">// Re-create the HTLC stream if the connection breaks
+                            </span><span class="kw">match </span>lnrpc
+                                .route_htlcs(ln_receiver.into(), <span class="kw-2">&amp;mut </span>TaskGroup::new())
+                                .<span class="kw">await
+                            </span>{
+                                <span class="prelude-val">Ok</span>(stream) =&gt; {
+                                    <span class="comment">// Blocks until the connection to the lightning node breaks
+                                    </span><span class="macro">info!</span>(<span class="string">&quot;Established HTLC stream&quot;</span>);
+                                    <span class="self">Self</span>::handle_htlc_stream(stream, sender, handle.clone(), scid_to_federation.clone(), clients.clone()).<span class="kw">await</span>;
+                                    <span class="macro">tracing::warn!</span>(<span class="string">&quot;HTLC Stream Lightning connection broken&quot;</span>);
+                                }
+                                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                                    <span class="macro">error!</span>(<span class="string">&quot;route_htlcs failed to open HTLC stream. Waiting 5 seconds and trying again&quot;</span>);
+                                    sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
                                 }
                             }
-                        }
-
-                        <span class="kw">let </span>outcome = InterceptHtlcResponse {
-                            action: <span class="prelude-val">Some</span>(Action::Forward(Forward {})),
-                            incoming_chan_id: htlc_request.incoming_chan_id,
-                            htlc_id: htlc_request.htlc_id,
-                        };
-
-                        <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = sender.send(outcome).<span class="kw">await </span>{
-                            <span class="macro">error!</span>(<span class="string">&quot;Error sending HTLC response to lightning node: {error:?}&quot;</span>);
+                        } <span class="kw">else </span>{
+                            <span class="kw">break</span>;
                         }
                     }
                 },
@@ -1072,15 +997,118 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="kw">async fn </span>handle_htlc_stream(
+        <span class="kw-2">mut </span>stream: RouteHtlcStream&lt;<span class="lifetime">&#39;_</span>&gt;,
+        sender: Sender&lt;InterceptHtlcResponse&gt;,
+        handle: TaskHandle,
+        scid_to_federation: Arc&lt;RwLock&lt;BTreeMap&lt;u64, FederationId&gt;&gt;&gt;,
+        clients: Arc&lt;RwLock&lt;BTreeMap&lt;FederationId, Arc&lt;fedimint_client::Client&gt;&gt;&gt;&gt;,
+    ) {
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) = stream.next().<span class="kw">await </span>{
+            <span class="kw">if </span>handle.is_shutting_down() {
+                <span class="kw">break</span>;
+            }
+
+            <span class="kw">let </span>scid_to_feds = scid_to_federation.read().<span class="kw">await</span>;
+            <span class="kw">let </span>federation_id = scid_to_feds.get(<span class="kw-2">&amp;</span>htlc_request.short_channel_id);
+            <span class="comment">// Just forward the HTLC if we do not have a federation that
+            // corresponds to the short channel id
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
+                <span class="kw">let </span>clients = clients.read().<span class="kw">await</span>;
+                <span class="kw">let </span>client = clients.get(federation_id);
+                <span class="comment">// Just forward the HTLC if we do not have a client that
+                // corresponds to the federation id
+                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
+                    <span class="kw">let </span>htlc: <span class="prelude-ty">Result</span>&lt;Htlc&gt; = htlc_request
+                        .clone()
+                        .try_into()
+                        .map_err(|<span class="kw">_</span>| GatewayError::ClientNgError);
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
+                        <span class="kw">let </span>intercept_op = client.gateway_handle_intercepted_htlc(htlc).<span class="kw">await</span>;
+                        <span class="comment">// TODO: Refactor this into the state machine so we don&#39;t need to wait here
+                        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(intercept_op) = intercept_op {
+                            <span class="kw">let </span>intercept_sub =
+                                client.gateway_subscribe_ln_receive(intercept_op).<span class="kw">await</span>;
+                            <span class="kw">if let </span><span class="prelude-val">Ok</span>(intercept_sub) = intercept_sub {
+                                <span class="kw">let </span><span class="kw-2">mut </span>intercept_sub = intercept_sub.into_stream();
+
+                                <span class="kw">let </span>outcome = <span class="kw">loop </span>{
+                                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(state) = intercept_sub.ok().<span class="kw">await </span>{
+                                        <span class="kw">match </span>state {
+                                            GatewayExtReceiveStates::Preimage(preimage) =&gt; {
+                                                <span class="kw">break </span>InterceptHtlcResponse {
+                                                    action: <span class="prelude-val">Some</span>(Action::Settle(Settle {
+                                                        preimage: preimage.<span class="number">0</span>.to_vec(),
+                                                    })),
+                                                    incoming_chan_id: htlc_request.incoming_chan_id,
+                                                    htlc_id: htlc_request.htlc_id,
+                                                };
+                                            }
+                                            GatewayExtReceiveStates::FundingFailed(failed) =&gt; {
+                                                <span class="kw">break </span>InterceptHtlcResponse {
+                                                    action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
+                                                        reason: failed,
+                                                    })),
+                                                    incoming_chan_id: htlc_request.incoming_chan_id,
+                                                    htlc_id: htlc_request.htlc_id,
+                                                }
+                                            }
+                                            GatewayExtReceiveStates::RefundSuccess(<span class="kw">_</span>) =&gt; {
+                                                <span class="kw">break </span>InterceptHtlcResponse {
+                                                    action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
+                                                        reason: <span class="string">&quot;Gateway is being refunded&quot;
+                                                            </span>.to_string(),
+                                                    })),
+                                                    incoming_chan_id: htlc_request.incoming_chan_id,
+                                                    htlc_id: htlc_request.htlc_id,
+                                                }
+                                            }
+                                            GatewayExtReceiveStates::RefundError(failed) =&gt; {
+                                                <span class="kw">break </span>InterceptHtlcResponse {
+                                                    action: <span class="prelude-val">Some</span>(Action::Cancel(Cancel {
+                                                        reason: failed,
+                                                    })),
+                                                    incoming_chan_id: htlc_request.incoming_chan_id,
+                                                    htlc_id: htlc_request.htlc_id,
+                                                }
+                                            }
+                                            <span class="kw">_ </span>=&gt; {}
+                                        }
+                                    }
+                                };
+
+                                <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = sender.send(outcome).<span class="kw">await </span>{
+                                    <span class="macro">error!</span>(
+                                        <span class="string">&quot;Error sending HTLC response to lightning node: {error:?}&quot;
+                                    </span>);
+                                }
+                                <span class="kw">continue</span>;
+                            }
+                        }
+                    }
+                }
+            }
+
+            <span class="kw">let </span>outcome = InterceptHtlcResponse {
+                action: <span class="prelude-val">Some</span>(Action::Forward(Forward {})),
+                incoming_chan_id: htlc_request.incoming_chan_id,
+                htlc_id: htlc_request.htlc_id,
+            };
+
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = sender.send(outcome).<span class="kw">await </span>{
+                <span class="macro">error!</span>(<span class="string">&quot;Error sending HTLC response to lightning node: {error:?}&quot;</span>);
+            }
+        }
+    }
+
     <span class="kw">async fn </span>fetch_lightning_route_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;RouteHint&gt;, PublicKey, String)&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
         <span class="kw">let </span>(route_hints, node_pub_key, alias) = <span class="kw">loop </span>{
             <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = <span class="self">self
                 </span>.lnrpc
                 .routehints()
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Could not fetch route hints&quot;</span>)
-                .try_into()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.try_into()
                 .expect(<span class="string">&quot;Could not parse route hints&quot;</span>);
 
             <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias } = <span class="self">self</span>.lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;

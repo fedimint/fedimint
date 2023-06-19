@@ -329,8 +329,6 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -463,9 +461,8 @@
             .expect(<span class="string">&quot;FM_GATEWAY_LIGHTNING_ADDR not set&quot;</span>)
             .parse::&lt;Url&gt;()
             .expect(<span class="string">&quot;Invalid FM_GATEWAY_LIGHTNING_ADDR&quot;</span>);
-        <span class="kw">let </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt; = Arc::new(RwLock::new(
-            NetworkLnRpcClient::new(lnrpc_addr).<span class="kw">await</span>.unwrap(),
-        ));
+        <span class="kw">let </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt; =
+            Arc::new(RwLock::new(NetworkLnRpcClient::new(lnrpc_addr).<span class="kw">await</span>));
 
         ClnLightningTest {
             rpc_cln,
@@ -616,9 +613,8 @@
         <span class="kw">let </span>initial_balance = <span class="self">Self</span>::channel_balance(rpc_lnd.clone()).<span class="kw">await</span>;
         <span class="kw">let </span>node_pub_key = <span class="self">Self</span>::pubkey(rpc_lnd.clone()).<span class="kw">await</span>;
 
-        <span class="kw">let </span>gateway_lnd_client = GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon)
-            .<span class="kw">await
-            </span>.unwrap();
+        <span class="kw">let </span>gateway_lnd_client =
+            GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon).<span class="kw">await</span>;
         <span class="kw">let </span>lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
         LndLightningTest {
             rpc_lnd,

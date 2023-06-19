@@ -109,17 +109,25 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>futures::stream::BoxStream;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic::transport::{Channel, Endpoint};
 <span class="kw">use </span>tonic::Request;
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
@@ -131,6 +139,8 @@
 
 <span class="kw">pub type </span>RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt; =
     BoxStream&lt;<span class="lifetime">&#39;a</span>, std::result::Result&lt;InterceptHtlcRequest, tonic::Status&gt;&gt;;
+
+<span class="kw">pub const </span>MAX_LIGHTNING_RETRIES: u32 = <span class="number">10</span>;
 
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ILnRpcClient: Debug + Send + Sync {
@@ -156,31 +166,39 @@
 /// `GatewayLightningServer`.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>NetworkLnRpcClient {
-    client: GatewayLightningClient&lt;Channel&gt;,
+    connection_url: Url,
 }
 
 <span class="kw">impl </span>NetworkLnRpcClient {
-    <span class="kw">pub async fn </span>new(url: Url) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>endpoint = Endpoint::from_shared(url.to_string()).map_err(|e| {
-            <span class="macro">error!</span>(<span class="string">&quot;Failed to create lnrpc endpoint from url : {:?}&quot;</span>, e);
-            GatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Failed to create lnrpc endpoint from url&quot;</span>))
-        })<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>gw_rpc = NetworkLnRpcClient {
-            client: <span class="self">Self</span>::connect(endpoint).<span class="kw">await</span><span class="question-mark">?</span>,
-        };
-        <span class="prelude-val">Ok</span>(gw_rpc)
+    <span class="kw">pub async fn </span>new(url: Url) -&gt; <span class="self">Self </span>{
+        <span class="macro">info!</span>(
+            <span class="string">&quot;Gateway configured to connect to remote LnRpcClient at \n cln extension address: {} &quot;</span>,
+            url.to_string()
+        );
+        NetworkLnRpcClient {
+            connection_url: url,
+        }
     }
 
-    <span class="kw">async fn </span>connect(endpoint: Endpoint) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayLightningClient&lt;Channel&gt;&gt; {
+    <span class="kw">async fn </span>connect(connection_url: Url) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayLightningClient&lt;Channel&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
         <span class="kw">let </span>client = <span class="kw">loop </span>{
-            <span class="kw">match </span>GatewayLightningClient::connect(endpoint.clone()).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(client) =&gt; <span class="kw">break </span>client,
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="macro">tracing::warn!</span>(<span class="string">&quot;Couldn&#39;t connect to CLN extension, retrying in 5 seconds...&quot;</span>);
-                    sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+            <span class="kw">if </span>retries &gt;= MAX_LIGHTNING_RETRIES {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                    <span class="string">&quot;Failed to connect to CLN&quot;
+                </span>)));
+            }
+
+            retries += <span class="number">1</span>;
+
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(endpoint) = Endpoint::from_shared(connection_url.to_string()) {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = GatewayLightningClient::connect(endpoint.clone()).<span class="kw">await </span>{
+                    <span class="kw">break </span>client;
                 }
             }
+
+            <span class="macro">tracing::warn!</span>(<span class="string">&quot;Couldn&#39;t connect to CLN extension, retrying in 1 second...&quot;</span>);
+            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         };
 
         <span class="prelude-val">Ok</span>(client)
@@ -191,21 +209,21 @@
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>NetworkLnRpcClient {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse&gt; {
         <span class="kw">let </span>req = Request::new(EmptyRequest {});
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>res = client.get_node_info(req).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
     <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse&gt; {
         <span class="kw">let </span>req = Request::new(EmptyRequest {});
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>res = client.get_route_hints(req).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
     <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse&gt; {
         <span class="kw">let </span>req = Request::new(invoice);
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>res = client.pay_invoice(req).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
@@ -215,7 +233,7 @@
         events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.client.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>res = client.route_htlcs(events).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(Box::pin(res.into_inner()))
     }
