@@ -3,10 +3,9 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::vec;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Context, Result};
 use bitcoin::secp256k1;
 use devimint::cmd;
-use devimint::util::ToCmdExt;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::TransactionBuilder;
@@ -31,14 +30,13 @@ use tracing::info;
 use crate::MetricEvent;
 
 pub async fn get_notes_cli(amount: &Amount) -> anyhow::Result<TieredMulti<SpendableNote>> {
-    cmd!(FedimintCli, "fetch").out_string().await?;
-    cmd!(FedimintCli, "spend", amount.msats.to_string())
+    cmd!(FedimintCli, "ng", "spend", amount.msats.to_string())
         .out_json()
-        .await?["note"]
+        .await?["notes"]
         .as_str()
         .map(parse_ecash)
         .transpose()?
-        .ok_or_else(|| anyhow::anyhow!("missing notes output"))
+        .context("missing notes output")
 }
 
 pub async fn try_get_notes_cli(
@@ -160,10 +158,10 @@ pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Invoice, Stri
         .as_str()
         .map(Invoice::from_str)
         .transpose()?
-        .ok_or_else(|| anyhow::anyhow!("Missing payment_request field"))?;
+        .context("Missing payment_request field")?;
     let r_hash = result["r_hash"]
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Missing r_hash field"))?
+        .context("Missing r_hash field")?
         .to_owned();
     Ok((invoice, r_hash))
 }
@@ -171,9 +169,7 @@ pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Invoice, Stri
 pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
     for _ in 0..60 {
         let result = cmd!(LnCli, "lookupinvoice", &r_hash).out_json().await?;
-        let state = result["state"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing state field"))?;
+        let state = result["state"].as_str().context("Missing state field")?;
         if state == "SETTLED" {
             return Ok(());
         } else {
@@ -220,7 +216,7 @@ pub async fn cln_create_invoice(amount: Amount) -> anyhow::Result<(Invoice, Stri
         .out_json()
         .await?["bolt11"]
         .as_str()
-        .ok_or_else(|| anyhow!("Missing bolt11 field"))?
+        .context("Missing bolt11 field")?
         .to_owned();
     Ok((Invoice::from_str(&invoice_string)?, label))
 }
@@ -230,7 +226,7 @@ pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
         .out_json()
         .await?["status"]
         .as_str()
-        .ok_or_else(|| anyhow!("Missing status field"))?
+        .context("Missing status field")?
         .to_owned();
     if status == "paid" {
         Ok(())
@@ -302,92 +298,50 @@ pub async fn remint_denomination(
     Ok(())
 }
 
-pub struct FedimintCli;
-impl ToCmdExt for FedimintCli {
-    type Fut = std::future::Ready<devimint::util::Command>;
+fn get_command_for_alias(alias: &str, default: &str) -> devimint::util::Command {
+    // try to use alias if set
+    let cli = std::env::var(alias)
+        .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
+        .unwrap_or_else(|_| vec![default.into()]);
+    let mut cmd = tokio::process::Command::new(&cli[0]);
+    cmd.args(&cli[1..]);
+    devimint::util::Command {
+        cmd,
+        args_debug: cli,
+    }
+}
 
-    fn cmd(self) -> Self::Fut {
-        // try to use alias if set
-        let fedimint_cli = std::env::var("FM_MINT_CLIENT")
-            .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
-            .unwrap_or_else(|_| vec!["fedimint-cli".into()]);
-        let mut cmd = tokio::process::Command::new(&fedimint_cli[0]);
-        cmd.args(&fedimint_cli[1..]);
-        std::future::ready(devimint::util::Command {
-            cmd,
-            args_debug: fedimint_cli,
-        })
+pub struct FedimintCli;
+impl FedimintCli {
+    pub async fn cmd(self) -> devimint::util::Command {
+        get_command_for_alias("FM_MINT_CLIENT", "fedimint-cli")
     }
 }
 
 pub struct LnCli;
-impl ToCmdExt for LnCli {
-    type Fut = std::future::Ready<devimint::util::Command>;
-
-    fn cmd(self) -> Self::Fut {
-        // try to use alias if set
-        let lncli = std::env::var("FM_LNCLI")
-            .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
-            .unwrap_or_else(|_| vec!["lncli".into()]);
-        let mut cmd = tokio::process::Command::new(&lncli[0]);
-        cmd.args(&lncli[1..]);
-        std::future::ready(devimint::util::Command {
-            cmd,
-            args_debug: lncli,
-        })
+impl LnCli {
+    pub async fn cmd(self) -> devimint::util::Command {
+        get_command_for_alias("FM_LNCLI", "lncli")
     }
 }
 
 pub struct ClnLightningCli;
-impl ToCmdExt for ClnLightningCli {
-    type Fut = std::future::Ready<devimint::util::Command>;
-
-    fn cmd(self) -> Self::Fut {
-        // try to use alias if set
-        let lightning_cli = std::env::var("FM_LIGHTNING_CLI")
-            .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
-            .unwrap_or_else(|_| vec!["lightning-cli".into()]);
-        let mut cmd = tokio::process::Command::new(&lightning_cli[0]);
-        cmd.args(&lightning_cli[1..]);
-        std::future::ready(devimint::util::Command {
-            cmd,
-            args_debug: lightning_cli,
-        })
+impl ClnLightningCli {
+    pub async fn cmd(self) -> devimint::util::Command {
+        get_command_for_alias("FM_LIGHTNING_CLI", "lightning-cli")
     }
 }
 
 pub struct GatewayClnCli;
-impl ToCmdExt for GatewayClnCli {
-    type Fut = std::future::Ready<devimint::util::Command>;
-
-    fn cmd(self) -> Self::Fut {
-        // try to use alias if set
-        let gw = std::env::var("FM_GWCLI_CLN")
-            .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
-            .unwrap_or_else(|_| vec!["gateway-cln".into()]);
-        let mut cmd = tokio::process::Command::new(&gw[0]);
-        cmd.args(&gw[1..]);
-        std::future::ready(devimint::util::Command {
-            cmd,
-            args_debug: gw,
-        })
+impl GatewayClnCli {
+    pub async fn cmd(self) -> devimint::util::Command {
+        get_command_for_alias("FM_GWCLI_CLN", "gateway-cln")
     }
 }
 
 pub struct GatewayLndCli;
-impl ToCmdExt for GatewayLndCli {
-    type Fut = std::future::Ready<devimint::util::Command>;
-
-    fn cmd(self) -> Self::Fut {
-        // try to use alias if set
-        let gw = std::env::var("FM_GWCLI_LND")
-            .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
-            .unwrap_or_else(|_| vec!["gateway-lnd".into()]);
-        let mut cmd = tokio::process::Command::new(&gw[0]);
-        cmd.args(&gw[1..]);
-        std::future::ready(devimint::util::Command {
-            cmd,
-            args_debug: gw,
-        })
+impl GatewayLndCli {
+    pub async fn cmd(self) -> devimint::util::Command {
+        get_command_for_alias("FM_GWCLI_LND", "gateway-lnd")
     }
 }
