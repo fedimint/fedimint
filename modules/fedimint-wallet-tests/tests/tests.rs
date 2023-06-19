@@ -13,8 +13,8 @@ use fedimint_wallet_server::WalletGen;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(0, DummyClientGen, DummyGen, DummyGenParams::default());
-    let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_rpc());
-    let wallet_client = WalletClientGen::new(fixtures.bitcoin_rpc());
+    let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_server());
+    let wallet_client = WalletClientGen::new(fixtures.bitcoin_client());
     fixtures.with_module(1, wallet_client, WalletGen, wallet_params)
 }
 
@@ -24,6 +24,8 @@ async fn on_chain_deposits() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
     let valid_until = SystemTime::now() + TIMEOUT;
 
     let (op, address) = client.get_deposit_address(valid_until).await?;
@@ -36,7 +38,7 @@ async fn on_chain_deposits() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, DepositState::WaitingForConfirmation);
 
     // Need to mine blocks until deposit is confirmed
-    bitcoin.mine_blocks(10).await;
+    bitcoin.mine_blocks(finality_delay).await;
     assert_eq!(sub.ok().await?, DepositState::Confirmed);
     assert_eq!(sub.ok().await?, DepositState::Claimed);
     assert_eq!(client.get_balance().await, sats(1000));

@@ -13,6 +13,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use fedimint_logging::TracingSetup;
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use tempfile::TempDir;
 
@@ -55,6 +56,8 @@ impl Fixtures {
         server: impl IServerModuleGen + MaybeSend + MaybeSync + 'static,
         params: impl ModuleGenParams,
     ) -> Self {
+        // Ensure tracing has been set once
+        let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
         let num_peers = match real_testing {
             true => 2,
@@ -65,7 +68,11 @@ impl Fixtures {
             true => {
                 let rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
                 let bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
-                let bitcoin = RealBitcoinTest::new(&rpc_config.url, bitcoin_rpc);
+                let bitcoincore_url = env::var("FM_TEST_BITCOIND_RPC")
+                    .expect("Must have bitcoind RPC defined for real tests")
+                    .parse()
+                    .expect("Invalid bitcoind RPC URL");
+                let bitcoin = RealBitcoinTest::new(&bitcoincore_url, bitcoin_rpc);
                 (Arc::new(bitcoin), rpc_config)
             }
             false => {
@@ -148,14 +155,26 @@ impl Fixtures {
     /// Starts a new gateway connected to a fed
     pub async fn new_connected_gateway(&self, fed: &FederationTest) -> GatewayTest {
         let mut gateway = self.new_gateway(None).await;
-
         gateway.connect_fed(fed).await;
         gateway
     }
 
-    /// Get a test bitcoin RPC config
-    pub fn bitcoin_rpc(&self) -> BitcoinRpcConfig {
+    /// Get a server bitcoin RPC config
+    pub fn bitcoin_server(&self) -> BitcoinRpcConfig {
         self.bitcoin_rpc.clone()
+    }
+
+    /// Get a client bitcoin RPC config
+    // TODO: Right now we only support mocks or esplora, we should support others in
+    // the future
+    pub fn bitcoin_client(&self) -> BitcoinRpcConfig {
+        match Fixtures::is_real_test() {
+            true => BitcoinRpcConfig {
+                kind: "esplora".to_string(),
+                url: "http://127.0.0.1:50002".parse().unwrap(),
+            },
+            false => self.bitcoin_rpc.clone(),
+        }
     }
 
     /// Get a test bitcoin fixture

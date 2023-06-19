@@ -28,3 +28,4 @@ fedimint-testing ={ path = "../../fedimint-testing" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 tokio = { version = "1.26.0", features = ["sync"] }
+tracing = "0.1.37"
