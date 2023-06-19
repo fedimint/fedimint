@@ -49,10 +49,10 @@ craneLib.overrideScope' (self: prev: {
   filterWorkspaceDepsBuildFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*/proto/.*" ] src;
 
   # Filter only files relevant to building the workspace
-  filterWorkspaceFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" ] src;
+  filterWorkspaceFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" ] src;
 
-  # Like `filterWorkspaceFiles` but with `./scripts/` and `./misc/test/` included
-  filterWorkspaceTestFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "scripts/.*" "misc/test/.*" ] src;
+  # Like `filterWorkspaceFiles` but with `./scripts/` included
+  filterWorkspaceTestFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "devimint/src/cfg/.*" "scripts/.*" ] src;
 
   cargo-llvm-cov = self.buildPackage rec {
     pname = "cargo-llvm-cov";
