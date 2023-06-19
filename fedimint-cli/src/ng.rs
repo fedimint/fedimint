@@ -101,6 +101,10 @@ pub enum ClientNg {
         #[clap(long)]
         force: bool,
     },
+    /// Discover the common api version to use to communicate with the
+    /// federation
+    #[clap(hide = true)]
+    DiscoverVersion,
     /// Restore the previously created backup of mint notes (with `backup`
     /// command)
     Restore {
@@ -369,6 +373,9 @@ pub async fn handle_ng_command(
             }
 
             unreachable!("Update stream ended without outcome");
+        }
+        ClientNg::DiscoverVersion => {
+            Ok(json!({ "versions": client.discover_common_api_version().await? }))
         }
     }
 }

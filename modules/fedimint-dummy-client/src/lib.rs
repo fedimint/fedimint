@@ -14,7 +14,8 @@ use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
-    CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
+    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    TransactionItemAmount,
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
@@ -196,6 +197,11 @@ impl ClientModule for DummyClientModule {
         DummyClientContext {
             dummy_decoder: self.decoder(),
         }
+    }
+
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
     }
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {

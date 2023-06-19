@@ -27,7 +27,8 @@ use url::Url;
 
 use crate::encoding::Decodable;
 use crate::module::{
-    DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen, ModuleConsensusVersion,
+    CoreConsensusVersion, DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen,
+    ModuleConsensusVersion,
 };
 use crate::task::{MaybeSend, MaybeSync};
 use crate::{maybe_add_send_sync, PeerId};
@@ -114,6 +115,8 @@ pub struct ClientConfig {
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
+    /// Core consensus version
+    pub consensus_version: CoreConsensusVersion,
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,

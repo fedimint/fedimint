@@ -7,7 +7,7 @@ use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
+use fedimint_core::module::{ModuleCommon, MultiApiVersion, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
@@ -46,6 +46,10 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     }
 
     fn context(&self) -> Self::ModuleStateMachineContext;
+
+    /// Api versions of the corresponding serverr side module's API
+    /// that this client module implementation can use.
+    fn supported_api_versions(&self) -> MultiApiVersion;
 
     async fn handle_cli_command(
         &self,
@@ -113,6 +117,8 @@ pub trait IClientModule: Debug {
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
 
+    fn supported_api_versions(&self) -> MultiApiVersion;
+
     async fn handle_cli_command(
         &self,
         client: &Client,
@@ -166,6 +172,11 @@ where
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext {
         DynContext::from_typed(instance, <T as ClientModule>::context(self))
+    }
+
+    /// See [`ClientModule::supported_api_versions`]
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        <T as ClientModule>::supported_api_versions(self)
     }
 
     async fn handle_cli_command(
