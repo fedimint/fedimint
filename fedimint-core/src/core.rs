@@ -13,7 +13,7 @@ use std::io::Read;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-pub use bitcoin::KeyPair;
+pub use bitcoin::key::KeyPair;
 use fedimint_core::dyn_newtype_define;
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;

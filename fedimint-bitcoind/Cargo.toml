@@ -14,11 +14,11 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.66"
 async-trait = "*"
-bitcoin = "0.29.2"
+bitcoin = "0.30.0"
 bitcoin_hashes = "0.11.0"
-bitcoincore-rpc = { version = "0.16.0", optional = true }
-electrum-client = {version = "0.12.0", optional = true }
-esplora-client = { version = "0.5.0", default-features = false, features = ["async", "async-https-rustls"], optional = true }
+bitcoincore-rpc = { version = "0.17.0", optional = true }
+electrum-client = {version = "0.15.1", optional = true }
+esplora-client = { git = "https://github.com/tcharding/rust-esplora-client/", branch = "06-10-upgrade-bitcoin", default-features = false, features = ["async", "async-https-rustls"], optional = true }
 lazy_static = "1.4.0"
 fedimint-core  = { path = "../fedimint-core" }
 fedimint-logging = { path = "../fedimint-logging" }

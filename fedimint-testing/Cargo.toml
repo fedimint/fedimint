@@ -15,8 +15,8 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.65"
 async-trait = "*"
-bitcoin = "0.29.2"
-bitcoincore-rpc = "0.16.0"
+bitcoin = "0.30.0"
+bitcoincore-rpc = "0.17.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 cln-rpc = "0.1.1"
 fedimint-core  = { path = "../fedimint-core" }
@@ -31,7 +31,7 @@ futures = "0.3"
 lightning = "0.0.113"
 lightning-invoice = "0.21.0"
 tempfile = "3.4.0"
-secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }
+secp256k1-zkp = { version = "0.9.1", features = [ "global-context", "bitcoin_hashes" ] }
 serde = { version = "1.0.149", features = [ "derive" ] }
 tracing ="0.1.37"
 rand = "0.8"

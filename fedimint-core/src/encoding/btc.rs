@@ -2,7 +2,6 @@ use std::io::{Error, Write};
 use std::str::FromStr;
 
 use anyhow::format_err;
-use bitcoin::hashes::Hash as BitcoinHash;
 use miniscript::{Descriptor, MiniscriptKey};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -31,14 +30,14 @@ macro_rules! impl_encode_decode_bridge {
     };
 }
 
-impl_encode_decode_bridge!(bitcoin::BlockHeader);
+impl_encode_decode_bridge!(bitcoin::blockdata::block::Header);
 impl_encode_decode_bridge!(bitcoin::BlockHash);
 impl_encode_decode_bridge!(bitcoin::OutPoint);
-impl_encode_decode_bridge!(bitcoin::Script);
+// impl_encode_decode_bridge!(bitcoin::Script);
 impl_encode_decode_bridge!(bitcoin::Transaction);
 impl_encode_decode_bridge!(bitcoin::Txid);
-impl_encode_decode_bridge!(bitcoin::util::merkleblock::PartialMerkleTree);
-impl_encode_decode_bridge!(bitcoin::util::psbt::PartiallySignedTransaction);
+impl_encode_decode_bridge!(bitcoin::merkle_tree::PartialMerkleTree);
+impl_encode_decode_bridge!(bitcoin::psbt::Psbt);
 
 impl<K> Encodable for miniscript::Descriptor<K>
 where

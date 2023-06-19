@@ -86,6 +86,3 @@ threshold_crypto = { opt-level = 3 }
 inherits = "dev"
 split-debuginfo = "packed"
 debug = 1
-
-[patch.crates-io]
-secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }

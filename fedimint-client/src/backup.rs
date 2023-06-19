@@ -396,7 +396,7 @@ impl Client {
 
     /// Backup id derived from the root secret key (public key used to self-sign
     /// backup requests)
-    pub fn get_backup_id(&self) -> bitcoin::XOnlyPublicKey {
+    pub fn get_backup_id(&self) -> bitcoin::key::XOnlyPublicKey {
         self.get_derived_backup_signing_key().x_only_public_key().0
     }
 

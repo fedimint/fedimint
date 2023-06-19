@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.69"
-bitcoin = "0.29.2"
+bitcoin = "0.30.0"
 clap = "4.1.6"
 fedimint-aead = { path = "../crypto/aead" }
 fedimint-core = { path = "../fedimint-core" }
@@ -24,7 +24,7 @@ fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 futures = "0.3.26"
 miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92" }
-secp256k1 = { version = "0.24.3", features = [ "serde", "global-context" ] }
+secp256k1 = { version = "0.27.0", features = [ "serde", "global-context" ] }
 serde = { version = "1.0.152", features = [ "derive" ] }
 serde_json = "1.0.93"
 tokio = { version = "1.26.0", features = [ "rt-multi-thread", "macros" ] }

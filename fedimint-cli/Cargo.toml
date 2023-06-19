@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.66"
 base64 = "0.20.0"
-bitcoin = "0.29.2"
+bitcoin = "0.30.0"
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 futures = "0.3.28"
