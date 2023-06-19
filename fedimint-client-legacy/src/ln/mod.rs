@@ -96,7 +96,7 @@ impl LnClient {
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
-            gateway_key: gateway.mint_pub_key,
+            gateway_key: gateway.gateway_pub_key,
             timelock,
             user_key: user_sk.x_only_public_key().0,
             invoice,
