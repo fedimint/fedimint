@@ -1214,6 +1214,7 @@
 <a href="#1214" id="1214">1214</a>
 <a href="#1215" id="1215">1215</a>
 <a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>ng;
 
 <span class="kw">use </span>core::fmt;
@@ -1264,7 +1265,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>tracing::{debug, info};
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::ng::ClientNg;
@@ -2317,6 +2318,7 @@
                     .await_restore_finished()
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+                <span class="macro">debug!</span>(<span class="string">&quot;Restore complete&quot;</span>);
 
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
             }
