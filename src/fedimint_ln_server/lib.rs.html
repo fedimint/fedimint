@@ -2310,7 +2310,7 @@
 
         <span class="kw">let </span>gateway = LightningGateway {
             mint_channel_id: <span class="number">100</span>,
-            mint_pub_key: pk.x_only_public_key().<span class="number">0</span>,
+            gateway_pub_key: pk.x_only_public_key().<span class="number">0</span>,
             node_pub_key: pk,
             api: Url::parse(<span class="string">&quot;http://example.com&quot;</span>)
                 .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),

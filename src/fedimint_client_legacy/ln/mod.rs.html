@@ -438,7 +438,7 @@
 
         <span class="kw">let </span>contract = OutgoingContract {
             hash: <span class="kw-2">*</span>invoice.payment_hash(),
-            gateway_key: gateway.mint_pub_key,
+            gateway_key: gateway.gateway_pub_key,
             timelock,
             user_key: user_sk.x_only_public_key().<span class="number">0</span>,
             invoice,
