@@ -1,5 +1,5 @@
 use bitcoin::{Address, Amount};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -65,6 +65,9 @@ pub enum Commands {
         #[clap(long)]
         federation_id: FederationId,
     },
+    Completion {
+        shell: clap_complete::Shell,
+    },
 }
 
 #[tokio::main]
@@ -72,24 +75,26 @@ async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
     let cli = Cli::parse();
-    let client = GatewayRpcClient::new(cli.address, source_password(cli.rpcpassword));
+    let client = || GatewayRpcClient::new(cli.address, source_password(cli.rpcpassword));
 
     match cli.command {
         Commands::VersionHash => {
             println!("version: {}", env!("CODE_VERSION"));
         }
         Commands::Info => {
-            let response = client.get_info().await?;
+            let response = client().get_info().await?;
 
             print_response(response).await;
         }
         Commands::Balance { federation_id } => {
-            let response = client.get_balance(BalancePayload { federation_id }).await?;
+            let response = client()
+                .get_balance(BalancePayload { federation_id })
+                .await?;
 
             print_response(response).await;
         }
         Commands::Address { federation_id } => {
-            let response = client
+            let response = client()
                 .get_deposit_address(DepositAddressPayload { federation_id })
                 .await?;
 
@@ -100,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
             amount,
             address,
         } => {
-            let response = client
+            let response = client()
                 .withdraw(WithdrawPayload {
                     federation_id,
                     amount,
@@ -111,17 +116,25 @@ async fn main() -> anyhow::Result<()> {
             print_response(response).await;
         }
         Commands::ConnectFed { connect } => {
-            let response = client
+            let response = client()
                 .connect_federation(ConnectFedPayload { connect })
                 .await?;
 
             print_response(response).await;
         }
         Commands::Backup { federation_id } => {
-            client.backup(BackupPayload { federation_id }).await?;
+            client().backup(BackupPayload { federation_id }).await?;
         }
         Commands::Restore { federation_id } => {
-            client.restore(RestorePayload { federation_id }).await?;
+            client().restore(RestorePayload { federation_id }).await?;
+        }
+        Commands::Completion { shell } => {
+            clap_complete::generate(
+                shell,
+                &mut Cli::command(),
+                "gateway-cli",
+                &mut std::io::stdout(),
+            );
         }
     }
 
