@@ -144,8 +144,21 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
-<span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -211,6 +224,9 @@
         <span class="attr">#[clap(long)]
         </span>federation_id: FederationId,
     },
+    Completion {
+        shell: clap_complete::Shell,
+    },
 }
 
 <span class="attr">#[tokio::main]
@@ -218,24 +234,26 @@
     TracingSetup::default().init()<span class="question-mark">?</span>;
 
     <span class="kw">let </span>cli = Cli::parse();
-    <span class="kw">let </span>client = GatewayRpcClient::new(cli.address, source_password(cli.rpcpassword));
+    <span class="kw">let </span>client = || GatewayRpcClient::new(cli.address, source_password(cli.rpcpassword));
 
     <span class="kw">match </span>cli.command {
         Commands::VersionHash =&gt; {
             <span class="macro">println!</span>(<span class="string">&quot;version: {}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>));
         }
         Commands::Info =&gt; {
-            <span class="kw">let </span>response = client.get_info().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>response = client().get_info().<span class="kw">await</span><span class="question-mark">?</span>;
 
             print_response(response).<span class="kw">await</span>;
         }
         Commands::Balance { federation_id } =&gt; {
-            <span class="kw">let </span>response = client.get_balance(BalancePayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>response = client()
+                .get_balance(BalancePayload { federation_id })
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
             print_response(response).<span class="kw">await</span>;
         }
         Commands::Address { federation_id } =&gt; {
-            <span class="kw">let </span>response = client
+            <span class="kw">let </span>response = client()
                 .get_deposit_address(DepositAddressPayload { federation_id })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -246,7 +264,7 @@
             amount,
             address,
         } =&gt; {
-            <span class="kw">let </span>response = client
+            <span class="kw">let </span>response = client()
                 .withdraw(WithdrawPayload {
                     federation_id,
                     amount,
@@ -257,17 +275,25 @@
             print_response(response).<span class="kw">await</span>;
         }
         Commands::ConnectFed { connect } =&gt; {
-            <span class="kw">let </span>response = client
+            <span class="kw">let </span>response = client()
                 .connect_federation(ConnectFedPayload { connect })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             print_response(response).<span class="kw">await</span>;
         }
         Commands::Backup { federation_id } =&gt; {
-            client.backup(BackupPayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
+            client().backup(BackupPayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         Commands::Restore { federation_id } =&gt; {
-            client.restore(RestorePayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
+            client().restore(RestorePayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        Commands::Completion { shell } =&gt; {
+            clap_complete::generate(
+                shell,
+                <span class="kw-2">&amp;mut </span>Cli::command(),
+                <span class="string">&quot;gateway-cli&quot;</span>,
+                <span class="kw-2">&amp;mut </span>std::io::stdout(),
+            );
         }
     }
 
