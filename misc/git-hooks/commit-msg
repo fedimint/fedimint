@@ -25,6 +25,7 @@ while read -r line ; do
 done < "$1"
 
 if ! convco check < "$tmp_file" ; then
+   >&2 echo "Please follow conventional commits(https://www.conventionalcommits.org)"
    >&2 echo "Use git recommit <args> to fix your commit"
   exit 1
 fi
