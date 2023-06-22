@@ -1,5 +1,6 @@
 use std::env;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -126,6 +127,69 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
               AVG LN SEND TIME: {ln_send_time:.3}\n\
               AVG LN RECV TIME: {ln_recv_time:.3}"
     );
+    Ok(())
+}
+
+pub async fn version_hash_tests() -> Result<()> {
+    let git_hash = get_git_hash().context("Failed to retrieve git hash")?;
+    let binary_width = 32;
+    let hash_width = 40;
+    println!("{:<binary_width$}{:>hash_width$}", "git hash:", git_hash);
+
+    // Verify version hash for each binary
+    verify_version_hash("fedimint-cli", &git_hash, &binary_width, &hash_width).await?;
+    verify_version_hash("fedimintd", &git_hash, &binary_width, &hash_width).await?;
+    verify_version_hash("gateway-cli", &git_hash, &binary_width, &hash_width).await?;
+    verify_version_hash(
+        "gateway-cln-extension",
+        &git_hash,
+        &binary_width,
+        &hash_width,
+    )
+    .await?;
+    verify_version_hash("gatewayd", &git_hash, &binary_width, &hash_width).await?;
+
+    Ok(())
+}
+
+fn get_git_hash() -> Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .context("Failed to execute git command")?;
+
+    let git_hash = String::from_utf8(output.stdout)
+        .context("Failed to parse git hash output")?
+        .trim()
+        .to_owned();
+
+    Ok(git_hash)
+}
+
+async fn verify_version_hash(
+    binary: &str,
+    expected_hash: &str,
+    binary_width: &usize,
+    hash_width: &usize,
+) -> Result<()> {
+    let output = cmd!(binary, "version-hash")
+        .out_string()
+        .await
+        .context("Failed to execute version-hash command")?;
+
+    let version_hash = output.trim();
+    println!(
+        "{:<binary_width$}{:>hash_width$}",
+        binary.to_owned() + " hash:",
+        version_hash
+    );
+
+    anyhow::ensure!(
+        version_hash == expected_hash,
+        "Version hash mismatch for binary: {}",
+        binary
+    );
+
     Ok(())
 }
 
@@ -1258,6 +1322,7 @@ enum Cmd {
     DevFed,
     RunUi,
     LatencyTests,
+    VersionHashTests,
     ReconnectTest,
     CliTests,
     LoadTestToolTest,
@@ -1382,6 +1447,9 @@ async fn main() -> Result<()> {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             latency_tests(dev_fed).await?;
+        }
+        Cmd::VersionHashTests => {
+            version_hash_tests().await?;
         }
         Cmd::ReconnectTest => {
             let (process_mgr, _) = setup(args.common).await?;

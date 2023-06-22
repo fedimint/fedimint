@@ -34,6 +34,10 @@ craneLib.overrideScope' (self: prev: {
 
     cargoClippyExtraArgs = "--all-targets --no-deps -- --deny warnings";
     doInstallCargoArtifacts = false;
+
+    preBuild = ''
+      export FEDIMINT_BUILD_ALLOW_GIT_FAIL=true
+    '';
   });
 
   workspaceDoc = self.mkCargoDerivation (self.commonArgs // {

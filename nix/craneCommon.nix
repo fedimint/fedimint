@@ -72,6 +72,7 @@ craneLib.overrideScope' (self: prev: {
     PROTOC = "${pkgs.protobuf}/bin/protoc";
     PROTOC_INCLUDE = "${pkgs.protobuf}/include";
     CARGO_PROFILE = self.commonProfile;
+    FEDIMINT_BUILD_ALLOW_GIT_FAIL = "true";
   };
 
   commonArgsBase = {
