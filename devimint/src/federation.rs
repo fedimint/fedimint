@@ -248,7 +248,8 @@ pub async fn run_config_gen(
     let configs = ServerConfig::trusted_dealer_gen(&params, fed.server_gens.clone());
     let mut fedimintd_envs = BTreeMap::new();
     for (peer, cfg) in configs {
-        let envs = vars::Fedimintd::init(&process_mgr.globals, &cfg).await?;
+        let bind_metrics_api = format!("127.0.0.1:{}", 3000 + peer.to_usize());
+        let envs = vars::Fedimintd::init(&process_mgr.globals, &cfg, bind_metrics_api).await?;
         let password = cfg.private.api_auth.0.clone();
         let data_dir = envs.FM_DATA_DIR.clone();
         fedimintd_envs.insert(peer.to_usize(), envs);

@@ -1,0 +1,13 @@
+[package]
+name = "fedimint-metrics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.71", features = ["backtrace"] }
+axum = "0.6.18"
+fedimint-core = { path = "../fedimint-core" }
+lazy_static = "1.4.0"
+prometheus = "0.13.3"
+tokio = "1"
+tracing = "0.1.37"
