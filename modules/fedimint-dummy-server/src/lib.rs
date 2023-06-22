@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::string::ToString;
 
 use anyhow::bail;
@@ -8,7 +8,7 @@ use fedimint_core::config::{
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{combine_sigs, SerdeSignature, SerdeSignatureShare};
+use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
@@ -35,8 +35,9 @@ use threshold_crypto::{PublicKeySet, SecretKeySet};
 use tokio::sync::Notify;
 
 use crate::db::{
-    migrate_to_v1, DbKeyPrefix, DummyFundsKeyV1, DummyFundsKeyV1Prefix, DummyOutcomeKeyV1,
-    DummyOutcomeKeyV1Prefix, DummySignKeyV1, DummySignV1Prefix,
+    migrate_to_v1, DbKeyPrefix, DummyFundsKeyV1, DummyFundsPrefixV1, DummyOutcomeKey,
+    DummyOutcomePrefix, DummySignatureKey, DummySignaturePrefix, DummySignatureShareKey,
+    DummySignatureSharePrefix, DummySignatureShareStringPrefix,
 };
 
 mod db;
@@ -182,7 +183,7 @@ impl ServerModuleGen for DummyGen {
                 DbKeyPrefix::Funds => {
                     push_db_pair_items!(
                         dbtx,
-                        DummyFundsKeyV1Prefix,
+                        DummyFundsPrefixV1,
                         DummyFundsKeyV1,
                         Amount,
                         items,
@@ -192,21 +193,31 @@ impl ServerModuleGen for DummyGen {
                 DbKeyPrefix::Outcome => {
                     push_db_pair_items!(
                         dbtx,
-                        DummyOutcomeKeyV1Prefix,
-                        DummyOutcomeKeyV1,
+                        DummyOutcomePrefix,
+                        DummyOutcomeKey,
                         DummyOutputOutcome,
                         items,
                         "Dummy Outputs"
                     );
                 }
-                DbKeyPrefix::Sign => {
+                DbKeyPrefix::SignatureShare => {
                     push_db_pair_items!(
                         dbtx,
-                        DummySignV1Prefix,
-                        DummySignKeyV1,
+                        DummySignatureSharePrefix,
+                        DummySignatureShareKey,
+                        SerdeSignatureShare,
+                        items,
+                        "Dummy Signature Shares"
+                    );
+                }
+                DbKeyPrefix::Signature => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DummySignaturePrefix,
+                        DummySignatureKey,
                         Option<SerdeSignature>,
                         items,
-                        "Dummy Sign"
+                        "Dummy Signatures"
                     );
                 }
             }
@@ -249,7 +260,7 @@ impl ServerModule for Dummy {
     ) -> ConsensusProposal<DummyConsensusItem> {
         // Sign and send the print requests to consensus
         let sign_requests: Vec<_> = dbtx
-            .find_by_prefix(&DummySignV1Prefix)
+            .find_by_prefix(&DummySignaturePrefix)
             .await
             .collect()
             .await;
@@ -257,7 +268,7 @@ impl ServerModule for Dummy {
         let consensus_items = sign_requests
             .into_iter()
             .filter(|(_, sig)| sig.is_none())
-            .map(|(DummySignKeyV1(message), _)| {
+            .map(|(DummySignatureKey(message), _)| {
                 let sig = self.cfg.private.private_key_share.sign(&message);
                 DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
             });
@@ -270,20 +281,67 @@ impl ServerModule for Dummy {
         consensus_items: Vec<(PeerId, DummyConsensusItem)>,
         _consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
-        // Collect all signatures consensus items by message
-        let mut sigs = HashMap::<String, BTreeMap<PeerId, SerdeSignatureShare>>::new();
-        for (peer, DummyConsensusItem::Sign(request, share)) in &consensus_items {
-            let entry = sigs.entry(request.clone()).or_default();
-            entry.insert(*peer, share.clone());
+        for (peer_id, DummyConsensusItem::Sign(request, share)) in consensus_items {
+            // check if we already have a signature share for this peer
+            if dbtx
+                .get_value(&DummySignatureShareKey(request.clone(), peer_id))
+                .await
+                .is_some()
+            {
+                continue;
+            }
+
+            // check if the signature share is valid
+            if !self
+                .cfg
+                .consensus
+                .public_key_set
+                .public_key_share(peer_id.to_usize())
+                .verify(&share.0, request.clone())
+            {
+                continue;
+            }
+
+            // save the valid signature share
+            dbtx.insert_new_entry(&DummySignatureShareKey(request.clone(), peer_id), &share)
+                .await;
+
+            // collect all signature shares for this request
+            let signature_shares = dbtx
+                .find_by_prefix(&DummySignatureShareStringPrefix(request.clone()))
+                .await
+                .collect::<Vec<_>>()
+                .await;
+
+            // check if we have enough signature shares to create a threshold siganture
+            if signature_shares.len() <= self.cfg.consensus.public_key_set.threshold() {
+                continue;
+            }
+
+            // combine the valid signature shares into a threshold signature
+            let threshold_signature = self
+                .cfg
+                .consensus
+                .public_key_set
+                .combine_signatures(
+                    signature_shares
+                        .iter()
+                        .map(|(peer_id, share)| (peer_id.1.to_usize(), &share.0)),
+                )
+                .expect("All signatures are valid");
+
+            // remove the signature shares
+            dbtx.remove_by_prefix(&DummySignatureShareStringPrefix(request.clone()))
+                .await;
+
+            // save the treshold signature
+            dbtx.insert_entry(
+                &DummySignatureKey(request.to_string()),
+                &Some(SerdeSignature(threshold_signature)),
+            )
+            .await;
         }
 
-        let pks = self.cfg.consensus.public_key_set.clone();
-        for (message, shares) in sigs {
-            let key = DummySignKeyV1(message.to_string());
-            // If a threshold of us signed, we can combine signatures
-            dbtx.insert_entry(&key, &combine_sigs(&pks, &shares, &message).ok())
-                .await;
-        }
         vec![]
     }
 
@@ -368,7 +426,7 @@ impl ServerModule for Dummy {
 
         // Update the output outcome the user can query
         let outcome = DummyOutputOutcome(updated_funds, output.account);
-        dbtx.insert_entry(&DummyOutcomeKeyV1(out_point), &outcome)
+        dbtx.insert_entry(&DummyOutcomeKey(out_point), &outcome)
             .await;
 
         Ok(meta)
@@ -388,12 +446,12 @@ impl ServerModule for Dummy {
         out_point: OutPoint,
     ) -> Option<DummyOutputOutcome> {
         // check whether or not the output has been processed
-        dbtx.get_value(&DummyOutcomeKeyV1(out_point)).await
+        dbtx.get_value(&DummyOutcomeKey(out_point)).await
     }
 
     async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
         audit
-            .add_items(dbtx, &DummyFundsKeyV1Prefix, |k, v| match k {
+            .add_items(dbtx, &DummyFundsPrefixV1, |k, v| match k {
                 // the fed's test account is considered an asset (positive)
                 // should be the bitcoin we own in a real module
                 DummyFundsKeyV1(key) if key == fed_public_key() => v.msats as i64,
@@ -411,7 +469,7 @@ impl ServerModule for Dummy {
                 async |module: &Dummy, context, message: String| -> () {
                     // TODO: Should not write to DB in module APIs
                     let mut dbtx = context.dbtx();
-                    dbtx.insert_entry(&DummySignKeyV1(message), &None).await;
+                    dbtx.insert_entry(&DummySignatureKey(message), &None).await;
                     module.sign_notify.notify_one();
                     Ok(())
                 }
@@ -420,7 +478,7 @@ impl ServerModule for Dummy {
                 // API waits for the signature to exist
                 "wait_signed",
                 async |_module: &Dummy, context, message: String| -> SerdeSignature {
-                    let future = context.wait_value_matches(DummySignKeyV1(message), |sig| sig.is_some());
+                    let future = context.wait_value_matches(DummySignatureKey(message), |sig| sig.is_some());
                     let sig = future.await;
                     Ok(sig.expect("checked is some"))
                 }
