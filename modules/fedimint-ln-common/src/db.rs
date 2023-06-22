@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 use secp256k1::PublicKey;
@@ -19,7 +17,7 @@ pub enum DbKeyPrefix {
     AgreedDecryptionShare = 0x43,
     ContractUpdate = 0x44,
     LightningGateway = 0x45,
-    BlockHeight = 0x46,
+    BlockHeightVote = 0x46,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -98,6 +96,9 @@ pub struct AgreedDecryptionShareKey(pub ContractId, pub PeerId);
 #[derive(Debug, Encodable)]
 pub struct AgreedDecryptionShareKeyPrefix;
 
+#[derive(Debug, Encodable)]
+pub struct AgreedDecryptionShareContractIdPrefix(pub ContractId);
+
 impl_db_record!(
     key = AgreedDecryptionShareKey,
     value = PreimageDecryptionShare,
@@ -105,7 +106,8 @@ impl_db_record!(
 );
 impl_db_lookup!(
     key = AgreedDecryptionShareKey,
-    query_prefix = AgreedDecryptionShareKeyPrefix
+    query_prefix = AgreedDecryptionShareKeyPrefix,
+    query_prefix = AgreedDecryptionShareContractIdPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -125,11 +127,18 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct BlockHeightKey;
+pub struct BlockHeightVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct BlockHeightVotePrefix;
 
 impl_db_record!(
-    key = BlockHeightKey,
-    value = BTreeMap<PeerId, u64>,
-    db_prefix = DbKeyPrefix::BlockHeight,
-    notify_on_modify = true
+    key = BlockHeightVoteKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::BlockHeightVote
+);
+
+impl_db_lookup!(
+    key = BlockHeightVoteKey,
+    query_prefix = BlockHeightVotePrefix
 );
