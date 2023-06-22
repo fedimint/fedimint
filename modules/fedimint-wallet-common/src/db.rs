@@ -1,24 +1,24 @@
 use bitcoin::{BlockHash, Txid};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::{
-    PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction, WalletOutputOutcome,
-};
+use crate::{PendingTransaction, SpendableUTXO, UnsignedTransaction, WalletOutputOutcome};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     BlockHash = 0x30,
     Utxo = 0x31,
-    RoundConsensus = 0x32,
+    BlockHeightVote = 0x32,
+    FeeRateVote = 0x33,
     UnsignedTransaction = 0x34,
     PendingTransaction = 0x35,
     PegOutTxSigCi = 0x36,
     PegOutBitcoinOutPoint = 0x37,
+    PegOutNonce = 0x38,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -52,15 +52,6 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::Utxo,
 );
 impl_db_lookup!(key = UTXOKey, query_prefix = UTXOPrefixKey);
-
-#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct RoundConsensusKey;
-
-impl_db_record!(
-    key = RoundConsensusKey,
-    value = RoundConsensus,
-    db_prefix = DbKeyPrefix::RoundConsensus,
-);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct UnsignedTransactionKey(pub Txid);
@@ -121,7 +112,48 @@ impl_db_record!(
     value = WalletOutputOutcome,
     db_prefix = DbKeyPrefix::PegOutBitcoinOutPoint,
 );
+
 impl_db_lookup!(
     key = PegOutBitcoinTransaction,
     query_prefix = PegOutBitcoinTransactionPrefix
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct BlockHeightVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct BlockHeightVotePrefix;
+
+impl_db_record!(
+    key = BlockHeightVoteKey,
+    value = u32,
+    db_prefix = DbKeyPrefix::BlockHeightVote
+);
+
+impl_db_lookup!(
+    key = BlockHeightVoteKey,
+    query_prefix = BlockHeightVotePrefix
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct FeeRateVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct FeeRateVotePrefix;
+
+impl_db_record!(
+    key = FeeRateVoteKey,
+    value = fedimint_core::Feerate,
+    db_prefix = DbKeyPrefix::FeeRateVote
+);
+
+impl_db_lookup!(key = FeeRateVoteKey, query_prefix = FeeRateVotePrefix);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct PegOutNonceKey;
+
+impl_db_record!(
+    key = PegOutNonceKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::PegOutNonce
 );

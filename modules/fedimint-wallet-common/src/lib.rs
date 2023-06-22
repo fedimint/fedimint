@@ -37,15 +37,24 @@ pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
     Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
 )]
 pub enum WalletConsensusItem {
-    RoundConsensus(RoundConsensusItem),
+    BlockHeight(u32), /* FIXME: use block hash instead, but needs more complicated
+                       * * verification logic */
+    Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
 }
 
 impl std::fmt::Display for WalletConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WalletConsensusItem::RoundConsensus(rc) => {
-                write!(f, "Wallet Block Height {}", rc.block_height)
+            WalletConsensusItem::BlockHeight(height) => {
+                write!(f, "Wallet Block Height {height}")
+            }
+            WalletConsensusItem::Feerate(feerate) => {
+                write!(
+                    f,
+                    "Wallet Feerate with sats per kvb {}",
+                    feerate.sats_per_kvb
+                )
             }
             WalletConsensusItem::PegOutSignature(sig) => {
                 write!(f, "Wallet PegOut signature for Bitcoin TxId {}", sig.txid)
@@ -54,25 +63,10 @@ impl std::fmt::Display for WalletConsensusItem {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct RoundConsensusItem {
-    pub block_height: u32, /* FIXME: use block hash instead, but needs more complicated
-                            * verification logic */
-    pub fee_rate: Feerate,
-    pub randomness: [u8; 32],
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PegOutSignatureItem {
     pub txid: Txid,
     pub signature: Vec<secp256k1::ecdsa::Signature>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct RoundConsensus {
-    pub block_height: u32,
-    pub fee_rate: Feerate,
-    pub randomness_beacon: [u8; 32],
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
