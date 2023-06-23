@@ -53,8 +53,8 @@
 //! module and its smart contracts are only used to incentivize LN payments, not
 //! to hold money. The mint module on the other hand holds e-cash note and can
 //! thus be used to fund transactions and to absorb change. Module clients with
-//! this ability should implement the [`module::PrimaryClientModule`] trait so
-//! they can be chosen as the primary module for a [`Client`].
+//! this ability should implement [`ClientModule::supports_being_primary`] and
+//! related methods.
 //!
 //! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
 //!
@@ -91,6 +91,7 @@ use fedimint_core::{
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use futures::StreamExt;
+use module::DynClientModule;
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
@@ -102,9 +103,7 @@ use crate::db::ClientSecretKey;
 use crate::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
 };
-use crate::module::{
-    ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule, StateGenerator,
-};
+use crate::module::{ClientModule, ClientModuleRegistry, IClientModule, StateGenerator};
 use crate::oplog::OperationLog;
 use crate::secret::RootSecretStrategy;
 use crate::sm::executor::{
@@ -630,7 +629,14 @@ impl Client {
     /// primary module will always be returned before any other modules (which
     /// themselves are ordered by their instance id).
     pub fn get_first_instance(&self, module_kind: &ModuleKind) -> Option<ModuleInstanceId> {
-        if &self.inner.primary_module_kind == module_kind {
+        if &self
+            .inner
+            .modules
+            .get_with_kind(self.inner.primary_module_instance)
+            .expect("must have primary module")
+            .0
+            == module_kind
+        {
             return Some(self.inner.primary_module_instance);
         }
 
@@ -667,10 +673,17 @@ impl Client {
         &self.inner.config
     }
 
+    /// Get the primary module
+    pub fn primary_module(&self) -> &DynClientModule {
+        self.inner
+            .modules
+            .get(self.inner.primary_module_instance)
+            .expect("primary module must be present")
+    }
+
     /// Balance available to the client for spending
     pub async fn get_balance(&self) -> Amount {
-        self.inner
-            .primary_module
+        self.primary_module()
             .get_balance(
                 self.inner.primary_module_instance,
                 &mut self.db().begin_transaction().await,
@@ -681,12 +694,12 @@ impl Client {
     /// Returns a stream that yields the current client balance every time it
     /// changes.
     pub async fn subscribe_balance_changes(&self) -> BoxStream<'_, Amount> {
-        let mut balance_changes = self.inner.primary_module.subscribe_balance_changes().await;
+        let mut balance_changes = self.primary_module().subscribe_balance_changes().await;
         Box::pin(stream! {
             while let Some(()) = balance_changes.next().await {
                 let mut dbtx = self.db().begin_transaction().await;
-                let balance = self.inner
-                    .primary_module
+                let balance = self
+                    .primary_module()
                     .get_balance(self.inner.primary_module_instance, &mut dbtx)
                     .await;
                 yield balance;
@@ -711,9 +724,7 @@ struct ClientInner {
     db: Database,
     federation_id: FederationId,
     federation_meta: BTreeMap<String, String>,
-    primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
-    primary_module_kind: ModuleKind,
     modules: ClientModuleRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynGlobalApi,
@@ -723,6 +734,12 @@ struct ClientInner {
 }
 
 impl ClientInner {
+    fn primary_module(&self) -> &DynClientModule {
+        self.modules
+            .get(self.primary_module_instance)
+            .expect("must have primary module")
+    }
+
     fn context_gen(self: &Arc<Self>) -> ModuleGlobalContextGen {
         let client_inner = self.clone();
         Arc::new(move |module_instance, operation| {
@@ -753,11 +770,7 @@ impl ClientInner {
         &self,
         instance: ModuleInstanceId,
     ) -> Option<&maybe_add_send_sync!(dyn IClientModule)> {
-        if instance == self.primary_module_instance {
-            Some(self.primary_module.as_ref())
-        } else {
-            Some(self.modules.get(instance)?.as_ref())
-        }
+        Some(self.modules.get(instance)?.as_ref())
     }
 
     /// Determines if a transaction is underfunded, overfunded or balanced
@@ -810,7 +823,7 @@ impl ClientInner {
             self.transaction_builder_balance(&partial_transaction)
         {
             let input = self
-                .primary_module
+                .primary_module()
                 .create_sufficient_input(
                     self.primary_module_instance,
                     dbtx,
@@ -826,7 +839,7 @@ impl ClientInner {
             self.transaction_builder_balance(&partial_transaction)
         {
             let output = self
-                .primary_module
+                .primary_module()
                 .create_exact_output(
                     self.primary_module_instance,
                     dbtx,
@@ -926,7 +939,7 @@ impl ClientInner {
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
-        self.primary_module
+        self.primary_module()
             .await_primary_module_output(operation_id, out_point)
             .await
     }
@@ -996,7 +1009,7 @@ impl ClientBuilder {
     }
 
     /// Uses this module with the given instance id as the primary module. See
-    /// [`module::PrimaryClientModule`] for more information.
+    /// [`ClientModule::supports_being_primary`] for more information.
     ///
     /// ## Panics
     /// If there was a primary module specified previously
@@ -1137,66 +1150,46 @@ impl ClientBuilder {
 
         let root_secret = get_client_root_secret::<S>(&db).await;
 
-        let (modules, (primary_module_kind, primary_module)) = {
+        let modules = {
             let mut modules = ClientModuleRegistry::default();
-            let mut primary_module = None;
             for (module_instance, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
-                if module_instance == primary_module_instance {
-                    let module = self
-                        .module_gens
-                        .get(&kind)
-                        .ok_or(anyhow!(
-                            "Unknown primary module kind, cannot skip primary module"
-                        ))?
-                        .init_primary(
-                            module_config,
-                            db.clone(),
-                            module_instance,
-                            root_secret.derive_module_secret(module_instance),
-                            notifier.clone(),
-                            api.clone(),
-                        )
-                        .await?;
-                    let not_replaced = primary_module.replace((kind, module)).is_none();
-                    assert!(not_replaced, "Each module instance can only occur once in config, so no replacement can take place here.")
-                } else {
-                    let module_gen = match self.module_gens.get(&kind) {
-                        Some(module_gen) => module_gen,
-                        None => {
-                            info!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
-                            continue;
-                        }
-                    };
+                let module_gen = match self.module_gens.get(&kind) {
+                    Some(module_gen) => module_gen,
+                    None => {
+                        info!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
+                        continue;
+                    }
+                };
 
-                    let module = module_gen
-                        .init(
-                            module_config,
-                            db.clone(),
-                            module_instance,
-                            // This is a divergence from the legacy client, where the child secret
-                            // keys were derived using *module kind*-specific derivation paths.
-                            // Since the new client has to support multiple, segregated modules of
-                            // the same kind we have to use the instance id instead.
-                            root_secret.derive_module_secret(module_instance),
-                            notifier.clone(),
-                            api.clone(),
-                        )
-                        .await?;
-                    modules.register_module(module_instance, kind, module);
+                let module = module_gen
+                    .init(
+                        module_config,
+                        db.clone(),
+                        module_instance,
+                        // This is a divergence from the legacy client, where the child secret
+                        // keys were derived using *module kind*-specific derivation paths.
+                        // Since the new client has to support multiple, segregated modules of
+                        // the same kind we have to use the instance id instead.
+                        root_secret.derive_module_secret(module_instance),
+                        notifier.clone(),
+                        api.clone(),
+                    )
+                    .await?;
+
+                if primary_module_instance == module_instance && !module.supports_being_primary() {
+                    bail!("Module instance {primary_module_instance} of kind {kind} does not support being a primary module");
                 }
+
+                modules.register_module(module_instance, kind, module);
             }
-            (
-                modules,
-                primary_module.ok_or(anyhow!("Primary module not found in config"))?,
-            )
+            modules
         };
 
         let executor = {
             let mut executor_builder = Executor::<DynGlobalClientContext>::builder();
             executor_builder
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
-            executor_builder.with_module_dyn(primary_module.context(primary_module_instance));
 
             for (module_instance_id, _, module) in modules.iter_modules() {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
@@ -1211,9 +1204,7 @@ impl ClientBuilder {
             db: db.clone(),
             federation_id: config.federation_id,
             federation_meta: config.meta,
-            primary_module,
             primary_module_instance,
-            primary_module_kind,
             modules,
             executor,
             api,

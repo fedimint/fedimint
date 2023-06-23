@@ -20,9 +20,7 @@ use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{
-    ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
-};
+use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{
@@ -440,21 +438,6 @@ impl ClientModuleGen for MintClientGen {
             cancel_oob_payment_bc,
         })
     }
-
-    async fn init_primary(
-        &self,
-        cfg: Self::Config,
-        db: Database,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
-        api: DynGlobalApi,
-        module_api: DynModuleApi,
-    ) -> anyhow::Result<DynPrimaryClientModule> {
-        Ok(self
-            .init(cfg, db, module_root_secret, notifier, api, module_api)
-            .await?
-            .into())
-    }
 }
 
 #[derive(Debug)]
@@ -661,10 +644,11 @@ impl ClientModule for MintClientModule {
         // TODO: wipe active states or all states?
         Ok(())
     }
-}
 
-#[apply(async_trait_maybe_send)]
-impl PrimaryClientModule for MintClientModule {
+    fn supports_being_primary(&self) -> bool {
+        true
+    }
+
     async fn create_sufficient_input(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,

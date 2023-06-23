@@ -4,9 +4,7 @@ use std::time::Duration;
 use anyhow::format_err;
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
-use fedimint_client::module::{
-    ClientModule, DynPrimaryClientModule, IClientModule, PrimaryClientModule,
-};
+use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
@@ -109,9 +107,13 @@ impl DummyClientExt for Client {
 
         // TODO: Building a tx could be easier
         // Create input using our own account
-        let input = dummy
-            .create_sufficient_input(&mut dbtx.get_isolated(), op_id, amount)
-            .await?;
+        let input = fedimint_client::module::ClientModule::create_sufficient_input(
+            dummy,
+            &mut dbtx.get_isolated(),
+            op_id,
+            amount,
+        )
+        .await?;
         dbtx.commit_tx().await;
 
         // Create output using another account
@@ -187,6 +189,7 @@ pub struct DummyClientContext {
 // TODO: Boiler-plate
 impl Context for DummyClientContext {}
 
+#[apply(async_trait_maybe_send!)]
 impl ClientModule for DummyClientModule {
     type Common = DummyModuleTypes;
     type ModuleStateMachineContext = DummyClientContext;
@@ -214,11 +217,11 @@ impl ClientModule for DummyClientModule {
             fee: self.cfg.tx_fee,
         }
     }
-}
 
-/// Creates exact inputs and outputs for the module
-#[apply(async_trait_maybe_send)]
-impl PrimaryClientModule for DummyClientModule {
+    fn supports_being_primary(&self) -> bool {
+        true
+    }
+
     async fn create_sufficient_input(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
@@ -327,22 +330,6 @@ impl ExtendsCommonModuleGen for DummyClientGen {
 impl ClientModuleGen for DummyClientGen {
     type Module = DummyClientModule;
     type Config = DummyClientConfig;
-
-    // TODO: Boilerplate-code
-    async fn init_primary(
-        &self,
-        cfg: Self::Config,
-        db: Database,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
-        api: DynGlobalApi,
-        module_api: DynModuleApi,
-    ) -> anyhow::Result<DynPrimaryClientModule> {
-        Ok(self
-            .init(cfg, db, module_root_secret, notifier, api, module_api)
-            .await?
-            .into())
-    }
 
     async fn init(
         &self,
