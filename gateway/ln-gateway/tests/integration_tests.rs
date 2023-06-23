@@ -10,7 +10,7 @@ use ln_gateway::rpc::ConnectFedPayload;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_supports_connecting_multiple_federations() {
-    let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
+    let (_, rpc, fed1, fed2, _) = fixtures::fixtures().await;
 
     assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 
@@ -36,7 +36,7 @@ async fn gatewayd_supports_connecting_multiple_federations() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_shows_info_about_all_connected_federations() {
-    let (_, rpc, fed1, fed2, _) = fixtures::fixtures(None).await;
+    let (_, rpc, fed1, fed2, _) = fixtures::fixtures().await;
 
     assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 

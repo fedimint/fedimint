@@ -8,7 +8,7 @@ use fedimint_dummy_server::DummyGen;
 use fedimint_testing::fixtures::Fixtures;
 
 fn fixtures() -> Fixtures {
-    Fixtures::new_primary(0, DummyClientGen, DummyGen, DummyGenParams::default())
+    Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default())
 }
 
 #[tokio::test(flavor = "multi_thread")]

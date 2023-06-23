@@ -32,6 +32,8 @@ export FM_TEST_USE_REAL_DAEMONS=1
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
   >&2 echo "### Testing against bitcoind"
+  env RUST_BACKTRACE=1 cargo test -p ln-gateway -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-ln-tests -- --test-threads=$(($(nproc) * 2)) "$@"
   env RUST_BACKTRACE=1 cargo test -p fedimint-dummy-tests -- --test-threads=$(($(nproc) * 2)) "$@"
   env RUST_BACKTRACE=1 cargo test -p fedimint-mint-tests -- --test-threads=$(($(nproc) * 2)) "$@"
   env RUST_BACKTRACE=1 cargo test -p fedimint-wallet-tests -- --test-threads=$(($(nproc) * 2)) "$@"

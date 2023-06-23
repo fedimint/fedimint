@@ -89,6 +89,10 @@ impl LightningTest for ClnLightningTest {
     fn is_shared(&self) -> bool {
         true
     }
+
+    fn as_rpc(&self) -> Arc<dyn ILnRpcClient> {
+        Arc::new(self.clone())
+    }
 }
 
 #[async_trait]
@@ -226,6 +230,10 @@ impl LightningTest for LndLightningTest {
 
     fn is_shared(&self) -> bool {
         true
+    }
+
+    fn as_rpc(&self) -> Arc<dyn ILnRpcClient> {
+        Arc::new(self.clone())
     }
 }
 

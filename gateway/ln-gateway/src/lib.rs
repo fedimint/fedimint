@@ -484,7 +484,21 @@ impl Gateway {
         Ok(())
     }
 
-    async fn select_client(
+    pub async fn remove_client(
+        &self,
+        federation_id: FederationId,
+    ) -> Result<Arc<fedimint_client::Client>> {
+        self.clients
+            .write()
+            .await
+            .remove(&federation_id)
+            .ok_or(GatewayError::Other(anyhow::anyhow!(
+                "No federation with id {}",
+                federation_id.to_string()
+            )))
+    }
+
+    pub async fn select_client(
         &self,
         federation_id: FederationId,
     ) -> Result<Arc<fedimint_client::Client>> {

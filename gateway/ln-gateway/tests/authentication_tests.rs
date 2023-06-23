@@ -19,11 +19,10 @@ use reqwest::StatusCode;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_api_authentication() -> anyhow::Result<()> {
-    let gw_password = "password".to_string();
-    let (_, rpc, fed1, _, bitcoin) = fixtures::fixtures(Some(gw_password.clone())).await;
+    let (gateway, rpc, fed1, _, bitcoin) = fixtures::fixtures().await;
 
     // Create an RPC client reference
-    let client1 = &rpc.with_password(gw_password);
+    let client1 = &rpc.with_password(gateway.password);
     let client2 = &rpc.with_password("bad password".to_string());
 
     // Create a test federation ID

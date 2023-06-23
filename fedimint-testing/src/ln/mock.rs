@@ -86,6 +86,10 @@ impl LightningTest for FakeLightningTest {
     fn is_shared(&self) -> bool {
         false
     }
+
+    fn as_rpc(&self) -> Arc<dyn ILnRpcClient> {
+        Arc::new(self.clone())
+    }
 }
 
 #[async_trait]
