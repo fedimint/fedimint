@@ -141,6 +141,9 @@ craneLib.overrideScope' (self: prev: {
     dummySrc = self.mkDummySrc {
       src = self.filterWorkspaceDepsBuildFiles self.commonSrc;
       extraDummyScript = ''
+        # temporary workaround: https://github.com/ipetkov/crane/issues/312#issuecomment-1601827484
+        rm -f $(find $out | grep bin/crane-dummy/main.rs)
+
         cp -ar ${srcDotCargo} --no-target-directory $out/.cargo
       '';
     };
