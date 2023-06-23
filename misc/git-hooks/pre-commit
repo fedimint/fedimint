@@ -25,7 +25,7 @@ set -e
 # Stash pending changes and revert them when script ends
 if [ -z "${NO_STASH:-}" ] && [ $is_unclean -ne 0 ]; then
   >&2 echo "Stashing uncommitted changes..."
-  git stash -q --keep-index
+  GIT_LITERAL_PATHSPECS=0 git stash -q --keep-index
   trap revert_git_stash EXIT
 fi
 
