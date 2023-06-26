@@ -7,11 +7,9 @@ use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::ClientBuilder;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::task::TaskGroup;
-use fedimint_dummy_client::DummyClientGen;
-use fedimint_mint_client::MintClientGen;
-use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
 
@@ -23,11 +21,21 @@ use crate::{GatewayError, Result};
 #[derive(Debug, Clone)]
 pub struct StandardGatewayClientBuilder {
     work_dir: PathBuf,
+    registry: ClientModuleGenRegistry,
+    primary_module: ModuleInstanceId,
 }
 
 impl StandardGatewayClientBuilder {
-    pub fn new(work_dir: PathBuf) -> Self {
-        Self { work_dir }
+    pub fn new(
+        work_dir: PathBuf,
+        registry: ClientModuleGenRegistry,
+        primary_module: ModuleInstanceId,
+    ) -> Self {
+        Self {
+            work_dir,
+            registry,
+            primary_module,
+        }
     }
 }
 
@@ -45,12 +53,7 @@ impl StandardGatewayClientBuilder {
         let db =
             fedimint_rocksdb::RocksDb::open(db_path).map_err(|_| GatewayError::DatabaseError)?;
 
-        // TODO: This should come from the outside and should not include the dummy
-        // module
-        let mut registry = ClientModuleGenRegistry::new();
-        registry.attach(MintClientGen);
-        registry.attach(DummyClientGen);
-        registry.attach(WalletClientGen::default());
+        let mut registry = self.registry.clone();
         registry.attach(GatewayClientGen {
             lightning_client: lnrpc,
             fees: config.fees,
@@ -60,7 +63,7 @@ impl StandardGatewayClientBuilder {
 
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_gens(registry);
-        client_builder.with_primary_module(1);
+        client_builder.with_primary_module(self.primary_module);
         client_builder.with_config(config.config);
         client_builder.with_database(db);
 
@@ -68,7 +71,10 @@ impl StandardGatewayClientBuilder {
             // TODO: make this configurable?
             .build::<PlainRootSecretStrategy>(tg)
             .await
-            .map_err(|_| GatewayError::ClientNgError)
+            .map_err(|error| {
+                tracing::warn!("Error building client: {:?}", error);
+                GatewayError::ClientNgError
+            })
     }
 
     pub async fn create_config(

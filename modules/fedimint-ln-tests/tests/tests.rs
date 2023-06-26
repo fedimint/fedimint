@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use assert_matches::assert_matches;
-use fedimint_client::Client;
 use fedimint_core::sats;
 use fedimint_core::util::NextOrPending;
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
@@ -12,29 +11,21 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_server::LightningGen;
-use fedimint_mint_client::MintClientGen;
-use fedimint_mint_common::config::MintGenParams;
-use fedimint_mint_server::MintGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::GatewayTest;
 use lightning_invoice::Invoice;
 
 fn fixtures() -> Fixtures {
-    // TODO: Remove dependency on mint (legacy gw client)
-    let fixtures = Fixtures::new_primary(1, MintClientGen, MintGen, MintGenParams::default());
+    let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    fixtures
-        .with_module(3, DummyClientGen, DummyGen, DummyGenParams::default())
-        .with_module(0, LightningClientGen, LightningGen, ln_params)
+    fixtures.with_module(LightningClientGen, LightningGen, ln_params)
 }
 
 /// Setup a gateway connected to the fed and client
-async fn gateway(fixtures: &Fixtures, fed: &FederationTest, client: &Client) -> GatewayTest {
-    let gateway = fixtures.new_connected_gateway(fed).await;
-    let node_pub_key = gateway.last_registered().await.node_pub_key;
-    client.set_active_gateway(&node_pub_key).await.unwrap();
-    gateway
+async fn gateway(fixtures: &Fixtures, fed: &FederationTest) {
+    let lnd = fixtures.lnd().await;
+    let mut gateway = fixtures.new_gateway(lnd).await;
+    gateway.connect_fed(fed).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -42,31 +33,19 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
+    let mut gateway1 = fixtures.new_gateway(fixtures.lnd().await).await;
+    let mut gateway2 = fixtures.new_gateway(fixtures.cln().await).await;
 
     // Client selects a gateway by default
-    let gateway1 = fixtures
-        .new_connected_gateway(&fed)
-        .await
-        .last_registered()
-        .await;
-    assert_eq!(
-        client.select_active_gateway().await?.node_pub_key,
-        gateway1.node_pub_key
-    );
+    let key1 = gateway1.connect_fed(&fed).await.registration.node_pub_key;
+    assert_eq!(client.select_active_gateway().await?.node_pub_key, key1);
 
-    let gateway2 = fixtures
-        .new_connected_gateway(&fed)
-        .await
-        .last_registered()
-        .await;
+    let key2 = gateway2.connect_fed(&fed).await.registration.node_pub_key;
     let gateways = client.fetch_registered_gateways().await.unwrap();
     assert_eq!(gateways.len(), 2);
 
-    client.set_active_gateway(&gateway2.node_pub_key).await?;
-    assert_eq!(
-        client.select_active_gateway().await?.node_pub_key,
-        gateway2.node_pub_key
-    );
+    client.set_active_gateway(&key2).await?;
+    assert_eq!(client.select_active_gateway().await?.node_pub_key, key2);
     Ok(())
 }
 
@@ -100,7 +79,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     }
 
     // TEST internal payment when there is a registered gateway
-    let _gateway = gateway(&fixtures, &fed, &client1).await;
+    gateway(&fixtures, &fed).await;
 
     let (op, invoice) = client1
         .create_bolt11_invoice(sats(250), "with-gateway-hint".to_string(), None)
@@ -130,7 +109,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let client1 = fed.new_client().await;
-    let _gateway = gateway(&fixtures, &fed, &client1).await;
+    gateway(&fixtures, &fed).await;
 
     // Signet invoice should fail on regtest
     let signet_invoice = Invoice::from_str(

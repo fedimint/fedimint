@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::Client;
@@ -26,93 +25,44 @@ use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage}
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
-use fedimint_testing::fixtures::{Fixtures, LightningFixtures};
-use fedimint_testing::ln::{LightningNodeType, LightningTest};
+use fedimint_testing::fixtures::Fixtures;
+use fedimint_testing::gateway::GatewayTest;
+use fedimint_testing::ln::LightningTest;
 use futures::Future;
-use lightning::routing::gossip::RoutingFees;
-use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::ng::{
-    GatewayClientExt, GatewayClientGen, GatewayClientModule, GatewayClientStateMachines,
-    GatewayExtPayStates, GatewayExtReceiveStates, GatewayExtRegisterStates, GatewayMeta, Htlc,
-    GW_ANNOUNCEMENT_TTL,
+    GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
+    GatewayExtReceiveStates, GatewayExtRegisterStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
-use tracing::debug;
 use url::Url;
 
-async fn fixtures(gateway_node: &LightningNodeType) -> (Fixtures, LightningFixtures) {
-    let fixtures = Fixtures::new_primary(1, DummyClientGen, DummyGen, DummyGenParams::default());
+fn fixtures() -> Fixtures {
+    let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    let fixtures = fixtures.with_module(0, LightningClientGen, LightningGen, ln_params);
-    let lightning_fixtures = LightningFixtures::new(gateway_node).await;
-    (fixtures, lightning_fixtures)
-}
-
-async fn new_gateway_client(
-    fed: &FederationTest,
-    gateway_lnrpc: Arc<dyn ILnRpcClient>,
-) -> anyhow::Result<Client> {
-    let mut registry = ClientModuleGenRegistry::new();
-    registry.attach(DummyClientGen);
-    registry.attach(GatewayClientGen {
-        lightning_client: gateway_lnrpc.clone(),
-        fees: RoutingFees {
-            base_msat: 0,
-            proportional_millionths: 0,
-        },
-        timelock_delta: 10,
-        mint_channel_id: 1,
-    });
-    let gateway = fed.new_gateway_client(registry).await;
-    {
-        let fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
-        let fake_route_hints = Vec::new();
-        let register_op = gateway
-            .register_with_federation(fake_api, fake_route_hints, GW_ANNOUNCEMENT_TTL)
-            .await?;
-        let mut register_sub = gateway
-            .gateway_subscribe_register(register_op)
-            .await?
-            .into_stream();
-        assert_matches!(
-            register_sub.ok().await?,
-            GatewayExtRegisterStates::Registering
-        );
-        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
-    }
-
-    Ok(gateway)
+    fixtures.with_module(LightningClientGen, LightningGen, ln_params)
 }
 
 async fn gateway_test<B>(
     f: impl FnOnce(
-            Fixtures,
+            GatewayTest,
             Arc<dyn LightningTest>,
             FederationTest,
             Client, // User Client
-            Client, // Gateway Client
         ) -> B
         + Copy,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = anyhow::Result<()>>,
 {
-    let gateway_nodes = [LightningNodeType::Cln, LightningNodeType::Lnd];
-    for gateway_node in gateway_nodes {
-        debug!("Running tests with {gateway_node:?}");
-        let (fixtures, lightning_fixtures) = fixtures(&gateway_node).await;
+    let fixtures = fixtures();
+    let lnd = fixtures.lnd().await;
+    let cln = fixtures.cln().await;
+
+    for (node, other_node) in vec![(lnd.clone(), cln.clone()), (cln, lnd)] {
         let fed = fixtures.new_fed().await;
         let user_client = fed.new_client().await;
-
-        let gateway =
-            new_gateway_client(&fed, lightning_fixtures.gateway_lightning_client.clone()).await?;
-        f(
-            fixtures,
-            lightning_fixtures.other_lightning_client,
-            fed,
-            user_client,
-            gateway,
-        )
-        .await?;
+        let mut gateway = fixtures.new_gateway(node).await;
+        gateway.connect_fed(&fed).await;
+        f(gateway, other_node, fed, user_client).await?;
     }
     Ok(())
 }
@@ -124,7 +74,8 @@ pub fn sha256(data: &[u8]) -> sha256::Hash {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
     gateway_test(
-        |_, other_lightning_client, _, user_client, gateway| async move {
+        |gateway, other_lightning_client, fed, user_client| async move {
+            let gateway = gateway.remove_client(&fed).await;
             // Print money for user_client
             let (_, outpoint) = user_client.print_money(sats(1000)).await?;
             user_client.receive_money(outpoint).await?;
@@ -174,7 +125,8 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     gateway_test(
-        |_, other_lightning_client, _, user_client, gateway| async move {
+        |gateway, other_lightning_client, fed, user_client| async move {
+            let gateway = gateway.remove_client(&fed).await;
             // Print money for user_client
             let (_, outpoint) = user_client.print_money(sats(1000)).await?;
             user_client.receive_money(outpoint).await?;
@@ -235,7 +187,8 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
     gateway_test(
-        |_, other_lightning_client, _, user_client, gateway| async move {
+        |gateway, other_lightning_client, fed, user_client| async move {
+            let gateway = gateway.remove_client(&fed).await;
             // Print money for user client
             let (_, outpoint) = user_client.print_money(sats(1000)).await?;
             user_client.receive_money(outpoint).await?;
@@ -278,7 +231,8 @@ async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
-    gateway_test(|_, _, _, user_client, gateway| async move {
+    gateway_test(|gateway, _, fed, user_client| async move {
+        let gateway = gateway.remove_client(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
         let (_, outpoint) = gateway.print_money(initial_gateway_balance).await?;
@@ -323,7 +277,8 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<()> {
-    gateway_test(|_, _, _, _, gateway| async move {
+    gateway_test(|gateway, _, fed, _| async move {
+        let gateway = gateway.remove_client(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
         let (_, outpoint) = gateway.print_money(initial_gateway_balance).await?;
@@ -355,7 +310,8 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
-    gateway_test(|_, _, _, user_client, gateway| async move {
+    gateway_test(|gateway, _, fed, user_client| async move {
+        let gateway = gateway.remove_client(&fed).await;
         // User client creates invoice in federation
         let (_invoice_op, invoice) = user_client
             .create_bolt11_invoice(sats(100), "description".into(), None)
@@ -386,7 +342,8 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()> {
     gateway_test(
-        |_, other_lightning_client, _, user_client, gateway| async move {
+        |gateway, other_lightning_client, fed, user_client| async move {
+            let gateway = gateway.remove_client(&fed).await;
             // Print money for gateway client
             let initial_gateway_balance = sats(1000);
             let (_, outpoint) = gateway.print_money(initial_gateway_balance).await?;
@@ -477,75 +434,65 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
-    let (fixtures, lightning_fixtures) = fixtures(&LightningNodeType::Cln).await;
+    let fixtures = fixtures();
+    let node = fixtures.lnd().await;
     let fed = fixtures.new_fed().await;
+    let mut gateway = fixtures.new_gateway(node).await;
+    gateway.connect_fed(&fed).await;
+    let gateway = gateway.remove_client(&fed).await;
 
-    let mut registry = ClientModuleGenRegistry::new();
-    registry.attach(DummyClientGen);
-    registry.attach(GatewayClientGen {
-        lightning_client: lightning_fixtures.gateway_lightning_client.clone(),
-        fees: RoutingFees {
-            base_msat: 0,
-            proportional_millionths: 0,
-        },
-        timelock_delta: 10,
-        mint_channel_id: 1,
-    });
-    let gateway = fed.new_gateway_client(registry).await;
-    {
-        let mut fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
-        let fake_route_hints = Vec::new();
-        // Register with the federation with a low TTL to verify it will re-register
-        let register_op = gateway
-            .register_with_federation(fake_api, fake_route_hints.clone(), Duration::from_secs(10))
-            .await?;
-        let mut register_sub = gateway
-            .gateway_subscribe_register(register_op)
-            .await?
-            .into_stream();
-        assert_matches!(
-            register_sub.ok().await?,
-            GatewayExtRegisterStates::Registering
-        );
-        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
-        // Verify that the gateway client will re-register after the TTL
-        assert_matches!(
-            register_sub.ok().await?,
-            GatewayExtRegisterStates::Registering
-        );
-        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
+    let mut fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
+    let fake_route_hints = Vec::new();
+    // Register with the federation with a low TTL to verify it will re-register
+    let register_op = gateway
+        .register_with_federation(fake_api, fake_route_hints.clone(), Duration::from_secs(10))
+        .await?;
+    let mut register_sub = gateway
+        .gateway_subscribe_register(register_op)
+        .await?
+        .into_stream();
+    assert_matches!(
+        register_sub.ok().await?,
+        GatewayExtRegisterStates::Registering
+    );
+    assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
+    // Verify that the gateway client will re-register after the TTL
+    assert_matches!(
+        register_sub.ok().await?,
+        GatewayExtRegisterStates::Registering
+    );
+    assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
 
-        // Update the URI for the gateway then re-register
-        fake_api = Url::from_str("http://127.0.0.1:8176").unwrap();
+    // Update the URI for the gateway then re-register
+    fake_api = Url::from_str("http://127.0.0.1:8176").unwrap();
 
-        let reregister_op = gateway
-            .register_with_federation(fake_api, fake_route_hints, GW_ANNOUNCEMENT_TTL)
-            .await?;
+    let reregister_op = gateway
+        .register_with_federation(fake_api, fake_route_hints, GW_ANNOUNCEMENT_TTL)
+        .await?;
 
-        let mut reregister_sub = gateway
-            .gateway_subscribe_register(reregister_op)
-            .await?
-            .into_stream();
-        // Verify that the re-register was successful
-        assert_matches!(
-            reregister_sub.ok().await?,
-            GatewayExtRegisterStates::Registering
-        );
-        assert_matches!(
-            reregister_sub.ok().await?,
-            GatewayExtRegisterStates::Success
-        );
+    let mut reregister_sub = gateway
+        .gateway_subscribe_register(reregister_op)
+        .await?
+        .into_stream();
+    // Verify that the re-register was successful
+    assert_matches!(
+        reregister_sub.ok().await?,
+        GatewayExtRegisterStates::Registering
+    );
+    assert_matches!(
+        reregister_sub.ok().await?,
+        GatewayExtRegisterStates::Success
+    );
 
-        // Verify that the previous register state machine expired and moved to `Done`
-        assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Done);
-    }
+    // Verify that the previous register state machine expired and moved to `Done`
+    assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Done);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_set_lightning_invoice_expiry() -> anyhow::Result<()> {
-    gateway_test(|_, other_lightning_client, _, _, _| async move {
+    gateway_test(|_, other_lightning_client, _, _| async move {
         let invoice = other_lightning_client
             .invoice(sats(1000), 600.into())
             .await

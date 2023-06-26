@@ -12,10 +12,10 @@ use fedimint_wallet_common::config::WalletGenParams;
 use fedimint_wallet_server::WalletGen;
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(0, DummyClientGen, DummyGen, DummyGenParams::default());
+    let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
     let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_server());
     let wallet_client = WalletClientGen::new(fixtures.bitcoin_client());
-    fixtures.with_module(1, wallet_client, WalletGen, wallet_params)
+    fixtures.with_module(wallet_client, WalletGen, wallet_params)
 }
 
 #[tokio::test(flavor = "multi_thread")]

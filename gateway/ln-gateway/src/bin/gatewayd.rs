@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::exit;
 
 use clap::Parser;
+use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -14,8 +15,8 @@ use fedimint_ln_client::LightningCommonGen;
 use fedimint_ln_common::config::GatewayFee;
 use fedimint_ln_common::LightningModuleTypes;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_client::{MintCommonGen, MintModuleTypes};
-use fedimint_wallet_client::{WalletCommonGen, WalletModuleTypes};
+use fedimint_mint_client::{MintClientGen, MintCommonGen, MintModuleTypes};
+use fedimint_wallet_client::{WalletClientGen, WalletCommonGen, WalletModuleTypes};
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
 use tracing::info;
@@ -84,7 +85,14 @@ async fn main() -> Result<(), anyhow::Error> {
     );
 
     // Create federation client builder
-    let client_builder = StandardGatewayClientBuilder::new(data_dir.clone());
+    let mut registry = ClientModuleGenRegistry::new();
+    registry.attach(MintClientGen);
+    registry.attach(WalletClientGen::default());
+    let client_builder = StandardGatewayClientBuilder::new(
+        data_dir.clone(),
+        registry,
+        LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    );
 
     // Create module decoder registry
     let decoders = ModuleDecoderRegistry::from_iter([

@@ -1,9 +1,9 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::KeyPair;
-use clap::ValueEnum;
 use fedimint_client_legacy::modules::ln::contracts::Preimage;
 use fedimint_core::{Amount, BitcoinHash};
 use lightning::ln::PaymentSecret;
@@ -57,19 +57,6 @@ pub trait LightningTest: ILnRpcClient {
 
     /// Is this a LN instance shared with other tests
     fn is_shared(&self) -> bool;
-}
 
-#[derive(ValueEnum, Clone, Debug)]
-pub enum LightningNodeType {
-    Cln,
-    Lnd,
-}
-
-impl ToString for LightningNodeType {
-    fn to_string(&self) -> String {
-        match self {
-            LightningNodeType::Cln => "cln".to_string(),
-            LightningNodeType::Lnd => "lnd".to_string(),
-        }
-    }
+    fn as_rpc(&self) -> Arc<dyn ILnRpcClient>;
 }

@@ -11,12 +11,8 @@ use fedimint_mint_server::MintGen;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 
 fn fixtures() -> Fixtures {
-    Fixtures::new_primary(0, MintClientGen, MintGen, MintGenParams::default()).with_module(
-        1,
-        DummyClientGen,
-        DummyGen,
-        DummyGenParams::default(),
-    )
+    let fixtures = Fixtures::new_primary(MintClientGen, MintGen, MintGenParams::default());
+    fixtures.with_module(DummyClientGen, DummyGen, DummyGenParams::default())
 }
 
 #[tokio::test(flavor = "multi_thread")]
