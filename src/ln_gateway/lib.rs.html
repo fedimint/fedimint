@@ -715,6 +715,20 @@
 <a href="#715" id="715">715</a>
 <a href="#716" id="716">716</a>
 <a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1201,7 +1215,21 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>select_client(
+    <span class="kw">pub async fn </span>remove_client(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: FederationId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;fedimint_client::Client&gt;&gt; {
+        <span class="self">self</span>.clients
+            .write()
+            .<span class="kw">await
+            </span>.remove(<span class="kw-2">&amp;</span>federation_id)
+            .ok_or(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                <span class="string">&quot;No federation with id {}&quot;</span>,
+                federation_id.to_string()
+            )))
+    }
+
+    <span class="kw">pub async fn </span>select_client(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;fedimint_client::Client&gt;&gt; {

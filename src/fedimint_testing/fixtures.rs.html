@@ -207,41 +207,6 @@
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -254,11 +219,10 @@
 <span class="kw">use </span>fedimint_core::config::{
     ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
 };
-<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>ln_gateway::lnrpc_client::ILnRpcClient;
 <span class="kw">use </span>tempfile::TempDir;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinFactory;
@@ -268,7 +232,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway::GatewayTest;
 <span class="kw">use </span><span class="kw">crate</span>::ln::mock::FakeLightningTest;
 <span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LndLightningTest};
-<span class="kw">use </span><span class="kw">crate</span>::ln::{LightningNodeType, LightningTest};
+<span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
 <span class="doccomment">/// A default timeout for things happening in tests
 </span><span class="kw">pub const </span>TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
@@ -279,23 +243,17 @@
 <span class="doccomment">/// A tool for easily writing fedimint integration tests
 </span><span class="kw">pub struct </span>Fixtures {
     num_peers: u16,
-    ids: Vec&lt;ModuleInstanceId&gt;,
     clients: Vec&lt;DynClientModuleGen&gt;,
     servers: Vec&lt;DynServerModuleGen&gt;,
     params: ServerModuleGenParamsRegistry,
     primary_client: ModuleInstanceId,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt;,
-}
-
-<span class="kw">pub struct </span>LightningFixtures {
-    <span class="kw">pub </span>other_lightning_client: Arc&lt;<span class="kw">dyn </span>LightningTest&gt;,
-    <span class="kw">pub </span>gateway_lightning_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
+    id: ModuleInstanceId,
 }
 
 <span class="kw">impl </span>Fixtures {
     <span class="kw">pub fn </span>new_primary(
-        id: ModuleInstanceId,
         client: <span class="kw">impl </span>IClientModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         server: <span class="kw">impl </span>IServerModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         params: <span class="kw">impl </span>ModuleGenParams,
@@ -327,15 +285,15 @@
 
         <span class="self">Self </span>{
             num_peers,
-            ids: <span class="macro">vec!</span>[],
             clients: <span class="macro">vec!</span>[],
             servers: <span class="macro">vec!</span>[],
             params: Default::default(),
-            primary_client: id,
+            primary_client: <span class="number">0</span>,
             bitcoin_rpc: config,
             bitcoin,
+            id: <span class="number">0</span>,
         }
-        .with_module(id, client, server, params)
+        .with_module(client, server, params)
     }
 
     <span class="kw">pub fn </span>is_real_test() -&gt; bool {
@@ -346,16 +304,15 @@
     </span><span class="doccomment">/// Add a module to the fed
     </span><span class="kw">pub fn </span>with_module(
         <span class="kw-2">mut </span><span class="self">self</span>,
-        id: ModuleInstanceId,
         client: <span class="kw">impl </span>IClientModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         server: <span class="kw">impl </span>IServerModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         params: <span class="kw">impl </span>ModuleGenParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.params
-            .attach_config_gen_params(id, server.module_kind(), params);
-        <span class="self">self</span>.ids.push(id);
+            .attach_config_gen_params(<span class="self">self</span>.id, server.module_kind(), params);
         <span class="self">self</span>.clients.push(DynClientModuleGen::from(client));
         <span class="self">self</span>.servers.push(DynServerModuleGen::from(server));
+        <span class="self">self</span>.id += <span class="number">1</span>;
 
         <span class="self">self
     </span>}
@@ -378,29 +335,44 @@
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Starts a new gateway
-    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, password: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; GatewayTest {
+    <span class="doccomment">/// Starts a new gateway with a given lightning node
+    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, ln: Arc&lt;<span class="kw">dyn </span>LightningTest&gt;) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier
         </span><span class="kw">let </span>server_gens = ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone());
         <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
         <span class="kw">let </span>decoders = server_gens.decoders(module_kinds).unwrap();
-
-        <span class="kw">let </span>password = password.unwrap_or_else(|| rand::random::&lt;u64&gt;().to_string());
+        <span class="kw">let </span>clients = <span class="self">self</span>.clients.clone().into_iter();
 
         GatewayTest::new(
             BASE_PORT.fetch_add(<span class="number">1</span>, Ordering::Relaxed),
-            password,
-            FakeLightningTest::new(),
+            rand::random::&lt;u64&gt;().to_string(),
+            ln,
             decoders,
+            ClientModuleGenRegistry::from_iter(clients.filter(|client| {
+                <span class="comment">// Remove LN module because the gateway adds one
+                </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">&quot;ln&quot;</span>)
+            })),
         )
         .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Starts a new gateway connected to a fed
-    </span><span class="kw">pub async fn </span>new_connected_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; GatewayTest {
-        <span class="kw">let </span><span class="kw-2">mut </span>gateway = <span class="self">self</span>.new_gateway(<span class="prelude-val">None</span>).<span class="kw">await</span>;
-        gateway.connect_fed(fed).<span class="kw">await</span>;
-        gateway
+    <span class="doccomment">/// Returns the LND lightning node
+    </span><span class="kw">pub async fn </span>lnd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>LightningTest&gt; {
+        <span class="kw">match </span>Fixtures::is_real_test() {
+            <span class="bool-val">true </span>=&gt; Arc::new(LndLightningTest::new().<span class="kw">await</span>),
+            <span class="bool-val">false </span>=&gt; Arc::new(FakeLightningTest::new()),
+        }
+    }
+
+    <span class="doccomment">/// Returns the CLN lightning node
+    </span><span class="kw">pub async fn </span>cln(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>LightningTest&gt; {
+        <span class="kw">match </span>Fixtures::is_real_test() {
+            <span class="bool-val">true </span>=&gt; {
+                <span class="kw">let </span>dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>).expect(<span class="string">&quot;Real tests require FM_TEST_DIR&quot;</span>);
+                Arc::new(ClnLightningTest::new(<span class="kw-2">&amp;</span>dir).<span class="kw">await</span>)
+            }
+            <span class="bool-val">false </span>=&gt; Arc::new(FakeLightningTest::new()),
+        }
     }
 
     <span class="doccomment">/// Get a server bitcoin RPC config
@@ -443,48 +415,6 @@
     <span class="kw">let </span>fullpath = PathBuf::from(parent).join(pathname);
     fs::create_dir_all(fullpath.clone()).expect(<span class="string">&quot;Can make dirs&quot;</span>);
     (fullpath, maybe_tmp_dir_guard)
-}
-
-<span class="kw">impl </span>LightningFixtures {
-    <span class="kw">pub async fn </span>new(gateway_node: <span class="kw-2">&amp;</span>LightningNodeType) -&gt; LightningFixtures {
-        <span class="kw">let </span>real_testing = Fixtures::is_real_test();
-        <span class="kw">let </span>(gateway_lightning_client, other_lightning_client) = <span class="kw">match </span>real_testing {
-            <span class="bool-val">true </span>=&gt; LightningFixtures::real_lightning_clients(gateway_node).<span class="kw">await</span>,
-            <span class="bool-val">false </span>=&gt; LightningFixtures::fake_lightning_clients(),
-        };
-
-        LightningFixtures {
-            gateway_lightning_client,
-            other_lightning_client,
-        }
-    }
-
-    <span class="kw">pub fn </span>fake_lightning_clients() -&gt; (Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;, Arc&lt;<span class="kw">dyn </span>LightningTest&gt;) {
-        (
-            Arc::new(FakeLightningTest::new()),
-            Arc::new(FakeLightningTest::new()),
-        )
-    }
-
-    <span class="kw">pub async fn </span>real_lightning_clients(
-        gateway_node: <span class="kw-2">&amp;</span>LightningNodeType,
-    ) -&gt; (Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;, Arc&lt;<span class="kw">dyn </span>LightningTest&gt;) {
-        <span class="comment">// Create the gateway&#39;s lightning connection and the &quot;other&quot; node&#39;s lightning
-        // connection.
-        </span><span class="kw">let </span>dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>).expect(<span class="string">&quot;Must have test dir defined for real tests&quot;</span>);
-        <span class="kw">match </span><span class="kw-2">&amp;</span>gateway_node {
-            LightningNodeType::Cln =&gt; {
-                <span class="kw">let </span>gw_ln: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = Arc::new(ClnLightningTest::new(<span class="kw-2">&amp;</span>dir).<span class="kw">await</span>);
-                <span class="kw">let </span>other_ln: Arc&lt;<span class="kw">dyn </span>LightningTest&gt; = Arc::new(LndLightningTest::new().<span class="kw">await</span>);
-                (gw_ln, other_ln)
-            }
-            LightningNodeType::Lnd =&gt; {
-                <span class="kw">let </span>gw_ln: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = Arc::new(LndLightningTest::new().<span class="kw">await</span>);
-                <span class="kw">let </span>other_ln: Arc&lt;<span class="kw">dyn </span>LightningTest&gt; = Arc::new(ClnLightningTest::new(<span class="kw-2">&amp;</span>dir).<span class="kw">await</span>);
-                (gw_ln, other_ln)
-            }
-        }
-    }
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

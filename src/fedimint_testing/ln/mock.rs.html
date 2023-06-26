@@ -143,6 +143,10 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -231,6 +235,10 @@
     <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="bool-val">false
     </span>}
+
+    <span class="kw">fn </span>as_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
+        Arc::new(<span class="self">self</span>.clone())
+    }
 }
 
 <span class="attr">#[async_trait]

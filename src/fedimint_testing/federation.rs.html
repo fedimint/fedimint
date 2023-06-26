@@ -195,18 +195,6 @@
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
@@ -215,7 +203,8 @@
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
 <span class="kw">use </span>fedimint_core::config::{
-    ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
+    ClientConfig, FederationId, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    META_FEDERATION_NAME_KEY,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
@@ -254,34 +243,12 @@
             .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
             .unwrap();
 
-        <span class="self">self</span>.new_client_with_config_and_registry(client_config, <span class="self">self</span>.client_gen.clone())
-            .<span class="kw">await
+        <span class="self">self</span>.new_client_with_config(client_config).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>new_client_with_config(<span class="kw-2">&amp;</span><span class="self">self</span>, client_config: ClientConfig) -&gt; Client {
-        <span class="self">self</span>.new_client_with_config_and_registry(client_config, <span class="self">self</span>.client_gen.clone())
-            .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Create a new client containing the lightning gateway client module
-    </span><span class="kw">pub async fn </span>new_gateway_client(<span class="kw-2">&amp;</span><span class="self">self</span>, registry: ClientModuleGenRegistry) -&gt; Client {
-        <span class="kw">let </span>client_config = <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
-            .consensus
-            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
-            .unwrap();
-
-        <span class="self">self</span>.new_client_with_config_and_registry(client_config, registry)
-            .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Create a client with a custom config
-    </span><span class="kw">pub async fn </span>new_client_with_config_and_registry(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        client_config: ClientConfig,
-        registry: ClientModuleGenRegistry,
-    ) -&gt; Client {
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
-        client_builder.with_module_gens(registry);
+        client_builder.with_module_gens(<span class="self">self</span>.client_gen.clone());
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
@@ -294,6 +261,15 @@
     <span class="doccomment">/// Return first connection code for gateways
     </span><span class="kw">pub fn </span>connection_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; WsClientConnectInfo {
         <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].get_connect_info()
+    }
+
+    <span class="doccomment">///  Return first id for gateways
+    </span><span class="kw">pub fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
+        <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
+            .consensus
+            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
+            .unwrap()
+            .federation_id
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(

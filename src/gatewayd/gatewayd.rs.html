@@ -129,11 +129,20 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::exit;
 
 <span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -145,8 +154,8 @@
 <span class="kw">use </span>fedimint_ln_common::config::GatewayFee;
 <span class="kw">use </span>fedimint_ln_common::LightningModuleTypes;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>fedimint_mint_client::{MintCommonGen, MintModuleTypes};
-<span class="kw">use </span>fedimint_wallet_client::{WalletCommonGen, WalletModuleTypes};
+<span class="kw">use </span>fedimint_mint_client::{MintClientGen, MintCommonGen, MintModuleTypes};
+<span class="kw">use </span>fedimint_wallet_client::{WalletClientGen, WalletCommonGen, WalletModuleTypes};
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
 <span class="kw">use </span>tracing::info;
@@ -215,7 +224,14 @@
     );
 
     <span class="comment">// Create federation client builder
-    </span><span class="kw">let </span>client_builder = StandardGatewayClientBuilder::new(data_dir.clone());
+    </span><span class="kw">let </span><span class="kw-2">mut </span>registry = ClientModuleGenRegistry::new();
+    registry.attach(MintClientGen);
+    registry.attach(WalletClientGen::default());
+    <span class="kw">let </span>client_builder = StandardGatewayClientBuilder::new(
+        data_dir.clone(),
+        registry,
+        LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    );
 
     <span class="comment">// Create module decoder registry
     </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([

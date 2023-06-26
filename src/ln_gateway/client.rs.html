@@ -114,6 +114,12 @@
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -123,11 +129,9 @@
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::ClientBuilder;
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_dummy_client::DummyClientGen;
-<span class="kw">use </span>fedimint_mint_client::MintClientGen;
-<span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 
@@ -139,11 +143,21 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>StandardGatewayClientBuilder {
     work_dir: PathBuf,
+    registry: ClientModuleGenRegistry,
+    primary_module: ModuleInstanceId,
 }
 
 <span class="kw">impl </span>StandardGatewayClientBuilder {
-    <span class="kw">pub fn </span>new(work_dir: PathBuf) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ work_dir }
+    <span class="kw">pub fn </span>new(
+        work_dir: PathBuf,
+        registry: ClientModuleGenRegistry,
+        primary_module: ModuleInstanceId,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            work_dir,
+            registry,
+            primary_module,
+        }
     }
 }
 
@@ -161,12 +175,7 @@
         <span class="kw">let </span>db =
             fedimint_rocksdb::RocksDb::open(db_path).map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)<span class="question-mark">?</span>;
 
-        <span class="comment">// TODO: This should come from the outside and should not include the dummy
-        // module
-        </span><span class="kw">let </span><span class="kw-2">mut </span>registry = ClientModuleGenRegistry::new();
-        registry.attach(MintClientGen);
-        registry.attach(DummyClientGen);
-        registry.attach(WalletClientGen::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>registry = <span class="self">self</span>.registry.clone();
         registry.attach(GatewayClientGen {
             lightning_client: lnrpc,
             fees: config.fees,
@@ -176,7 +185,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
         client_builder.with_module_gens(registry);
-        client_builder.with_primary_module(<span class="number">1</span>);
+        client_builder.with_primary_module(<span class="self">self</span>.primary_module);
         client_builder.with_config(config.config);
         client_builder.with_database(db);
 
@@ -184,7 +193,10 @@
             <span class="comment">// TODO: make this configurable?
             </span>.build::&lt;PlainRootSecretStrategy&gt;(tg)
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| GatewayError::ClientNgError)
+            </span>.map_err(|error| {
+                <span class="macro">tracing::warn!</span>(<span class="string">&quot;Error building client: {:?}&quot;</span>, error);
+                GatewayError::ClientNgError
+            })
     }
 
     <span class="kw">pub async fn </span>create_config(
