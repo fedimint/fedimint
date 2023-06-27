@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+use fedimint_core::util::write_overwrite_async;
+
 pub trait ToEnvVar {
     fn to_env_value(&self) -> Option<String>;
 }
@@ -72,7 +74,6 @@ async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
 
 use fedimint_server::config::ServerConfig;
 use format as f;
-use tokio::fs;
 
 pub fn utf8(path: &Path) -> &str {
     path.as_os_str().to_str().expect("must be valid utf8")
@@ -129,18 +130,29 @@ declare_vars! {
 impl Global {
     pub async fn new(test_dir: &Path, fed_size: usize) -> anyhow::Result<Self> {
         let this = Self::init(test_dir, fed_size).await?;
-        fs::copy(
-            "misc/test/bitcoin.conf",
+        write_overwrite_async(
             this.FM_BTC_DIR.join("bitcoin.conf"),
+            include_str!("cfg/bitcoin.conf"),
         )
         .await?;
-        fs::copy("misc/test/lnd.conf", this.FM_LND_DIR.join("lnd.conf")).await?;
-        fs::copy("misc/test/lightningd.conf", this.FM_CLN_DIR.join("config")).await?;
-        fs::copy(
-            "misc/test/electrs.toml",
+
+        write_overwrite_async(
+            this.FM_LND_DIR.join("lnd.conf"),
+            include_str!("cfg/lnd.conf"),
+        )
+        .await?;
+        write_overwrite_async(
+            this.FM_CLN_DIR.join("config"),
+            include_str!("cfg/lightningd.conf"),
+        )
+        .await?;
+
+        write_overwrite_async(
             this.FM_ELECTRS_DIR.join("electrs.toml"),
+            include_str!("cfg/electrs.toml"),
         )
         .await?;
+
         Ok(this)
     }
 }
