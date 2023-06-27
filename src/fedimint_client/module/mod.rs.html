@@ -416,9 +416,6 @@
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
@@ -523,6 +520,87 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Wiping not supported&quot;</span>);
     }
+
+    <span class="doccomment">/// Does this module support being a primary module
+    ///
+    /// If it does it must implement:
+    ///
+    /// * [`Self::create_sufficient_input`]
+    /// * [`Self::create_exact_output`]
+    /// * [`Self::await_primary_module_output`]
+    /// * [`Self::get_balance`]
+    /// * [`Self::subscribe_balance_changes`]
+    </span><span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="bool-val">false
+    </span>}
+
+    <span class="comment">// TODO: unclear if we should return a vec of inputs
+    </span><span class="doccomment">/// Creates an input of **at least** a given `min_amount` from the holdings
+    /// managed by the module.
+    ///
+    /// If successful it returns:
+    /// * A set of private keys belonging to the input for signing the
+    ///   transaction
+    /// * The input of **at least** `min_amount`, the actual amount might be
+    ///   larger, the caller has to handle this case and possibly generate
+    ///   change using `create_change_output`.
+    /// * A closure that generates states belonging to the input. This closure
+    ///   takes the transaction id of the transaction in which the input was
+    ///   used and the input index as input since these cannot be known at time
+    ///   of calling `create_funding_input` and have to be injected later.
+    ///
+    /// The function returns an error if the client&#39;s funds are not sufficient
+    /// to create the requested input.
+    </span><span class="kw">async fn </span>create_sufficient_input(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _operation_id: OperationId,
+        _min_amount: Amount,
+    ) -&gt; anyhow::Result&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
+
+    <span class="doccomment">/// Creates an output of **exactly** `amount` that will pay into the
+    /// holdings managed by the module.
+    ///
+    /// It returns:
+    /// * The output of **exactly** `amount`.
+    /// * A closure that generates states belonging to the output. This closure
+    ///   takes the transaction id of the transaction in which the output was
+    ///   used and the output index as input since these cannot be known at time
+    ///   of calling `create_change_output` and have to be injected later.
+    </span><span class="kw">async fn </span>create_exact_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _operation_id: OperationId,
+        _amount: Amount,
+    ) -&gt; ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
+
+    <span class="doccomment">/// Waits for the funds from an output created by
+    /// [`Self::create_exact_output`] to become available. This function
+    /// returning typically implies a change in the output of
+    /// [`Self::get_balance`].
+    </span><span class="kw">async fn </span>await_primary_module_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _operation_id: OperationId,
+        _out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
+
+    <span class="doccomment">/// Returns the balance held by this module and available for funding
+    /// transactions.
+    </span><span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
+        <span class="macro">unimplemented!</span>()
+    }
+
+    <span class="doccomment">/// Returns a stream that will output the updated module balance each time
+    /// it changes.
+    </span><span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
 }
 
 <span class="doccomment">/// Type-erased version of [`ClientModule`]
@@ -570,6 +648,38 @@
         module_instance_id: ModuleInstanceId,
         executor: Executor&lt;DynGlobalClientContext&gt;,
     ) -&gt; anyhow::Result&lt;()&gt;;
+
+    <span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
+
+    <span class="kw">async fn </span>create_sufficient_input(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_instance: ModuleInstanceId,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
+        min_amount: Amount,
+    ) -&gt; anyhow::Result&lt;ClientInput&gt;;
+
+    <span class="kw">async fn </span>create_exact_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_instance: ModuleInstanceId,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
+        amount: Amount,
+    ) -&gt; ClientOutput;
+
+    <span class="kw">async fn </span>await_primary_module_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt;;
+
+    <span class="kw">async fn </span>get_balance(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_instance: ModuleInstanceId,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; Amount;
+
+    <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -651,126 +761,11 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         &lt;T <span class="kw">as </span>ClientModule&gt;::wipe(<span class="self">self</span>, dbtx, module_instance_id, executor).<span class="kw">await
     </span>}
-}
 
-<span class="macro">dyn_newtype_define!</span>(
-    <span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>DynClientModule(Arc&lt;IClientModule&gt;)
-);
-
-<span class="kw">impl </span>AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>)&gt; <span class="kw">for </span>DynClientModule {
-    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>) {
-        <span class="self">self</span>.<span class="number">0</span>.as_ref()
+    <span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        &lt;T <span class="kw">as </span>ClientModule&gt;::supports_being_primary(<span class="self">self</span>)
     }
-}
 
-<span class="kw">pub type </span>StateGenerator&lt;S&gt; =
-    Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(TransactionId, u64) -&gt; Vec&lt;S&gt; + <span class="lifetime">&#39;static</span>)&gt;;
-
-<span class="doccomment">/// A client module that can be used as funding source and to generate arbitrary
-/// change outputs for unbalanced transactions.
-</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>PrimaryClientModule: ClientModule {
-    <span class="comment">// TODO: unclear if we should return a vec of inputs
-    </span><span class="doccomment">/// Creates an input of **at least** a given `min_amount` from the holdings
-    /// managed by the module.
-    ///
-    /// If successful it returns:
-    /// * A set of private keys belonging to the input for signing the
-    ///   transaction
-    /// * The input of **at least** `min_amount`, the actual amount might be
-    ///   larger, the caller has to handle this case and possibly generate
-    ///   change using `create_change_output`.
-    /// * A closure that generates states belonging to the input. This closure
-    ///   takes the transaction id of the transaction in which the input was
-    ///   used and the input index as input since these cannot be known at time
-    ///   of calling `create_funding_input` and have to be injected later.
-    ///
-    /// The function returns an error if the client&#39;s funds are not sufficient
-    /// to create the requested input.
-    </span><span class="kw">async fn </span>create_sufficient_input(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-        min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;;
-
-    <span class="doccomment">/// Creates an output of **exactly** `amount` that will pay into the
-    /// holdings managed by the module.
-    ///
-    /// It returns:
-    /// * The output of **exactly** `amount`.
-    /// * A closure that generates states belonging to the output. This closure
-    ///   takes the transaction id of the transaction in which the output was
-    ///   used and the output index as input since these cannot be known at time
-    ///   of calling `create_change_output` and have to be injected later.
-    </span><span class="kw">async fn </span>create_exact_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -&gt; ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;;
-
-    <span class="doccomment">/// Waits for the funds from an output created by
-    /// [`Self::create_exact_output`] to become available. This function
-    /// returning typically implies a change in the output of
-    /// [`Self::get_balance`].
-    </span><span class="kw">async fn </span>await_primary_module_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -&gt; anyhow::Result&lt;Amount&gt;;
-
-    <span class="doccomment">/// Returns the balance held by this module and available for funding
-    /// transactions.
-    </span><span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount;
-
-    <span class="doccomment">/// Returns a stream that will output the updated module balance each time
-    /// it changes.
-    </span><span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt;;
-}
-
-<span class="doccomment">/// Type-erased version of [`PrimaryClientModule`]
-</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>IPrimaryClientModule: IClientModule {
-    <span class="kw">async fn </span>create_sufficient_input(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance: ModuleInstanceId,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-        min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInput&gt;;
-
-    <span class="kw">async fn </span>create_exact_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance: ModuleInstanceId,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -&gt; ClientOutput;
-
-    <span class="kw">async fn </span>await_primary_module_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -&gt; anyhow::Result&lt;Amount&gt;;
-
-    <span class="kw">async fn </span>get_balance(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance: ModuleInstanceId,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Amount;
-
-    <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt;;
-
-    <span class="kw">fn </span>as_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>));
-}
-
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;T&gt; IPrimaryClientModule <span class="kw">for </span>T
-<span class="kw">where
-    </span>T: PrimaryClientModule,
-{
     <span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_instance: ModuleInstanceId,
@@ -778,7 +773,7 @@
         operation_id: OperationId,
         min_amount: Amount,
     ) -&gt; anyhow::Result&lt;ClientInput&gt; {
-        <span class="prelude-val">Ok</span>(T::create_sufficient_input(
+        <span class="prelude-val">Ok</span>(&lt;T <span class="kw">as </span>ClientModule&gt;::create_sufficient_input(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
             operation_id,
@@ -795,7 +790,7 @@
         operation_id: OperationId,
         amount: Amount,
     ) -&gt; ClientOutput {
-        T::create_exact_output(
+        &lt;T <span class="kw">as </span>ClientModule&gt;::create_exact_output(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
             operation_id,
@@ -810,7 +805,7 @@
         operation_id: OperationId,
         out_point: OutPoint,
     ) -&gt; anyhow::Result&lt;Amount&gt; {
-        T::await_primary_module_output(<span class="self">self</span>, operation_id, out_point).<span class="kw">await
+        &lt;T <span class="kw">as </span>ClientModule&gt;::await_primary_module_output(<span class="self">self</span>, operation_id, out_point).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>get_balance(
@@ -818,27 +813,26 @@
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Amount {
-        T::get_balance(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance)).<span class="kw">await
+        &lt;T <span class="kw">as </span>ClientModule&gt;::get_balance(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance)).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
-        T::subscribe_balance_changes(<span class="self">self</span>).<span class="kw">await
-    </span>}
-
-    <span class="kw">fn </span>as_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>)) {
-        <span class="self">self
+        &lt;T <span class="kw">as </span>ClientModule&gt;::subscribe_balance_changes(<span class="self">self</span>).<span class="kw">await
     </span>}
 }
 
 <span class="macro">dyn_newtype_define!</span>(
     <span class="attr">#[derive(Clone)]
-    </span><span class="kw">pub </span>DynPrimaryClientModule(Arc&lt;IPrimaryClientModule&gt;)
+    </span><span class="kw">pub </span>DynClientModule(Arc&lt;IClientModule&gt;)
 );
 
-<span class="kw">impl </span>AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>)&gt; <span class="kw">for </span>DynPrimaryClientModule {
+<span class="kw">impl </span>AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>)&gt; <span class="kw">for </span>DynClientModule {
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule + <span class="lifetime">&#39;static</span>) {
-        <span class="self">self</span>.<span class="number">0</span>.as_client()
+        <span class="self">self</span>.<span class="number">0</span>.as_ref()
     }
 }
+
+<span class="kw">pub type </span>StateGenerator&lt;S&gt; =
+    Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(TransactionId, u64) -&gt; Vec&lt;S&gt; + <span class="lifetime">&#39;static</span>)&gt;;
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

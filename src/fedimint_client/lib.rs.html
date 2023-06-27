@@ -1350,15 +1350,6 @@
 <a href="#1350" id="1350">1350</a>
 <a href="#1351" id="1351">1351</a>
 <a href="#1352" id="1352">1352</a>
-<a href="#1353" id="1353">1353</a>
-<a href="#1354" id="1354">1354</a>
-<a href="#1355" id="1355">1355</a>
-<a href="#1356" id="1356">1356</a>
-<a href="#1357" id="1357">1357</a>
-<a href="#1358" id="1358">1358</a>
-<a href="#1359" id="1359">1359</a>
-<a href="#1360" id="1360">1360</a>
-<a href="#1361" id="1361">1361</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1414,8 +1405,8 @@
 //! module and its smart contracts are only used to incentivize LN payments, not
 //! to hold money. The mint module on the other hand holds e-cash note and can
 //! thus be used to fund transactions and to absorb change. Module clients with
-//! this ability should implement the [`module::PrimaryClientModule`] trait so
-//! they can be chosen as the primary module for a [`Client`].
+//! this ability should implement [`ClientModule::supports_being_primary`] and
+//! related methods.
 //!
 //! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
 //!
@@ -1452,6 +1443,7 @@
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>module::DynClientModule;
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
@@ -1463,9 +1455,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::gen::{
     ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
 };
-<span class="kw">use </span><span class="kw">crate</span>::module::{
-    ClientModule, ClientModuleRegistry, DynPrimaryClientModule, IClientModule, StateGenerator,
-};
+<span class="kw">use </span><span class="kw">crate</span>::module::{ClientModule, ClientModuleRegistry, IClientModule, StateGenerator};
 <span class="kw">use </span><span class="kw">crate</span>::oplog::OperationLog;
 <span class="kw">use </span><span class="kw">crate</span>::secret::RootSecretStrategy;
 <span class="kw">use </span><span class="kw">crate</span>::sm::executor::{
@@ -1991,7 +1981,14 @@
     /// primary module will always be returned before any other modules (which
     /// themselves are ordered by their instance id).
     </span><span class="kw">pub fn </span>get_first_instance(<span class="kw-2">&amp;</span><span class="self">self</span>, module_kind: <span class="kw-2">&amp;</span>ModuleKind) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt; {
-        <span class="kw">if </span><span class="kw-2">&amp;</span><span class="self">self</span>.inner.primary_module_kind == module_kind {
+        <span class="kw">if </span><span class="kw-2">&amp;</span><span class="self">self
+            </span>.inner
+            .modules
+            .get_with_kind(<span class="self">self</span>.inner.primary_module_instance)
+            .expect(<span class="string">&quot;must have primary module&quot;</span>)
+            .<span class="number">0
+            </span>== module_kind
+        {
             <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="self">self</span>.inner.primary_module_instance);
         }
 
@@ -2028,10 +2025,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.inner.config
     }
 
+    <span class="doccomment">/// Get the primary module
+    </span><span class="kw">pub fn </span>primary_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynClientModule {
+        <span class="self">self</span>.inner
+            .modules
+            .get(<span class="self">self</span>.inner.primary_module_instance)
+            .expect(<span class="string">&quot;primary module must be present&quot;</span>)
+    }
+
     <span class="doccomment">/// Balance available to the client for spending
     </span><span class="kw">pub async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        <span class="self">self</span>.inner
-            .primary_module
+        <span class="self">self</span>.primary_module()
             .get_balance(
                 <span class="self">self</span>.inner.primary_module_instance,
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>,
@@ -2042,12 +2046,12 @@
     <span class="doccomment">/// Returns a stream that yields the current client balance every time it
     /// changes.
     </span><span class="kw">pub async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;_</span>, Amount&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>balance_changes = <span class="self">self</span>.inner.primary_module.subscribe_balance_changes().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>balance_changes = <span class="self">self</span>.primary_module().subscribe_balance_changes().<span class="kw">await</span>;
         Box::pin(<span class="macro">stream! </span>{
             <span class="kw">while let </span><span class="prelude-val">Some</span>(()) = balance_changes.next().<span class="kw">await </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
-                <span class="kw">let </span>balance = <span class="self">self</span>.inner
-                    .primary_module
+                <span class="kw">let </span>balance = <span class="self">self
+                    </span>.primary_module()
                     .get_balance(<span class="self">self</span>.inner.primary_module_instance, <span class="kw-2">&amp;mut </span>dbtx)
                     .<span class="kw">await</span>;
                 <span class="kw">yield </span>balance;
@@ -2072,9 +2076,7 @@
     db: Database,
     federation_id: FederationId,
     federation_meta: BTreeMap&lt;String, String&gt;,
-    primary_module: DynPrimaryClientModule,
     primary_module_instance: ModuleInstanceId,
-    primary_module_kind: ModuleKind,
     modules: ClientModuleRegistry,
     executor: Executor&lt;DynGlobalClientContext&gt;,
     api: DynGlobalApi,
@@ -2084,6 +2086,12 @@
 }
 
 <span class="kw">impl </span>ClientInner {
+    <span class="kw">fn </span>primary_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynClientModule {
+        <span class="self">self</span>.modules
+            .get(<span class="self">self</span>.primary_module_instance)
+            .expect(<span class="string">&quot;must have primary module&quot;</span>)
+    }
+
     <span class="kw">fn </span>context_gen(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) -&gt; ModuleGlobalContextGen {
         <span class="kw">let </span>client_inner = <span class="self">self</span>.clone();
         Arc::new(<span class="kw">move </span>|module_instance, operation| {
@@ -2114,11 +2122,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         instance: ModuleInstanceId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule)&gt; {
-        <span class="kw">if </span>instance == <span class="self">self</span>.primary_module_instance {
-            <span class="prelude-val">Some</span>(<span class="self">self</span>.primary_module.as_ref())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Some</span>(<span class="self">self</span>.modules.get(instance)<span class="question-mark">?</span>.as_ref())
-        }
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.modules.get(instance)<span class="question-mark">?</span>.as_ref())
     }
 
     <span class="doccomment">/// Determines if a transaction is underfunded, overfunded or balanced
@@ -2171,7 +2175,7 @@
             <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
         {
             <span class="kw">let </span>input = <span class="self">self
-                </span>.primary_module
+                </span>.primary_module()
                 .create_sufficient_input(
                     <span class="self">self</span>.primary_module_instance,
                     dbtx,
@@ -2187,7 +2191,7 @@
             <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
         {
             <span class="kw">let </span>output = <span class="self">self
-                </span>.primary_module
+                </span>.primary_module()
                 .create_exact_output(
                     <span class="self">self</span>.primary_module_instance,
                     dbtx,
@@ -2287,7 +2291,7 @@
         operation_id: OperationId,
         out_point: OutPoint,
     ) -&gt; anyhow::Result&lt;Amount&gt; {
-        <span class="self">self</span>.primary_module
+        <span class="self">self</span>.primary_module()
             .await_primary_module_output(operation_id, out_point)
             .<span class="kw">await
     </span>}
@@ -2357,7 +2361,7 @@
     }
 
     <span class="doccomment">/// Uses this module with the given instance id as the primary module. See
-    /// [`module::PrimaryClientModule`] for more information.
+    /// [`ClientModule::supports_being_primary`] for more information.
     ///
     /// ## Panics
     /// If there was a primary module specified previously
@@ -2498,66 +2502,46 @@
 
         <span class="kw">let </span>root_secret = get_client_root_secret::&lt;S&gt;(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 
-        <span class="kw">let </span>(modules, (primary_module_kind, primary_module)) = {
+        <span class="kw">let </span>modules = {
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();
-            <span class="kw">let </span><span class="kw-2">mut </span>primary_module = <span class="prelude-val">None</span>;
             <span class="kw">for </span>(module_instance, module_config) <span class="kw">in </span>config.modules.clone() {
                 <span class="kw">let </span>kind = module_config.kind().clone();
-                <span class="kw">if </span>module_instance == primary_module_instance {
-                    <span class="kw">let </span>module = <span class="self">self
-                        </span>.module_gens
-                        .get(<span class="kw-2">&amp;</span>kind)
-                        .ok_or(<span class="macro">anyhow!</span>(
-                            <span class="string">&quot;Unknown primary module kind, cannot skip primary module&quot;
-                        </span>))<span class="question-mark">?
-                        </span>.init_primary(
-                            module_config,
-                            db.clone(),
-                            module_instance,
-                            root_secret.derive_module_secret(module_instance),
-                            notifier.clone(),
-                            api.clone(),
-                        )
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>not_replaced = primary_module.replace((kind, module)).is_none();
-                    <span class="macro">assert!</span>(not_replaced, <span class="string">&quot;Each module instance can only occur once in config, so no replacement can take place here.&quot;</span>)
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>module_gen = <span class="kw">match </span><span class="self">self</span>.module_gens.get(<span class="kw-2">&amp;</span>kind) {
-                        <span class="prelude-val">Some</span>(module_gen) =&gt; module_gen,
-                        <span class="prelude-val">None </span>=&gt; {
-                            <span class="macro">info!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance} not found in module gens, skipping&quot;</span>);
-                            <span class="kw">continue</span>;
-                        }
-                    };
+                <span class="kw">let </span>module_gen = <span class="kw">match </span><span class="self">self</span>.module_gens.get(<span class="kw-2">&amp;</span>kind) {
+                    <span class="prelude-val">Some</span>(module_gen) =&gt; module_gen,
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance} not found in module gens, skipping&quot;</span>);
+                        <span class="kw">continue</span>;
+                    }
+                };
 
-                    <span class="kw">let </span>module = module_gen
-                        .init(
-                            module_config,
-                            db.clone(),
-                            module_instance,
-                            <span class="comment">// This is a divergence from the legacy client, where the child secret
-                            // keys were derived using *module kind*-specific derivation paths.
-                            // Since the new client has to support multiple, segregated modules of
-                            // the same kind we have to use the instance id instead.
-                            </span>root_secret.derive_module_secret(module_instance),
-                            notifier.clone(),
-                            api.clone(),
-                        )
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-                    modules.register_module(module_instance, kind, module);
+                <span class="kw">let </span>module = module_gen
+                    .init(
+                        module_config,
+                        db.clone(),
+                        module_instance,
+                        <span class="comment">// This is a divergence from the legacy client, where the child secret
+                        // keys were derived using *module kind*-specific derivation paths.
+                        // Since the new client has to support multiple, segregated modules of
+                        // the same kind we have to use the instance id instead.
+                        </span>root_secret.derive_module_secret(module_instance),
+                        notifier.clone(),
+                        api.clone(),
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">if </span>primary_module_instance == module_instance &amp;&amp; !module.supports_being_primary() {
+                    <span class="macro">bail!</span>(<span class="string">&quot;Module instance {primary_module_instance} of kind {kind} does not support being a primary module&quot;</span>);
                 }
+
+                modules.register_module(module_instance, kind, module);
             }
-            (
-                modules,
-                primary_module.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Primary module not found in config&quot;</span>))<span class="question-mark">?</span>,
-            )
+            modules
         };
 
         <span class="kw">let </span>executor = {
             <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::&lt;DynGlobalClientContext&gt;::builder();
             executor_builder
                 .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
-            executor_builder.with_module_dyn(primary_module.context(primary_module_instance));
 
             <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
@@ -2572,9 +2556,7 @@
             db: db.clone(),
             federation_id: config.federation_id,
             federation_meta: config.meta,
-            primary_module,
             primary_module_instance,
-            primary_module_kind,
             modules,
             executor,
             api,
