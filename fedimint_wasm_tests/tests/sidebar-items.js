@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["__wbgt_build_client_0",""],["__wbgt_receive_1",""],["__wbgt_receive_and_pay_2",""],["build_client",""],["receive",""],["receive_and_pay",""]]};
