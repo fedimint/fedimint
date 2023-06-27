@@ -102,6 +102,87 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ) -> anyhow::Result<()> {
         anyhow::bail!("Wiping not supported");
     }
+
+    /// Does this module support being a primary module
+    ///
+    /// If it does it must implement:
+    ///
+    /// * [`Self::create_sufficient_input`]
+    /// * [`Self::create_exact_output`]
+    /// * [`Self::await_primary_module_output`]
+    /// * [`Self::get_balance`]
+    /// * [`Self::subscribe_balance_changes`]
+    fn supports_being_primary(&self) -> bool {
+        false
+    }
+
+    // TODO: unclear if we should return a vec of inputs
+    /// Creates an input of **at least** a given `min_amount` from the holdings
+    /// managed by the module.
+    ///
+    /// If successful it returns:
+    /// * A set of private keys belonging to the input for signing the
+    ///   transaction
+    /// * The input of **at least** `min_amount`, the actual amount might be
+    ///   larger, the caller has to handle this case and possibly generate
+    ///   change using `create_change_output`.
+    /// * A closure that generates states belonging to the input. This closure
+    ///   takes the transaction id of the transaction in which the input was
+    ///   used and the input index as input since these cannot be known at time
+    ///   of calling `create_funding_input` and have to be injected later.
+    ///
+    /// The function returns an error if the client's funds are not sufficient
+    /// to create the requested input.
+    async fn create_sufficient_input(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _operation_id: OperationId,
+        _min_amount: Amount,
+    ) -> anyhow::Result<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>> {
+        unimplemented!()
+    }
+
+    /// Creates an output of **exactly** `amount` that will pay into the
+    /// holdings managed by the module.
+    ///
+    /// It returns:
+    /// * The output of **exactly** `amount`.
+    /// * A closure that generates states belonging to the output. This closure
+    ///   takes the transaction id of the transaction in which the output was
+    ///   used and the output index as input since these cannot be known at time
+    ///   of calling `create_change_output` and have to be injected later.
+    async fn create_exact_output(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _operation_id: OperationId,
+        _amount: Amount,
+    ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States> {
+        unimplemented!()
+    }
+
+    /// Waits for the funds from an output created by
+    /// [`Self::create_exact_output`] to become available. This function
+    /// returning typically implies a change in the output of
+    /// [`Self::get_balance`].
+    async fn await_primary_module_output(
+        &self,
+        _operation_id: OperationId,
+        _out_point: OutPoint,
+    ) -> anyhow::Result<Amount> {
+        unimplemented!()
+    }
+
+    /// Returns the balance held by this module and available for funding
+    /// transactions.
+    async fn get_balance(&self, _dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
+        unimplemented!()
+    }
+
+    /// Returns a stream that will output the updated module balance each time
+    /// it changes.
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
+        unimplemented!()
+    }
 }
 
 /// Type-erased version of [`ClientModule`]
@@ -149,6 +230,38 @@ pub trait IClientModule: Debug {
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
     ) -> anyhow::Result<()>;
+
+    fn supports_being_primary(&self) -> bool;
+
+    async fn create_sufficient_input(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        min_amount: Amount,
+    ) -> anyhow::Result<ClientInput>;
+
+    async fn create_exact_output(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        amount: Amount,
+    ) -> ClientOutput;
+
+    async fn await_primary_module_output(
+        &self,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -> anyhow::Result<Amount>;
+
+    async fn get_balance(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Amount;
+
+    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -230,126 +343,11 @@ where
     ) -> anyhow::Result<()> {
         <T as ClientModule>::wipe(self, dbtx, module_instance_id, executor).await
     }
-}
 
-dyn_newtype_define!(
-    #[derive(Clone)]
-    pub DynClientModule(Arc<IClientModule>)
-);
-
-impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModule {
-    fn as_ref(&self) -> &maybe_add_send_sync!(dyn IClientModule + 'static) {
-        self.0.as_ref()
+    fn supports_being_primary(&self) -> bool {
+        <T as ClientModule>::supports_being_primary(self)
     }
-}
 
-pub type StateGenerator<S> =
-    Arc<maybe_add_send_sync!(dyn Fn(TransactionId, u64) -> Vec<S> + 'static)>;
-
-/// A client module that can be used as funding source and to generate arbitrary
-/// change outputs for unbalanced transactions.
-#[apply(async_trait_maybe_send!)]
-pub trait PrimaryClientModule: ClientModule {
-    // TODO: unclear if we should return a vec of inputs
-    /// Creates an input of **at least** a given `min_amount` from the holdings
-    /// managed by the module.
-    ///
-    /// If successful it returns:
-    /// * A set of private keys belonging to the input for signing the
-    ///   transaction
-    /// * The input of **at least** `min_amount`, the actual amount might be
-    ///   larger, the caller has to handle this case and possibly generate
-    ///   change using `create_change_output`.
-    /// * A closure that generates states belonging to the input. This closure
-    ///   takes the transaction id of the transaction in which the input was
-    ///   used and the input index as input since these cannot be known at time
-    ///   of calling `create_funding_input` and have to be injected later.
-    ///
-    /// The function returns an error if the client's funds are not sufficient
-    /// to create the requested input.
-    async fn create_sufficient_input(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        operation_id: OperationId,
-        min_amount: Amount,
-    ) -> anyhow::Result<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>;
-
-    /// Creates an output of **exactly** `amount` that will pay into the
-    /// holdings managed by the module.
-    ///
-    /// It returns:
-    /// * The output of **exactly** `amount`.
-    /// * A closure that generates states belonging to the output. This closure
-    ///   takes the transaction id of the transaction in which the output was
-    ///   used and the output index as input since these cannot be known at time
-    ///   of calling `create_change_output` and have to be injected later.
-    async fn create_exact_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>;
-
-    /// Waits for the funds from an output created by
-    /// [`Self::create_exact_output`] to become available. This function
-    /// returning typically implies a change in the output of
-    /// [`Self::get_balance`].
-    async fn await_primary_module_output(
-        &self,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -> anyhow::Result<Amount>;
-
-    /// Returns the balance held by this module and available for funding
-    /// transactions.
-    async fn get_balance(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount;
-
-    /// Returns a stream that will output the updated module balance each time
-    /// it changes.
-    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
-}
-
-/// Type-erased version of [`PrimaryClientModule`]
-#[apply(async_trait_maybe_send!)]
-pub trait IPrimaryClientModule: IClientModule {
-    async fn create_sufficient_input(
-        &self,
-        module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        min_amount: Amount,
-    ) -> anyhow::Result<ClientInput>;
-
-    async fn create_exact_output(
-        &self,
-        module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -> ClientOutput;
-
-    async fn await_primary_module_output(
-        &self,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -> anyhow::Result<Amount>;
-
-    async fn get_balance(
-        &self,
-        module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
-    ) -> Amount;
-
-    async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
-
-    fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static));
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<T> IPrimaryClientModule for T
-where
-    T: PrimaryClientModule,
-{
     async fn create_sufficient_input(
         &self,
         module_instance: ModuleInstanceId,
@@ -357,7 +355,7 @@ where
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<ClientInput> {
-        Ok(T::create_sufficient_input(
+        Ok(<T as ClientModule>::create_sufficient_input(
             self,
             &mut dbtx.with_module_prefix(module_instance),
             operation_id,
@@ -374,7 +372,7 @@ where
         operation_id: OperationId,
         amount: Amount,
     ) -> ClientOutput {
-        T::create_exact_output(
+        <T as ClientModule>::create_exact_output(
             self,
             &mut dbtx.with_module_prefix(module_instance),
             operation_id,
@@ -389,7 +387,7 @@ where
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
-        T::await_primary_module_output(self, operation_id, out_point).await
+        <T as ClientModule>::await_primary_module_output(self, operation_id, out_point).await
     }
 
     async fn get_balance(
@@ -397,25 +395,24 @@ where
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Amount {
-        T::get_balance(self, &mut dbtx.with_module_prefix(module_instance)).await
+        <T as ClientModule>::get_balance(self, &mut dbtx.with_module_prefix(module_instance)).await
     }
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
-        T::subscribe_balance_changes(self).await
-    }
-
-    fn as_client(&self) -> &(maybe_add_send_sync!(dyn IClientModule + 'static)) {
-        self
+        <T as ClientModule>::subscribe_balance_changes(self).await
     }
 }
 
 dyn_newtype_define!(
     #[derive(Clone)]
-    pub DynPrimaryClientModule(Arc<IPrimaryClientModule>)
+    pub DynClientModule(Arc<IClientModule>)
 );
 
-impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynPrimaryClientModule {
+impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModule {
     fn as_ref(&self) -> &maybe_add_send_sync!(dyn IClientModule + 'static) {
-        self.0.as_client()
+        self.0.as_ref()
     }
 }
+
+pub type StateGenerator<S> =
+    Arc<maybe_add_send_sync!(dyn Fn(TransactionId, u64) -> Vec<S> + 'static)>;

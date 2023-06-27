@@ -160,28 +160,6 @@ impl Client {
             }
         }
 
-        {
-            let module = &self.inner.primary_module;
-            let id = self.inner.primary_module_instance;
-            let kind = self.inner.primary_module_kind.clone();
-
-            debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Preparing primary module backup");
-            if module.supports_backup() {
-                let backup = module
-                    .backup(
-                        &mut dbtx.with_module_prefix(id),
-                        self.inner.executor.clone(),
-                        self.inner.api.clone(),
-                        id,
-                    )
-                    .await?;
-
-                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, size=backup.len(), "Prepared primary module backup");
-                modules.insert(id, backup);
-            } else {
-                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Primary module does not support backup");
-            }
-        }
         dbtx.commit_tx().await;
 
         Ok(ClientBackup {
@@ -232,28 +210,6 @@ impl Client {
                     self.inner.executor.clone(),
                 )
                 .await?;
-        }
-
-        {
-            let module = &self.inner.primary_module;
-            let id = self.inner.primary_module_instance;
-            let kind = self.inner.primary_module_kind.clone();
-
-            if module.supports_backup() {
-                info!(
-                    target: LOG_CLIENT,
-                    module_kind = %kind,
-                    module_id = id,
-                    "Wiping primary module state"
-                );
-                module
-                    .wipe(
-                        &mut dbtx.with_module_prefix(id),
-                        id,
-                        self.inner.executor.clone(),
-                    )
-                    .await?;
-            }
         }
         dbtx.commit_tx().await;
 
@@ -330,31 +286,6 @@ impl Client {
                 .await?;
         }
 
-        {
-            let module = &self.inner.primary_module;
-            let id = self.inner.primary_module_instance;
-            let kind = self.inner.primary_module_kind.clone();
-
-            if module.supports_backup() {
-                let module_backup = backup.as_ref().and_then(|b| b.modules.get(&id));
-
-                info!(
-                    target: LOG_CLIENT_RECOVERY,
-                    module_kind = %kind,
-                    module_id = id,
-                    "Starting recovery from backup for primary module"
-                );
-                module
-                    .restore(
-                        &mut dbtx,
-                        id,
-                        self.inner.executor.clone(),
-                        self.inner.api.clone(),
-                        module_backup.map(Vec::as_slice),
-                    )
-                    .await?;
-            }
-        }
         dbtx.commit_tx().await;
         Ok(metadata)
     }

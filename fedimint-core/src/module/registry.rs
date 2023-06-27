@@ -47,6 +47,11 @@ impl<M> ModuleRegistry<M> {
     pub fn get(&self, id: ModuleInstanceId) -> Option<&M> {
         self.0.get(&id).map(|m| &m.1)
     }
+
+    /// Get module data by instance id, including [`ModuleKind`]
+    pub fn get_with_kind(&self, id: ModuleInstanceId) -> Option<&(ModuleKind, M)> {
+        self.0.get(&id)
+    }
 }
 
 impl<M: std::fmt::Debug> ModuleRegistry<M> {
