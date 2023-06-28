@@ -1009,6 +1009,10 @@
 <a href="#1009" id="1009">1009</a>
 <a href="#1010" id="1010">1010</a>
 <a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1059,6 +1063,7 @@
 <span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 <span class="kw">use </span>rand::seq::IteratorRandom;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
+<span class="kw">use </span>secp256k1::XOnlyPublicKey;
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -1083,7 +1088,7 @@
     </span><span class="kw">async fn </span>select_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;LightningGateway&gt;;
 
     <span class="doccomment">/// Sets the gateway to be used by all other operations
-    </span><span class="kw">async fn </span>set_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, node_pub_key: <span class="kw-2">&amp;</span>secp256k1::PublicKey) -&gt; anyhow::Result&lt;()&gt;;
+    </span><span class="kw">async fn </span>set_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway_pub_key: <span class="kw-2">&amp;</span>XOnlyPublicKey) -&gt; anyhow::Result&lt;()&gt;;
 
     <span class="doccomment">/// Gateways actively registered with the fed
     </span><span class="kw">async fn </span>fetch_registered_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;LightningGateway&gt;&gt;;
@@ -1214,7 +1219,7 @@
     }
 
     <span class="doccomment">/// Switches the clients active gateway to a registered gateway.
-    </span><span class="kw">async fn </span>set_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, node_pub_key: <span class="kw-2">&amp;</span>secp256k1::PublicKey) -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">async fn </span>set_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway_pub_key: <span class="kw-2">&amp;</span>XOnlyPublicKey) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>(_lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
 
@@ -1225,9 +1230,12 @@
         };
         <span class="kw">let </span>gateway = gateways
             .into_iter()
-            .find(|g| <span class="kw-2">&amp;</span>g.node_pub_key == node_pub_key)
+            .find(|g| <span class="kw-2">&amp;</span>g.gateway_pub_key == gateway_pub_key)
             .ok_or_else(|| {
-                <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Could not find gateway with public key {:?}&quot;</span>, node_pub_key)
+                <span class="macro">anyhow::anyhow!</span>(
+                    <span class="string">&quot;Could not find gateway with gateway public key {:?}&quot;</span>,
+                    gateway_pub_key
+                )
             })<span class="question-mark">?</span>;
 
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway).<span class="kw">await</span>;

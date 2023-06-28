@@ -231,7 +231,7 @@
             .find(|x| x.api.to_string() == <span class="string">&quot;http://127.0.0.1:28175/&quot;</span>)
             .expect(<span class="string">&quot;no gateway with api http://127.0.0.1:28175&quot;</span>);
 
-        client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.node_pub_key).<span class="kw">await</span><span class="question-mark">?</span>;
+        client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.gateway_pub_key).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -261,7 +261,7 @@
             .find(|x| x.api.to_string() == <span class="string">&quot;http://127.0.0.1:28175/&quot;</span>)
             .expect(<span class="string">&quot;no gateway with api http://127.0.0.1:28175&quot;</span>);
 
-        client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.node_pub_key).<span class="kw">await</span><span class="question-mark">?</span>;
+        client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.gateway_pub_key).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;

@@ -294,10 +294,6 @@
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
@@ -483,17 +479,13 @@
     }
 
     <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>pub_key = <span class="kw">match </span><span class="kw-2">&amp;</span>gw.ln {
-            <span class="prelude-val">Some</span>(LightningNode::Cln(cln)) =&gt; cln.pub_key().<span class="kw">await</span><span class="question-mark">?</span>,
-            <span class="prelude-val">Some</span>(LightningNode::Lnd(lnd)) =&gt; lnd.pub_key().<span class="kw">await</span><span class="question-mark">?</span>,
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                    <span class="string">&quot;Gatewayd is disconnected from the Lightning Node&quot;
-                </span>))
-            }
-        };
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, pub_key.clone()).run().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;ng&quot;</span>, <span class="string">&quot;switch-gateway&quot;</span>, pub_key).run().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>gateway_pub_key = gw.gateway_pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_pub_key.clone())
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;ng&quot;</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_pub_key)
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(
             <span class="string">&quot;Using {name} gateway&quot;</span>,
             name = gw.ln.as_ref().unwrap().name()

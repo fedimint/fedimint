@@ -1267,7 +1267,7 @@
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_client_legacy::modules::wallet::WalletClientGen;
 <span class="kw">use </span>fedimint_client_legacy::utils::{
-    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
+    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_gateway_pub_key,
     parse_peer_id, serialize_ecash,
 };
 <span class="kw">use </span>fedimint_client_legacy::{Client, UserClientConfig};
@@ -1791,8 +1791,8 @@
     <span class="doccomment">/// Switch active gateway
     </span>SwitchGateway {
         <span class="doccomment">/// node public key for a gateway
-        </span><span class="attr">#[clap(value_parser = parse_node_pub_key)]
-        </span>pubkey: secp256k1::PublicKey,
+        </span><span class="attr">#[clap(value_parser = parse_gateway_pub_key)]
+        </span>pubkey: secp256k1::XOnlyPublicKey,
     },
 
     <span class="doccomment">/// Upload the (encrypted) snapshot of mint notes to federation

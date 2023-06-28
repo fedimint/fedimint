@@ -808,7 +808,7 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::vec;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, Context};
+<span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>clap::{Args, Parser, Subcommand, ValueEnum};
 <span class="kw">use </span>common::{
     cln_create_invoice, cln_wait_invoice_payment, gateway_pay_invoice, get_note_summary,
@@ -1577,11 +1577,11 @@
             </span><span class="macro">cmd!</span>(GatewayClnCli, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await
         </span>}
     }<span class="question-mark">?</span>;
-    <span class="kw">let </span>node_pub_key = gateway_json[<span class="string">&quot;federations&quot;</span>][<span class="number">0</span>][<span class="string">&quot;registration&quot;</span>][<span class="string">&quot;node_pub_key&quot;</span>]
+    <span class="kw">let </span>gateway_pub_key = gateway_json[<span class="string">&quot;federations&quot;</span>][<span class="number">0</span>][<span class="string">&quot;registration&quot;</span>][<span class="string">&quot;gateway_pub_key&quot;</span>]
         .as_str()
-        .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Missing node_pub_key field&quot;</span>))<span class="question-mark">?</span>;
+        .context(<span class="string">&quot;Missing gateway_pub_key field&quot;</span>)<span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>(node_pub_key.into())
+    <span class="prelude-val">Ok</span>(gateway_pub_key.into())
 }
 
 <span class="kw">async fn </span>get_cfg_from_args(args: <span class="kw-2">&amp;</span>ConnectCommonArgs) -&gt; anyhow::Result&lt;ClientConfig&gt; {

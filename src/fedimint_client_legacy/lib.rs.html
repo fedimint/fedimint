@@ -1718,6 +1718,9 @@
 <a href="#1718" id="1718">1718</a>
 <a href="#1719" id="1719">1719</a>
 <a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -2531,20 +2534,23 @@
     /// advance.
     </span><span class="kw">pub async fn </span>switch_active_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        node_pub_key: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
+        gateway_pub_key: <span class="prelude-ty">Option</span>&lt;secp256k1::XOnlyPublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;LightningGateway&gt; {
         <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>gateways.is_empty() {
             <span class="macro">debug!</span>(<span class="string">&quot;Could not find any gateways&quot;</span>);
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NoGateways);
         };
-        <span class="kw">let </span>gateway = <span class="kw">match </span>node_pub_key {
+        <span class="kw">let </span>gateway = <span class="kw">match </span>gateway_pub_key {
             <span class="comment">// If a pubkey was provided, try to select and activate a gateway with that pubkey.
             </span><span class="prelude-val">Some</span>(pub_key) =&gt; gateways
                 .into_iter()
-                .find(|g| g.node_pub_key == pub_key)
+                .find(|g| g.gateway_pub_key == pub_key)
                 .ok_or_else(|| {
-                    <span class="macro">debug!</span>(<span class="string">&quot;Could not find gateway with public key {:?}&quot;</span>, pub_key);
+                    <span class="macro">debug!</span>(
+                        <span class="string">&quot;Could not find gateway with gateway public key {:?}&quot;</span>,
+                        gateway_pub_key
+                    );
                     ClientError::GatewayNotFound
                 })<span class="question-mark">?</span>,
             <span class="comment">// Otherwise (no pubkey provided), select and activate the first registered gateway.

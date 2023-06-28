@@ -586,13 +586,13 @@
     client: <span class="kw-2">&amp;</span>Client,
     gateway_public_key: <span class="kw-2">&amp;</span>str,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>gateway_public_key = parse_node_pub_key(gateway_public_key)<span class="question-mark">?</span>;
+    <span class="kw">let </span>gateway_public_key = parse_gateway_pub_key(gateway_public_key)<span class="question-mark">?</span>;
     client.set_active_gateway(<span class="kw-2">&amp;</span>gateway_public_key).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub fn </span>parse_node_pub_key(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
-    secp256k1::PublicKey::from_str(s)
+<span class="kw">pub fn </span>parse_gateway_pub_key(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::XOnlyPublicKey, secp256k1::Error&gt; {
+    secp256k1::XOnlyPublicKey::from_str(s)
 }
 
 <span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>Client) -&gt; anyhow::Result&lt;TieredSummary&gt; {
