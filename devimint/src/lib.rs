@@ -130,6 +130,15 @@ impl Gatewayd {
         }
     }
 
+    pub async fn gateway_pub_key(&self) -> Result<String> {
+        let info = cmd!(self, "info").out_json().await?;
+        let gateway_pub_key = info["federations"][0]["registration"]["gateway_pub_key"]
+            .as_str()
+            .context("gateway_pub_key must be a string")?
+            .to_owned();
+        Ok(gateway_pub_key)
+    }
+
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
         let connect_str = poll_value("connect info", || async {
             match cmd!(fed, "connect-info").out_json().await {

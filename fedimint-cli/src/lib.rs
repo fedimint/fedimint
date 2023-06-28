@@ -22,7 +22,7 @@ use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::modules::ln::contracts::ContractId;
 use fedimint_client_legacy::modules::wallet::WalletClientGen;
 use fedimint_client_legacy::utils::{
-    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_node_pub_key,
+    from_hex, parse_bitcoin_amount, parse_ecash, parse_fedimint_amount, parse_gateway_pub_key,
     parse_peer_id, serialize_ecash,
 };
 use fedimint_client_legacy::{Client, UserClientConfig};
@@ -546,8 +546,8 @@ enum Command {
     /// Switch active gateway
     SwitchGateway {
         /// node public key for a gateway
-        #[clap(value_parser = parse_node_pub_key)]
-        pubkey: secp256k1::PublicKey,
+        #[clap(value_parser = parse_gateway_pub_key)]
+        pubkey: secp256k1::XOnlyPublicKey,
     },
 
     /// Upload the (encrypted) snapshot of mint notes to federation

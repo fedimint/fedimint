@@ -239,13 +239,13 @@ pub async fn switch_default_gateway(
     client: &Client,
     gateway_public_key: &str,
 ) -> anyhow::Result<()> {
-    let gateway_public_key = parse_node_pub_key(gateway_public_key)?;
+    let gateway_public_key = parse_gateway_pub_key(gateway_public_key)?;
     client.set_active_gateway(&gateway_public_key).await?;
     Ok(())
 }
 
-pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
-    secp256k1::PublicKey::from_str(s)
+pub fn parse_gateway_pub_key(s: &str) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
+    secp256k1::XOnlyPublicKey::from_str(s)
 }
 
 pub async fn get_note_summary(client: &Client) -> anyhow::Result<TieredSummary> {
