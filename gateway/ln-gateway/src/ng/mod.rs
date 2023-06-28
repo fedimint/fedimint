@@ -18,7 +18,9 @@ use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ExtendsCommonModuleGen, TransactionItemAmount};
+use fedimint_core::module::{
+    ApiVersion, ExtendsCommonModuleGen, MultiApiVersion, TransactionItemAmount,
+};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -468,6 +470,11 @@ impl ClientModule for GatewayClientModule {
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: self.decoder(),
         }
+    }
+
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
     }
 
     fn input_amount(

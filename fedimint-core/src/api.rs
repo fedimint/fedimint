@@ -2,10 +2,11 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::{Cursor, Read};
+use std::ops::Add;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use std::{cmp, result};
 
 use anyhow::{anyhow, ensure};
@@ -43,11 +44,11 @@ use crate::backup::ClientBackupSnapshot;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use crate::module::ApiRequestErased;
+use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::outcome::TransactionStatus;
 use crate::query::{
-    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, UnionResponses,
-    UnionResponsesSingle, VerifiableResponse,
+    CurrentConsensus, DiscoverApiVersionSet, EventuallyConsistent, QueryStep, QueryStrategy,
+    UnionResponses, UnionResponsesSingle, VerifiableResponse,
 };
 use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction};
@@ -151,6 +152,15 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
         method: &str,
         params: &[Value],
     ) -> result::Result<Value, jsonrpsee_core::Error>;
+}
+
+/// Set of api versions for each component (core + modules)
+///
+/// E.g. result of federated common api versions discovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiVersionSet {
+    pub core: ApiVersion,
+    pub modules: BTreeMap<ModuleInstanceId, ApiVersion>,
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -385,6 +395,12 @@ pub trait GlobalFederationApi {
         &self,
         id: &secp256k1::XOnlyPublicKey,
     ) -> FederationResult<Vec<ClientBackupSnapshot>>;
+
+    /// Query peers and calculate optimal common api versions to use.
+    async fn discover_api_version_set(
+        &self,
+        client_versions: &SupportedApiVersionsSummary,
+    ) -> FederationResult<ApiVersionSet>;
 }
 
 fn map_tx_outcome_outpoint<R>(
@@ -597,6 +613,22 @@ where
             .into_iter()
             .flatten()
             .collect())
+    }
+
+    async fn discover_api_version_set(
+        &self,
+        client_versions: &SupportedApiVersionsSummary,
+    ) -> FederationResult<ApiVersionSet> {
+        self.request_with_strategy(
+            DiscoverApiVersionSet::new(
+                self.all_members().len(),
+                Instant::now().add(Duration::from_secs(3)),
+                client_versions.clone(),
+            ),
+            "version".to_owned(),
+            ApiRequestErased::default(),
+        )
+        .await
     }
 }
 

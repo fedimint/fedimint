@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::result;
 use std::sync::Arc;
 
 use futures::Future;
@@ -519,8 +520,14 @@ impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynServerModuleG
 ///
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
 pub struct CoreConsensusVersion(pub u32);
+
+impl From<u32> for CoreConsensusVersion {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
 
 /// Consensus version of a specific module instance
 ///
@@ -548,6 +555,12 @@ pub struct CoreConsensusVersion(pub u32);
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ModuleConsensusVersion(pub u32);
 
+impl From<u32> for ModuleConsensusVersion {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
 /// Api version supported by a core server or a client/server module at a given
 /// [`ModuleConsensusVersion`]
 ///
@@ -565,7 +578,7 @@ pub struct ModuleConsensusVersion(pub u32);
 /// backward compatibility on both client and server side to accommodate end
 /// user client devices receiving updates at a pace hard to control, and
 /// technical and coordination challenges of upgrading servers.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ApiVersion {
     /// Major API version
     ///
@@ -584,29 +597,220 @@ pub struct ApiVersion {
     pub minor: u32,
 }
 
+/// Multiple, disjoin, minimum required or maximum supported, api versions.
+///
+/// If a given component can (potentially) support multiple different (distinct
+/// major number), of an API, this type is used to express it.
+///
+/// Each element must have a distinct major api number, and means
+/// either minimum required API version of this major number, or maximum
+/// supported version of this major number.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct MultiApiVersion(Vec<ApiVersion>);
+
+impl MultiApiVersion {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Verify the invariant: sorted by unique major numbers
+    fn is_consistent(&self) -> bool {
+        self.0
+            .iter()
+            .fold((None, true), |(prev, is_sorted), next| {
+                (
+                    Some(*next),
+                    is_sorted && prev.map(|prev| prev.major < next.major).unwrap_or(true),
+                )
+            })
+            .1
+    }
+
+    fn iter(&self) -> MultiApiVersionIter {
+        MultiApiVersionIter(self.0.iter())
+    }
+
+    pub fn try_from_iter<T: IntoIterator<Item = ApiVersion>>(
+        iter: T,
+    ) -> result::Result<Self, ApiVersion> {
+        Result::from_iter(iter)
+    }
+
+    /// Insert `version` to the list of supported APIs
+    ///
+    /// Returns `Ok` if no existing element with the same `major` version was
+    /// found and new `version` was successfully inserted. Returns `Err` if
+    /// an existing element with the same `major` version was found, to allow
+    /// modifying its `minor` number. This is useful when merging required /
+    /// supported version sequences with each other.
+    fn try_insert(&mut self, version: ApiVersion) -> result::Result<(), &mut u32> {
+        let ret = match self
+            .0
+            .binary_search_by_key(&version.major, |version| version.major)
+        {
+            Ok(found_idx) => Err(self
+                .0
+                .get_mut(found_idx)
+                .map(|v| &mut v.minor)
+                .expect("element must exist - just checked")),
+            Err(insert_idx) => {
+                self.0.insert(insert_idx, version);
+                Ok(())
+            }
+        };
+
+        ret
+    }
+
+    pub(crate) fn get_by_major(&self, major: u32) -> Option<ApiVersion> {
+        self.0
+            .binary_search_by_key(&major, |version| version.major)
+            .ok()
+            .map(|index| {
+                self.0
+                    .get(index)
+                    .copied()
+                    .expect("Must exist because binary_search_by_key told us so")
+            })
+    }
+}
+
+impl<'de> Deserialize<'de> for MultiApiVersion {
+    fn deserialize<D>(deserializer: D) -> result::Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        let inner = Vec::<ApiVersion>::deserialize(deserializer)?;
+
+        let ret = Self(inner);
+
+        if !ret.is_consistent() {
+            return Err(D::Error::custom(
+                "Invalid MultiApiVersion value: inconsistent",
+            ));
+        }
+
+        Ok(ret)
+    }
+}
+
+pub struct MultiApiVersionIter<'a>(std::slice::Iter<'a, ApiVersion>);
+
+impl<'a> Iterator for MultiApiVersionIter<'a> {
+    type Item = ApiVersion;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().copied()
+    }
+}
+
+impl<'a> IntoIterator for &'a MultiApiVersion {
+    type Item = ApiVersion;
+
+    type IntoIter = MultiApiVersionIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl FromIterator<ApiVersion> for Result<MultiApiVersion, ApiVersion> {
+    fn from_iter<T: IntoIterator<Item = ApiVersion>>(iter: T) -> Self {
+        let mut s = MultiApiVersion::new();
+        for version in iter.into_iter() {
+            if s.try_insert(version).is_err() {
+                return Err(version);
+            }
+        }
+        Ok(s)
+    }
+}
+
+#[test]
+fn api_version_multi_sanity() {
+    let mut mav = MultiApiVersion::new();
+
+    assert_eq!(mav.try_insert(ApiVersion { major: 2, minor: 3 }), Ok(()));
+
+    assert_eq!(mav.get_by_major(0), None);
+    assert_eq!(mav.get_by_major(2), Some(ApiVersion { major: 2, minor: 3 }));
+
+    assert_eq!(
+        mav.try_insert(ApiVersion { major: 2, minor: 1 }),
+        Err(&mut 3)
+    );
+    *mav.try_insert(ApiVersion { major: 2, minor: 2 })
+        .expect_err("must be error, just like one line above") += 1;
+    assert_eq!(mav.try_insert(ApiVersion { major: 1, minor: 2 }), Ok(()));
+    assert_eq!(mav.try_insert(ApiVersion { major: 3, minor: 4 }), Ok(()));
+    assert_eq!(
+        mav.try_insert(ApiVersion { major: 2, minor: 0 }),
+        Err(&mut 4)
+    );
+    assert_eq!(mav.get_by_major(5), None);
+    assert_eq!(mav.get_by_major(3), Some(ApiVersion { major: 3, minor: 4 }));
+
+    debug_assert!(mav.is_consistent());
+}
+
+#[test]
+fn api_version_multi_from_iter_sanity() {
+    assert!(result::Result::<MultiApiVersion, ApiVersion>::from_iter([]).is_ok());
+    assert!(
+        result::Result::<MultiApiVersion, ApiVersion>::from_iter([ApiVersion {
+            major: 0,
+            minor: 0
+        }])
+        .is_ok()
+    );
+    assert!(result::Result::<MultiApiVersion, ApiVersion>::from_iter([
+        ApiVersion { major: 0, minor: 1 },
+        ApiVersion { major: 1, minor: 2 }
+    ])
+    .is_ok());
+    assert!(result::Result::<MultiApiVersion, ApiVersion>::from_iter([
+        ApiVersion { major: 0, minor: 1 },
+        ApiVersion { major: 1, minor: 2 },
+        ApiVersion { major: 0, minor: 1 },
+    ])
+    .is_err());
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupportedCoreApiVersions {
-    pub consensus: CoreConsensusVersion,
-    pub api: Vec<ApiVersion>,
+    pub core_consensus: CoreConsensusVersion,
+    /// Supported Api versions for this core consensus versions
+    pub api: MultiApiVersion,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupportedModuleApiVersions {
-    pub core: CoreConsensusVersion,
-    pub module: ModuleConsensusVersion,
-    pub api: Vec<ApiVersion>,
+    pub core_consensus: CoreConsensusVersion,
+    pub module_consensus: ModuleConsensusVersion,
+    /// Supported Api versions for this core & module consensus versions
+    pub api: MultiApiVersion,
 }
 
 impl SupportedModuleApiVersions {
+    /// Create `SupportedModuleApiVersions` from raw parts
+    ///
+    /// Panics if `api_version` parts conflict as per
+    /// [`SupportedModuleApiVersions`] invariants.
     pub fn from_raw(core: u32, module: u32, api_versions: &[(u32, u32)]) -> Self {
         Self {
-            core: CoreConsensusVersion(core),
-            module: ModuleConsensusVersion(module),
-            api: api_versions
-                .iter()
-                .copied()
-                .map(|(major, minor)| ApiVersion { major, minor })
-                .collect(),
+            core_consensus: CoreConsensusVersion(core),
+            module_consensus: ModuleConsensusVersion(module),
+            api: result::Result::<MultiApiVersion, ApiVersion>::from_iter(
+                api_versions
+                    .iter()
+                    .copied()
+                    .map(|(major, minor)| ApiVersion { major, minor }),
+            )
+            .expect(
+                "overlapping (conflicting) api versions when declaring SupportedModuleApiVersions",
+            ),
         }
     }
 }

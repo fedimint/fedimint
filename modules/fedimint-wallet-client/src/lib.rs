@@ -24,7 +24,8 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, TransactionItemAmount,
+    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    TransactionItemAmount,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
@@ -462,6 +463,11 @@ impl ClientModule for WalletClientModule {
             wallet_decoder: self.decoder(),
             secp: Default::default(),
         }
+    }
+
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
     }
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {

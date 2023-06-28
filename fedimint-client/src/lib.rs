@@ -74,12 +74,19 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
 use async_stream::stream;
-use fedimint_core::api::{DynGlobalApi, DynModuleApi, IGlobalFederationApi, WsFederationApi};
+use fedimint_core::api::{
+    ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
+    WsFederationApi,
+};
 use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::{
+    ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
+    SupportedModuleApiVersions,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
@@ -460,6 +467,12 @@ pub struct Client {
     inner: Arc<ClientInner>,
 }
 
+/// List of core api versions supported by the implementation.
+/// Notably `major` version is the one being supported, and corresponding
+/// `minor` version is the one required (for given `major` version).
+const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
+    &[ApiVersion { major: 0, minor: 0 }];
+
 pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 
 impl Client {
@@ -705,6 +718,48 @@ impl Client {
                 yield balance;
             }
         })
+    }
+
+    /// Query the federation for API version support and then calculate
+    /// the best API version to use (supported by most guardians).
+    pub async fn discover_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
+        Ok(self
+            .api()
+            .discover_api_version_set(&self.supported_api_versions_summary().await)
+            .await?)
+    }
+
+    /// [`SupportedApiVersionsSummary`] that the client and its modules support
+    pub async fn supported_api_versions_summary(&self) -> SupportedApiVersionsSummary {
+        let config = self.get_config().await;
+
+        SupportedApiVersionsSummary {
+            core: SupportedCoreApiVersions {
+                core_consensus: config.consensus_version,
+                api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
+                    .expect("must not have conflicting versions"),
+            },
+            modules: self
+                .inner
+                .modules
+                .iter_modules()
+                .filter_map(|(module_instance_id, _, module)| {
+                    config
+                        .modules
+                        .get(&module_instance_id)
+                        .map(|module_config| {
+                            (
+                                module_instance_id,
+                                SupportedModuleApiVersions {
+                                    core_consensus: config.consensus_version,
+                                    module_consensus: module_config.version,
+                                    api: module.supported_api_versions(),
+                                },
+                            )
+                        })
+                })
+                .collect(),
+        }
     }
 }
 

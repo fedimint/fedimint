@@ -15,7 +15,7 @@ use fedimint_core::config::{
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, PeerHandle,
+    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
@@ -179,6 +179,7 @@ impl ServerConfigConsensus {
             federation_id: FederationId(self.auth_pk_set.public_key()),
             epoch_pk: self.epoch_pk_set.public_key(),
             api_endpoints: self.api_endpoints.clone(),
+            consensus_version: self.version,
             modules: self
                 .modules
                 .iter()
@@ -201,8 +202,9 @@ impl ServerConfig {
     /// Api versions supported by this server
     pub fn supported_api_versions() -> SupportedCoreApiVersions {
         SupportedCoreApiVersions {
-            consensus: CORE_CONSENSUS_VERSION,
-            api: vec![ApiVersion { major: 0, minor: 0 }],
+            core_consensus: CORE_CONSENSUS_VERSION,
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+                .expect("not version conflicts"),
         }
     }
     /// Creates a new config from the results of a trusted or distributed key
