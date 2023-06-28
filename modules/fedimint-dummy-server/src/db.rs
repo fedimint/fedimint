@@ -1,7 +1,7 @@
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::SerdeSignature;
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
+use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
 use futures::StreamExt;
 use secp256k1::XOnlyPublicKey;
 use serde::Serialize;
@@ -15,7 +15,8 @@ use crate::DummyOutputOutcome;
 pub enum DbKeyPrefix {
     Funds = 0x01,
     Outcome = 0x02,
-    Sign = 0x03,
+    SignatureShare = 0x03,
+    Signature = 0x04,
 }
 
 // TODO: Boilerplate-code
@@ -40,6 +41,20 @@ impl_db_record!(
 );
 impl_db_lookup!(key = DummyFundsKeyV0, query_prefix = DummyFundsKeyPrefixV0);
 
+/// Lookup funds for a user by key or prefix
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
+pub struct DummyFundsKeyV1(pub XOnlyPublicKey);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct DummyFundsPrefixV1;
+
+impl_db_record!(
+    key = DummyFundsKeyV1,
+    value = Amount,
+    db_prefix = DbKeyPrefix::Funds,
+);
+impl_db_lookup!(key = DummyFundsKeyV1, query_prefix = DummyFundsPrefixV1);
+
 /// Example DB migration from version 0 to version 1
 pub async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
     // Select old entries
@@ -62,47 +77,51 @@ pub async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), any
 
 /// Lookup tx outputs by key or prefix
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummyOutcomeKeyV1(pub OutPoint);
+pub struct DummyOutcomeKey(pub OutPoint);
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct DummyOutcomeKeyV1Prefix;
+pub struct DummyOutcomePrefix;
 
 impl_db_record!(
-    key = DummyOutcomeKeyV1,
+    key = DummyOutcomeKey,
     value = DummyOutputOutcome,
     db_prefix = DbKeyPrefix::Outcome,
 );
-impl_db_lookup!(
-    key = DummyOutcomeKeyV1,
-    query_prefix = DummyOutcomeKeyV1Prefix
-);
-
-/// Lookup funds for a user by key or prefix
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummyFundsKeyV1(pub XOnlyPublicKey);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct DummyFundsKeyV1Prefix;
-
-impl_db_record!(
-    key = DummyFundsKeyV1,
-    value = Amount,
-    db_prefix = DbKeyPrefix::Funds,
-);
-impl_db_lookup!(key = DummyFundsKeyV1, query_prefix = DummyFundsKeyV1Prefix);
+impl_db_lookup!(key = DummyOutcomeKey, query_prefix = DummyOutcomePrefix);
 
 /// Lookup signature requests by key or prefix
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummySignKeyV1(pub String);
+pub struct DummySignatureShareKey(pub String, pub PeerId);
 
-#[derive(Debug, Encodable, Decodable)]
-pub struct DummySignV1Prefix;
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
+pub struct DummySignatureShareStringPrefix(pub String);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
+pub struct DummySignatureSharePrefix;
 
 impl_db_record!(
-    key = DummySignKeyV1,
+    key = DummySignatureShareKey,
+    value = SerdeSignatureShare,
+    db_prefix = DbKeyPrefix::SignatureShare,
+);
+impl_db_lookup!(
+    key = DummySignatureShareKey,
+    query_prefix = DummySignatureShareStringPrefix,
+    query_prefix = DummySignatureSharePrefix
+);
+
+/// Lookup signature requests by key or prefix
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
+pub struct DummySignatureKey(pub String);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct DummySignaturePrefix;
+
+impl_db_record!(
+    key = DummySignatureKey,
     value = Option<SerdeSignature>,
-    db_prefix = DbKeyPrefix::Sign,
+    db_prefix = DbKeyPrefix::Signature,
     // Allows us to listen for notifications on this key
     notify_on_modify = true
 );
-impl_db_lookup!(key = DummySignKeyV1, query_prefix = DummySignV1Prefix);
+impl_db_lookup!(key = DummySignatureKey, query_prefix = DummySignaturePrefix);
