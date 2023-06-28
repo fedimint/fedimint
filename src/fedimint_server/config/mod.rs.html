@@ -790,6 +790,8 @@
 <a href="#790" id="790">790</a>
 <a href="#791" id="791">791</a>
 <a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -807,7 +809,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, PeerHandle,
+    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
@@ -971,6 +973,7 @@
             federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
             epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
             api_endpoints: <span class="self">self</span>.api_endpoints.clone(),
+            consensus_version: <span class="self">self</span>.version,
             modules: <span class="self">self
                 </span>.modules
                 .iter()
@@ -993,8 +996,9 @@
     <span class="doccomment">/// Api versions supported by this server
     </span><span class="kw">pub fn </span>supported_api_versions() -&gt; SupportedCoreApiVersions {
         SupportedCoreApiVersions {
-            consensus: CORE_CONSENSUS_VERSION,
-            api: <span class="macro">vec!</span>[ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}],
+            core_consensus: CORE_CONSENSUS_VERSION,
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
+                .expect(<span class="string">&quot;not version conflicts&quot;</span>),
         }
     }
     <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key

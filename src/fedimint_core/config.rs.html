@@ -826,6 +826,9 @@
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -855,7 +858,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
-    DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen, ModuleConsensusVersion,
+    CoreConsensusVersion, DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen,
+    ModuleConsensusVersion,
 };
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, MaybeSync};
 <span class="kw">use crate</span>::{maybe_add_send_sync, PeerId};
@@ -942,6 +946,8 @@
     </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
     <span class="doccomment">/// Threshold pubkey for authenticating epoch history
     </span><span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
+    <span class="doccomment">/// Core consensus version
+    </span><span class="kw">pub </span>consensus_version: CoreConsensusVersion,
     <span class="comment">// TODO: make it a String -&gt; serde_json::Value map?
     </span><span class="doccomment">/// Additional config the federation wants to transmit to the clients
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,

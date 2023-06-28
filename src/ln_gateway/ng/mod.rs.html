@@ -670,6 +670,13 @@
 <a href="#670" id="670">670</a>
 <a href="#671" id="671">671</a>
 <a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>register;
 
@@ -690,7 +697,9 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::module::{ExtendsCommonModuleGen, TransactionItemAmount};
+<span class="kw">use </span>fedimint_core::module::{
+    ApiVersion, ExtendsCommonModuleGen, MultiApiVersion, TransactionItemAmount,
+};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::contracts::ContractId;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
@@ -1140,6 +1149,11 @@
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: <span class="self">self</span>.decoder(),
         }
+    }
+
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
+            .expect(<span class="string">&quot;no version conficts&quot;</span>)
     }
 
     <span class="kw">fn </span>input_amount(
