@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use common::{
     cln_create_invoice, cln_wait_invoice_payment, gateway_pay_invoice, get_note_summary,
@@ -774,11 +774,11 @@ async fn get_gateway_public_key(
             cmd!(GatewayClnCli, "info").out_json().await
         }
     }?;
-    let node_pub_key = gateway_json["federations"][0]["registration"]["node_pub_key"]
+    let gateway_pub_key = gateway_json["federations"][0]["registration"]["gateway_pub_key"]
         .as_str()
-        .ok_or_else(|| anyhow!("Missing node_pub_key field"))?;
+        .context("Missing gateway_pub_key field")?;
 
-    Ok(node_pub_key.into())
+    Ok(gateway_pub_key.into())
 }
 
 async fn get_cfg_from_args(args: &ConnectCommonArgs) -> anyhow::Result<ClientConfig> {

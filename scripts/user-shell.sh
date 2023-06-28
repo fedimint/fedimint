@@ -15,13 +15,13 @@ function show_verbose_output()
 }
 
 function use_cln_gw() {
-    PUBKEY=$($FM_LIGHTNING_CLI getinfo | jq -e -r '.id')
+    PUBKEY=$($FM_GWCLI_CLN info | jq -e -r '.federations[0].registration.gateway_pub_key')
     $FM_MINT_CLIENT switch-gateway $PUBKEY
     echo "Using CLN gateway"
 }
 
 function use_lnd_gw() {
-    PUBKEY=$($FM_LNCLI getinfo | jq -e -r '.identity_pubkey')
+    PUBKEY=$($FM_GWCLI_LND info | jq -e -r '.federations[0].registration.gateway_pub_key')
     $FM_MINT_CLIENT switch-gateway $PUBKEY
     echo "Using LND gateway"
 }
