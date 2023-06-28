@@ -6,7 +6,7 @@ use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use fedimint_core::task::{sleep, TaskGroup};
 use secp256k1::PublicKey;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::lnrpc::failure::FailureCode;
@@ -23,8 +23,8 @@ use tracing::{error, info, trace, warn};
 use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gatewaylnrpc::{
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::lnrpc_client::{ILnRpcClient, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
 use crate::GatewayError;
@@ -32,6 +32,10 @@ use crate::GatewayError;
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
+
+lazy_static::lazy_static! {
+    static ref LND_SENDER: RwLock<Option<mpsc::Sender<ForwardHtlcInterceptResponse>>> = RwLock::new(None);
+}
 
 pub struct GatewayLndClient {
     /// LND client
@@ -153,35 +157,6 @@ impl GatewayLndClient {
             .await;
 
         Ok(())
-    }
-
-    async fn forward_htlc(
-        incoming_circuit_key: CircuitKey,
-        lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
-    ) -> crate::Result<()> {
-        let response = ForwardHtlcInterceptResponse {
-            incoming_circuit_key: Some(incoming_circuit_key),
-            action: ResolveHoldForwardAction::Resume.into(),
-            preimage: vec![],
-            failure_message: vec![],
-            failure_code: FailureCode::TemporaryChannelFailure.into(),
-        };
-        Self::send_lnd_response(lnd_sender, response).await
-    }
-
-    async fn settle_htlc(
-        key: CircuitKey,
-        preimage: Vec<u8>,
-        lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
-    ) -> crate::Result<()> {
-        let response = ForwardHtlcInterceptResponse {
-            incoming_circuit_key: Some(key),
-            action: ResolveHoldForwardAction::Settle.into(),
-            preimage,
-            failure_message: vec![],
-            failure_code: FailureCode::TemporaryChannelFailure.into(),
-        };
-        Self::send_lnd_response(lnd_sender, response).await
     }
 
     async fn cancel_htlc(
@@ -447,7 +422,6 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
         const CHANNEL_SIZE: usize = 100;
@@ -458,47 +432,55 @@ impl ILnRpcClient for GatewayLndClient {
             mpsc::channel::<Result<InterceptHtlcRequest, tonic::Status>>(CHANNEL_SIZE);
 
         let (lnd_sender, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(CHANNEL_SIZE);
+
         self.spawn_interceptor(task_group, lnd_sender.clone(), lnd_rx, actor_sender.clone())
             .await?;
-
-        let mut stream = events.into_inner();
-        task_group.spawn("LND Route HTLCs", |_handle| async move {
-            while let Some(request) = stream.recv().await {
-                let InterceptHtlcResponse {
-                    action,
-                    incoming_chan_id,
-                    htlc_id,
-                } = request;
-
-                match action {
-                    Some(Action::Settle(Settle { preimage })) => {
-                        let _ = Self::settle_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, preimage, lnd_sender.clone()).await.map_err(|e| {
-                            error!("Failed to settle HTLC: {:?}", e);
-                        });
-                    },
-                    Some(Action::Cancel(Cancel { reason: _ })) => {
-                        let _ = Self::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).await.map_err(|e| {
-                            error!("Failed to cancel HTLC: {:?}", e);
-                        });
-                    },
-                    Some(Action::Forward(Forward { })) => {
-                        let _ = Self::forward_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone())
-                            .await
-                            .map_err(|e| {
-                                error!("Failed to forward HTLC: {:?}", e);
-                            });
-                    }
-                    None => {
-                        error!("No action specified for intercepted htlc. This should not happen. ChanId: {} HTLC ID: {}", incoming_chan_id, htlc_id);
-                        let _ = Self::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).await.map_err(|e| {
-                            error!("Failed to cancel HTLC: {:?}", e);
-                        });
-                    }
-                };
-            }
-        })
-        .await;
-
+        let mut sender = LND_SENDER.write().await;
+        *sender = Some(lnd_sender);
         Ok(Box::pin(ReceiverStream::new(actor_receiver)))
+    }
+
+    async fn complete_htlc(
+        &self,
+        htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, GatewayError> {
+        if let Some(lnd_sender) = LND_SENDER.read().await.clone() {
+            let InterceptHtlcResponse {
+                action,
+                incoming_chan_id,
+                htlc_id,
+            } = htlc;
+
+            let (action, preimage) = match action {
+                Some(Action::Settle(Settle { preimage })) => {
+                    (ResolveHoldForwardAction::Settle.into(), preimage)
+                }
+                Some(Action::Cancel(Cancel { reason: _ })) => {
+                    (ResolveHoldForwardAction::Fail.into(), vec![])
+                }
+                Some(Action::Forward(Forward {})) => {
+                    (ResolveHoldForwardAction::Resume.into(), vec![])
+                }
+                None => (ResolveHoldForwardAction::Fail.into(), vec![]),
+            };
+
+            let response = ForwardHtlcInterceptResponse {
+                incoming_circuit_key: Some(CircuitKey {
+                    chan_id: incoming_chan_id,
+                    htlc_id,
+                }),
+                action,
+                preimage,
+                failure_message: vec![],
+                failure_code: FailureCode::TemporaryChannelFailure.into(),
+            };
+
+            Self::send_lnd_response(lnd_sender, response).await?;
+            return Ok(EmptyResponse {});
+        }
+
+        Err(GatewayError::Other(anyhow::anyhow!(
+            "Gatewayd has not started to route HTLCs"
+        )))
     }
 }

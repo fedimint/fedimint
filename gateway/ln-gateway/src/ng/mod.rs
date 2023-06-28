@@ -1,3 +1,4 @@
+pub mod complete;
 pub mod pay;
 
 use std::sync::Arc;
@@ -42,10 +43,12 @@ use thiserror::Error;
 use tracing::info;
 use url::Url;
 
+use self::complete::GatewayCompleteStateMachine;
 use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
 use crate::db::FederationRegistrationKey;
 use crate::gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcRequest};
 use crate::lnrpc_client::ILnRpcClient;
+use crate::ng::complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
@@ -346,6 +349,7 @@ pub struct GatewayClientContext {
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     pub ln_decoder: Decoder,
+    notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
 }
 
 impl Context for GatewayClientContext {}
@@ -394,6 +398,7 @@ impl ClientModule for GatewayClientModule {
             timelock_delta: self.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: self.decoder(),
+            notifier: self.notifier.clone(),
         }
     }
 
@@ -508,13 +513,23 @@ impl GatewayClientModule {
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
             output: incoming_output,
             state_machines: Arc::new(move |txid, _| {
-                vec![GatewayClientStateMachines::Receive(IncomingStateMachine {
-                    common: IncomingSmCommon {
-                        operation_id,
-                        contract_id,
-                    },
-                    state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
-                })]
+                vec![
+                    GatewayClientStateMachines::Receive(IncomingStateMachine {
+                        common: IncomingSmCommon {
+                            operation_id,
+                            contract_id,
+                        },
+                        state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                    }),
+                    GatewayClientStateMachines::Complete(GatewayCompleteStateMachine {
+                        common: GatewayCompleteCommon {
+                            operation_id,
+                            incoming_chan_id: htlc.incoming_chan_id,
+                            htlc_id: htlc.htlc_id,
+                        },
+                        state: GatewayCompleteStates::WaitForPreimage(WaitForPreimageState),
+                    }),
+                ]
             }),
         };
         Ok((operation_id, client_output))
@@ -526,6 +541,7 @@ impl GatewayClientModule {
 pub enum GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
     Receive(IncomingStateMachine),
+    Complete(GatewayCompleteStateMachine),
 }
 
 impl IntoDynInstance for GatewayClientStateMachines {
@@ -558,6 +574,12 @@ impl State for GatewayClientStateMachines {
                     GatewayClientStateMachines::Receive
                 )
             }
+            GatewayClientStateMachines::Complete(complete_state) => {
+                sm_enum_variant_translation!(
+                    complete_state.transitions(context, global_context),
+                    GatewayClientStateMachines::Complete
+                )
+            }
         }
     }
 
@@ -565,6 +587,7 @@ impl State for GatewayClientStateMachines {
         match self {
             GatewayClientStateMachines::Pay(pay_state) => pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
+            GatewayClientStateMachines::Complete(complete_state) => complete_state.operation_id(),
         }
     }
 }

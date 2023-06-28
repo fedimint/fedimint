@@ -40,7 +40,7 @@ use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_wallet_client::{WalletClientExt, WithdrawState};
 use futures::stream::StreamExt;
-use gatewaylnrpc::intercept_htlc_response::{Action, Cancel};
+use gatewaylnrpc::intercept_htlc_response::Action;
 use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
@@ -51,15 +51,14 @@ use rpc::FederationInfo;
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, Mutex};
-use tracing::{error, info};
+use tokio::sync::Mutex;
+use tracing::{error, info, warn};
 use url::Url;
 
-use crate::gatewaylnrpc::intercept_htlc_response::{Forward, Settle};
+use crate::gatewaylnrpc::intercept_htlc_response::Forward;
 use crate::lnd::GatewayLndClient;
 use crate::lnrpc_client::NetworkLnRpcClient;
-use crate::ng::{GatewayExtPayStates, GatewayExtReceiveStates, Htlc};
+use crate::ng::{GatewayExtPayStates, Htlc};
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
@@ -242,7 +241,7 @@ impl Gateway {
         }
     }
 
-    async fn create_boxxed_lightning_client(mode: LightningMode) -> Box<dyn ILnRpcClient> {
+    async fn create_boxed_lightning_client(mode: LightningMode) -> Box<dyn ILnRpcClient> {
         match mode {
             LightningMode::Cln { cln_extension_addr } => {
                 Box::new(NetworkLnRpcClient::new(cln_extension_addr).await)
@@ -259,6 +258,7 @@ impl Gateway {
         let scid_to_federation = self.scid_to_federation.clone();
         let clients = self.clients.clone();
         let ln_mode = self.lightning_mode.clone();
+        let lnrpc = self.lnrpc.clone();
         self.task_group
             .spawn(
                 "Subscribe to intercepted HTLCs in stream",
@@ -268,22 +268,19 @@ impl Gateway {
                             break;
                         }
 
-                        // Create a stream used to communicate with the Lightning implementation
-                        let (sender, ln_receiver) = mpsc::channel::<InterceptHtlcResponse>(100);
-
                         if let Some(ln_mode) = ln_mode.clone() {
-                            let mut lnrpc = Self::create_boxxed_lightning_client(ln_mode).await;
+                            let mut lnrpc_route = Self::create_boxed_lightning_client(ln_mode).await;
 
                             // Re-create the HTLC stream if the connection breaks
-                            match lnrpc
-                                .route_htlcs(ln_receiver.into(), &mut TaskGroup::new())
+                            match lnrpc_route
+                                .route_htlcs(&mut TaskGroup::new())
                                 .await
                             {
                                 Ok(stream) => {
                                     // Blocks until the connection to the lightning node breaks
                                     info!("Established HTLC stream");
-                                    Self::handle_htlc_stream(stream, sender, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
-                                    tracing::warn!("HTLC Stream Lightning connection broken");
+                                    Self::handle_htlc_stream(stream, lnrpc.clone(), handle.clone(), scid_to_federation.clone(), clients.clone()).await;
+                                    warn!("HTLC Stream Lightning connection broken");
                                 }
                                 Err(_) => {
                                     error!("route_htlcs failed to open HTLC stream. Waiting 5 seconds and trying again");
@@ -302,7 +299,7 @@ impl Gateway {
 
     async fn handle_htlc_stream(
         mut stream: RouteHtlcStream<'_>,
-        sender: Sender<InterceptHtlcResponse>,
+        lnrpc: Arc<dyn ILnRpcClient>,
         handle: TaskHandle,
         scid_to_federation: Arc<RwLock<BTreeMap<u64, FederationId>>>,
         clients: Arc<RwLock<BTreeMap<FederationId, Arc<fedimint_client::Client>>>>,
@@ -327,66 +324,8 @@ impl Gateway {
                         .try_into()
                         .map_err(|_| GatewayError::ClientNgError);
                     if let Ok(htlc) = htlc {
-                        let intercept_op = client.gateway_handle_intercepted_htlc(htlc).await;
-                        // TODO: Refactor this into the state machine so we don't need to wait here
-                        if let Ok(intercept_op) = intercept_op {
-                            let intercept_sub =
-                                client.gateway_subscribe_ln_receive(intercept_op).await;
-                            if let Ok(intercept_sub) = intercept_sub {
-                                let mut intercept_sub = intercept_sub.into_stream();
-
-                                let outcome = loop {
-                                    if let Ok(state) = intercept_sub.ok().await {
-                                        match state {
-                                            GatewayExtReceiveStates::Preimage(preimage) => {
-                                                break InterceptHtlcResponse {
-                                                    action: Some(Action::Settle(Settle {
-                                                        preimage: preimage.0.to_vec(),
-                                                    })),
-                                                    incoming_chan_id: htlc_request.incoming_chan_id,
-                                                    htlc_id: htlc_request.htlc_id,
-                                                };
-                                            }
-                                            GatewayExtReceiveStates::FundingFailed(failed) => {
-                                                break InterceptHtlcResponse {
-                                                    action: Some(Action::Cancel(Cancel {
-                                                        reason: failed,
-                                                    })),
-                                                    incoming_chan_id: htlc_request.incoming_chan_id,
-                                                    htlc_id: htlc_request.htlc_id,
-                                                }
-                                            }
-                                            GatewayExtReceiveStates::RefundSuccess(_) => {
-                                                break InterceptHtlcResponse {
-                                                    action: Some(Action::Cancel(Cancel {
-                                                        reason: "Gateway is being refunded"
-                                                            .to_string(),
-                                                    })),
-                                                    incoming_chan_id: htlc_request.incoming_chan_id,
-                                                    htlc_id: htlc_request.htlc_id,
-                                                }
-                                            }
-                                            GatewayExtReceiveStates::RefundError(failed) => {
-                                                break InterceptHtlcResponse {
-                                                    action: Some(Action::Cancel(Cancel {
-                                                        reason: failed,
-                                                    })),
-                                                    incoming_chan_id: htlc_request.incoming_chan_id,
-                                                    htlc_id: htlc_request.htlc_id,
-                                                }
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                };
-
-                                if let Err(error) = sender.send(outcome).await {
-                                    error!(
-                                        "Error sending HTLC response to lightning node: {error:?}"
-                                    );
-                                }
-                                continue;
-                            }
+                        if client.gateway_handle_intercepted_htlc(htlc).await.is_ok() {
+                            continue;
                         }
                     }
                 }
@@ -398,7 +337,7 @@ impl Gateway {
                 htlc_id: htlc_request.htlc_id,
             };
 
-            if let Err(error) = sender.send(outcome).await {
+            if let Err(error) = lnrpc.complete_htlc(outcome).await {
                 error!("Error sending HTLC response to lightning node: {error:?}");
             }
         }

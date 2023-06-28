@@ -4,7 +4,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_core::task::{sleep, TaskGroup};
 use futures::stream::BoxStream;
-use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::info;
@@ -12,7 +11,7 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::{GatewayError, Result};
@@ -33,11 +32,9 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
-    async fn route_htlcs<'a>(
-        &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
-        task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>>;
+    async fn route_htlcs<'a>(&mut self, task_group: &mut TaskGroup) -> Result<RouteHtlcStream<'a>>;
+
+    async fn complete_htlc(&self, htlc: InterceptHtlcResponse) -> Result<EmptyResponse>;
 }
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -110,11 +107,16 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
         _task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>> {
         let mut client = Self::connect(self.connection_url.clone()).await?;
-        let res = client.route_htlcs(events).await?;
+        let res = client.route_htlcs(EmptyRequest {}).await?;
         Ok(Box::pin(res.into_inner()))
+    }
+
+    async fn complete_htlc(&self, htlc: InterceptHtlcResponse) -> Result<EmptyResponse> {
+        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let res = client.complete_htlc(htlc).await?;
+        Ok(res.into_inner())
     }
 }

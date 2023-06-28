@@ -12,14 +12,13 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 use ln_gateway::gatewaylnrpc::{
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
 use ln_gateway::GatewayError;
 use tokio::sync::{Mutex, RwLock};
-use tokio_stream::wrappers::ReceiverStream;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};
 use tonic_lnd::{connect, LndClient};
 use tracing::info;
@@ -111,14 +110,16 @@ impl ILnRpcClient for ClnLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.lnrpc
-            .write()
-            .await
-            .route_htlcs(events, task_group)
-            .await
+        self.lnrpc.write().await.route_htlcs(task_group).await
+    }
+
+    async fn complete_htlc(
+        &self,
+        htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, GatewayError> {
+        self.lnrpc.read().await.complete_htlc(htlc).await
     }
 }
 
@@ -262,14 +263,16 @@ impl ILnRpcClient for LndLightningTest {
 
     async fn route_htlcs<'a>(
         &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
         task_group: &mut TaskGroup,
     ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.lnrpc
-            .write()
-            .await
-            .route_htlcs(events, task_group)
-            .await
+        self.lnrpc.write().await.route_htlcs(task_group).await
+    }
+
+    async fn complete_htlc(
+        &self,
+        htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, GatewayError> {
+        self.lnrpc.read().await.complete_htlc(htlc).await
     }
 }
 
