@@ -334,7 +334,6 @@ impl ILnRpcClient for GatewayLndClient {
             .await
             .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
             .into_inner();
-        info!("send response {:?}", send_response);
 
         if send_response.payment_preimage.is_empty() {
             return Err(GatewayError::LnRpcError(tonic::Status::new(

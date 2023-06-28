@@ -27,6 +27,7 @@ use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use client::StandardGatewayClientBuilder;
+use fedimint_client::sm::OperationId;
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
@@ -36,6 +37,7 @@ use fedimint_core::util::NextOrPending;
 use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::KIND;
 use fedimint_wallet_client::{WalletClientExt, WithdrawState};
@@ -150,6 +152,7 @@ pub struct Gateway {
     gatewayd_db: Database,
     api: Url,
     task_group: TaskGroup,
+    contracts: Arc<Mutex<BTreeMap<ContractId, OperationId>>>,
 }
 
 impl Gateway {
@@ -174,6 +177,7 @@ impl Gateway {
             gatewayd_db,
             api,
             task_group: TaskGroup::new(),
+            contracts: Arc::new(Mutex::new(BTreeMap::new())),
         };
 
         gw.load_clients().await?;
@@ -201,6 +205,7 @@ impl Gateway {
             gatewayd_db,
             api,
             task_group: TaskGroup::new(),
+            contracts: Arc::new(Mutex::new(BTreeMap::new())),
         };
 
         gw.load_clients().await?;
@@ -613,14 +618,25 @@ impl Gateway {
         })
     }
 
-    async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<Preimage> {
+    async fn handle_pay_invoice_msg(&mut self, payload: PayInvoicePayload) -> Result<Preimage> {
         let PayInvoicePayload {
             federation_id,
             contract_id,
         } = payload;
 
         let client = self.select_client(federation_id).await?;
-        let operation_id = client.gateway_pay_bolt11_invoice(contract_id).await?;
+
+        let operation_id = {
+            let mut contracts_guard = self.contracts.lock().await;
+            if let Some(operation_id) = contracts_guard.get(&contract_id) {
+                operation_id.to_owned()
+            } else {
+                let operation_id = client.gateway_pay_bolt11_invoice(contract_id).await?;
+                contracts_guard.insert(contract_id, operation_id.clone());
+                operation_id
+            }
+        };
+
         let mut updates = client
             .gateway_subscribe_ln_pay(operation_id)
             .await?
