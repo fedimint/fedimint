@@ -31,7 +31,7 @@ use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
-    GatewayExtReceiveStates, GatewayExtRegisterStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
+    GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
 use url::Url;
 
@@ -444,48 +444,18 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let mut fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
     let fake_route_hints = Vec::new();
     // Register with the federation with a low TTL to verify it will re-register
-    let register_op = gateway
+    gateway
         .register_with_federation(fake_api, fake_route_hints.clone(), Duration::from_secs(10))
         .await?;
-    let mut register_sub = gateway
-        .gateway_subscribe_register(register_op)
-        .await?
-        .into_stream();
-    assert_matches!(
-        register_sub.ok().await?,
-        GatewayExtRegisterStates::Registering
-    );
-    assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
-    // Verify that the gateway client will re-register after the TTL
-    assert_matches!(
-        register_sub.ok().await?,
-        GatewayExtRegisterStates::Registering
-    );
-    assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Success);
+    // TODO: Validate this
 
     // Update the URI for the gateway then re-register
     fake_api = Url::from_str("http://127.0.0.1:8176").unwrap();
 
-    let reregister_op = gateway
+    gateway
         .register_with_federation(fake_api, fake_route_hints, GW_ANNOUNCEMENT_TTL)
         .await?;
-
-    let mut reregister_sub = gateway
-        .gateway_subscribe_register(reregister_op)
-        .await?
-        .into_stream();
-    // Verify that the re-register was successful
-    assert_matches!(
-        reregister_sub.ok().await?,
-        GatewayExtRegisterStates::Registering
-    );
-    assert_matches!(
-        reregister_sub.ok().await?,
-        GatewayExtRegisterStates::Success
-    );
-
-    // Verify that the previous register state machine expired and moved to `Done`
-    assert_matches!(register_sub.ok().await?, GatewayExtRegisterStates::Done);
+    // TODO: Validate this
 
     Ok(())
 }

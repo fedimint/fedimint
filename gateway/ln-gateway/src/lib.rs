@@ -44,7 +44,7 @@ use gatewaylnrpc::intercept_htlc_response::{Action, Cancel};
 use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
-use ng::{GatewayClientExt, GatewayClientModule, GatewayExtRegisterStates};
+use ng::{GatewayClientExt, GatewayClientModule};
 use rand::Rng;
 use rpc::FederationInfo;
 use secp256k1::PublicKey;
@@ -176,6 +176,7 @@ impl Gateway {
             task_group: TaskGroup::new(),
         };
 
+        gw.register_clients_timer().await;
         gw.load_clients().await?;
         gw.route_htlcs().await?;
 
@@ -203,6 +204,7 @@ impl Gateway {
             task_group: TaskGroup::new(),
         };
 
+        gw.register_clients_timer().await;
         gw.load_clients().await?;
         gw.route_htlcs().await?;
 
@@ -384,17 +386,18 @@ impl Gateway {
         }
     }
 
-    async fn fetch_lightning_route_info(&self) -> Result<(Vec<RouteHint>, PublicKey, String)> {
+    async fn fetch_lightning_route_info(
+        lnrpc: Arc<dyn ILnRpcClient>,
+    ) -> Result<(Vec<RouteHint>, PublicKey, String)> {
         let mut num_retries = 0;
         let (route_hints, node_pub_key, alias) = loop {
-            let route_hints: Vec<RouteHint> = self
-                .lnrpc
+            let route_hints: Vec<RouteHint> = lnrpc
                 .routehints()
                 .await?
                 .try_into()
                 .expect("Could not parse route hints");
 
-            let GetNodeInfoResponse { pub_key, alias } = self.lnrpc.info().await?;
+            let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
             let node_pub_key = PublicKey::from_slice(&pub_key)
                 .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
 
@@ -412,6 +415,42 @@ impl Gateway {
         };
 
         Ok((route_hints, node_pub_key, alias))
+    }
+
+    async fn register_clients_timer(&mut self) {
+        let clients = self.clients.clone();
+        let api = self.api.clone();
+        let lnrpc = self.lnrpc.clone();
+        self.task_group
+            .spawn("register clients", move |handle| async move {
+                while !handle.is_shutting_down() {
+                    match Self::fetch_lightning_route_info(lnrpc.clone()).await {
+                        Ok((route_hints, _, _)) => {
+                            for (federation_id, client) in clients.read().await.iter() {
+                                if client
+                                    .register_with_federation(
+                                        api.clone(),
+                                        route_hints.clone(),
+                                        GW_ANNOUNCEMENT_TTL,
+                                    )
+                                    .await
+                                    .is_err()
+                                {
+                                    error!("Error registering federation {federation_id}");
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            error!(
+                                "Could not retrieve route hints, gateway will not be registered."
+                            );
+                        }
+                    }
+
+                    sleep(Duration::from_secs(60)).await;
+                }
+            })
+            .await;
     }
 
     async fn load_clients(&mut self) -> Result<()> {
@@ -454,25 +493,9 @@ impl Gateway {
         scid: u64,
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
-        let register_op = client
+        client
             .register_with_federation(self.api.clone(), route_hints, GW_ANNOUNCEMENT_TTL)
             .await?;
-        // TODO: Move this inside of the state machine
-        {
-            let mut register_sub = client
-                .gateway_subscribe_register(register_op)
-                .await?
-                .into_stream();
-            loop {
-                let state = register_sub.ok().await?;
-                match state {
-                    GatewayExtRegisterStates::Success => break,
-                    GatewayExtRegisterStates::Done => break,
-                    _ => {}
-                }
-            }
-        }
-
         self.clients
             .write()
             .await
@@ -488,6 +511,7 @@ impl Gateway {
         &self,
         federation_id: FederationId,
     ) -> Result<Arc<fedimint_client::Client>> {
+        // TODO: Delete from database as well
         self.clients
             .write()
             .await
@@ -550,7 +574,7 @@ impl Gateway {
         };
 
         let federation_id = gw_client_cfg.config.federation_id;
-        let (route_hints, _, _) = self.fetch_lightning_route_info().await?;
+        let (route_hints, _, _) = Self::fetch_lightning_route_info(self.lnrpc.clone()).await?;
 
         let client = self
             .client_builder
@@ -586,7 +610,8 @@ impl Gateway {
     pub async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
         let mut federations = Vec::new();
         let federation_clients = self.clients.read().await.clone().into_iter();
-        let (route_hints, node_pub_key, alias) = self.fetch_lightning_route_info().await?;
+        let (route_hints, node_pub_key, alias) =
+            Self::fetch_lightning_route_info(self.lnrpc.clone()).await?;
         for (federation_id, client) in federation_clients {
             // TODO: We're reconstructing these registrations, which could have changed in
             // the meantime, which might break some tests if they're expecting
