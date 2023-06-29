@@ -632,7 +632,7 @@ impl Gateway {
                 operation_id.to_owned()
             } else {
                 let operation_id = client.gateway_pay_bolt11_invoice(contract_id).await?;
-                contracts_guard.insert(contract_id, operation_id.clone());
+                contracts_guard.insert(contract_id, operation_id);
                 operation_id
             }
         };

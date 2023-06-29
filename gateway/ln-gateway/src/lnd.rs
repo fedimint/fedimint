@@ -10,7 +10,9 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::lnrpc::failure::FailureCode;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, SendRequest};
+use tonic_lnd::lnrpc::{
+    ChanInfoRequest, GetInfoRequest, ListChannelsRequest, ListPaymentsRequest, Payment, SendRequest,
+};
 use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction};
 use tonic_lnd::{connect, LndClient};
 use tracing::{error, info, trace};
@@ -203,6 +205,30 @@ impl GatewayLndClient {
             ))
         })
     }
+
+    async fn lookup_payment(
+        &self,
+        payment_request: String,
+        _invoice_timestamp: u64,
+        client: &mut LndClient,
+    ) -> Result<Option<Payment>, GatewayError> {
+        let payments = client
+            .lightning()
+            .list_payments(ListPaymentsRequest {
+                // TODO: Returning ALL payments here is bad, because there could be a lot of
+                // payments We can't filter by timestamp until we fix our tonic_lnd
+                // dependency
+                include_incomplete: true,
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
+            .into_inner()
+            .payments;
+        Ok(payments
+            .into_iter()
+            .find(|payment| payment.payment_request == payment_request))
+    }
 }
 
 impl fmt::Debug for GatewayLndClient {
@@ -325,26 +351,51 @@ impl ILnRpcClient for GatewayLndClient {
             self.macaroon.clone(),
         )
         .await?;
-        let send_response = client
-            .lightning()
-            .send_payment_sync(SendRequest {
-                payment_request: invoice.invoice.to_string(),
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
-            .into_inner();
 
-        if send_response.payment_preimage.is_empty() {
-            return Err(GatewayError::LnRpcError(tonic::Status::new(
-                tonic::Code::Internal,
-                "LND did not return a preimage",
-            )));
+        // If the payment exists, that means we've already tried to pay the invoice
+        let preimage = if let Some(mut payment) = self
+            .lookup_payment(invoice.invoice.clone(), invoice.timestamp, &mut client)
+            .await?
+        {
+            while payment.status == 1 {
+                fedimint_core::task::sleep(Duration::from_millis(50)).await;
+                payment = self
+                    .lookup_payment(invoice.invoice.clone(), invoice.timestamp, &mut client)
+                    .await?
+                    .expect("LND deleted in flight payment");
+            }
+
+            if payment.status != 2 {
+                return Err(GatewayError::LnRpcError(tonic::Status::new(
+                    tonic::Code::Internal,
+                    "LND did not return a preimage",
+                )));
+            }
+
+            bitcoin_hashes::hex::FromHex::from_hex(payment.payment_preimage.as_str())
+                .map_err(|_| anyhow::anyhow!("Failed to convert preimage"))?
+        } else {
+            let send_response = client
+                .lightning()
+                .send_payment_sync(SendRequest {
+                    payment_request: invoice.invoice.to_string(),
+                    ..Default::default()
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
+                .into_inner();
+
+            if send_response.payment_preimage.is_empty() {
+                return Err(GatewayError::LnRpcError(tonic::Status::new(
+                    tonic::Code::Internal,
+                    "LND did not return a preimage",
+                )));
+            };
+
+            send_response.payment_preimage
         };
 
-        return Ok(PayInvoiceResponse {
-            preimage: send_response.payment_preimage,
-        });
+        return Ok(PayInvoiceResponse { preimage });
     }
 
     async fn route_htlcs<'a>(

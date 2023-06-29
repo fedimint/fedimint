@@ -124,7 +124,7 @@ impl LightningPayCreatedOutgoingLnContract {
                 context.ln_decoder.clone(),
                 success_context,
                 txid,
-                contract_id.clone(),
+                contract_id,
             ),
             move |_dbtx, result, old_state| {
                 Box::pin(Self::transition_outgoing_contract_funded(

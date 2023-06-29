@@ -434,6 +434,7 @@ impl GatewayLightning for ClnRpcService {
             invoice,
             max_delay,
             max_fee_percent,
+            timestamp: _,
         } = request.into_inner();
 
         let outcome = self
