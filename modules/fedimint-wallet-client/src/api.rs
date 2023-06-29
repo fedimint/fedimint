@@ -35,7 +35,8 @@ where
         address: &Address,
         amount: bitcoin::Amount,
     ) -> FederationResult<Option<PegOutFees>> {
-        self.request_eventually_consistent(
+        self.request_with_strategy(
+            EventuallyConsistent::new(self.all_members().threshold()),
             "peg_out_fees".to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
         )

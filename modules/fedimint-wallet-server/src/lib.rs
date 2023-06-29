@@ -620,7 +620,14 @@ impl ServerModule for Wallet {
                         None
                     );
 
-                    Ok(tx.map(|tx| tx.fees).ok())
+                    match tx {
+                        Err(error) => {
+                            // Usually from not enough spendable UTXOs
+                            warn!("Error returning peg-out fees {error}");
+                            Ok(None)
+                        }
+                        Ok(tx) => Ok(Some(tx.fees))
+                    }
                 }
             },
         ]
@@ -1128,9 +1135,7 @@ impl Wallet {
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
         broadcast_pending_tx(db.begin_transaction().await, &rpc).await;
-        // FIXME: remove after modularization finishes
-        #[cfg(not(target_family = "wasm"))]
-        fedimint_core::task::sleep(Duration::from_secs(10)).await;
+        sleep(Duration::from_secs(1)).await;
     }
 }
 

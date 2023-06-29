@@ -39,5 +39,6 @@ pub trait BitcoinTest {
     /// received to an address
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount;
 
+    /// Waits till tx is found in mempool and returns the fees
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount;
 }

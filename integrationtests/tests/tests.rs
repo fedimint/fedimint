@@ -32,72 +32,13 @@ use fedimint_mint_server::common::{MintConsensusItem, MintOutputSignatureShare};
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
-use fedimint_wallet_server::common::WalletConsensusItem::PegOutSignature;
-use fedimint_wallet_server::common::{PegOutFees, PegOutSignatureItem, Rbf};
+use fedimint_wallet_server::common::{PegOutFees, Rbf};
 use futures::future::{join_all, Either};
 use serde::{Deserialize, Serialize};
 use tracing::log::warn;
 use tracing::{info, instrument};
 
-use crate::fixtures::{peers, test, unwrap_item, FederationTest};
-
-#[tokio::test(flavor = "multi_thread")]
-async fn wallet_peg_in_and_peg_out_with_fees() -> Result<()> {
-    test(2, |fed, user, bitcoin| async move {
-        // TODO: this should not be needed, but I get errors on `peg_in` below sometimes
-        let bitcoin = bitcoin.lock_exclusive().await;
-        let peg_in_amount: u64 = 5000;
-        let peg_out_amount: u64 = 1200; // amount requires minted change
-
-        let peg_in_address = user.get_new_peg_in_address().await;
-        let (proof, tx) = bitcoin
-            .send_and_mine_block(&peg_in_address, Amount::from_sat(peg_in_amount))
-            .await;
-        bitcoin
-            .mine_blocks(fed.wallet.consensus.finality_delay as u64)
-            .await;
-        fed.run_consensus_epochs(1).await;
-
-        user.submit_peg_in(proof, tx).await.unwrap();
-        fed.run_consensus_epochs(2).await; // peg in epoch + partial sigs epoch
-        assert_eq!(user.ecash_total(), sats(peg_in_amount));
-
-        let peg_out_address = bitcoin.get_new_address().await;
-        let (fees, out_point) = user.peg_out(peg_out_amount, &peg_out_address);
-        fed.run_consensus_epochs(2).await; // peg-out tx + peg out signing epoch
-
-        assert_matches!(
-            unwrap_item(&fed.find_module_item(fed.wallet_id).await),
-            PegOutSignature(_)
-        );
-
-        let outcome_txid = user.await_peg_out_txid(out_point).await.unwrap();
-
-        assert!(matches!(
-            unwrap_item(&fed.find_module_item(fed.wallet_id).await),
-            PegOutSignature(PegOutSignatureItem {
-                txid,
-                ..
-            }) if *txid == outcome_txid));
-
-        // confirm we can broadcast at different times
-        fed.subset_peers(&[0]).await.broadcast_transactions().await;
-        bitcoin.mine_blocks(1).await;
-        fed.subset_peers(&[1]).await.broadcast_transactions().await;
-
-        assert_eq!(
-            bitcoin.mine_block_and_get_received(&peg_out_address).await,
-            sats(peg_out_amount)
-        );
-        assert_eq!(
-            user.ecash_total(),
-            sats(peg_in_amount - peg_out_amount) - fees.amount().into()
-        );
-
-        assert_eq!(fed.max_balance_sheet(), 0);
-    })
-    .await
-}
+use crate::fixtures::{peers, test, FederationTest};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {

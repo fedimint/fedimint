@@ -48,7 +48,7 @@ use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::outcome::TransactionStatus;
 use crate::query::{
     CurrentConsensus, DiscoverApiVersionSet, EventuallyConsistent, QueryStep, QueryStrategy,
-    UnionResponses, UnionResponsesSingle, VerifiableResponse,
+    UnionResponsesSingle, VerifiableResponse,
 };
 use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction};
@@ -268,22 +268,6 @@ pub trait FederationApiExt: IFederationApi {
                 None => return Err(FederationError(BTreeMap::new())),
             }
         }
-    }
-
-    async fn request_union<Ret>(
-        &self,
-        method: String,
-        params: ApiRequestErased,
-    ) -> FederationResult<Vec<Ret>>
-    where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
-    {
-        self.request_with_strategy(
-            UnionResponses::new(self.all_members().one_honest()),
-            method,
-            params,
-        )
-        .await
     }
 
     async fn request_current_consensus<Ret>(

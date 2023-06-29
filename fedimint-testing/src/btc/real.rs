@@ -8,6 +8,7 @@ use bitcoincore_rpc::{Client, RpcApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{task, Amount};
 use lazy_static::lazy_static;
@@ -121,12 +122,15 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     }
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
-        self.client
-            .get_mempool_entry(txid)
-            .unwrap()
-            .fees
-            .base
-            .into()
+        loop {
+            match self.client.get_mempool_entry(txid) {
+                Ok(tx) => return tx.fees.base.into(),
+                Err(_) => {
+                    sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+            }
+        }
     }
 }
 
