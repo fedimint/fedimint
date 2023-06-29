@@ -94,16 +94,10 @@ pub enum ClientNg {
         // TODO: Can we make it `*Map<String, String>` and avoid custom parsing?
         metadata: Vec<String>,
     },
-    /// Wipe the state of the client (mostly for testing purposes)
+    /// Developer options, not meant for normal use
     #[clap(hide = true)]
-    Wipe {
-        #[clap(long)]
-        force: bool,
-    },
-    /// Discover the common api version to use to communicate with the
-    /// federation
-    #[clap(hide = true)]
-    DiscoverVersion,
+    #[clap(subcommand)]
+    Dev(Dev),
     /// Restore the previously created backup of mint notes (with `backup`
     /// command)
     Restore {
@@ -112,6 +106,19 @@ pub enum ClientNg {
     },
     /// Print the secret key of the client
     PrintSecret,
+}
+
+/// Commands meant only for Fedimint developers
+#[derive(Debug, Clone, Subcommand)]
+pub enum Dev {
+    /// Discover the common api version to use to communicate with the
+    /// federation
+    DiscoverVersion,
+    /// Wipe the state of the client
+    Wipe {
+        #[clap(long)]
+        force: bool,
+    },
 }
 
 pub fn parse_gateway_pub_key(s: &str) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
@@ -326,13 +333,6 @@ pub async fn handle_ng_command(
         ClientNg::Restore { .. } => {
             panic!("Has to be handled before initializing client")
         }
-        ClientNg::Wipe { force } => {
-            if !force {
-                bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
-            }
-            client.wipe_state().await?;
-            Ok(serde_json::to_value(()).unwrap())
-        }
         ClientNg::PrintSecret => {
             let secret = client.get_secret::<PlainRootSecretStrategy>().await;
             let hex_secret = hex::ToHex::to_hex(&secret[..]);
@@ -373,9 +373,18 @@ pub async fn handle_ng_command(
 
             unreachable!("Update stream ended without outcome");
         }
-        ClientNg::DiscoverVersion => {
-            Ok(json!({ "versions": client.discover_common_api_version().await? }))
-        }
+        ClientNg::Dev(cmd) => match cmd {
+            Dev::Wipe { force } => {
+                if !force {
+                    bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
+                }
+                client.wipe_state().await?;
+                Ok(serde_json::to_value(()).unwrap())
+            }
+            Dev::DiscoverVersion => {
+                Ok(json!({ "versions": client.discover_common_api_version().await? }))
+            }
+        },
     }
 }
 
