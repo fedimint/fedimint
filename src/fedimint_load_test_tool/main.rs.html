@@ -801,6 +801,29 @@
 <a href="#801" id="801">801</a>
 <a href="#802" id="802">802</a>
 <a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -937,6 +960,13 @@
         help = <span class="string">&quot;How many invoices will be created for each user. Only applicable if --generate-invoice-with is provided&quot;
     </span>)]
     </span>invoices_per_user: u16,
+
+    <span class="attr">#[arg(
+        long,
+        default_value = <span class="string">&quot;0&quot;</span>,
+        help = <span class="string">&quot;How many seconds to sleep between LN payments&quot;
+    </span>)]
+    </span>ln_payment_sleep_secs: u64,
 
     <span class="attr">#[arg(
         long,
@@ -1080,6 +1110,7 @@
                 initial_notes,
                 args.generate_invoice_with,
                 args.invoices_per_user,
+                Duration::from_secs(args.ln_payment_sleep_secs),
                 invoices,
                 gateway_public_key,
                 args.notes_per_user,
@@ -1117,6 +1148,7 @@
     initial_notes: TieredMulti&lt;SpendableNote&gt;,
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     generated_invoices_per_user: u16,
+    ln_payment_sleep: Duration,
     invoices_from_file: Vec&lt;Invoice&gt;,
     gateway_public_key: <span class="prelude-ty">Option</span>&lt;String&gt;,
     notes_per_user: u16,
@@ -1194,6 +1226,7 @@
                 client,
                 notes,
                 generated_invoices_per_user,
+                ln_payment_sleep,
                 invoice_amount,
                 invoices,
                 generate_invoice_with,
@@ -1206,10 +1239,12 @@
     <span class="prelude-val">Ok</span>(futures)
 }
 
-<span class="kw">async fn </span>do_user_task(
+<span class="attr">#[allow(clippy::too_many_arguments)]
+</span><span class="kw">async fn </span>do_user_task(
     client: Client,
     notes: Vec&lt;TieredMulti&lt;SpendableNote&gt;&gt;,
     generated_invoices_per_user: u16,
+    ln_payment_sleep: Duration,
     invoice_amount: Amount,
     additional_invoices: Vec&lt;Invoice&gt;,
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
@@ -1221,7 +1256,9 @@
             .<span class="kw">await
             </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;while reissuing initial {amount}: {e}&quot;</span>))<span class="question-mark">?</span>;
     }
-    <span class="kw">for _ in </span><span class="number">0</span>..generated_invoices_per_user {
+    <span class="kw">let </span><span class="kw-2">mut </span>generated_invoices_per_user_iterator =
+        (<span class="number">0</span>..generated_invoices_per_user).into_iter().peekable();
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) = generated_invoices_per_user_iterator.next() {
         <span class="kw">let </span>total_amount = get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>.total_amount();
         <span class="kw">if </span>invoice_amount &gt; total_amount {
             <span class="macro">warn!</span>(<span class="string">&quot;Can&#39;t pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}&quot;</span>);
@@ -1245,9 +1282,14 @@
                     <span class="kw">break</span>;
                 }
             };
+            <span class="kw">if </span>generated_invoices_per_user_iterator.peek().is_some() {
+                <span class="comment">// Only sleep while there are more invoices to pay
+                </span>fedimint_core::task::sleep(ln_payment_sleep).<span class="kw">await</span>;
+            }
         }
     }
-    <span class="kw">for </span>invoice <span class="kw">in </span>additional_invoices {
+    <span class="kw">let </span><span class="kw-2">mut </span>additional_invoices = additional_invoices.into_iter().peekable();
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(invoice) = additional_invoices.next() {
         <span class="kw">let </span>total_amount = get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>.total_amount();
         <span class="kw">let </span>invoice_amount =
             Amount::from_msats(invoice.amount_milli_satoshis().unwrap_or_default());
@@ -1257,6 +1299,10 @@
             <span class="macro">warn!</span>(<span class="string">&quot;Can&#39;t pay invoice {invoice}, amount is zero&quot;</span>);
         } <span class="kw">else </span>{
             gateway_pay_invoice(<span class="kw-2">&amp;</span>client, invoice, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>additional_invoices.peek().is_some() {
+                <span class="comment">// Only sleep while there are more invoices to pay
+                </span>fedimint_core::task::sleep(ln_payment_sleep).<span class="kw">await</span>;
+            }
         }
     }
     <span class="prelude-val">Ok</span>(())
