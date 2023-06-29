@@ -249,7 +249,10 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
         }
 
         if self.errors.len() >= self.required {
-            return QueryStep::Failure(mem::take(&mut self.errors));
+            return QueryStep::Failure {
+                general: None,
+                members: mem::take(&mut self.errors),
+            };
         }
 
         QueryStep::Continue
@@ -512,17 +515,16 @@ impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVe
             QueryStep::Success(o) => {
                 match discover_common_api_versions_set(&self.client_versions, o) {
                     Ok(o) => QueryStep::Success(o),
-                    // TODO: do we need QueryStep::HighLevelFailureOfSomeKind?
-                    Err(e) => QueryStep::Failure(BTreeMap::from([(
-                        PeerId::from(0),
-                        api::MemberError::ResponseDeserialization(e),
-                    )])),
+                    Err(e) => QueryStep::Failure {
+                        general: Some(e),
+                        members: BTreeMap::new(),
+                    },
                 }
             }
             QueryStep::RetryMembers(v) => QueryStep::RetryMembers(v),
             QueryStep::FailMembers(v) => QueryStep::FailMembers(v),
             QueryStep::Continue => QueryStep::Continue,
-            QueryStep::Failure(v) => QueryStep::Failure(v),
+            QueryStep::Failure { general, members } => QueryStep::Failure { general, members },
         }
     }
 }
@@ -547,5 +549,10 @@ pub enum QueryStep<R> {
     /// Return the successful result
     Success(R),
     /// Fail the whole request and remember errors from given members
-    Failure(BTreeMap<PeerId, MemberError>),
+    /// Note: member errors are to be added to any errors previously returned
+    /// with `FailMembers`
+    Failure {
+        general: Option<anyhow::Error>,
+        members: BTreeMap<PeerId, MemberError>,
+    },
 }
