@@ -137,6 +137,13 @@ struct LoadTestArgs {
 
     #[arg(
         long,
+        default_value = "0",
+        help = "How many seconds to sleep between LN payments"
+    )]
+    ln_payment_sleep_secs: u64,
+
+    #[arg(
+        long,
         help = "A text file with one invoice per line. If --generate-invoice-with is provided, these will be additional invoices to be paid"
     )]
     invoices_file: Option<PathBuf>,
@@ -277,6 +284,7 @@ async fn main() -> anyhow::Result<()> {
                 initial_notes,
                 args.generate_invoice_with,
                 args.invoices_per_user,
+                Duration::from_secs(args.ln_payment_sleep_secs),
                 invoices,
                 gateway_public_key,
                 args.notes_per_user,
@@ -314,6 +322,7 @@ async fn run_load_test(
     initial_notes: TieredMulti<SpendableNote>,
     generate_invoice_with: Option<LnInvoiceGeneration>,
     generated_invoices_per_user: u16,
+    ln_payment_sleep: Duration,
     invoices_from_file: Vec<Invoice>,
     gateway_public_key: Option<String>,
     notes_per_user: u16,
@@ -391,6 +400,7 @@ async fn run_load_test(
                 client,
                 notes,
                 generated_invoices_per_user,
+                ln_payment_sleep,
                 invoice_amount,
                 invoices,
                 generate_invoice_with,
@@ -403,10 +413,12 @@ async fn run_load_test(
     Ok(futures)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn do_user_task(
     client: Client,
     notes: Vec<TieredMulti<SpendableNote>>,
     generated_invoices_per_user: u16,
+    ln_payment_sleep: Duration,
     invoice_amount: Amount,
     additional_invoices: Vec<Invoice>,
     generate_invoice_with: Option<LnInvoiceGeneration>,
@@ -418,7 +430,9 @@ async fn do_user_task(
             .await
             .map_err(|e| anyhow::anyhow!("while reissuing initial {amount}: {e}"))?;
     }
-    for _ in 0..generated_invoices_per_user {
+    let mut generated_invoices_per_user_iterator =
+        (0..generated_invoices_per_user).into_iter().peekable();
+    while let Some(_) = generated_invoices_per_user_iterator.next() {
         let total_amount = get_note_summary(&client).await?.total_amount();
         if invoice_amount > total_amount {
             warn!("Can't pay invoice, not enough funds: {invoice_amount} > {total_amount}");
@@ -442,9 +456,14 @@ async fn do_user_task(
                     break;
                 }
             };
+            if generated_invoices_per_user_iterator.peek().is_some() {
+                // Only sleep while there are more invoices to pay
+                fedimint_core::task::sleep(ln_payment_sleep).await;
+            }
         }
     }
-    for invoice in additional_invoices {
+    let mut additional_invoices = additional_invoices.into_iter().peekable();
+    while let Some(invoice) = additional_invoices.next() {
         let total_amount = get_note_summary(&client).await?.total_amount();
         let invoice_amount =
             Amount::from_msats(invoice.amount_milli_satoshis().unwrap_or_default());
@@ -454,6 +473,10 @@ async fn do_user_task(
             warn!("Can't pay invoice {invoice}, amount is zero");
         } else {
             gateway_pay_invoice(&client, invoice, &event_sender).await?;
+            if additional_invoices.peek().is_some() {
+                // Only sleep while there are more invoices to pay
+                fedimint_core::task::sleep(ln_payment_sleep).await;
+            }
         }
     }
     Ok(())
