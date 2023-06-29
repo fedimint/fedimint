@@ -1268,6 +1268,25 @@
 <a href="#1268" id="1268">1268</a>
 <a href="#1269" id="1269">1269</a>
 <a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1361,25 +1380,34 @@
 
 <span class="doccomment">/// An API request error when calling an entire federation
 </span><span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub struct </span>FederationError(BTreeMap&lt;PeerId, MemberError&gt;);
+</span><span class="kw">pub struct </span>FederationError {
+    general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
+    members: BTreeMap&lt;PeerId, MemberError&gt;,
+}
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>FederationError {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
-        f.write_str(<span class="string">&quot;Federation rpc error(&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.iter().enumerate() {
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{peer} =&gt; {e})&quot;</span>))<span class="question-mark">?</span>;
-            <span class="kw">if </span>i == <span class="self">self</span>.<span class="number">0</span>.len() - <span class="number">1 </span>{
+        f.write_str(<span class="string">&quot;Federation rpc error {&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(general) = <span class="self">self</span>.general.as_ref() {
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;general =&gt; {general})&quot;</span>))<span class="question-mark">?</span>;
+            <span class="kw">if </span>!<span class="self">self</span>.members.is_empty() {
                 f.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
             }
         }
-        f.write_str(<span class="string">&quot;)&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.members.iter().enumerate() {
+            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{peer} =&gt; {e})&quot;</span>))<span class="question-mark">?</span>;
+            <span class="kw">if </span>i == <span class="self">self</span>.members.len() - <span class="number">1 </span>{
+                f.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
+            }
+        }
+        f.write_str(<span class="string">&quot;}&quot;</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 }
 
 <span class="kw">impl </span>FederationError {
     <span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.<span class="number">0</span>.iter().any(|(<span class="kw">_</span>, e)| e.is_retryable())
+        <span class="self">self</span>.members.iter().any(|(<span class="kw">_</span>, e)| e.is_retryable())
     }
 }
 
@@ -1526,16 +1554,24 @@
                             }
                         }
                         QueryStep::Continue =&gt; {}
-                        QueryStep::Failure(failed) =&gt; {
-                            <span class="kw">for </span>(failed_peer, error) <span class="kw">in </span>failed {
+                        QueryStep::Failure { general, members } =&gt; {
+                            <span class="kw">for </span>(failed_peer, error) <span class="kw">in </span>members {
                                 member_errors.insert(failed_peer, error);
                             }
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError(member_errors));
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError {
+                                general,
+                                members: member_errors,
+                            });
                         }
                         QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
                     }
                 }
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError(BTreeMap::new())),
+                <span class="prelude-val">None </span>=&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError {
+                        general: <span class="prelude-val">None</span>,
+                        members: BTreeMap::new(),
+                    })
+                }
             }
         }
     }
@@ -1767,7 +1803,9 @@
                     QueryStep::FailMembers(failed) =&gt; QueryStep::FailMembers(failed),
                     QueryStep::Continue =&gt; QueryStep::Continue,
                     QueryStep::Success(res) =&gt; QueryStep::Success(res),
-                    QueryStep::Failure(failed) =&gt; QueryStep::Failure(failed),
+                    QueryStep::Failure { general, members } =&gt; {
+                        QueryStep::Failure { general, members }
+                    }
                 }
             }
         }
