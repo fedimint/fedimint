@@ -91,25 +91,34 @@ impl MemberError {
 
 /// An API request error when calling an entire federation
 #[derive(Debug, Error)]
-pub struct FederationError(BTreeMap<PeerId, MemberError>);
+pub struct FederationError {
+    general: Option<anyhow::Error>,
+    members: BTreeMap<PeerId, MemberError>,
+}
 
 impl fmt::Display for FederationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Federation rpc error(")?;
-        for (i, (peer, e)) in self.0.iter().enumerate() {
-            f.write_fmt(format_args!("{peer} => {e})"))?;
-            if i == self.0.len() - 1 {
+        f.write_str("Federation rpc error {")?;
+        if let Some(general) = self.general.as_ref() {
+            f.write_fmt(format_args!("general => {general})"))?;
+            if !self.members.is_empty() {
                 f.write_str(", ")?;
             }
         }
-        f.write_str(")")?;
+        for (i, (peer, e)) in self.members.iter().enumerate() {
+            f.write_fmt(format_args!("{peer} => {e})"))?;
+            if i == self.members.len() - 1 {
+                f.write_str(", ")?;
+            }
+        }
+        f.write_str("}")?;
         Ok(())
     }
 }
 
 impl FederationError {
     pub fn is_retryable(&self) -> bool {
-        self.0.iter().any(|(_, e)| e.is_retryable())
+        self.members.iter().any(|(_, e)| e.is_retryable())
     }
 }
 
@@ -256,16 +265,24 @@ pub trait FederationApiExt: IFederationApi {
                             }
                         }
                         QueryStep::Continue => {}
-                        QueryStep::Failure(failed) => {
-                            for (failed_peer, error) in failed {
+                        QueryStep::Failure { general, members } => {
+                            for (failed_peer, error) in members {
                                 member_errors.insert(failed_peer, error);
                             }
-                            return Err(FederationError(member_errors));
+                            return Err(FederationError {
+                                general,
+                                members: member_errors,
+                            });
                         }
                         QueryStep::Success(response) => return Ok(response),
                     }
                 }
-                None => return Err(FederationError(BTreeMap::new())),
+                None => {
+                    return Err(FederationError {
+                        general: None,
+                        members: BTreeMap::new(),
+                    })
+                }
             }
         }
     }
@@ -497,7 +514,9 @@ where
                     QueryStep::FailMembers(failed) => QueryStep::FailMembers(failed),
                     QueryStep::Continue => QueryStep::Continue,
                     QueryStep::Success(res) => QueryStep::Success(res),
-                    QueryStep::Failure(failed) => QueryStep::Failure(failed),
+                    QueryStep::Failure { general, members } => {
+                        QueryStep::Failure { general, members }
+                    }
                 }
             }
         }
