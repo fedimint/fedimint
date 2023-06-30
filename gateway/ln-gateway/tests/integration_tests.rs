@@ -52,11 +52,11 @@ async fn gatewayd_shows_info_about_all_connected_federations() {
     assert!(info
         .federations
         .iter()
-        .any(|info| info.federation_id == id1 && info.balance == Amount::ZERO));
+        .any(|info| info.federation_id == id1 && info.balance_msat == Amount::ZERO));
     assert!(info
         .federations
         .iter()
-        .any(|info| info.federation_id == id2 && info.balance == Amount::ZERO));
+        .any(|info| info.federation_id == id2 && info.balance_msat == Amount::ZERO));
 }
 
 #[tokio::test(flavor = "multi_thread")]
