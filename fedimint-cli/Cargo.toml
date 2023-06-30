@@ -23,7 +23,6 @@ bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 futures = "0.3.28"
 lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
-fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-aead = { path = "../crypto/aead" }
 fedimint-client = { path = "../fedimint-client" }
 fedimint-core ={ path = "../fedimint-core" }

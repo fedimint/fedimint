@@ -30,7 +30,7 @@ use tracing::info;
 use crate::MetricEvent;
 
 pub async fn get_notes_cli(amount: &Amount) -> anyhow::Result<TieredMulti<SpendableNote>> {
-    cmd!(FedimintCli, "ng", "spend", amount.msats.to_string())
+    cmd!(FedimintCli, "spend", amount.msats.to_string())
         .out_json()
         .await?["notes"]
         .as_str()

@@ -27,7 +27,7 @@ The previous step has already set up an e-cash client with a funded wallet for y
 You can view your client's holdings using the `info` command:
 
 ```shell
-$ fedimint-cli ng info
+$ fedimint-cli info
 
 {
   "federation_id": "b0d8dc13caff84c3e050a891c06966abfc55874b8173e3523eea323b827e6754270bb975b8693081b903a319c2d33591",
@@ -49,7 +49,7 @@ The `spend` subcommand allows sending notes to another client. This will select 
 The notes are base64 encoded into a note and printed as the `note` field.
 
 ```shell
-$ fedimint-cli ng spend 100000
+$ fedimint-cli spend 100000
 
 {
   "note": "BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt..."
@@ -75,7 +75,7 @@ $ fedimint-cli validate BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
 A receiving client can now reissue these notes to claim them and avoid double spends:
 
 ```shell
-$ fedimint-cli ng reissue BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
+$ fedimint-cli reissue BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
 
 {
   "id": {
@@ -115,7 +115,7 @@ $ lncli addinvoice --amt_msat 100000
 Pay the invoice by copying the `payment_request` field:
 
 ```shell
-$ fedimint-cli ng ln-pay "lnbcrt1u1p3vdl3ds..."
+$ fedimint-cli ln-pay "lnbcrt1u1p3vdl3ds..."
 ```
 
 Confirm the invoice was paid, copy the `r_hash` field from the `lncli addinvoice` command above:
@@ -132,7 +132,7 @@ $ lncli lookupinvoice 1072fe19b3a53b3d778f6d5b0b...
 
 To receive a lightning payment inside use `fedimint-cli` to create an invoice:
 ```shell
-$ fedimint-cli ng ln-invoice --amount 1000
+$ fedimint-cli ln-invoice --amount 1000
 
 {
   "invoice": "lnbcrt10n1pjq2zwxdqjv...",
@@ -149,8 +149,8 @@ $ lncli payinvoice --force lnbcrt10n1pjq2zwxdqjv...
 Have mint client check that payment succeeded and display new balances:
 
 ```shell
-$ fedimint-cli ng wait-invoice "5b37007b6a1fcb74e71631dcdb9d96504...."
-$ fedimint-cli ng info
+$ fedimint-cli wait-invoice "5b37007b6a1fcb74e71631dcdb9d96504...."
+$ fedimint-cli info
 ```
 
 Read [more about the Gateway here](./gateway.md)
@@ -165,25 +165,23 @@ Usage: fedimint-cli [OPTIONS] <COMMAND>
 
 Commands:
   version-hash     Print the latest git commit hash this bin. was build with
-  peg-in-address   Generate a new peg-in address, funds sent to it can later be claimed
-  peg-in           Issue notes in exchange for a peg-in proof
-  reissue          Reissue notes received from a third party to avoid double spends
-  validate         Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
-  spend            Prepare notes to send to a third party as a payment
-  peg-out          Withdraw funds from the federation
-  ln-pay           Pay a lightning invoice via a gateway
-  fetch            Fetch (re-)issued notes and finalize issuance process
   info             Display wallet info (holdings, tiers)
+  reissue          Reissue notes received from a third party to avoid double spends
+  spend            Prepare notes to send to a third party as a payment
   ln-invoice       Create a lightning invoice to receive payment via gateway
   wait-invoice     Wait for incoming invoice to be paid
-  join-federation  Join a federation using it's ConnectInfo
+  ln-pay           Pay a lightning invoice via a gateway
   list-gateways    List registered gateways
   switch-gateway   Switch active gateway
+  deposit-address  Generate a new deposit address, funds sent to it can later be claimed
+  await-deposit    Wait for desposit on previously generated address
+  withdraw         Withdraw funds from the federation
   backup           Upload the (encrypted) snapshot of mint notes to federation
   restore          Restore the previously created backup of mint notes (with `backup` command)
-  ng
+  print-secret     Print the secret key of the client
   admin
   dev
+  join-federation  Join a federation using it's ConnectInfo
   completion
   help             Print this message or the help of the given subcommand(s)
 
