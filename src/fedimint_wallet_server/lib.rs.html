@@ -1987,6 +1987,11 @@
 <a href="#1987" id="1987">1987</a>
 <a href="#1988" id="1988">1988</a>
 <a href="#1989" id="1989">1989</a>
+<a href="#1990" id="1990">1990</a>
+<a href="#1991" id="1991">1991</a>
+<a href="#1992" id="1992">1992</a>
+<a href="#1993" id="1993">1993</a>
+<a href="#1994" id="1994">1994</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::ops::Sub;
@@ -2609,7 +2614,14 @@
                         <span class="prelude-val">None
                     </span>);
 
-                    <span class="prelude-val">Ok</span>(tx.map(|tx| tx.fees).ok())
+                    <span class="kw">match </span>tx {
+                        <span class="prelude-val">Err</span>(error) =&gt; {
+                            <span class="comment">// Usually from not enough spendable UTXOs
+                            </span><span class="macro">warn!</span>(<span class="string">&quot;Error returning peg-out fees {error}&quot;</span>);
+                            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+                        }
+                        <span class="prelude-val">Ok</span>(tx) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx.fees))
+                    }
                 }
             },
         ]
@@ -3117,9 +3129,7 @@
 </span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: <span class="kw-2">&amp;</span>TaskHandle) {
     <span class="kw">while </span>!tg_handle.is_shutting_down() {
         broadcast_pending_tx(db.begin_transaction().<span class="kw">await</span>, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
-        <span class="comment">// FIXME: remove after modularization finishes
-        </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-        </span>fedimint_core::task::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
+        sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
     }
 }
 

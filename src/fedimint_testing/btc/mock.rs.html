@@ -296,9 +296,18 @@
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
 <a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>async_trait::async_trait;
@@ -314,7 +323,7 @@
     <span class="prelude-ty">Result </span><span class="kw">as </span>BitcoinRpcResult,
 };
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::task::TaskHandle;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskHandle};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, Feerate};
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -503,26 +512,33 @@
     }
 
     <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
-        <span class="kw">let </span>pending = <span class="self">self</span>.pending.lock().unwrap();
-        <span class="kw">let </span>addresses = <span class="self">self</span>.addresses.lock().unwrap();
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>pending = <span class="self">self</span>.pending.lock().unwrap().clone();
+            <span class="kw">let </span>addresses = <span class="self">self</span>.addresses.lock().unwrap().clone();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>fee = Amount::ZERO;
-        <span class="kw">let </span>tx = pending
-            .iter()
-            .find(|tx| tx.txid() == <span class="kw-2">*</span>txid)
-            .expect(<span class="string">&quot;tx was broadcast&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>fee = Amount::ZERO;
+            <span class="kw">let </span>maybe_tx = pending.iter().find(|tx| tx.txid() == <span class="kw-2">*</span>txid);
 
-        <span class="kw">for </span>input <span class="kw">in </span>tx.input.iter() {
-            fee += <span class="kw-2">*</span>addresses
-                .get(<span class="kw-2">&amp;</span>input.previous_output.txid)
-                .expect(<span class="string">&quot;tx has sats&quot;</span>);
+            <span class="kw">let </span>tx = <span class="kw">match </span>maybe_tx {
+                <span class="prelude-val">None </span>=&gt; {
+                    sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                    <span class="kw">continue</span>;
+                }
+                <span class="prelude-val">Some</span>(tx) =&gt; tx,
+            };
+
+            <span class="kw">for </span>input <span class="kw">in </span>tx.input.iter() {
+                fee += <span class="kw-2">*</span>addresses
+                    .get(<span class="kw-2">&amp;</span>input.previous_output.txid)
+                    .expect(<span class="string">&quot;tx has sats&quot;</span>);
+            }
+
+            <span class="kw">for </span>output <span class="kw">in </span>tx.output.iter() {
+                fee -= Amount::from_sats(output.value);
+            }
+
+            <span class="kw">return </span>fee;
         }
-
-        <span class="kw">for </span>output <span class="kw">in </span>tx.output.iter() {
-            fee -= Amount::from_sats(output.value);
-        }
-
-        fee
     }
 }
 

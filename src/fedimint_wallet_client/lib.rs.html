@@ -726,7 +726,7 @@
     Failed(String),
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>WithdrawState {
     Created,
     Succeeded(bitcoin::Txid),

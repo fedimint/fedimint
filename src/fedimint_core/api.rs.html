@@ -1271,22 +1271,6 @@
 <a href="#1271" id="1271">1271</a>
 <a href="#1272" id="1272">1272</a>
 <a href="#1273" id="1273">1273</a>
-<a href="#1274" id="1274">1274</a>
-<a href="#1275" id="1275">1275</a>
-<a href="#1276" id="1276">1276</a>
-<a href="#1277" id="1277">1277</a>
-<a href="#1278" id="1278">1278</a>
-<a href="#1279" id="1279">1279</a>
-<a href="#1280" id="1280">1280</a>
-<a href="#1281" id="1281">1281</a>
-<a href="#1282" id="1282">1282</a>
-<a href="#1283" id="1283">1283</a>
-<a href="#1284" id="1284">1284</a>
-<a href="#1285" id="1285">1285</a>
-<a href="#1286" id="1286">1286</a>
-<a href="#1287" id="1287">1287</a>
-<a href="#1288" id="1288">1288</a>
-<a href="#1289" id="1289">1289</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1337,7 +1321,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::outcome::TransactionStatus;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     CurrentConsensus, DiscoverApiVersionSet, EventuallyConsistent, QueryStep, QueryStrategy,
-    UnionResponses, UnionResponsesSingle, VerifiableResponse,
+    UnionResponsesSingle, VerifiableResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::task;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
@@ -1575,22 +1559,6 @@
             }
         }
     }
-
-    <span class="kw">async fn </span>request_union&lt;Ret&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        method: String,
-        params: ApiRequestErased,
-    ) -&gt; FederationResult&lt;Vec&lt;Ret&gt;&gt;
-    <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
-    {
-        <span class="self">self</span>.request_with_strategy(
-            UnionResponses::new(<span class="self">self</span>.all_members().one_honest()),
-            method,
-            params,
-        )
-        .<span class="kw">await
-    </span>}
 
     <span class="kw">async fn </span>request_current_consensus&lt;Ret&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
