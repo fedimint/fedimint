@@ -569,6 +569,8 @@ impl Gateway {
             self.api.clone(),
         );
 
+        let balance = client.get_balance().await;
+
         self.register_client(client, federation_id, channel_id, route_hints)
             .await?;
 
@@ -580,6 +582,7 @@ impl Gateway {
         Ok(FederationInfo {
             federation_id,
             registration,
+            balance,
         })
     }
 
@@ -597,10 +600,12 @@ impl Gateway {
                 GW_ANNOUNCEMENT_TTL,
                 self.api.clone(),
             );
+            let balance = client.get_balance().await;
 
             federations.push(FederationInfo {
                 federation_id,
                 registration,
+                balance,
             });
         }
 

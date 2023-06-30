@@ -4,6 +4,7 @@
 //! and business logic.
 mod fixtures;
 
+use fedimint_core::Amount;
 use fedimint_testing::federation::FederationTest;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::ConnectFedPayload;
@@ -51,11 +52,11 @@ async fn gatewayd_shows_info_about_all_connected_federations() {
     assert!(info
         .federations
         .iter()
-        .any(|info| info.federation_id == id1));
+        .any(|info| info.federation_id == id1 && info.balance == Amount::ZERO));
     assert!(info
         .federations
         .iter()
-        .any(|info| info.federation_id == id2));
+        .any(|info| info.federation_id == id2 && info.balance == Amount::ZERO));
 }
 
 #[tokio::test(flavor = "multi_thread")]
