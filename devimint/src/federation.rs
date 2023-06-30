@@ -204,6 +204,12 @@ impl Federation {
         }
         Ok(())
     }
+
+    pub async fn client_balance(&self) -> Result<u64> {
+        Ok(cmd!(self, "info").out_json().await?["total_msat"]
+            .as_u64()
+            .unwrap())
+    }
 }
 
 #[derive(Clone)]

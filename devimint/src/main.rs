@@ -236,12 +236,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_str()
         .unwrap()
         .to_owned();
-    assert_eq!(
-        cmd!(fed, "info").out_json().await?["total_amount"]
-            .as_u64()
-            .unwrap(),
-        9_958_000
-    );
+    assert_eq!(fed.client_balance().await?, 9_958_000);
     cmd!(fed, "validate", notes.clone()).run().await?;
     cmd!(fed, "reissue", notes).run().await?;
     cmd!(fed, "fetch").run().await?;
@@ -281,9 +276,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // OUTGOING: fedimint-cli pays LND via CLN gateway
     info!("Old client: Testing outgoing LN payment");
-    let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
-        .as_u64()
-        .unwrap();
+    let initial_client_balance = fed.client_balance().await?;
     let initial_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -315,9 +308,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
     // Assert balances changed by 100000 msat (amount sent) + 1000 msat (fee)
-    let final_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
-        .as_u64()
-        .unwrap();
+    let final_client_balance = fed.client_balance().await?;
     let final_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -378,9 +369,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // OUTGOING: fedimint-cli pays CLN via LND gateaway
     info!("Old client: Testing outgoing LN payment");
-    let initial_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
-        .as_u64()
-        .unwrap();
+    let initial_client_balance = fed.client_balance().await?;
     let initial_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -417,9 +406,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ));
 
     // Assert balances changed by 100000 msat (amount sent) + 1000 msat (fee)
-    let final_client_balance = cmd!(fed, "info").out_json().await?["total_amount"]
-        .as_u64()
-        .unwrap();
+    let final_client_balance = fed.client_balance().await?;
     let final_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -556,9 +543,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     const CLIENT_NG_REISSUE_AMOUNT: u64 = 420;
     const CLIENT_NG_SPEND_AMOUNT: u64 = 42;
 
-    let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let initial_clientng_balance = fed.client_balance().await?;
     assert_eq!(initial_clientng_balance, 0);
 
     let reissue_notes = cmd!(fed, "spend", CLIENT_NG_REISSUE_AMOUNT)
@@ -574,9 +559,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     assert_eq!(client_ng_reissue_amt, CLIENT_NG_REISSUE_AMOUNT);
 
-    let initial_clientng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let initial_clientng_balance = fed.client_balance().await?;
     assert_eq!(initial_clientng_balance, CLIENT_NG_REISSUE_AMOUNT);
 
     info!("Testing backup&restore");
@@ -597,9 +580,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap()
         .to_owned();
 
-    let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let clientng_post_spend_balance = fed.client_balance().await?;
     assert_eq!(
         clientng_post_spend_balance,
         CLIENT_NG_REISSUE_AMOUNT - CLIENT_NG_SPEND_AMOUNT
@@ -608,9 +589,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Test we can reissue our own notes
     cmd!(fed, "ng", "reissue", notes).out_json().await?;
 
-    let clientng_post_spend_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let clientng_post_spend_balance = fed.client_balance().await?;
     assert_eq!(clientng_post_spend_balance, CLIENT_NG_REISSUE_AMOUNT);
 
     let reissue_amount: u64 = 4096;
@@ -642,9 +621,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing fedimint-cli NG pays LND via CLN gateway");
     fed.use_gateway(&gw_cln).await?;
 
-    let initial_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let initial_client_ng_balance = fed.client_balance().await?;
     let initial_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -676,10 +653,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
     // Assert balances changed by 3000 msat (amount sent) + 30 msat (fee)
-    let final_cln_outgoing_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
-        ["total_msat"]
-        .as_u64()
-        .unwrap();
+    let final_cln_outgoing_client_ng_balance = fed.client_balance().await?;
     let final_cln_outgoing_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -740,10 +714,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
 
     // Assert balances changed by 1000 msat
-    let final_cln_incoming_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
-        ["total_msat"]
-        .as_u64()
-        .unwrap();
+    let final_cln_incoming_client_ng_balance = fed.client_balance().await?;
     let final_cln_incoming_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -802,10 +773,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ));
 
     // Assert balances changed by 1000 msat (amount sent) + 10 msat (fee)
-    let final_lnd_outgoing_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
-        ["total_msat"]
-        .as_u64()
-        .unwrap();
+    let final_lnd_outgoing_client_ng_balance = fed.client_balance().await?;
     let final_lnd_outgoing_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -863,10 +831,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cmd!(fed, "ng", "wait-invoice", operation_id).run().await?;
 
     // Assert balances changed by 1000 msat
-    let final_lnd_incoming_client_ng_balance = cmd!(fed, "ng", "info").out_json().await?
-        ["total_msat"]
-        .as_u64()
-        .unwrap();
+    let final_lnd_incoming_client_ng_balance = fed.client_balance().await?;
     let final_lnd_incoming_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -888,15 +853,11 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // # Wallet NG tests
     // ## Deposit
     info!("Testing client ng deposit");
-    let initial_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let initial_walletng_balance = fed.client_balance().await?;
 
     fed.pegin_ng(100_000).await?; // deposit in sats
 
-    let post_deposit_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let post_deposit_walletng_balance = fed.client_balance().await?;
 
     assert_eq!(
         post_deposit_walletng_balance,
@@ -906,9 +867,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // ## Withdraw
     info!("Testing client ng withdraw");
 
-    let initial_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let initial_walletng_balance = fed.client_balance().await?;
 
     let address = bitcoind.get_new_address().await?;
     let withdraw_res = cmd!(
@@ -940,9 +899,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .iter()
         .any(|o| o.script_pubkey == address.script_pubkey() && o.value == 5000));
 
-    let post_withdraw_walletng_balance = cmd!(fed, "ng", "info").out_json().await?["total_msat"]
-        .as_u64()
-        .unwrap();
+    let post_withdraw_walletng_balance = fed.client_balance().await?;
     let expected_wallet_balance = initial_walletng_balance - 5_000_000 - (fees_sat * 1000);
 
     assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
