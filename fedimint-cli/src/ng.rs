@@ -49,15 +49,19 @@ impl FromStr for ModuleSelector {
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum ClientNg {
+    /// Display wallet info (holdings, tiers)
     Info,
+    /// Reissue notes received from a third party to avoid double spends
     Reissue {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
     },
+    /// Prepare notes to send to a third party as a payment
     Spend {
         #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
     },
+    /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
         #[clap(long, value_parser = parse_fedimint_amount)]
         amount: Amount,
@@ -66,21 +70,22 @@ pub enum ClientNg {
         #[clap(long)]
         expiry_time: Option<u64>,
     },
-    WaitInvoice {
-        operation_id: OperationId,
-    },
-    LnPay {
-        bolt11: lightning_invoice::Invoice,
-    },
+    /// Wait for incoming invoice to be paid
+    WaitInvoice { operation_id: OperationId },
+    /// Pay a lightning invoice via a gateway
+    LnPay { bolt11: lightning_invoice::Invoice },
+    /// List registered gateways
     ListGateways,
+    /// Switch active gateway
     SwitchGateway {
         #[clap(value_parser = parse_gateway_pub_key)]
         pubkey: secp256k1::XOnlyPublicKey,
     },
+    /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress,
-    AwaitDeposit {
-        operation_id: OperationId,
-    },
+    /// Wait for desposit on previously generated address
+    AwaitDeposit { operation_id: OperationId },
+    /// Withdraw funds from the federation
     Withdraw {
         #[clap(long)]
         amount: bitcoin::Amount,
