@@ -27,6 +27,16 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --all --all-targets
 >&2 echo "Pre-building tests..."
 cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p fedimint-tests
 
+function cli_test_bin_version_hash() {
+  set -eo pipefail # pipefail must be set manually again
+  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
+
+  echo "## START: ${FUNCNAME[0]}"
+  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/version-hash-tests.sh" 2>&1 | ts -s
+  echo "## COMPLETE: ${FUNCNAME[0]}"
+}
+export -f cli_test_bin_version_hash
+
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
   trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
@@ -156,6 +166,8 @@ if parallel \
   cli_test_reconnect \
   cli_test_lightning_reconnect \
   cli_test_cli \
+  # TODO capture git HEAD commit hash and pass it to this shell script
+  # cli_test_bin_version_hash \
   cli_load_test_tool_test ; then
   >&2 echo "All tests successful"
 else
