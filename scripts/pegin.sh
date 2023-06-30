@@ -14,7 +14,7 @@ function await_fedimint_block_sync() {
   FINALITY_DELAY=10
   AWAIT="$((BLOCKS - FINALITY_DELAY))"
   echo "await_fedimint_block_sync $AWAIT"
-  $FM_MINT_CLIENT wait-block-height "$AWAIT"
+  $FM_MINT_CLIENT dev wait-block-height "$AWAIT"
 }
 
 function sat_to_btc() {

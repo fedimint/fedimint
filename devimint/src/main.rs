@@ -147,6 +147,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     cmd!(
         fed,
+        "dev",
         "config-decrypt",
         "--in-file={data_dir}/server-0/private.encrypt",
         "--out-file={data_dir}/server-0/config-plaintext.json"
@@ -157,6 +158,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     cmd!(
         fed,
+        "dev",
         "config-encrypt",
         "--in-file={data_dir}/server-0/config-plaintext.json",
         "--out-file={data_dir}/server-0/config-2"
@@ -167,6 +169,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     cmd!(
         fed,
+        "dev",
         "config-decrypt",
         "--in-file={data_dir}/server-0/config-2",
         "--out-file={data_dir}/server-0/config-plaintext-2.json"
@@ -177,13 +180,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Test load last epoch with admin client
     info!("Testing load last epoch with admin client");
-    let epoch_json = cmd!(fed, "last-epoch")
+    let epoch_json = cmd!(fed, "admin", "last-epoch")
         .env("FM_PASSWORD", "pass0")
         .env("FM_OUR_ID", "0")
         .out_json()
         .await?;
     let epoch_hex = epoch_json["hex_outcome"].as_str().unwrap();
-    let _force_epoch = cmd!(fed, "force-epoch", epoch_hex)
+    let _force_epoch = cmd!(fed, "admin", "force-epoch", epoch_hex)
         .env("FM_PASSWORD", "pass0")
         .env("FM_OUR_ID", "0")
         .out_json()
@@ -208,12 +211,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?;
 
     let fed_id = fed.federation_id().await;
-    let connect_info = cmd!(fed, "decode-connect-info", connect_string.clone())
+    let connect_info = cmd!(fed, "dev", "decode-connect-info", connect_string.clone())
         .out_json()
         .await?;
     anyhow::ensure!(
         cmd!(
             fed,
+            "dev",
             "encode-connect-info",
             format!("--url={}", connect_info["url"].as_str().unwrap()),
             format!(

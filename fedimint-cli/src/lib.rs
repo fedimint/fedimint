@@ -435,21 +435,28 @@ impl Opts {
 enum Command {
     /// Print the latest git commit hash this bin. was build with
     VersionHash,
+
+    #[clap(flatten)]
+    Legacy(LegacyCmd),
+
+    #[clap(subcommand)]
+    Ng(ng::ClientNg),
+
+    #[clap(subcommand)]
+    Admin(AdminCmd),
+
+    #[clap(subcommand)]
+    Dev(DevCmd),
+
+    Completion {
+        shell: clap_complete::Shell,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+enum LegacyCmd {
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
-
-    /// Send direct method call to the API. If you specify --peer-id, it will
-    /// just ask one server, otherwise it will get consensus from all servers
-    Api {
-        /// JSON-RPC method to call
-        method: String,
-        /// JSON-RPC parameters for the request
-        #[clap(default_value = "null")]
-        params: String,
-        /// Which server to send request to
-        #[clap(long = "peer-id")]
-        peer_id: Option<u16>,
-    },
 
     /// Issue notes in exchange for a peg-in proof
     PegIn {
@@ -487,9 +494,7 @@ enum Command {
     },
 
     /// Pay a lightning invoice via a gateway
-    LnPay {
-        bolt11: lightning_invoice::Invoice,
-    },
+    LnPay { bolt11: lightning_invoice::Invoice },
 
     /// Fetch (re-)issued notes and finalize issuance process
     Fetch,
@@ -508,37 +513,10 @@ enum Command {
     },
 
     /// Wait for incoming invoice to be paid
-    WaitInvoice {
-        invoice: lightning_invoice::Invoice,
-    },
-
-    /// Wait for the fed to reach a consensus block height
-    WaitBlockHeight {
-        height: u64,
-    },
-
-    /// Decode connection info into its JSON representation
-    DecodeConnectInfo {
-        connect_info: WsClientConnectInfo,
-    },
-
-    /// Encode connection info from its constituent parts
-    EncodeConnectInfo {
-        #[clap(long = "url")]
-        url: Url,
-        #[clap(long = "download-token", value_parser = from_hex::<ClientConfigDownloadToken>)]
-        download_token: ClientConfigDownloadToken,
-        #[clap(long = "id")]
-        id: FederationId,
-    },
-
-    /// Config enabling client to establish websocket connection to federation
-    ConnectInfo,
+    WaitInvoice { invoice: lightning_invoice::Invoice },
 
     /// Join a federation using it's ConnectInfo
-    JoinFederation {
-        connect: String,
-    },
+    JoinFederation { connect: String },
 
     /// List registered gateways
     ListGateways,
@@ -575,28 +553,59 @@ enum Command {
     /// Wipe the notes data from the DB. Useful for testing backup & restore
     #[clap(hide = true)]
     WipeNotes,
+}
 
-    /// Decode a transaction hex string and print it to stdout
-    DecodeTransaction {
-        hex_string: String,
-    },
-
-    /// Signal a consensus upgrade
-    SignalUpgrade,
-
-    /// Gets the current epoch count
-    EpochCount,
-
+#[derive(Debug, Clone, Subcommand)]
+enum AdminCmd {
     /// Gets the last epoch
     LastEpoch,
 
     /// Force processing an epoch
-    ForceEpoch {
-        hex_outcome: String,
-    },
+    ForceEpoch { hex_outcome: String },
 
     /// Show the status according to the `status` endpoint
     Status,
+
+    /// Signal a consensus upgrade
+    SignalUpgrade,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+enum DevCmd {
+    /// Send direct method call to the API. If you specify --peer-id, it will
+    /// just ask one server, otherwise it will get consensus from all servers
+    Api {
+        /// JSON-RPC method to call
+        method: String,
+        /// JSON-RPC parameters for the request
+        #[clap(default_value = "null")]
+        params: String,
+        /// Which server to send request to
+        #[clap(long = "peer-id")]
+        peer_id: Option<u16>,
+    },
+
+    /// Config enabling client to establish websocket connection to federation
+    ConnectInfo,
+
+    /// Wait for the fed to reach a consensus block height
+    WaitBlockHeight { height: u64 },
+
+    /// Decode connection info into its JSON representation
+    DecodeConnectInfo { connect_info: WsClientConnectInfo },
+
+    /// Encode connection info from its constituent parts
+    EncodeConnectInfo {
+        #[clap(long = "url")]
+        url: Url,
+        #[clap(long = "download-token", value_parser = from_hex::<ClientConfigDownloadToken>)]
+        download_token: ClientConfigDownloadToken,
+        #[clap(long = "id")]
+        id: FederationId,
+    },
+
+    /// Gets the current epoch count
+    EpochCount,
 
     ConfigDecrypt {
         /// Encrypted config file
@@ -630,12 +639,8 @@ enum Command {
         password: String,
     },
 
-    #[clap(subcommand)]
-    Ng(ng::ClientNg),
-
-    Completion {
-        shell: clap_complete::Shell,
-    },
+    /// Decode a transaction hex string and print it to stdout
+    DecodeTransaction { hex_string: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -702,7 +707,7 @@ impl FedimintCli {
         let mut rng = rand::rngs::OsRng;
 
         match cli.command.clone() {
-            Command::JoinFederation { connect } => {
+            Command::Legacy(LegacyCmd::JoinFederation { connect }) => {
                 let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid connect info")?;
                 let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]))
@@ -726,39 +731,10 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::IOError, "couldn't write config")?;
                 Ok(CliOutput::JoinFederation { joined: connect })
             }
-            Command::Api {
-                method,
-                params,
-                peer_id,
-            } => {
-                let params: Value = serde_json::from_str(&params)
-                    .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
-                let params = ApiRequestErased::new(params);
-                let ws_api: Arc<_> = WsFederationApi::from_config(
-                    cli.build_client(&self.module_gens).await?.config().as_ref(),
-                )
-                .into();
-                let response: Value = match peer_id {
-                    Some(peer_id) => ws_api
-                        .request_raw(peer_id.into(), &method, &[params.to_json()])
-                        .await
-                        .map_err_cli_general()?,
-                    None => ws_api
-                        .request_with_strategy(
-                            EventuallyConsistent::new(ws_api.peers().len()),
-                            method,
-                            params,
-                        )
-                        .await
-                        .map_err_cli_general()?,
-                };
-
-                Ok(CliOutput::UntypedApiOutput { value: response })
-            }
             Command::VersionHash => Ok(CliOutput::VersionHash {
                 hash: env!("CODE_VERSION").to_string(),
             }),
-            Command::PegInAddress => {
+            Command::Legacy(LegacyCmd::PegInAddress) => {
                 let peg_in_address = cli
                     .build_client(&self.module_gens)
                     .await?
@@ -768,10 +744,10 @@ impl FedimintCli {
                     address: (peg_in_address),
                 })
             }
-            Command::PegIn {
+            Command::Legacy(LegacyCmd::PegIn {
                 txout_proof,
                 transaction,
-            } => cli
+            }) => cli
                 .build_client(&self.module_gens)
                 .await?
                 .peg_in(txout_proof, transaction, &mut rng)
@@ -782,7 +758,7 @@ impl FedimintCli {
                     "peg-in failed (no further information)",
                 ),
 
-            Command::Reissue { notes } => cli
+            Command::Legacy(LegacyCmd::Reissue { notes }) => cli
                 .build_client(&self.module_gens)
                 .await?
                 .reissue(notes, &mut rng)
@@ -792,7 +768,7 @@ impl FedimintCli {
                     CliErrorKind::GeneralFederationError,
                     "could not reissue notes (no further information)",
                 ),
-            Command::Validate { notes } => {
+            Command::Legacy(LegacyCmd::Validate { notes }) => {
                 let validate_result = cli
                     .build_client(&self.module_gens)
                     .await?
@@ -814,7 +790,7 @@ impl FedimintCli {
                     }),
                 }
             }
-            Command::Spend { amount } => cli
+            Command::Legacy(LegacyCmd::Spend { amount }) => cli
                 .build_client(&self.module_gens)
                 .await?
                 .spend_ecash(amount, rng)
@@ -826,7 +802,7 @@ impl FedimintCli {
                     CliErrorKind::GeneralFederationError,
                     "failed to execute spend (no further information)",
                 ),
-            Command::Fetch => cli
+            Command::Legacy(LegacyCmd::Fetch) => cli
                 .build_client(&self.module_gens)
                 .await?
                 .fetch_all_notes()
@@ -836,7 +812,7 @@ impl FedimintCli {
                     CliErrorKind::GeneralFederationError,
                     "failed to fetch notes",
                 ),
-            Command::Info => {
+            Command::Legacy(LegacyCmd::Info) => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let summary = client.summary().await;
 
@@ -849,7 +825,7 @@ impl FedimintCli {
                     details: summary.iter().collect(),
                 })
             }
-            Command::PegOut { address, amount } => {
+            Command::Legacy(LegacyCmd::PegOut { address, amount }) => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let peg_out = client
                     .new_peg_out_with_fees(amount, address)
@@ -872,7 +848,7 @@ impl FedimintCli {
                         "invalid peg-out outcome",
                     )
             }
-            Command::LnPay { bolt11 } => {
+            Command::Legacy(LegacyCmd::LnPay { bolt11 }) => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let (contract_id, outpoint) = client
                     .fund_outgoing_ln_contract(bolt11, &mut rng)
@@ -896,11 +872,11 @@ impl FedimintCli {
                         "gateway failed to execute contract",
                     )
             }
-            Command::LnInvoice {
+            Command::Legacy(LegacyCmd::LnInvoice {
                 amount,
                 description,
                 expiry_time,
-            } => cli
+            }) => cli
                 .build_client(&self.module_gens)
                 .await?
                 .generate_confirmed_invoice(amount, description, &mut rng, expiry_time)
@@ -912,7 +888,7 @@ impl FedimintCli {
                     CliErrorKind::GeneralFederationError,
                     "couldn't create invoice",
                 ),
-            Command::WaitInvoice { invoice } => {
+            Command::Legacy(LegacyCmd::WaitInvoice { invoice }) => {
                 let contract_id = (*invoice.payment_hash()).into();
                 cli.build_client(&self.module_gens)
                     .await?
@@ -923,47 +899,7 @@ impl FedimintCli {
                     })
                     .map_err_cli_msg(CliErrorKind::Timeout, "invoice did not get paid in time")
             }
-            Command::WaitBlockHeight { height } => cli
-                .build_client(&self.module_gens)
-                .await?
-                .await_consensus_block_height(height)
-                .await
-                .map(|_| CliOutput::WaitBlockHeight { reached: (height) })
-                .map_err_cli_msg(CliErrorKind::Timeout, "timeout reached"),
-            Command::ConnectInfo => {
-                let path = cli.workdir()?.join("client-connect");
-                let string = fs::read_to_string(path).map_err_cli_msg(
-                    CliErrorKind::GeneralFederationError,
-                    "cannot read connect string",
-                )?;
-
-                let connect_info = WsClientConnectInfo::from_str(&string).map_err_cli_msg(
-                    CliErrorKind::GeneralFederationError,
-                    "cannot parse connect string",
-                )?;
-
-                Ok(CliOutput::ConnectInfo { connect_info })
-            }
-            Command::DecodeConnectInfo { connect_info } => Ok(CliOutput::DecodeConnectInfo {
-                url: connect_info.url,
-                download_token: connect_info
-                    .download_token
-                    .consensus_encode_to_hex()
-                    .expect("encodes"),
-                id: connect_info.id,
-            }),
-            Command::EncodeConnectInfo {
-                url,
-                download_token,
-                id,
-            } => Ok(CliOutput::ConnectInfo {
-                connect_info: WsClientConnectInfo {
-                    url,
-                    download_token,
-                    id,
-                },
-            }),
-            Command::ListGateways {} => {
+            Command::Legacy(LegacyCmd::ListGateways {}) => {
                 let client = cli.build_client(&self.module_gens).await?;
                 let gateways = client.fetch_registered_gateways().await.map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
@@ -998,7 +934,7 @@ impl FedimintCli {
                     gateways: (gateways_json),
                 })
             }
-            Command::SwitchGateway { pubkey } => {
+            Command::Legacy(LegacyCmd::SwitchGateway { pubkey }) => {
                 let gateway = cli
                     .build_client(&self.module_gens)
                     .await?
@@ -1014,7 +950,7 @@ impl FedimintCli {
                     new_gateway: (gateway_json),
                 })
             }
-            Command::Backup { metadata } => {
+            Command::Legacy(LegacyCmd::Backup { metadata }) => {
                 let metadata = metadata_from_clap_cli(metadata)?;
 
                 cli.build_client(&self.module_gens)
@@ -1025,7 +961,7 @@ impl FedimintCli {
                     .map(|_| CliOutput::Backup)
                     .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed")
             }
-            Command::Restore { gap_limit } => cli
+            Command::Legacy(LegacyCmd::Restore { gap_limit }) => cli
                 .build_client(&self.module_gens)
                 .await?
                 .mint_client()
@@ -1033,7 +969,7 @@ impl FedimintCli {
                 .await
                 .map(|_| CliOutput::Backup)
                 .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed"),
-            Command::WipeNotes => cli
+            Command::Legacy(LegacyCmd::WipeNotes) => cli
                 .build_client(&self.module_gens)
                 .await?
                 .mint_client()
@@ -1042,65 +978,6 @@ impl FedimintCli {
                 .map(|_| CliOutput::Backup)
                 .map_err_cli_msg(CliErrorKind::GeneralFederationError, "failed"),
 
-            Command::DecodeTransaction { hex_string } => {
-                let bytes: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(&hex_string)
-                    .map_err_cli_msg(
-                        CliErrorKind::SerializationError,
-                        "failed to decode transaction",
-                    )?;
-
-                let tx = fedimint_core::transaction::Transaction::from_bytes(
-                    &bytes,
-                    cli.build_client(&self.module_gens).await?.decoders(),
-                )
-                .map_err_cli_msg(
-                    CliErrorKind::SerializationError,
-                    "failed to decode transaction",
-                )?;
-
-                Ok(CliOutput::DecodeTransaction {
-                    transaction: (format!("{tx:?}")),
-                })
-            }
-            Command::SignalUpgrade => {
-                cli.admin_client().await?.signal_upgrade().await?;
-                Ok(CliOutput::SignalUpgrade)
-            }
-            Command::EpochCount => {
-                let count = cli
-                    .build_client(&self.module_gens)
-                    .await?
-                    .context()
-                    .api
-                    .fetch_epoch_count()
-                    .await?;
-                Ok(CliOutput::EpochCount { count })
-            }
-            Command::LastEpoch => {
-                let cfg = cli.load_config()?;
-                let decoders = cli.load_decoders(&cfg, &self.module_gens);
-                let client = cli.admin_client().await?;
-                let last_epoch = client
-                    .fetch_last_epoch_history(cfg.0.epoch_pk, &decoders)
-                    .await?;
-
-                let hex_outcome = last_epoch.consensus_encode_to_hex().map_err_cli_io()?;
-                Ok(CliOutput::LastEpoch { hex_outcome })
-            }
-            Command::ForceEpoch { hex_outcome } => {
-                let cfg = cli.load_config()?;
-                let decoders = cli.load_decoders(&cfg, &self.module_gens);
-                let outcome: SignedEpochOutcome = Decodable::consensus_decode_hex(
-                    &hex_outcome,
-                    &decoders,
-                )
-                .map_err_cli_msg(CliErrorKind::SerializationError, "failed to decode outcome")?;
-                let client = cli.admin_client().await?;
-                client
-                    .force_process_epoch(SerdeEpochHistory::from(&outcome))
-                    .await?;
-                Ok(CliOutput::ForceEpoch)
-            }
             Command::Ng(ClientNg::Restore { secret }) => {
                 let mut tg = TaskGroup::new();
                 let (client, metadata) = cli
@@ -1123,12 +1000,141 @@ impl FedimintCli {
 
                 Ok(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
             }
-            Command::ConfigDecrypt {
+            Command::Ng(command) => {
+                let config = cli.load_config()?.0;
+                let client = cli
+                    .build_client_ng(&self.module_gens)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+                Ok(CliOutput::Raw(
+                    ng::handle_ng_command(command, config, client)
+                        .await
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                ))
+            }
+            Command::Admin(AdminCmd::Status) => {
+                let status = cli.admin_client().await?.status().await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(status)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
+                ))
+            }
+            Command::Admin(AdminCmd::LastEpoch) => {
+                let cfg = cli.load_config()?;
+                let decoders = cli.load_decoders(&cfg, &self.module_gens);
+                let client = cli.admin_client().await?;
+                let last_epoch = client
+                    .fetch_last_epoch_history(cfg.0.epoch_pk, &decoders)
+                    .await?;
+
+                let hex_outcome = last_epoch.consensus_encode_to_hex().map_err_cli_io()?;
+                Ok(CliOutput::LastEpoch { hex_outcome })
+            }
+            Command::Admin(AdminCmd::ForceEpoch { hex_outcome }) => {
+                let cfg = cli.load_config()?;
+                let decoders = cli.load_decoders(&cfg, &self.module_gens);
+                let outcome: SignedEpochOutcome = Decodable::consensus_decode_hex(
+                    &hex_outcome,
+                    &decoders,
+                )
+                .map_err_cli_msg(CliErrorKind::SerializationError, "failed to decode outcome")?;
+                let client = cli.admin_client().await?;
+                client
+                    .force_process_epoch(SerdeEpochHistory::from(&outcome))
+                    .await?;
+                Ok(CliOutput::ForceEpoch)
+            }
+            Command::Admin(AdminCmd::SignalUpgrade) => {
+                cli.admin_client().await?.signal_upgrade().await?;
+                Ok(CliOutput::SignalUpgrade)
+            }
+            Command::Dev(DevCmd::Api {
+                method,
+                params,
+                peer_id,
+            }) => {
+                let params: Value = serde_json::from_str(&params)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
+                let params = ApiRequestErased::new(params);
+                let ws_api: Arc<_> = WsFederationApi::from_config(
+                    cli.build_client(&self.module_gens).await?.config().as_ref(),
+                )
+                .into();
+                let response: Value = match peer_id {
+                    Some(peer_id) => ws_api
+                        .request_raw(peer_id.into(), &method, &[params.to_json()])
+                        .await
+                        .map_err_cli_general()?,
+                    None => ws_api
+                        .request_with_strategy(
+                            EventuallyConsistent::new(ws_api.peers().len()),
+                            method,
+                            params,
+                        )
+                        .await
+                        .map_err_cli_general()?,
+                };
+
+                Ok(CliOutput::UntypedApiOutput { value: response })
+            }
+            Command::Dev(DevCmd::ConnectInfo) => {
+                let path = cli.workdir()?.join("client-connect");
+                let string = fs::read_to_string(path).map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "cannot read connect string",
+                )?;
+
+                let connect_info = WsClientConnectInfo::from_str(&string).map_err_cli_msg(
+                    CliErrorKind::GeneralFederationError,
+                    "cannot parse connect string",
+                )?;
+
+                Ok(CliOutput::ConnectInfo { connect_info })
+            }
+            Command::Dev(DevCmd::WaitBlockHeight { height }) => cli
+                .build_client(&self.module_gens)
+                .await?
+                .await_consensus_block_height(height)
+                .await
+                .map(|_| CliOutput::WaitBlockHeight { reached: (height) })
+                .map_err_cli_msg(CliErrorKind::Timeout, "timeout reached"),
+            Command::Dev(DevCmd::DecodeConnectInfo { connect_info }) => {
+                Ok(CliOutput::DecodeConnectInfo {
+                    url: connect_info.url,
+                    download_token: connect_info
+                        .download_token
+                        .consensus_encode_to_hex()
+                        .expect("encodes"),
+                    id: connect_info.id,
+                })
+            }
+            Command::Dev(DevCmd::EncodeConnectInfo {
+                url,
+                download_token,
+                id,
+            }) => Ok(CliOutput::ConnectInfo {
+                connect_info: WsClientConnectInfo {
+                    url,
+                    download_token,
+                    id,
+                },
+            }),
+            Command::Dev(DevCmd::EpochCount) => {
+                let count = cli
+                    .build_client(&self.module_gens)
+                    .await?
+                    .context()
+                    .api
+                    .fetch_epoch_count()
+                    .await?;
+                Ok(CliOutput::EpochCount { count })
+            }
+            Command::Dev(DevCmd::ConfigDecrypt {
                 in_file,
                 out_file,
                 salt_file,
                 password,
-            } => {
+            }) => {
                 let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
                 let salt = fs::read_to_string(salt_file).map_err_cli_general()?;
                 let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
@@ -1144,12 +1150,12 @@ impl FedimintCli {
                     .map_err_cli_general()?;
                 Ok(CliOutput::ConfigDecrypt)
             }
-            Command::ConfigEncrypt {
+            Command::Dev(DevCmd::ConfigEncrypt {
                 in_file,
                 out_file,
                 salt_file,
                 password,
-            } => {
+            }) => {
                 let mut in_file_handle =
                     fs::File::open(in_file).expect("Could not create output cfg file");
                 let mut plaintext_bytes = vec![];
@@ -1161,24 +1167,25 @@ impl FedimintCli {
                 encrypted_write(plaintext_bytes, &key, out_file).map_err_cli_general()?;
                 Ok(CliOutput::ConfigEncrypt)
             }
-            Command::Ng(command) => {
-                let config = cli.load_config()?.0;
-                let client = cli
-                    .build_client_ng(&self.module_gens)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-                Ok(CliOutput::Raw(
-                    ng::handle_ng_command(command, config, client)
-                        .await
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
-                ))
-            }
-            Command::Status => {
-                let status = cli.admin_client().await?.status().await?;
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(status)
-                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
-                ))
+            Command::Dev(DevCmd::DecodeTransaction { hex_string }) => {
+                let bytes: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(&hex_string)
+                    .map_err_cli_msg(
+                        CliErrorKind::SerializationError,
+                        "failed to decode transaction",
+                    )?;
+
+                let tx = fedimint_core::transaction::Transaction::from_bytes(
+                    &bytes,
+                    cli.build_client(&self.module_gens).await?.decoders(),
+                )
+                .map_err_cli_msg(
+                    CliErrorKind::SerializationError,
+                    "failed to decode transaction",
+                )?;
+
+                Ok(CliOutput::DecodeTransaction {
+                    transaction: (format!("{tx:?}")),
+                })
             }
             Command::Completion { shell } => {
                 clap_complete::generate(

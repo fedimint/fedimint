@@ -164,42 +164,31 @@ $ fedimint-cli help
 Usage: fedimint-cli [OPTIONS] <COMMAND>
 
 Commands:
-  version-hash         Print the latest git commit hash this bin. was build with
-  peg-in-address       Generate a new peg-in address, funds sent to it can later be claimed
-  api                  Send direct method call to the API. If you specify --peer-id, it will just ask one server, otherwise it will get consensus from all servers
-  peg-in               Issue notes in exchange for a peg-in proof
-  reissue              Reissue notes received from a third party to avoid double spends
-  validate             Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
-  spend                Prepare notes to send to a third party as a payment
-  peg-out              Withdraw funds from the federation
-  ln-pay               Pay a lightning invoice via a gateway
-  fetch                Fetch (re-)issued notes and finalize issuance process
-  info                 Display wallet info (holdings, tiers)
-  ln-invoice           Create a lightning invoice to receive payment via gateway
-  wait-invoice         Wait for incoming invoice to be paid
-  wait-block-height    Wait for the fed to reach a consensus block height
-  decode-connect-info  Decode connection info into its JSON representation
-  encode-connect-info  Encode connection info from its constituent parts
-  connect-info         Config enabling client to establish websocket connection to federation
-  join-federation      Join a federation using it's ConnectInfo
-  list-gateways        List registered gateways
-  switch-gateway       Switch active gateway
-  backup               Upload the (encrypted) snapshot of mint notes to federation
-  restore              Restore the previously created backup of mint notes (with `backup` command)
-  decode-transaction   Decode a transaction hex string and print it to stdout
-  signal-upgrade       Signal a consensus upgrade
-  epoch-count          Gets the current epoch count
-  last-epoch           Gets the last epoch
-  force-epoch          Force processing an epoch
-  status               Show the status according to the `status` endpoint
-  config-decrypt       
-  config-encrypt       
-  ng                   
-  completion           
-  help                 Print this message or the help of the given subcommand(s)
+  version-hash     Print the latest git commit hash this bin. was build with
+  peg-in-address   Generate a new peg-in address, funds sent to it can later be claimed
+  peg-in           Issue notes in exchange for a peg-in proof
+  reissue          Reissue notes received from a third party to avoid double spends
+  validate         Validate notes without claiming them (only checks if signatures valid, does not check if nonce unspent)
+  spend            Prepare notes to send to a third party as a payment
+  peg-out          Withdraw funds from the federation
+  ln-pay           Pay a lightning invoice via a gateway
+  fetch            Fetch (re-)issued notes and finalize issuance process
+  info             Display wallet info (holdings, tiers)
+  ln-invoice       Create a lightning invoice to receive payment via gateway
+  wait-invoice     Wait for incoming invoice to be paid
+  join-federation  Join a federation using it's ConnectInfo
+  list-gateways    List registered gateways
+  switch-gateway   Switch active gateway
+  backup           Upload the (encrypted) snapshot of mint notes to federation
+  restore          Restore the previously created backup of mint notes (with `backup` command)
+  ng
+  admin
+  dev
+  completion
+  help             Print this message or the help of the given subcommand(s)
 
 Options:
-      --data-dir <WORKDIR>   The working directory of the client containing the config and db [env: FM_DATA_DIR=/tmp/nix-shell.f1yupU/fm-rDEN/cfg]
+      --data-dir <WORKDIR>   The working directory of the client containing the config and db [env: FM_DATA_DIR=]
       --our-id <OUR_ID>      Peer id of the guardian [env: FM_OUR_ID=]
       --password <PASSWORD>  Guardian password for authentication [env: FM_PASSWORD=]
   -h, --help                 Print help

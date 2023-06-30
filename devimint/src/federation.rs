@@ -159,7 +159,9 @@ impl Federation {
         let finality_delay = wallet_cfg.finality_delay;
         let btc_height = self.bitcoind.client().get_blockchain_info()?.blocks;
         let expected = btc_height - (finality_delay as u64);
-        cmd!(self, "wait-block-height", expected).run().await?;
+        cmd!(self, "dev", "wait-block-height", expected)
+            .run()
+            .await?;
         Ok(())
     }
 
@@ -174,6 +176,7 @@ impl Federation {
     pub async fn await_all_peers(&self) -> Result<()> {
         cmd!(
             self,
+            "dev",
             "api",
             "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height"
         )
