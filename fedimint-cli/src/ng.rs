@@ -55,6 +55,7 @@ pub enum ClientNg {
         notes: TieredMulti<SpendableNote>,
     },
     Spend {
+        #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
     },
     LnInvoice {
