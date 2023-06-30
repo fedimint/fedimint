@@ -94,7 +94,7 @@ pub enum DepositState {
     Failed(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum WithdrawState {
     Created,
     Succeeded(bitcoin::Txid),

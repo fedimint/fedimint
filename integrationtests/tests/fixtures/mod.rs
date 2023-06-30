@@ -22,7 +22,7 @@ use fedimint_core::config::{
     ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
 };
 use fedimint_core::core::{
-    DynModuleConsensusItem, ModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
+    DynModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -1087,14 +1087,4 @@ impl FederationTest {
             connect_info: cfg.get_connect_info(),
         }
     }
-}
-
-/// Unwraps a dyn consensus item into a specific one for making assertions
-#[track_caller]
-pub fn unwrap_item<M: ModuleConsensusItem>(mci: &Option<DynModuleConsensusItem>) -> &M {
-    mci.as_ref()
-        .expect("Module item exists")
-        .as_any()
-        .downcast_ref()
-        .expect("Unexpected type found")
 }

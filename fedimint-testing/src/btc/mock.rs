@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::iter::repeat;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::format_err;
 use async_trait::async_trait;
@@ -16,7 +17,7 @@ use fedimint_bitcoind::{
     Result as BitcoinRpcResult,
 };
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::task::TaskHandle;
+use fedimint_core::task::{sleep, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, Feerate};
 use rand::rngs::OsRng;
@@ -205,26 +206,33 @@ impl BitcoinTest for FakeBitcoinTest {
     }
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
-        let pending = self.pending.lock().unwrap();
-        let addresses = self.addresses.lock().unwrap();
+        loop {
+            let pending = self.pending.lock().unwrap().clone();
+            let addresses = self.addresses.lock().unwrap().clone();
 
-        let mut fee = Amount::ZERO;
-        let tx = pending
-            .iter()
-            .find(|tx| tx.txid() == *txid)
-            .expect("tx was broadcast");
+            let mut fee = Amount::ZERO;
+            let maybe_tx = pending.iter().find(|tx| tx.txid() == *txid);
 
-        for input in tx.input.iter() {
-            fee += *addresses
-                .get(&input.previous_output.txid)
-                .expect("tx has sats");
+            let tx = match maybe_tx {
+                None => {
+                    sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+                Some(tx) => tx,
+            };
+
+            for input in tx.input.iter() {
+                fee += *addresses
+                    .get(&input.previous_output.txid)
+                    .expect("tx has sats");
+            }
+
+            for output in tx.output.iter() {
+                fee -= Amount::from_sats(output.value);
+            }
+
+            return fee;
         }
-
-        for output in tx.output.iter() {
-            fee -= Amount::from_sats(output.value);
-        }
-
-        fee
     }
 }
 
