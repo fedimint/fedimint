@@ -209,22 +209,6 @@ dyn_newtype_define! {
 }
 
 impl DynGlobalClientContext {
-    // TODO: Remove in favor of `await_tx_accepted`
-    pub async fn await_tx_rejected(&self, operation_id: OperationId, txid: TransactionId) {
-        let update_stream = self.transaction_update_stream(operation_id).await;
-
-        let query_txid = txid;
-        update_stream
-            .filter(move |tx_submission_state| {
-                std::future::ready(matches!(
-                    tx_submission_state.state,
-                    TxSubmissionStates::Rejected { txid, .. } if txid == query_txid
-                ))
-            })
-            .next_or_pending()
-            .await;
-    }
-
     pub async fn await_tx_accepted(
         &self,
         operation_id: OperationId,
