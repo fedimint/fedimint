@@ -208,13 +208,13 @@ impl GatewayPayInvoice {
     ) -> Result<Preimage, OutgoingPaymentError> {
         let invoice = buy_preimage.invoice.clone();
         let max_delay = buy_preimage.max_delay;
-        let max_fee_percent = buy_preimage.max_fee_percent();
+        let max_fee_msat = buy_preimage.max_send_amount.msats;
         match context
             .lnrpc
             .pay(PayInvoiceRequest {
                 invoice: invoice.to_string(),
                 max_delay,
-                max_fee_percent,
+                max_fee_msat,
                 payment_hash: invoice.payment_hash().to_vec(),
             })
             .await
@@ -304,7 +304,6 @@ impl GatewayPayInvoice {
 
         Ok(PaymentParameters {
             max_delay: max_delay.unwrap(),
-            invoice_amount,
             max_send_amount: account.amount,
             invoice,
         })
@@ -314,16 +313,8 @@ impl GatewayPayInvoice {
 #[derive(Debug, Clone)]
 pub struct PaymentParameters {
     max_delay: u64,
-    invoice_amount: Amount,
     max_send_amount: Amount,
     invoice: lightning_invoice::Invoice,
-}
-
-impl PaymentParameters {
-    fn max_fee_percent(&self) -> f64 {
-        let max_absolute_fee = self.max_send_amount - self.invoice_amount;
-        (max_absolute_fee.msats as f64) / (self.invoice_amount.msats as f64)
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
