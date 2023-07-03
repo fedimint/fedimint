@@ -17,7 +17,7 @@ craneLib.overrideScope' (self: prev: {
     doCheck = false;
   });
 
-  workspaceTest = self.cargoTest (prev // {
+  workspaceTest = self.cargoTest (prev.commonArgs // {
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
   });
