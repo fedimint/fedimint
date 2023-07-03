@@ -280,9 +280,12 @@ jobs:
     strategy:
       matrix:
         build:
-          - client-pkgs
-          - fedimint-pkgs
-          - gateway-pkgs
+          - pkg: client-pkgs
+            bin: fedimint-cli
+          - pkg: fedimint-pkgs
+            bin: fedimintd
+          - pkg: gateway-pkgs
+            bin: gateway-cli
 
     runs-on: buildjet-4vcpu-ubuntu-2004
     timeout-minutes: 30
@@ -297,8 +300,11 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
-      - name: Build ${{ matrix.build }}
-        run: nix build -L .#${{ matrix.build }}
+      - name: Build ${{ matrix.build.pkg }}
+        run: nix build -L .#${{ matrix.build.pkg }}
+
+      - name: Check version ${{ matrix.build.bin }}
+        run: nix run .#${{ matrix.build.bin }} version-hash && echo "$GITHUB_SHA" && test "$(nix run .#${{ matrix.build.bin }} version-hash)" = "${GITHUB_SHA}"
 
   notifications:
     # if: github.ref == 'refs/heads/master'
