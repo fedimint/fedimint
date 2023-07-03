@@ -280,20 +280,6 @@
 <a href="#280" id="280">280</a>
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
@@ -380,31 +366,7 @@
     }
 
     <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;peg-in-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;address&quot;</span>]
-            .as_str()
-            .context(<span class="string">&quot;address must be a string&quot;</span>)<span class="question-mark">?
-            </span>.to_owned();
-        <span class="kw">let </span>txid = <span class="self">self</span>.bitcoind.send_to(pegin_addr, amt).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(txout_proof, raw_tx) = <span class="macro">tokio::try_join!</span>(
-            <span class="self">self</span>.bitcoind.get_txout_proof(<span class="kw-2">&amp;</span>txid),
-            <span class="self">self</span>.bitcoind.get_raw_transaction(<span class="kw-2">&amp;</span>txid),
-        )<span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(
-            <span class="self">self</span>,
-            <span class="string">&quot;peg-in&quot;</span>,
-            <span class="string">&quot;--txout-proof={txout_proof}&quot;</span>,
-            <span class="string">&quot;--transaction={raw_tx}&quot;</span>,
-        )
-        .run()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;fetch&quot;</span>).run().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="kw">pub async fn </span>pegin_ng(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;ng&quot;</span>, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit_address = deposit[<span class="string">&quot;address&quot;</span>].as_str().unwrap();
         <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">&quot;operation_id&quot;</span>].as_str().unwrap();
 
@@ -413,7 +375,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">100</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;ng&quot;</span>, <span class="string">&quot;await-deposit&quot;</span>, deposit_operation_id)
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;await-deposit&quot;</span>, deposit_operation_id)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -455,13 +417,19 @@
         <span class="kw">let </span>finality_delay = wallet_cfg.finality_delay;
         <span class="kw">let </span>btc_height = <span class="self">self</span>.bitcoind.client().get_blockchain_info()<span class="question-mark">?</span>.blocks;
         <span class="kw">let </span>expected = btc_height - (finality_delay <span class="kw">as </span>u64);
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;wait-block-height&quot;</span>, expected).run().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-block-height&quot;</span>, expected)
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         poll(<span class="string">&quot;gateways registered&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;list-gateways&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;num_gateways&quot;</span>].as_u64() == <span class="prelude-val">Some</span>(<span class="number">2</span>))
+            <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;list-gateways&quot;</span>)
+                .out_json()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.as_array()
+                .map_or(<span class="bool-val">false</span>, |x| x.len() == <span class="number">2</span>))
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -470,6 +438,7 @@
     <span class="kw">pub async fn </span>await_all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">cmd!</span>(
             <span class="self">self</span>,
+            <span class="string">&quot;dev&quot;</span>,
             <span class="string">&quot;api&quot;</span>,
             <span class="string">&quot;module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height&quot;
         </span>)
@@ -481,9 +450,6 @@
     <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>gateway_pub_key = gw.gateway_pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_pub_key.clone())
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;ng&quot;</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_pub_key)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(
@@ -499,6 +465,12 @@
             <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>client_balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;total_msat&quot;</span>]
+            .as_u64()
+            .unwrap())
     }
 }
 

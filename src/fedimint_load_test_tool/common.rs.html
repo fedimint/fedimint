@@ -377,7 +377,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::MetricEvent;
 
 <span class="kw">pub async fn </span>get_notes_cli(amount: <span class="kw-2">&amp;</span>Amount) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-    <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;ng&quot;</span>, <span class="string">&quot;spend&quot;</span>, amount.msats.to_string())
+    <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;spend&quot;</span>, amount.msats.to_string())
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
         .as_str()

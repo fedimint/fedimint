@@ -1638,7 +1638,7 @@
             <span class="kw">let </span>connect = <span class="kw">if let </span><span class="prelude-val">Some</span>(connect) = connect {
                 connect.to_owned()
             } <span class="kw">else </span>{
-                <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;connect-info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;connect_info&quot;</span>]
+                <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;connect-info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;connect_info&quot;</span>]
                     .as_str()
                     .map(ToOwned::to_owned)
                     .expect(<span class="string">&quot;connect-info command to succeed&quot;</span>)
