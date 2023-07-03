@@ -84,31 +84,7 @@ impl Federation {
     }
 
     pub async fn pegin(&self, amt: u64) -> Result<()> {
-        let pegin_addr = cmd!(self, "peg-in-address").out_json().await?["address"]
-            .as_str()
-            .context("address must be a string")?
-            .to_owned();
-        let txid = self.bitcoind.send_to(pegin_addr, amt).await?;
-        self.bitcoind.mine_blocks(11).await?;
-        self.await_block_sync().await?;
-        let (txout_proof, raw_tx) = tokio::try_join!(
-            self.bitcoind.get_txout_proof(&txid),
-            self.bitcoind.get_raw_transaction(&txid),
-        )?;
-        cmd!(
-            self,
-            "peg-in",
-            "--txout-proof={txout_proof}",
-            "--transaction={raw_tx}",
-        )
-        .run()
-        .await?;
-        cmd!(self, "fetch").run().await?;
-        Ok(())
-    }
-
-    pub async fn pegin_ng(&self, amt: u64) -> Result<()> {
-        let deposit = cmd!(self, "ng", "deposit-address").out_json().await?;
+        let deposit = cmd!(self, "deposit-address").out_json().await?;
         let deposit_address = deposit["address"].as_str().unwrap();
         let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
 
@@ -117,7 +93,7 @@ impl Federation {
             .await?;
         self.bitcoind.mine_blocks(100).await?;
 
-        cmd!(self, "ng", "await-deposit", deposit_operation_id)
+        cmd!(self, "await-deposit", deposit_operation_id)
             .run()
             .await?;
         Ok(())
@@ -159,13 +135,19 @@ impl Federation {
         let finality_delay = wallet_cfg.finality_delay;
         let btc_height = self.bitcoind.client().get_blockchain_info()?.blocks;
         let expected = btc_height - (finality_delay as u64);
-        cmd!(self, "wait-block-height", expected).run().await?;
+        cmd!(self, "dev", "wait-block-height", expected)
+            .run()
+            .await?;
         Ok(())
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
         poll("gateways registered", || async {
-            Ok(cmd!(self, "list-gateways").out_json().await?["num_gateways"].as_u64() == Some(2))
+            Ok(cmd!(self, "list-gateways")
+                .out_json()
+                .await?
+                .as_array()
+                .map_or(false, |x| x.len() == 2))
         })
         .await?;
         Ok(())
@@ -174,6 +156,7 @@ impl Federation {
     pub async fn await_all_peers(&self) -> Result<()> {
         cmd!(
             self,
+            "dev",
             "api",
             "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height"
         )
@@ -185,9 +168,6 @@ impl Federation {
     pub async fn use_gateway(&self, gw: &Gatewayd) -> Result<()> {
         let gateway_pub_key = gw.gateway_pub_key().await?;
         cmd!(self, "switch-gateway", gateway_pub_key.clone())
-            .run()
-            .await?;
-        cmd!(self, "ng", "switch-gateway", gateway_pub_key)
             .run()
             .await?;
         info!(
@@ -203,6 +183,12 @@ impl Federation {
             self.await_block_sync().await?;
         }
         Ok(())
+    }
+
+    pub async fn client_balance(&self) -> Result<u64> {
+        Ok(cmd!(self, "info").out_json().await?["total_msat"]
+            .as_u64()
+            .unwrap())
     }
 }
 

@@ -1261,7 +1261,6 @@ dependencies = [
  "fedimint-aead",
  "fedimint-build",
  "fedimint-client",
- "fedimint-client-legacy",
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-logging",

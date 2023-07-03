@@ -4,28 +4,6 @@ eval "$(devimint env)"
 source ./scripts/completion.sh
 source ./scripts/aliases.sh
 
-function show_verbose_output()
-{
-    if [[ $FM_VERBOSE_OUTPUT -ne 1 ]]
-    then
-        cat > /dev/null 2>&1
-    else
-        cat
-    fi
-}
-
-function use_cln_gw() {
-    PUBKEY=$($FM_GWCLI_CLN info | jq -e -r '.federations[0].registration.gateway_pub_key')
-    $FM_MINT_CLIENT switch-gateway $PUBKEY
-    echo "Using CLN gateway"
-}
-
-function use_lnd_gw() {
-    PUBKEY=$($FM_GWCLI_LND info | jq -e -r '.federations[0].registration.gateway_pub_key')
-    $FM_MINT_CLIENT switch-gateway $PUBKEY
-    echo "Using LND gateway"
-}
-
 echo Waiting for fedimint start
 
 STATUS="$(devimint wait)"
@@ -35,15 +13,6 @@ then
     echo "See other panes for errors"
     exit 1
 fi
-
-scripts/pegin.sh 10000.0 | show_verbose_output
-
-use_cln_gw
-
-echo Funding CLN gateway e-cash wallet ...
-scripts/pegin.sh 20000.0 1 | show_verbose_output
-echo Funding LND gateway e-cash wallet ...
-scripts/pegin.sh 20000.0 1 "LND" | show_verbose_output
 
 echo Done!
 echo

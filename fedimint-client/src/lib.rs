@@ -509,6 +509,10 @@ impl Client {
         self.inner.federation_meta.get(key).cloned()
     }
 
+    pub fn decoders(&self) -> &ModuleDecoderRegistry {
+        self.inner.decoders()
+    }
+
     fn root_secret(&self) -> DerivableSecret {
         self.inner.root_secret.clone()
     }

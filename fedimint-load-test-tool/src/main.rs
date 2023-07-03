@@ -812,7 +812,7 @@ async fn get_cfg_from_args(args: &ConnectCommonArgs) -> anyhow::Result<ClientCon
             let connect = if let Some(connect) = connect {
                 connect.to_owned()
             } else {
-                cmd!(FedimintCli, "connect-info").out_json().await?["connect_info"]
+                cmd!(FedimintCli, "dev", "connect-info").out_json().await?["connect_info"]
                     .as_str()
                     .map(ToOwned::to_owned)
                     .expect("connect-info command to succeed")

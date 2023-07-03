@@ -48,15 +48,20 @@ impl FromStr for ModuleSelector {
 }
 
 #[derive(Debug, Clone, Subcommand)]
-pub enum ClientNg {
+pub enum ClientCmd {
+    /// Display wallet info (holdings, tiers)
     Info,
+    /// Reissue notes received from a third party to avoid double spends
     Reissue {
         #[clap(value_parser = parse_ecash)]
         notes: TieredMulti<SpendableNote>,
     },
+    /// Prepare notes to send to a third party as a payment
     Spend {
+        #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
     },
+    /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
         #[clap(long, value_parser = parse_fedimint_amount)]
         amount: Amount,
@@ -65,21 +70,22 @@ pub enum ClientNg {
         #[clap(long)]
         expiry_time: Option<u64>,
     },
-    WaitInvoice {
-        operation_id: OperationId,
-    },
-    LnPay {
-        bolt11: lightning_invoice::Invoice,
-    },
+    /// Wait for incoming invoice to be paid
+    WaitInvoice { operation_id: OperationId },
+    /// Pay a lightning invoice via a gateway
+    LnPay { bolt11: lightning_invoice::Invoice },
+    /// List registered gateways
     ListGateways,
+    /// Switch active gateway
     SwitchGateway {
         #[clap(value_parser = parse_gateway_pub_key)]
         pubkey: secp256k1::XOnlyPublicKey,
     },
+    /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress,
-    AwaitDeposit {
-        operation_id: OperationId,
-    },
+    /// Wait for desposit on previously generated address
+    AwaitDeposit { operation_id: OperationId },
+    /// Withdraw funds from the federation
     Withdraw {
         #[clap(long)]
         amount: bitcoin::Amount,
@@ -123,15 +129,15 @@ fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
 }
 
 pub async fn handle_ng_command(
-    command: ClientNg,
+    command: ClientCmd,
     _config: ClientConfig,
     client: Client,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
-        ClientNg::Info => {
+        ClientCmd::Info => {
             return get_note_summary(&client).await;
         }
-        ClientNg::Reissue { notes } => {
+        ClientCmd::Reissue { notes } => {
             let amount = notes.total_amount();
 
             let operation_id = client.reissue_external_notes(notes, ()).await?;
@@ -151,7 +157,7 @@ pub async fn handle_ng_command(
 
             Ok(serde_json::to_value(amount).unwrap())
         }
-        ClientNg::Spend { amount } => {
+        ClientCmd::Spend { amount } => {
             let (operation, notes) = client
                 .spend_notes(amount, Duration::from_secs(3600), ())
                 .await?;
@@ -161,7 +167,7 @@ pub async fn handle_ng_command(
                 "notes": serialize_ecash(&notes),
             }))
         }
-        ClientNg::LnInvoice {
+        ClientCmd::LnInvoice {
             amount,
             description,
             expiry_time,
@@ -177,7 +183,7 @@ pub async fn handle_ng_command(
             })
             .unwrap())
         }
-        ClientNg::WaitInvoice { operation_id } => {
+        ClientCmd::WaitInvoice { operation_id } => {
             let mut updates = client
                 .subscribe_ln_receive(operation_id)
                 .await?
@@ -198,7 +204,7 @@ pub async fn handle_ng_command(
 
             return Err(anyhow::anyhow!("Lightning receive failed"));
         }
-        ClientNg::LnPay { bolt11 } => {
+        ClientCmd::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
 
             let (pay_type, contract_id) = client.pay_bolt11_invoice(bolt11).await?;
@@ -262,7 +268,7 @@ pub async fn handle_ng_command(
 
             return Err(anyhow::anyhow!("Lightning Payment failed"));
         }
-        ClientNg::ListGateways => {
+        ClientCmd::ListGateways => {
             let gateways = client.fetch_registered_gateways().await?;
             if gateways.is_empty() {
                 return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());
@@ -284,14 +290,14 @@ pub async fn handle_ng_command(
                 });
             Ok(serde_json::to_value(gateways_json).unwrap())
         }
-        ClientNg::SwitchGateway { pubkey } => {
+        ClientCmd::SwitchGateway { pubkey } => {
             client.set_active_gateway(&pubkey).await?;
             let gateway = client.select_active_gateway().await?;
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
         }
-        ClientNg::DepositAddress => {
+        ClientCmd::DepositAddress => {
             let (operation_id, address) = client
                 .get_deposit_address(now() + Duration::from_secs(600))
                 .await?;
@@ -302,7 +308,7 @@ pub async fn handle_ng_command(
                 }
             })
         }
-        ClientNg::AwaitDeposit { operation_id } => {
+        ClientCmd::AwaitDeposit { operation_id } => {
             let mut updates = client
                 .subscribe_deposit_updates(operation_id)
                 .await?
@@ -315,7 +321,7 @@ pub async fn handle_ng_command(
             Ok(serde_json::to_value(()).unwrap())
         }
 
-        ClientNg::Backup { metadata } => {
+        ClientCmd::Backup { metadata } => {
             let metadata = metadata_from_clap_cli(metadata)?;
 
             client
@@ -323,17 +329,17 @@ pub async fn handle_ng_command(
                 .await?;
             Ok(serde_json::to_value(()).unwrap())
         }
-        ClientNg::Restore { .. } => {
+        ClientCmd::Restore { .. } => {
             panic!("Has to be handled before initializing client")
         }
-        ClientNg::Wipe { force } => {
+        ClientCmd::Wipe { force } => {
             if !force {
                 bail!("This will wipe the state of the client irrecoverably. Use `--force` to proceed.")
             }
             client.wipe_state().await?;
             Ok(serde_json::to_value(()).unwrap())
         }
-        ClientNg::PrintSecret => {
+        ClientCmd::PrintSecret => {
             let secret = client.get_secret::<PlainRootSecretStrategy>().await;
             let hex_secret = hex::ToHex::to_hex(&secret[..]);
 
@@ -341,7 +347,7 @@ pub async fn handle_ng_command(
                 "secret": hex_secret,
             }))
         }
-        ClientNg::Withdraw { amount, address } => {
+        ClientCmd::Withdraw { amount, address } => {
             let fees = client.get_withdraw_fee(address.clone(), amount).await?;
             let absolute_fees = fees.amount();
 
@@ -373,7 +379,7 @@ pub async fn handle_ng_command(
 
             unreachable!("Update stream ended without outcome");
         }
-        ClientNg::DiscoverVersion => {
+        ClientCmd::DiscoverVersion => {
             Ok(json!({ "versions": client.discover_common_api_version().await? }))
         }
     }
