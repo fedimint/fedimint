@@ -2329,7 +2329,6 @@ dependencies = [
  "clap",
  "clap_complete",
  "fedimint-build",
- "fedimint-client-legacy",
  "fedimint-core",
  "fedimint-logging",
  "ln-gateway",
