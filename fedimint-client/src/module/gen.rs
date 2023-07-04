@@ -5,7 +5,9 @@ use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientModuleConfig};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
-use fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen};
+use fedimint_core::module::{
+    CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen, MultiApiVersion,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
@@ -20,6 +22,10 @@ pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
 pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     type Module: ClientModule;
     type Config: TypedClientModuleConfig;
+
+    /// Api versions of the corresponding server side module's API
+    /// that this client module implementation can use.
+    fn supported_api_versions(&self) -> MultiApiVersion;
 
     /// Initialize a [`ClientModule`] instance from its config
     async fn init(
@@ -40,6 +46,9 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
     fn module_kind(&self) -> ModuleKind;
 
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static);
+
+    /// See [`ClientModuleGen::supported_api_versions`]
+    fn supported_api_versions(&self) -> MultiApiVersion;
 
     async fn init(
         &self,
@@ -68,6 +77,10 @@ where
 
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
         self
+    }
+
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        <Self as ClientModuleGen>::supported_api_versions(self)
     }
 
     async fn init(

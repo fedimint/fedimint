@@ -202,11 +202,6 @@ impl ClientModule for DummyClientModule {
         }
     }
 
-    fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
-            .expect("no version conficts")
-    }
-
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
             amount: input.amount,
@@ -336,6 +331,11 @@ impl ExtendsCommonModuleGen for DummyClientGen {
 impl ClientModuleGen for DummyClientGen {
     type Module = DummyClientModule;
     type Config = DummyClientConfig;
+
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
+    }
 
     async fn init(
         &self,

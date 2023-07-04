@@ -13,7 +13,6 @@ use fedimint_core::config::{
     ServerModuleGenRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
@@ -72,13 +71,22 @@ impl ServerConfig {
     }
 
     pub(crate) fn supported_api_versions_summary(
-        modules: &ServerModuleRegistry,
+        modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
+        module_inits: &ServerModuleGenRegistry,
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: Self::supported_api_versions(),
             modules: modules
-                .iter_modules()
-                .map(|(id, _, module)| (id, module.supported_api_versions()))
+                .iter()
+                .map(|(&id, config)| {
+                    (
+                        id,
+                        module_inits
+                            .get(&config.kind)
+                            .expect("missing module kind gen")
+                            .supported_api_versions(),
+                    )
+                })
                 .collect(),
         }
     }

@@ -386,6 +386,11 @@ impl ClientModuleGen for GatewayClientGen {
     type Module = GatewayClientModule;
     type Config = LightningClientConfig;
 
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
+    }
+
     async fn init(
         &self,
         cfg: Self::Config,
@@ -470,11 +475,6 @@ impl ClientModule for GatewayClientModule {
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: self.decoder(),
         }
-    }
-
-    fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
-            .expect("no version conficts")
     }
 
     fn input_amount(

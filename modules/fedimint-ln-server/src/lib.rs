@@ -66,6 +66,10 @@ impl ServerModuleGen for LightningGen {
         &[ModuleConsensusVersion(0)]
     }
 
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -289,10 +293,6 @@ impl ServerModule for Lightning {
     type Common = LightningModuleTypes;
     type Gen = LightningGen;
     type VerificationCache = LightningVerificationCache;
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
-    }
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         while !self.consensus_proposal(dbtx).await.forces_new_epoch() {

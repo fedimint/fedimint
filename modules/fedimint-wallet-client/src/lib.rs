@@ -387,6 +387,11 @@ impl ClientModuleGen for WalletClientGen {
     type Module = WalletClientModule;
     type Config = WalletClientConfig;
 
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
+    }
+
     async fn init(
         &self,
         cfg: Self::Config,
@@ -463,11 +468,6 @@ impl ClientModule for WalletClientModule {
             wallet_decoder: self.decoder(),
             secp: Default::default(),
         }
-    }
-
-    fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
-            .expect("no version conficts")
     }
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {

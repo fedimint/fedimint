@@ -67,6 +67,10 @@ impl ServerModuleGen for MintGen {
         &[ModuleConsensusVersion(0)]
     }
 
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -333,10 +337,6 @@ impl ServerModule for Mint {
         if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
             std::future::pending().await
         }
-    }
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
     }
 
     async fn consensus_proposal(

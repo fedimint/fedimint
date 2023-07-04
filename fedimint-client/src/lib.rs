@@ -724,40 +724,57 @@ impl Client {
         })
     }
 
-    /// Query the federation for API version support and then calculate
-    /// the best API version to use (supported by most guardians).
     pub async fn discover_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
         Ok(self
             .api()
-            .discover_api_version_set(&self.supported_api_versions_summary().await)
+            .discover_api_version_set(
+                &Self::supported_api_versions_summary_static(
+                    self.get_config().await,
+                    &self.inner.module_gens,
+                )
+                .await,
+            )
+            .await?)
+    }
+
+    /// Query the federation for API version support and then calculate
+    /// the best API version to use (supported by most guardians).
+    pub async fn discover_common_api_version_static(
+        config: &ClientConfig,
+        client_module_gen: &ClientModuleGenRegistry,
+        api: &DynGlobalApi,
+    ) -> anyhow::Result<ApiVersionSet> {
+        Ok(api
+            .discover_api_version_set(
+                &Self::supported_api_versions_summary_static(config, client_module_gen).await,
+            )
             .await?)
     }
 
     /// [`SupportedApiVersionsSummary`] that the client and its modules support
-    pub async fn supported_api_versions_summary(&self) -> SupportedApiVersionsSummary {
-        let config = self.get_config().await;
-
+    pub async fn supported_api_versions_summary_static(
+        config: &ClientConfig,
+        client_module_gen: &ClientModuleGenRegistry,
+    ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
                 core_consensus: config.consensus_version,
                 api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
                     .expect("must not have conflicting versions"),
             },
-            modules: self
-                .inner
+            modules: config
                 .modules
-                .iter_modules()
-                .filter_map(|(module_instance_id, _, module)| {
-                    config
-                        .modules
-                        .get(&module_instance_id)
-                        .map(|module_config| {
+                .iter()
+                .filter_map(|(&module_instance_id, module_config)| {
+                    client_module_gen
+                        .get(module_config.kind())
+                        .map(|module_gen| {
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
                                     core_consensus: config.consensus_version,
                                     module_consensus: module_config.version,
-                                    api: module.supported_api_versions(),
+                                    api: module_gen.supported_api_versions(),
                                 },
                             )
                         })
@@ -785,6 +802,7 @@ struct ClientInner {
     federation_meta: BTreeMap<String, String>,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
+    module_gens: ClientModuleGenRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
@@ -1207,6 +1225,10 @@ impl ClientBuilder {
 
         let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
+        // TODO: pass to module's `init`
+        let _common_versions =
+            Client::discover_common_api_version_static(&config, &self.module_gens, &api).await?;
+
         let root_secret = get_client_root_secret::<S>(&db).await;
 
         let modules = {
@@ -1265,6 +1287,7 @@ impl ClientBuilder {
             federation_meta: config.meta,
             primary_module_instance,
             modules,
+            module_gens: self.module_gens.clone(),
             executor,
             api,
             secp_ctx: Secp256k1::new(),
