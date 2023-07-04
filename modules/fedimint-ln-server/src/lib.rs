@@ -1,5 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::ops::Sub;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use anyhow::bail;
@@ -34,7 +33,8 @@ use fedimint_ln_common::contracts::{
     IdentifiableContract, Preimage, PreimageDecryptionShare,
 };
 use fedimint_ln_common::db::{
-    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockHeightKey, ContractKey,
+    AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
+    AgreedDecryptionShareKeyPrefix, BlockHeightVoteKey, BlockHeightVotePrefix, ContractKey,
     ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
     LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
     ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
@@ -45,7 +45,6 @@ use fedimint_ln_common::{
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
-use itertools::Itertools;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -242,11 +241,15 @@ impl ServerModuleGen for LightningGen {
                         "Proposed Decryption Shares"
                     );
                 }
-                DbKeyPrefix::BlockHeight => {
-                    let heights = dbtx.get_value(&BlockHeightKey).await;
-                    if let Some(heights) = heights {
-                        lightning.insert("BlockHeight".to_string(), Box::new(heights));
-                    }
+                DbKeyPrefix::BlockHeightVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        BlockHeightVotePrefix,
+                        BlockHeightVoteKey,
+                        u64,
+                        lightning,
+                        "Block Height Votes"
+                    );
                 }
             }
         }
@@ -310,14 +313,10 @@ impl ServerModule for Lightning {
             .collect()
             .await;
 
-        let consensus_height = self.consensus_height(dbtx).await;
-        let height = self
-            .btc_rpc
-            .get_block_height()
-            .await
-            .expect("always retries");
-        if consensus_height.is_none() || consensus_height.unwrap_or_default() < height {
-            items.push(LightningConsensusItem::BlockHeight(height));
+        let block_height_vote = self.block_height().await;
+
+        if block_height_vote != self.consensus_block_height(dbtx).await {
+            items.push(LightningConsensusItem::BlockHeight(block_height_vote));
         }
 
         ConsensusProposal::new_auto_trigger(items)
@@ -329,24 +328,160 @@ impl ServerModule for Lightning {
         consensus_items: Vec<(PeerId, LightningConsensusItem)>,
         _consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
-        let mut peer_heights = dbtx.get_value(&BlockHeightKey).await.unwrap_or_default();
-
-        for (peer, item) in consensus_items.into_iter() {
-            let span = info_span!("process decryption share", %peer);
+        for (peer_id, item) in consensus_items.into_iter() {
+            let span = info_span!("process decryption share", %peer_id);
             let _guard = span.enter();
 
             match item {
                 LightningConsensusItem::DecryptPreimage(contract_id, share) => {
-                    dbtx.insert_new_entry(&AgreedDecryptionShareKey(contract_id, peer), &share)
+                    // check if we already have a decryption share for this peer
+                    if dbtx
+                        .get_value(&AgreedDecryptionShareKey(contract_id, peer_id))
+                        .await
+                        .is_some()
+                    {
+                        warn!("Received redundant decryption share");
+                        continue;
+                    }
+
+                    let account = match self.get_contract_account(dbtx, contract_id).await {
+                        Some(account) => account,
+                        None => {
+                            warn!("Received decryption share for non-existent contract account");
+                            continue;
+                        }
+                    };
+
+                    let (contract, out_point) = match account.contract {
+                        FundedContract::Incoming(contract) => {
+                            (contract.contract, contract.out_point)
+                        }
+                        FundedContract::Outgoing(..) => {
+                            warn!("Received decryption share for outgoing contract");
+                            continue;
+                        }
+                    };
+
+                    if contract.decrypted_preimage != DecryptedPreimage::Pending {
+                        warn!("Received decryption share for non-pending incoming contract");
+                        continue;
+                    }
+
+                    if !self.validate_decryption_share(
+                        peer_id,
+                        &share,
+                        &contract.encrypted_preimage,
+                    ) {
+                        warn!("Received invalid decryption share for incoming contract");
+                        continue;
+                    }
+
+                    // we save the first ordered valid decryption share for every peer
+                    dbtx.insert_new_entry(&AgreedDecryptionShareKey(contract_id, peer_id), &share)
+                        .await;
+
+                    // collect all valid decryption shares for this contract_id
+                    let decryption_shares = dbtx
+                        .find_by_prefix(&AgreedDecryptionShareContractIdPrefix(contract_id))
+                        .await
+                        .map(|(key, decryption_share)| (key.1, decryption_share))
+                        .collect::<Vec<_>>()
+                        .await;
+
+                    if decryption_shares.len() < self.cfg.consensus.threshold() {
+                        continue;
+                    }
+
+                    debug!("Beginning to decrypt preimage");
+
+                    let preimage_vec = match self.cfg.consensus.threshold_pub_keys.decrypt(
+                        decryption_shares
+                            .iter()
+                            .map(|(peer, share)| (peer.to_usize(), &share.0)),
+                        &contract.encrypted_preimage.0,
+                    ) {
+                        Ok(preimage_vec) => preimage_vec,
+                        Err(_) => {
+                            // TODO: check if that can happen even though shares are verified
+                            // before
+                            error!(contract_hash = %contract.hash, "Failed to decrypt preimage");
+                            continue;
+                        }
+                    };
+
+                    // Delete decryption shares once we've decrypted the preimage
+                    dbtx.remove_entry(&ProposeDecryptionShareKey(contract_id))
+                        .await;
+
+                    dbtx.remove_by_prefix(&AgreedDecryptionShareContractIdPrefix(contract_id))
+                        .await;
+
+                    let decrypted_preimage = if preimage_vec.len() == 32
+                        && contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage_vec)
+                    {
+                        let preimage = Preimage(
+                            preimage_vec
+                                .as_slice()
+                                .try_into()
+                                .expect("Invalid preimage length"),
+                        );
+                        if preimage.to_public_key().is_ok() {
+                            DecryptedPreimage::Some(preimage)
+                        } else {
+                            DecryptedPreimage::Invalid
+                        }
+                    } else {
+                        DecryptedPreimage::Invalid
+                    };
+
+                    debug!(?decrypted_preimage);
+
+                    // TODO: maybe define update helper fn
+                    // Update contract
+                    let contract_db_key = ContractKey(contract_id);
+                    let mut contract_account = dbtx
+                        .get_value(&contract_db_key)
+                        .await
+                        .expect("checked before that it exists");
+                    let mut incoming = match &mut contract_account.contract {
+                        FundedContract::Incoming(incoming) => incoming,
+                        _ => unreachable!("previously checked that it's an incoming contrac"),
+                    };
+                    incoming.contract.decrypted_preimage = decrypted_preimage.clone();
+                    trace!(?contract_account, "Updating contract account");
+                    dbtx.insert_entry(&contract_db_key, &contract_account).await;
+
+                    // Update output outcome
+                    let mut outcome = dbtx
+                        .get_value(&ContractUpdateKey(out_point))
+                        .await
+                        .expect("outcome was created on funding");
+                    let incoming_contract_outcome_preimage = match &mut outcome {
+                        LightningOutputOutcome::Contract {
+                            outcome: ContractOutcome::Incoming(decryption_outcome),
+                            ..
+                        } => decryption_outcome,
+                        _ => panic!("We are expeccting an incoming contract"),
+                    };
+                    *incoming_contract_outcome_preimage = decrypted_preimage.clone();
+                    dbtx.insert_entry(&ContractUpdateKey(out_point), &outcome)
                         .await;
                 }
-                LightningConsensusItem::BlockHeight(height) => {
-                    peer_heights.insert(peer, height);
+                LightningConsensusItem::BlockHeight(block_height) => {
+                    let current_vote = dbtx
+                        .get_value(&BlockHeightVoteKey(peer_id))
+                        .await
+                        .unwrap_or(0);
+
+                    // consensus block height can never decrease
+                    if block_height > current_vote {
+                        dbtx.insert_entry(&BlockHeightVoteKey(peer_id), &block_height)
+                            .await;
+                    }
                 }
             }
         }
 
-        dbtx.insert_entry(&BlockHeightKey, &peer_heights).await;
         vec![]
     }
 
@@ -377,7 +512,7 @@ impl ServerModule for Lightning {
             .into_module_error_other();
         }
 
-        let consensus_height = self.consensus_height(dbtx).await.unwrap_or_default();
+        let consensus_height = self.consensus_block_height(dbtx).await;
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
                 if outgoing.timelock as u64 > consensus_height && !outgoing.cancelled {
@@ -620,160 +755,10 @@ impl ServerModule for Lightning {
     #[instrument(skip_all)]
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        consensus_peers: &BTreeSet<PeerId>,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        _consensus_peers: &BTreeSet<PeerId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
-        // Decrypt preimages
-        let preimage_decryption_shares = dbtx
-            .find_by_prefix(&AgreedDecryptionShareKeyPrefix)
-            .await
-            .map(|(key, value)| (key.0, (key.1, value)))
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .into_group_map();
-
-        let mut bad_peers = vec![];
-        for (contract_id, shares) in preimage_decryption_shares {
-            let peers: Vec<PeerId> = shares.iter().map(|(peer, _)| *peer).collect();
-            let span = info_span!("decrypt_preimage", %contract_id);
-            let _guard = span.enter();
-
-            let incoming_contract = match self.get_contract_account(dbtx, contract_id).await {
-                Some(ContractAccount {
-                    contract: FundedContract::Incoming(incoming),
-                    ..
-                }) => incoming.contract,
-                _ => {
-                    warn!("Received decryption share for non-existent incoming contract");
-                    for peer in peers {
-                        dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
-                            .await;
-                    }
-                    continue;
-                }
-            };
-
-            let valid_shares: HashMap<PeerId, PreimageDecryptionShare> = shares
-                .into_iter()
-                .filter(|(peer, share)| {
-                    self.validate_decryption_share(
-                        *peer,
-                        share,
-                        &incoming_contract.encrypted_preimage,
-                    )
-                })
-                .collect();
-
-            for peer in consensus_peers.sub(&valid_shares.keys().cloned().collect()) {
-                bad_peers.push(peer);
-                warn!("{} did not contribute valid decryption shares", peer);
-            }
-
-            if valid_shares.len() < self.cfg.consensus.threshold() {
-                warn!(
-                    valid_shares = %valid_shares.len(),
-                    shares_needed = %self.cfg.consensus.threshold(),
-                    "Too few decryption shares"
-                );
-                continue;
-            }
-            debug!("Beginning to decrypt preimage");
-
-            let contract = self
-                .get_contract_account(dbtx, contract_id)
-                .await
-                .expect("decryption shares without contracts should be discarded earlier"); // FIXME: verify
-
-            let (incoming_contract, out_point) = match contract.contract {
-                FundedContract::Incoming(incoming) => (incoming.contract, incoming.out_point),
-                _ => panic!(
-                    "decryption shares without incoming contracts should be discarded earlier"
-                ),
-            };
-
-            if !matches!(
-                incoming_contract.decrypted_preimage,
-                DecryptedPreimage::Pending
-            ) {
-                warn!("Tried to decrypt the same preimage twice, this should not happen.");
-                continue;
-            }
-
-            let preimage_vec = match self.cfg.consensus.threshold_pub_keys.decrypt(
-                valid_shares
-                    .iter()
-                    .map(|(peer, share)| (peer.to_usize(), &share.0)),
-                &incoming_contract.encrypted_preimage.0,
-            ) {
-                Ok(preimage_vec) => preimage_vec,
-                Err(_) => {
-                    // TODO: check if that can happen even though shares are verified before
-                    error!(contract_hash = %incoming_contract.hash, "Failed to decrypt preimage");
-                    continue;
-                }
-            };
-
-            // Delete decryption shares once we've decrypted the preimage
-            dbtx.remove_entry(&ProposeDecryptionShareKey(contract_id))
-                .await;
-            for peer in peers {
-                dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
-                    .await;
-            }
-
-            let decrypted_preimage = if preimage_vec.len() == 32
-                && incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage_vec)
-            {
-                let preimage = Preimage(
-                    preimage_vec
-                        .as_slice()
-                        .try_into()
-                        .expect("Invalid preimage length"),
-                );
-                if preimage.to_public_key().is_ok() {
-                    DecryptedPreimage::Some(preimage)
-                } else {
-                    DecryptedPreimage::Invalid
-                }
-            } else {
-                DecryptedPreimage::Invalid
-            };
-            debug!(?decrypted_preimage);
-
-            // TODO: maybe define update helper fn
-            // Update contract
-            let contract_db_key = ContractKey(contract_id);
-            let mut contract_account = dbtx
-                .get_value(&contract_db_key)
-                .await
-                .expect("checked before that it exists");
-            let mut incoming = match &mut contract_account.contract {
-                FundedContract::Incoming(incoming) => incoming,
-                _ => unreachable!("previously checked that it's an incoming contrac"),
-            };
-            incoming.contract.decrypted_preimage = decrypted_preimage.clone();
-            trace!(?contract_account, "Updating contract account");
-            dbtx.insert_entry(&contract_db_key, &contract_account).await;
-
-            // Update output outcome
-            let outcome_db_key = ContractUpdateKey(out_point);
-            let mut outcome = dbtx
-                .get_value(&outcome_db_key)
-                .await
-                .expect("outcome was created on funding");
-            let incoming_contract_outcome_preimage = match &mut outcome {
-                LightningOutputOutcome::Contract {
-                    outcome: ContractOutcome::Incoming(decryption_outcome),
-                    ..
-                } => decryption_outcome,
-                _ => panic!("We are expeccting an incoming contract"),
-            };
-            *incoming_contract_outcome_preimage = decrypted_preimage.clone();
-            dbtx.insert_entry(&outcome_db_key, &outcome).await;
-        }
-
-        bad_peers
+        vec![]
     }
 
     async fn output_status(
@@ -795,9 +780,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 "block_height",
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
-                    let future = context.wait_key_exists(BlockHeightKey);
-                    future.await;
-                    Ok(module.consensus_height(&mut context.dbtx()).await)
+                    Ok(Some(module.consensus_block_height(&mut context.dbtx()).await))
                 }
             },
             api_endpoint! {
@@ -855,16 +838,32 @@ impl Lightning {
         Ok(Lightning { cfg, btc_rpc })
     }
 
-    /// Returns the median block height if enough peers have contributed
-    pub async fn consensus_height(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Option<u64> {
-        let peer_heights = dbtx.get_value(&BlockHeightKey).await.unwrap_or_default();
-        if peer_heights.len() < self.cfg.consensus.threshold() {
-            return None;
+    pub async fn block_height(&self) -> u64 {
+        self.btc_rpc
+            .get_block_height()
+            .await
+            .expect("bitcoind rpc failed")
+    }
+
+    pub async fn consensus_block_height(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u64 {
+        let peer_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
+
+        let mut heights = dbtx
+            .find_by_prefix(&BlockHeightVotePrefix)
+            .await
+            .map(|(.., height)| height)
+            .collect::<Vec<_>>()
+            .await;
+
+        assert!(heights.len() <= peer_count);
+
+        while heights.len() < peer_count {
+            heights.push(0);
         }
 
-        let mut heights: Vec<_> = peer_heights.values().collect();
         heights.sort_unstable();
-        Some(**heights.get(heights.len() / 2).expect("items is non-empty"))
+
+        heights[peer_count / 2]
     }
 
     fn validate_decryption_share(
@@ -1212,7 +1211,7 @@ mod fedimint_migration_tests {
                             "validate_migrations was not able to read any ProposeDecryptionShares"
                         );
                         }
-                        DbKeyPrefix::BlockHeight => {}
+                        DbKeyPrefix::BlockHeightVote => {}
                     }
                 }
             },
