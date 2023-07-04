@@ -42,7 +42,7 @@ async fn client_ignores_unknown_module() {
     let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
 
-    let mut cfg = client.get_config().await.clone();
+    let mut cfg = client.get_config().clone();
     let extra_mod = ClientModuleConfig {
         kind: ModuleKind::from_static_str("unknown_module"),
         version: ModuleConsensusVersion(0),

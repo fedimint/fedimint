@@ -620,10 +620,7 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
                 let params = ApiRequestErased::new(params);
                 let ws_api: Arc<_> = WsFederationApi::from_config(
-                    cli.build_client_ng(&self.module_gens)
-                        .await?
-                        .get_config()
-                        .await,
+                    cli.build_client_ng(&self.module_gens).await?.get_config(),
                 )
                 .into();
                 let response: Value = match peer_id {

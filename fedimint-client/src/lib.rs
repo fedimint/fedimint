@@ -686,7 +686,7 @@ impl Client {
     }
 
     /// Returns the config with which the client was initialized.
-    pub async fn get_config(&self) -> &ClientConfig {
+    pub fn get_config(&self) -> &ClientConfig {
         &self.inner.config
     }
 
@@ -729,7 +729,7 @@ impl Client {
             .api()
             .discover_api_version_set(
                 &Self::supported_api_versions_summary_static(
-                    self.get_config().await,
+                    self.get_config(),
                     &self.inner.module_gens,
                 )
                 .await,

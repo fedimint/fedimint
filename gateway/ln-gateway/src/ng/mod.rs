@@ -256,7 +256,7 @@ impl GatewayClientExt for Client {
                                     operation_id,
                                     time_to_live,
                                     registration_info: registration,
-                                    federation_id: self.get_config().await.federation_id,
+                                    federation_id: self.get_config().federation_id,
                                 },
                                 state: RegisterWithFederationStates::Register(
                                     RegisterWithFederation {
