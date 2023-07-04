@@ -120,7 +120,7 @@
 
           # Create a package that contains only one `bin`ary from an input `pkg`
           #
-          # For efficiency we built some binaries togetherr (like fedimintd + fedimint-cli),
+          # For efficiency we built some binaries together (like fedimintd + fedimint-cli),
           # but we would like to expose them separately.
           pickBinary = { pkg, bin }:
             stdenv.mkDerivation {
@@ -149,21 +149,25 @@
             workspaceAudit = craneLib.workspaceAudit;
           };
 
-          # outputs that build a particular Rust package
-          rustPackageOutputs = {
-            default = craneLibNative.fedimint-pkgs;
+          # Outputs that build a particular Rust package.
+          # Notably, these don't have the git hash replaced (yet) - for that, see `rustPackageOutputsFinal`
+          rustPackageOutputs = craneLib: {
+            default = craneLib.fedimint-pkgs;
 
-            fedimint-pkgs = craneLibNative.fedimint-pkgs;
-            gateway-pkgs = craneLibNative.gateway-pkgs;
-            client-pkgs = craneLibNative.client-pkgs { };
-            fedimint-dbtool-pkgs = craneLibNative.fedimint-dbtool-pkgs;
-            devimint = craneLibNative.devimint;
-            fedimint-load-test-tool = craneLibNative.fedimint-load-test-tool;
+            fedimint-pkgs = craneLib.fedimint-pkgs;
+            gateway-pkgs = craneLib.gateway-pkgs;
+            client-pkgs = craneLib.client-pkgs { };
+            fedimint-dbtool-pkgs = craneLib.fedimint-dbtool-pkgs;
+            devimint = craneLib.devimint;
+            fedimint-load-test-tool = craneLib.fedimint-load-test-tool;
           };
 
-          # rust packages outputs with git hash replaced
-          rustPackageOutputsFinal = builtins.mapAttrs (name: package: replaceGitHash { inherit name package; }) rustPackageOutputs;
+          # `rustPackageOutputs` with git hash replaced from placeholder to a real value
+          # To avoid rebuilding too much source needlessly, we replace placeholders with real git hash (which changes on every build),
+          # as a very last step.
+          rustPackageOutputsFinal = craneLib: builtins.mapAttrs (name: package: replaceGitHash { inherit name package; }) (rustPackageOutputs craneLib);
 
+          # All tests, grouped together, so we can `nix build -L .#cli-test.<name>` or `nix build -L .#ci.cli-test.<name>`, etc.
           cli-test = craneLib: {
             all = craneLib.cliTestsAll;
             reconnect = craneLib.cliTestReconnect;
@@ -180,33 +184,33 @@
           };
 
           # packages we expose from our flake (note: we also expose `legacyPackages` for hierarchical outputs)
-          packages = (workspaceOutputs craneLibNative) //
+          packages = craneLib: (workspaceOutputs craneLib) //
             # replace git hash in the final binaries
-            rustPackageOutputsFinal
+            (rustPackageOutputsFinal craneLib)
             // {
             fedimintd = pickBinary
               {
-                pkg = rustPackageOutputsFinal.fedimint-pkgs;
+                pkg = (rustPackageOutputsFinal craneLib).fedimint-pkgs;
                 bin = "fedimintd";
               };
             fedimint-cli = pickBinary
               {
-                pkg = rustPackageOutputsFinal.fedimint-pkgs;
+                pkg = (rustPackageOutputsFinal craneLib).fedimint-pkgs;
                 bin = "fedimint-cli";
               };
             gatewayd = pickBinary
               {
-                pkg = rustPackageOutputsFinal.gateway-pkgs;
+                pkg = (rustPackageOutputsFinal craneLib).gateway-pkgs;
                 bin = "gatewayd";
               };
             gateway-cli = pickBinary
               {
-                pkg = rustPackageOutputsFinal.gateway-pkgs;
+                pkg = (rustPackageOutputsFinal craneLib).gateway-pkgs;
                 bin = "gateway-cli";
               };
             fedimint-load-test-tool = pickBinary
               {
-                pkg = rustPackageOutputsFinal.fedimint-load-test-tool;
+                pkg = (rustPackageOutputsFinal craneLib).fedimint-load-test-tool;
                 bin = "fedimint-load-test-tool";
               };
           };
@@ -229,7 +233,7 @@
               # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
               # recursing into `cargoArtifacts` to do the same. This way a debug build depends on debug build of all dependencies.
               # See https://github.com/ipetkov/crane/discussions/140#discussioncomment-3857137 for more info.
-              debug = (workspaceOutputs craneLibDebug) // { cli-test = cli-test craneLibDebug; };
+              debug = (workspaceOutputs craneLibDebug) // { cli-test = cli-test craneLibDebug; } // (packages craneLibDebug);
 
               ci = (workspaceOutputs craneLibCi) // {
                 wasm-tests = wasm-tests {
@@ -239,7 +243,7 @@
                   craneLibNative = craneLibCi;
                 };
                 cli-test = cli-test craneLibCi;
-              };
+              } // (packages craneLibCi);
 
               cross = builtins.mapAttrs
                 (name: target: {
@@ -254,12 +258,13 @@
                     pkgs.writeShellScriptBin "entrypoint" ''
                       exec bash "${./misc/fedimintd-container-entrypoint.sh}" "$@"
                     '';
+                  packagesNative = (packages craneLibNative);
                 in
                 {
                   fedimintd = pkgs.dockerTools.buildLayeredImage {
                     name = "fedimintd";
                     contents = [
-                      packages.fedimint-pkgs
+                      packagesNative.fedimint-pkgs
                       pkgs.bash
                       pkgs.coreutils
                     ];
@@ -488,7 +493,9 @@
             };
         in
         {
-          inherit packages legacyPackages devShells;
+          inherit devShells legacyPackages;
+
+          packages = packages craneLibNative;
 
           lib = {
             inherit replaceGitHash devShells;
