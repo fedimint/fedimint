@@ -12,6 +12,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send_sync, task};
 use futures::future::select_all;
 use futures::stream::StreamExt;
@@ -19,6 +20,7 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
+use super::state::StateTransitionFunction;
 use crate::sm::notifier::Notifier;
 use crate::sm::state::{DynContext, DynState};
 use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId, State, StateTransition};
@@ -267,6 +269,12 @@ where
     }
 }
 
+type TransitionForActiveState<GC> = (
+    serde_json::Value,
+    DynState<GC>,
+    StateTransitionFunction<DynState<GC>>,
+    ActiveState,
+);
 impl<GC> ExecutorInner<GC>
 where
     GC: GlobalContext,
@@ -275,7 +283,7 @@ where
         info!("Starting state machine executor task");
         loop {
             if let Err(err) = self
-                .execute_next_state_transition(&global_context_gen)
+                .execute_next_state_transitions(&global_context_gen)
                 .await
             {
                 warn!(
@@ -286,24 +294,53 @@ where
         }
     }
 
-    async fn execute_next_state_transition(
+    fn get_transition_for(
+        &self,
+        state: DynState<GC>,
+        meta: ActiveState,
+        global_context_gen: &ContextGen<GC>,
+    ) -> Option<BoxFuture<TransitionForActiveState<GC>>> {
+        let module_instance = state.module_instance_id();
+        let context = &self
+            .module_contexts
+            .get(&module_instance)
+            .expect("Unknown module");
+        let transitions = state
+            .transitions(
+                context,
+                &global_context_gen(module_instance, state.operation_id()),
+            )
+            .into_iter()
+            .map(|transition| {
+                let state = state.clone();
+                let f: BoxFuture<TransitionForActiveState<GC>> = Box::pin(async move {
+                    let StateTransition {
+                        trigger,
+                        transition,
+                    } = transition;
+                    (trigger.await, state, transition, meta)
+                });
+                f
+            })
+            .collect::<Vec<_>>();
+        if transitions.is_empty() {
+            None
+        } else {
+            Some(Box::pin(async move {
+                let (first_completed_result, _index, _unused_transitions) =
+                    select_all(transitions).await;
+                first_completed_result
+            }))
+        }
+    }
+
+    async fn execute_next_state_transitions(
         &self,
         global_context_gen: &ContextGen<GC>,
     ) -> anyhow::Result<()> {
         let active_states = self.get_active_states().await;
-
         // TODO: use DB prefix subscription instead of polling
-        let active_state_count = active_states.len();
-        let new_state_added = async move {
-            loop {
-                let new_active_states_count = self.get_active_states().await.len();
-                if new_active_states_count > active_state_count {
-                    return;
-                }
-                fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).await;
-            }
-        };
-
+        let mut active_state_count = active_states.len();
         if active_states.is_empty() {
             // FIXME: what to do in this case? Probably best to subscribe to DB eventually
             debug!("No state transitions available, waiting before re-trying");
@@ -312,115 +349,133 @@ where
         }
         trace!("Active states: {:?}", active_states);
 
-        let transitions = active_states
-            .iter()
-            .flat_map(|(state, meta)| {
-                let module_instance = state.module_instance_id();
-                let context = &self
-                    .module_contexts
-                    .get(&module_instance)
-                    .expect("Unknown module");
-                state
-                    .transitions(
-                        context,
-                        &global_context_gen(module_instance, state.operation_id()),
-                    )
-                    .into_iter()
-                    .map(move |transition| {
-                        Box::pin(async move {
-                            let StateTransition {
-                                trigger,
-                                transition,
-                            } = transition;
-                            (trigger.await, state.clone(), transition, meta)
-                        })
-                    })
-            })
+        let mut transitions = active_states
+            .into_iter()
+            .flat_map(|(state, meta)| self.get_transition_for(state, meta, global_context_gen))
             .collect::<Vec<_>>();
 
-        let num_states = active_states.len();
-        let num_transitions = transitions.len();
-        debug!(
-            num_states,
-            num_transitions, "Awaiting any state transition to become ready"
-        );
-
-        let ((transition_outcome, state, transition_fn, meta), _, _) = select! {
-            res = select_all(transitions) => res,
-            () = new_state_added => {
-                debug!("New state added, re-starting state transitions");
+        loop {
+            if active_state_count == 0 {
+                debug!(
+                    "No state transitions remaining, exiting execute_next_state_transitions loops"
+                );
                 return Ok(());
             }
-        };
+            let num_states = active_state_count;
+            let num_transitions = transitions.len();
+            debug!(
+                num_states,
+                num_transitions, "Awaiting any state transition to become ready"
+            );
+            let new_state_added = async move {
+                loop {
+                    // Prioritize existing active states over new states
+                    fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).await;
+                    let new_active_states_count = self.get_active_states().await.len();
+                    if new_active_states_count > active_state_count {
+                        return;
+                    }
+                }
+            };
+            let (completed_result, _index, remaining_transitions) = select! {
+                res = select_all(transitions) => res,
+                () = new_state_added => {
+                    debug!("New state added, re-starting state transitions");
+                    return Ok(());
+                }
+            };
+            transitions = remaining_transitions;
+            let (transition_outcome, state, transition_fn, meta) = completed_result;
+            debug!(
+                ?state,
+                transition_outcome = ?AbbreviateJson(&transition_outcome),
+                "Executing state transition"
+            );
 
-        debug!(
-            ?state,
-            transition_outcome = ?AbbreviateJson(&transition_outcome),
-            "Executing state transition"
-        );
-
-        let new_state = self
-            .db
-            .autocommit(
-                |dbtx| {
-                    let state = state.clone();
-                    let transition_fn = transition_fn.clone();
-                    let transition_outcome = transition_outcome.clone();
-                    Box::pin(async move {
-                        let new_state = transition_fn(
-                            &mut ClientSMDatabaseTransaction::new(dbtx, state.module_instance_id()),
-                            transition_outcome,
-                            state.clone(),
-                        )
-                        .await;
-                        dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
-                            .await;
-                        dbtx.insert_entry(
-                            &InactiveStateKey::from_state(state.clone()),
-                            &meta.into_inactive(),
-                        )
-                        .await;
-
-                        let context = &self
-                            .module_contexts
-                            .get(&state.module_instance_id())
-                            .expect("Unknown module");
-
-                        let global_context =
-                            global_context_gen(state.module_instance_id(), state.operation_id());
-                        if new_state.is_terminal(context, &global_context) {
-                            // TODO: log state machine id or something
-                            debug!("State machine reached terminal state");
-                            dbtx.insert_entry(
-                                &InactiveStateKey::from_state(new_state.clone()),
-                                &ActiveState::new().into_inactive(),
+            let active_or_inactive_state = self
+                .db
+                .autocommit(
+                    |dbtx| {
+                        let state = state.clone();
+                        let transition_fn = transition_fn.clone();
+                        let transition_outcome = transition_outcome.clone();
+                        Box::pin(async move {
+                            let new_state = transition_fn(
+                                &mut ClientSMDatabaseTransaction::new(
+                                    dbtx,
+                                    state.module_instance_id(),
+                                ),
+                                transition_outcome,
+                                state.clone(),
                             )
                             .await;
-                        } else {
+                            dbtx.remove_entry(&ActiveStateKey::from_state(state.clone()))
+                                .await;
                             dbtx.insert_entry(
-                                &ActiveStateKey::from_state(new_state.clone()),
-                                &ActiveState::new(),
+                                &InactiveStateKey::from_state(state.clone()),
+                                &meta.into_inactive(),
                             )
                             .await;
-                        }
 
-                        Ok(new_state)
-                    })
-                },
-                Some(100),
-            )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
-                AutocommitError::ClosureError { error, .. } => error,
-            })?;
+                            let context = &self
+                                .module_contexts
+                                .get(&state.module_instance_id())
+                                .expect("Unknown module");
 
-        self.notifier.notify(new_state);
+                            let global_context = global_context_gen(
+                                state.module_instance_id(),
+                                state.operation_id(),
+                            );
+                            if new_state.is_terminal(context, &global_context) {
+                                // TODO: log state machine id or something
+                                debug!("State machine reached terminal state");
+                                let k = InactiveStateKey::from_state(new_state.clone());
+                                let v = ActiveState::new().into_inactive();
+                                dbtx.insert_entry(&k, &v).await;
+                                Ok(ActiveOrInactiveState::Inactive {
+                                    dyn_state: new_state,
+                                })
+                            } else {
+                                let k = ActiveStateKey::from_state(new_state.clone());
+                                let v = ActiveState::new();
+                                dbtx.insert_entry(&k, &v).await;
+                                Ok(ActiveOrInactiveState::Active {
+                                    dyn_state: new_state,
+                                    active_state: v,
+                                })
+                            }
+                        })
+                    },
+                    Some(100),
+                )
+                .await
+                .map_err(|e| match e {
+                    AutocommitError::CommitFailed {
+                        last_error,
+                        attempts,
+                    } => last_error.context(format!("Failed to commit after {attempts} attempts")),
+                    AutocommitError::ClosureError { error, .. } => error,
+                })?;
 
-        Ok(())
+            active_state_count -= 1;
+            match active_or_inactive_state {
+                ActiveOrInactiveState::Active {
+                    dyn_state,
+                    active_state,
+                } => {
+                    if let Some(transition) =
+                        self.get_transition_for(dyn_state.clone(), active_state, global_context_gen)
+                    {
+                        active_state_count += 1;
+                        transitions.push(transition);
+                    }
+                    self.notifier.notify(dyn_state);
+                }
+                ActiveOrInactiveState::Inactive { dyn_state } => {
+                    self.notifier.notify(dyn_state);
+                }
+            }
+        }
     }
 
     async fn get_active_states(&self) -> Vec<(DynState<GC>, ActiveState)> {
@@ -773,6 +828,16 @@ where
     GC: GlobalContext,
 {
     type Record = InactiveStateKey<GC>;
+}
+
+enum ActiveOrInactiveState<GC> {
+    Active {
+        dyn_state: DynState<GC>,
+        active_state: ActiveState,
+    },
+    Inactive {
+        dyn_state: DynState<GC>,
+    },
 }
 
 #[cfg(test)]
