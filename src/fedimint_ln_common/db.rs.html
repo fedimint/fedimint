@@ -133,16 +133,9 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::Serialize;
@@ -161,7 +154,7 @@
     AgreedDecryptionShare = <span class="number">0x43</span>,
     ContractUpdate = <span class="number">0x44</span>,
     LightningGateway = <span class="number">0x45</span>,
-    BlockHeightVote = <span class="number">0x46</span>,
+    BlockHeight = <span class="number">0x46</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -240,9 +233,6 @@
 </span><span class="attr">#[derive(Debug, Encodable)]
 </span><span class="kw">pub struct </span>AgreedDecryptionShareKeyPrefix;
 
-<span class="attr">#[derive(Debug, Encodable)]
-</span><span class="kw">pub struct </span>AgreedDecryptionShareContractIdPrefix(<span class="kw">pub </span>ContractId);
-
 <span class="macro">impl_db_record!</span>(
     key = AgreedDecryptionShareKey,
     value = PreimageDecryptionShare,
@@ -250,8 +240,7 @@
 );
 <span class="macro">impl_db_lookup!</span>(
     key = AgreedDecryptionShareKey,
-    query_prefix = AgreedDecryptionShareKeyPrefix,
-    query_prefix = AgreedDecryptionShareContractIdPrefix
+    query_prefix = AgreedDecryptionShareKeyPrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -271,20 +260,13 @@
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>BlockHeightVoteKey(<span class="kw">pub </span>PeerId);
-
-<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>BlockHeightVotePrefix;
+</span><span class="kw">pub struct </span>BlockHeightKey;
 
 <span class="macro">impl_db_record!</span>(
-    key = BlockHeightVoteKey,
-    value = u64,
-    db_prefix = DbKeyPrefix::BlockHeightVote
-);
-
-<span class="macro">impl_db_lookup!</span>(
-    key = BlockHeightVoteKey,
-    query_prefix = BlockHeightVotePrefix
-);
+    key = BlockHeightKey,
+    value = BTreeMap&lt;PeerId, u64&gt;,
+    db_prefix = DbKeyPrefix::BlockHeight,
+    notify_on_modify = <span class="bool-val">true
+</span>);
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
