@@ -437,6 +437,7 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
@@ -528,8 +529,9 @@
 }
 
 <span class="kw">type </span>TriggerFuture = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = serde_json::Value&gt; + <span class="lifetime">&#39;static</span>)&gt;&gt;;
+
 <span class="comment">// TODO: remove Arc, maybe make it a fn pointer?
-</span><span class="kw">type </span>StateTransitionFunction&lt;S&gt; = Arc&lt;
+</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>StateTransitionFunction&lt;S&gt; = Arc&lt;
     <span class="macro">maybe_add_send_sync!</span>(
         <span class="kw">dyn for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(
             <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,

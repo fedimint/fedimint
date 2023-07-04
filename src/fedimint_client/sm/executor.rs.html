@@ -972,6 +972,71 @@
 <a href="#972" id="972">972</a>
 <a href="#973" id="973">973</a>
 <a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -986,6 +1051,7 @@
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateJson;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, task};
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>futures::stream::StreamExt;
@@ -993,6 +1059,7 @@
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
+<span class="kw">use </span><span class="kw">super</span>::state::StateTransitionFunction;
 <span class="kw">use </span><span class="kw">crate</span>::sm::notifier::Notifier;
 <span class="kw">use </span><span class="kw">crate</span>::sm::state::{DynContext, DynState};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId, State, StateTransition};
@@ -1241,6 +1308,12 @@
     }
 }
 
+<span class="kw">type </span>TransitionForActiveState&lt;GC&gt; = (
+    serde_json::Value,
+    DynState&lt;GC&gt;,
+    StateTransitionFunction&lt;DynState&lt;GC&gt;&gt;,
+    ActiveState,
+);
 <span class="kw">impl</span>&lt;GC&gt; ExecutorInner&lt;GC&gt;
 <span class="kw">where
     </span>GC: GlobalContext,
@@ -1249,7 +1322,7 @@
         <span class="macro">info!</span>(<span class="string">&quot;Starting state machine executor task&quot;</span>);
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self
-                </span>.execute_next_state_transition(<span class="kw-2">&amp;</span>global_context_gen)
+                </span>.execute_next_state_transitions(<span class="kw-2">&amp;</span>global_context_gen)
                 .<span class="kw">await
             </span>{
                 <span class="macro">warn!</span>(
@@ -1260,24 +1333,53 @@
         }
     }
 
-    <span class="kw">async fn </span>execute_next_state_transition(
+    <span class="kw">fn </span>get_transition_for(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        state: DynState&lt;GC&gt;,
+        meta: ActiveState,
+        global_context_gen: <span class="kw-2">&amp;</span>ContextGen&lt;GC&gt;,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;BoxFuture&lt;TransitionForActiveState&lt;GC&gt;&gt;&gt; {
+        <span class="kw">let </span>module_instance = state.module_instance_id();
+        <span class="kw">let </span>context = <span class="kw-2">&amp;</span><span class="self">self
+            </span>.module_contexts
+            .get(<span class="kw-2">&amp;</span>module_instance)
+            .expect(<span class="string">&quot;Unknown module&quot;</span>);
+        <span class="kw">let </span>transitions = state
+            .transitions(
+                context,
+                <span class="kw-2">&amp;</span>global_context_gen(module_instance, state.operation_id()),
+            )
+            .into_iter()
+            .map(|transition| {
+                <span class="kw">let </span>state = state.clone();
+                <span class="kw">let </span>f: BoxFuture&lt;TransitionForActiveState&lt;GC&gt;&gt; = Box::pin(<span class="kw">async move </span>{
+                    <span class="kw">let </span>StateTransition {
+                        trigger,
+                        transition,
+                    } = transition;
+                    (trigger.<span class="kw">await</span>, state, transition, meta)
+                });
+                f
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">if </span>transitions.is_empty() {
+            <span class="prelude-val">None
+        </span>} <span class="kw">else </span>{
+            <span class="prelude-val">Some</span>(Box::pin(<span class="kw">async move </span>{
+                <span class="kw">let </span>(first_completed_result, _index, _unused_transitions) =
+                    select_all(transitions).<span class="kw">await</span>;
+                first_completed_result
+            }))
+        }
+    }
+
+    <span class="kw">async fn </span>execute_next_state_transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         global_context_gen: <span class="kw-2">&amp;</span>ContextGen&lt;GC&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
-
         <span class="comment">// TODO: use DB prefix subscription instead of polling
-        </span><span class="kw">let </span>active_state_count = active_states.len();
-        <span class="kw">let </span>new_state_added = <span class="kw">async move </span>{
-            <span class="kw">loop </span>{
-                <span class="kw">let </span>new_active_states_count = <span class="self">self</span>.get_active_states().<span class="kw">await</span>.len();
-                <span class="kw">if </span>new_active_states_count &gt; active_state_count {
-                    <span class="kw">return</span>;
-                }
-                fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).<span class="kw">await</span>;
-            }
-        };
-
+        </span><span class="kw">let </span><span class="kw-2">mut </span>active_state_count = active_states.len();
         <span class="kw">if </span>active_states.is_empty() {
             <span class="comment">// FIXME: what to do in this case? Probably best to subscribe to DB eventually
             </span><span class="macro">debug!</span>(<span class="string">&quot;No state transitions available, waiting before re-trying&quot;</span>);
@@ -1286,115 +1388,133 @@
         }
         <span class="macro">trace!</span>(<span class="string">&quot;Active states: {:?}&quot;</span>, active_states);
 
-        <span class="kw">let </span>transitions = active_states
-            .iter()
-            .flat_map(|(state, meta)| {
-                <span class="kw">let </span>module_instance = state.module_instance_id();
-                <span class="kw">let </span>context = <span class="kw-2">&amp;</span><span class="self">self
-                    </span>.module_contexts
-                    .get(<span class="kw-2">&amp;</span>module_instance)
-                    .expect(<span class="string">&quot;Unknown module&quot;</span>);
-                state
-                    .transitions(
-                        context,
-                        <span class="kw-2">&amp;</span>global_context_gen(module_instance, state.operation_id()),
-                    )
-                    .into_iter()
-                    .map(<span class="kw">move </span>|transition| {
-                        Box::pin(<span class="kw">async move </span>{
-                            <span class="kw">let </span>StateTransition {
-                                trigger,
-                                transition,
-                            } = transition;
-                            (trigger.<span class="kw">await</span>, state.clone(), transition, meta)
-                        })
-                    })
-            })
+        <span class="kw">let </span><span class="kw-2">mut </span>transitions = active_states
+            .into_iter()
+            .flat_map(|(state, meta)| <span class="self">self</span>.get_transition_for(state, meta, global_context_gen))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>num_states = active_states.len();
-        <span class="kw">let </span>num_transitions = transitions.len();
-        <span class="macro">debug!</span>(
-            num_states,
-            num_transitions, <span class="string">&quot;Awaiting any state transition to become ready&quot;
-        </span>);
-
-        <span class="kw">let </span>((transition_outcome, state, transition_fn, meta), <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">select! </span>{
-            res = select_all(transitions) =&gt; res,
-            () = new_state_added =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;New state added, re-starting state transitions&quot;</span>);
+        <span class="kw">loop </span>{
+            <span class="kw">if </span>active_state_count == <span class="number">0 </span>{
+                <span class="macro">debug!</span>(
+                    <span class="string">&quot;No state transitions remaining, exiting execute_next_state_transitions loops&quot;
+                </span>);
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
-        };
+            <span class="kw">let </span>num_states = active_state_count;
+            <span class="kw">let </span>num_transitions = transitions.len();
+            <span class="macro">debug!</span>(
+                num_states,
+                num_transitions, <span class="string">&quot;Awaiting any state transition to become ready&quot;
+            </span>);
+            <span class="kw">let </span>new_state_added = <span class="kw">async move </span>{
+                <span class="kw">loop </span>{
+                    <span class="comment">// Prioritize existing active states over new states
+                    </span>fedimint_core::task::sleep(EXECUTOR_POLL_INTERVAL).<span class="kw">await</span>;
+                    <span class="kw">let </span>new_active_states_count = <span class="self">self</span>.get_active_states().<span class="kw">await</span>.len();
+                    <span class="kw">if </span>new_active_states_count &gt; active_state_count {
+                        <span class="kw">return</span>;
+                    }
+                }
+            };
+            <span class="kw">let </span>(completed_result, _index, remaining_transitions) = <span class="macro">select! </span>{
+                res = select_all(transitions) =&gt; res,
+                () = new_state_added =&gt; {
+                    <span class="macro">debug!</span>(<span class="string">&quot;New state added, re-starting state transitions&quot;</span>);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+            };
+            transitions = remaining_transitions;
+            <span class="kw">let </span>(transition_outcome, state, transition_fn, meta) = completed_result;
+            <span class="macro">debug!</span>(
+                <span class="question-mark">?</span>state,
+                transition_outcome = <span class="question-mark">?</span>AbbreviateJson(<span class="kw-2">&amp;</span>transition_outcome),
+                <span class="string">&quot;Executing state transition&quot;
+            </span>);
 
-        <span class="macro">debug!</span>(
-            <span class="question-mark">?</span>state,
-            transition_outcome = <span class="question-mark">?</span>AbbreviateJson(<span class="kw-2">&amp;</span>transition_outcome),
-            <span class="string">&quot;Executing state transition&quot;
-        </span>);
-
-        <span class="kw">let </span>new_state = <span class="self">self
-            </span>.db
-            .autocommit(
-                |dbtx| {
-                    <span class="kw">let </span>state = state.clone();
-                    <span class="kw">let </span>transition_fn = transition_fn.clone();
-                    <span class="kw">let </span>transition_outcome = transition_outcome.clone();
-                    Box::pin(<span class="kw">async move </span>{
-                        <span class="kw">let </span>new_state = transition_fn(
-                            <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction::new(dbtx, state.module_instance_id()),
-                            transition_outcome,
-                            state.clone(),
-                        )
-                        .<span class="kw">await</span>;
-                        dbtx.remove_entry(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state.clone()))
-                            .<span class="kw">await</span>;
-                        dbtx.insert_entry(
-                            <span class="kw-2">&amp;</span>InactiveStateKey::from_state(state.clone()),
-                            <span class="kw-2">&amp;</span>meta.into_inactive(),
-                        )
-                        .<span class="kw">await</span>;
-
-                        <span class="kw">let </span>context = <span class="kw-2">&amp;</span><span class="self">self
-                            </span>.module_contexts
-                            .get(<span class="kw-2">&amp;</span>state.module_instance_id())
-                            .expect(<span class="string">&quot;Unknown module&quot;</span>);
-
-                        <span class="kw">let </span>global_context =
-                            global_context_gen(state.module_instance_id(), state.operation_id());
-                        <span class="kw">if </span>new_state.is_terminal(context, <span class="kw-2">&amp;</span>global_context) {
-                            <span class="comment">// TODO: log state machine id or something
-                            </span><span class="macro">debug!</span>(<span class="string">&quot;State machine reached terminal state&quot;</span>);
-                            dbtx.insert_entry(
-                                <span class="kw-2">&amp;</span>InactiveStateKey::from_state(new_state.clone()),
-                                <span class="kw-2">&amp;</span>ActiveState::new().into_inactive(),
+            <span class="kw">let </span>active_or_inactive_state = <span class="self">self
+                </span>.db
+                .autocommit(
+                    |dbtx| {
+                        <span class="kw">let </span>state = state.clone();
+                        <span class="kw">let </span>transition_fn = transition_fn.clone();
+                        <span class="kw">let </span>transition_outcome = transition_outcome.clone();
+                        Box::pin(<span class="kw">async move </span>{
+                            <span class="kw">let </span>new_state = transition_fn(
+                                <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction::new(
+                                    dbtx,
+                                    state.module_instance_id(),
+                                ),
+                                transition_outcome,
+                                state.clone(),
                             )
                             .<span class="kw">await</span>;
-                        } <span class="kw">else </span>{
+                            dbtx.remove_entry(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state.clone()))
+                                .<span class="kw">await</span>;
                             dbtx.insert_entry(
-                                <span class="kw-2">&amp;</span>ActiveStateKey::from_state(new_state.clone()),
-                                <span class="kw-2">&amp;</span>ActiveState::new(),
+                                <span class="kw-2">&amp;</span>InactiveStateKey::from_state(state.clone()),
+                                <span class="kw-2">&amp;</span>meta.into_inactive(),
                             )
                             .<span class="kw">await</span>;
-                        }
 
-                        <span class="prelude-val">Ok</span>(new_state)
-                    })
-                },
-                <span class="prelude-val">Some</span>(<span class="number">100</span>),
-            )
-            .<span class="kw">await
-            </span>.map_err(|e| <span class="kw">match </span>e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
-                AutocommitError::ClosureError { error, .. } =&gt; error,
-            })<span class="question-mark">?</span>;
+                            <span class="kw">let </span>context = <span class="kw-2">&amp;</span><span class="self">self
+                                </span>.module_contexts
+                                .get(<span class="kw-2">&amp;</span>state.module_instance_id())
+                                .expect(<span class="string">&quot;Unknown module&quot;</span>);
 
-        <span class="self">self</span>.notifier.notify(new_state);
+                            <span class="kw">let </span>global_context = global_context_gen(
+                                state.module_instance_id(),
+                                state.operation_id(),
+                            );
+                            <span class="kw">if </span>new_state.is_terminal(context, <span class="kw-2">&amp;</span>global_context) {
+                                <span class="comment">// TODO: log state machine id or something
+                                </span><span class="macro">debug!</span>(<span class="string">&quot;State machine reached terminal state&quot;</span>);
+                                <span class="kw">let </span>k = InactiveStateKey::from_state(new_state.clone());
+                                <span class="kw">let </span>v = ActiveState::new().into_inactive();
+                                dbtx.insert_entry(<span class="kw-2">&amp;</span>k, <span class="kw-2">&amp;</span>v).<span class="kw">await</span>;
+                                <span class="prelude-val">Ok</span>(ActiveOrInactiveState::Inactive {
+                                    dyn_state: new_state,
+                                })
+                            } <span class="kw">else </span>{
+                                <span class="kw">let </span>k = ActiveStateKey::from_state(new_state.clone());
+                                <span class="kw">let </span>v = ActiveState::new();
+                                dbtx.insert_entry(<span class="kw-2">&amp;</span>k, <span class="kw-2">&amp;</span>v).<span class="kw">await</span>;
+                                <span class="prelude-val">Ok</span>(ActiveOrInactiveState::Active {
+                                    dyn_state: new_state,
+                                    active_state: v,
+                                })
+                            }
+                        })
+                    },
+                    <span class="prelude-val">Some</span>(<span class="number">100</span>),
+                )
+                .<span class="kw">await
+                </span>.map_err(|e| <span class="kw">match </span>e {
+                    AutocommitError::CommitFailed {
+                        last_error,
+                        attempts,
+                    } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
+                    AutocommitError::ClosureError { error, .. } =&gt; error,
+                })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(())
+            active_state_count -= <span class="number">1</span>;
+            <span class="kw">match </span>active_or_inactive_state {
+                ActiveOrInactiveState::Active {
+                    dyn_state,
+                    active_state,
+                } =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(transition) =
+                        <span class="self">self</span>.get_transition_for(dyn_state.clone(), active_state, global_context_gen)
+                    {
+                        active_state_count += <span class="number">1</span>;
+                        transitions.push(transition);
+                    }
+                    <span class="self">self</span>.notifier.notify(dyn_state);
+                }
+                ActiveOrInactiveState::Inactive { dyn_state } =&gt; {
+                    <span class="self">self</span>.notifier.notify(dyn_state);
+                }
+            }
+        }
     }
 
     <span class="kw">async fn </span>get_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState&lt;GC&gt;, ActiveState)&gt; {
@@ -1747,6 +1867,16 @@
     </span>GC: GlobalContext,
 {
     <span class="kw">type </span>Record = InactiveStateKey&lt;GC&gt;;
+}
+
+<span class="kw">enum </span>ActiveOrInactiveState&lt;GC&gt; {
+    Active {
+        dyn_state: DynState&lt;GC&gt;,
+        active_state: ActiveState,
+    },
+    Inactive {
+        dyn_state: DynState&lt;GC&gt;,
+    },
 }
 
 <span class="attr">#[cfg(test)]
