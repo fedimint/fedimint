@@ -134,13 +134,6 @@
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -181,9 +174,7 @@
 <span class="macro">impl_db_lookup!</span>(key = NonceKey, query_prefix = NonceKeyPrefix);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>ProposedPartialSignatureKey {
-    <span class="kw">pub </span>out_point: OutPoint, <span class="comment">// tx + output idx
-</span>}
+</span><span class="kw">pub struct </span>ProposedPartialSignatureKey(<span class="kw">pub </span>OutPoint);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ProposedPartialSignaturesKeyPrefix;
@@ -199,18 +190,13 @@
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>ReceivedPartialSignatureKey {
-    <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
-    </span><span class="kw">pub </span>peer_id: PeerId,
-}
+</span><span class="kw">pub struct </span>ReceivedPartialSignatureKey(<span class="kw">pub </span>OutPoint, <span class="kw">pub </span>PeerId);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ReceivedPartialSignaturesKeyPrefix;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>ReceivedPartialSignatureKeyOutputPrefix {
-    <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
-</span>}
+</span><span class="kw">pub struct </span>ReceivedPartialSignatureKeyOutputPrefix(<span class="kw">pub </span>OutPoint);
 
 <span class="macro">impl_db_record!</span>(
     key = ReceivedPartialSignatureKey,

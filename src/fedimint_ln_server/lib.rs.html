@@ -1224,9 +1224,7 @@
 <a href="#1224" id="1224">1224</a>
 <a href="#1225" id="1225">1225</a>
 <a href="#1226" id="1226">1226</a>
-<a href="#1227" id="1227">1227</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::ops::Sub;
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
@@ -1261,7 +1259,8 @@
     IdentifiableContract, Preimage, PreimageDecryptionShare,
 };
 <span class="kw">use </span>fedimint_ln_common::db::{
-    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockHeightKey, ContractKey,
+    AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
+    AgreedDecryptionShareKeyPrefix, BlockHeightVoteKey, BlockHeightVotePrefix, ContractKey,
     ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
     LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
     ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
@@ -1272,7 +1271,6 @@
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -1469,11 +1467,15 @@
                         <span class="string">&quot;Proposed Decryption Shares&quot;
                     </span>);
                 }
-                DbKeyPrefix::BlockHeight =&gt; {
-                    <span class="kw">let </span>heights = dbtx.get_value(<span class="kw-2">&amp;</span>BlockHeightKey).<span class="kw">await</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(heights) = heights {
-                        lightning.insert(<span class="string">&quot;BlockHeight&quot;</span>.to_string(), Box::new(heights));
-                    }
+                DbKeyPrefix::BlockHeightVote =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        BlockHeightVotePrefix,
+                        BlockHeightVoteKey,
+                        u64,
+                        lightning,
+                        <span class="string">&quot;Block Height Votes&quot;
+                    </span>);
                 }
             }
         }
@@ -1537,14 +1539,10 @@
             .collect()
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>;
-        <span class="kw">let </span>height = <span class="self">self
-            </span>.btc_rpc
-            .get_block_height()
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;always retries&quot;</span>);
-        <span class="kw">if </span>consensus_height.is_none() || consensus_height.unwrap_or_default() &lt; height {
-            items.push(LightningConsensusItem::BlockHeight(height));
+        <span class="kw">let </span>block_height_vote = <span class="self">self</span>.block_height().<span class="kw">await</span>;
+
+        <span class="kw">if </span>block_height_vote != <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await </span>{
+            items.push(LightningConsensusItem::BlockHeight(block_height_vote));
         }
 
         ConsensusProposal::new_auto_trigger(items)
@@ -1556,24 +1554,160 @@
         consensus_items: Vec&lt;(PeerId, LightningConsensusItem)&gt;,
         _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>peer_heights = dbtx.get_value(<span class="kw-2">&amp;</span>BlockHeightKey).<span class="kw">await</span>.unwrap_or_default();
-
-        <span class="kw">for </span>(peer, item) <span class="kw">in </span>consensus_items.into_iter() {
-            <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer);
+        <span class="kw">for </span>(peer_id, item) <span class="kw">in </span>consensus_items.into_iter() {
+            <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer_id);
             <span class="kw">let </span>_guard = span.enter();
 
             <span class="kw">match </span>item {
                 LightningConsensusItem::DecryptPreimage(contract_id, share) =&gt; {
-                    dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer), <span class="kw-2">&amp;</span>share)
+                    <span class="comment">// check if we already have a decryption share for this peer
+                    </span><span class="kw">if </span>dbtx
+                        .get_value(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer_id))
+                        .<span class="kw">await
+                        </span>.is_some()
+                    {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Received redundant decryption share&quot;</span>);
+                        <span class="kw">continue</span>;
+                    }
+
+                    <span class="kw">let </span>account = <span class="kw">match </span><span class="self">self</span>.get_contract_account(dbtx, contract_id).<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(account) =&gt; account,
+                        <span class="prelude-val">None </span>=&gt; {
+                            <span class="macro">warn!</span>(<span class="string">&quot;Received decryption share for non-existent contract account&quot;</span>);
+                            <span class="kw">continue</span>;
+                        }
+                    };
+
+                    <span class="kw">let </span>(contract, out_point) = <span class="kw">match </span>account.contract {
+                        FundedContract::Incoming(contract) =&gt; {
+                            (contract.contract, contract.out_point)
+                        }
+                        FundedContract::Outgoing(..) =&gt; {
+                            <span class="macro">warn!</span>(<span class="string">&quot;Received decryption share for outgoing contract&quot;</span>);
+                            <span class="kw">continue</span>;
+                        }
+                    };
+
+                    <span class="kw">if </span>contract.decrypted_preimage != DecryptedPreimage::Pending {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Received decryption share for non-pending incoming contract&quot;</span>);
+                        <span class="kw">continue</span>;
+                    }
+
+                    <span class="kw">if </span>!<span class="self">self</span>.validate_decryption_share(
+                        peer_id,
+                        <span class="kw-2">&amp;</span>share,
+                        <span class="kw-2">&amp;</span>contract.encrypted_preimage,
+                    ) {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Received invalid decryption share for incoming contract&quot;</span>);
+                        <span class="kw">continue</span>;
+                    }
+
+                    <span class="comment">// we save the first ordered valid decryption share for every peer
+                    </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer_id), <span class="kw-2">&amp;</span>share)
+                        .<span class="kw">await</span>;
+
+                    <span class="comment">// collect all valid decryption shares for this contract_id
+                    </span><span class="kw">let </span>decryption_shares = dbtx
+                        .find_by_prefix(<span class="kw-2">&amp;</span>AgreedDecryptionShareContractIdPrefix(contract_id))
+                        .<span class="kw">await
+                        </span>.map(|(key, decryption_share)| (key.<span class="number">1</span>, decryption_share))
+                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                        .<span class="kw">await</span>;
+
+                    <span class="kw">if </span>decryption_shares.len() &lt; <span class="self">self</span>.cfg.consensus.threshold() {
+                        <span class="kw">continue</span>;
+                    }
+
+                    <span class="macro">debug!</span>(<span class="string">&quot;Beginning to decrypt preimage&quot;</span>);
+
+                    <span class="kw">let </span>preimage_vec = <span class="kw">match </span><span class="self">self</span>.cfg.consensus.threshold_pub_keys.decrypt(
+                        decryption_shares
+                            .iter()
+                            .map(|(peer, share)| (peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>)),
+                        <span class="kw-2">&amp;</span>contract.encrypted_preimage.<span class="number">0</span>,
+                    ) {
+                        <span class="prelude-val">Ok</span>(preimage_vec) =&gt; preimage_vec,
+                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="comment">// TODO: check if that can happen even though shares are verified
+                            // before
+                            </span><span class="macro">error!</span>(contract_hash = %contract.hash, <span class="string">&quot;Failed to decrypt preimage&quot;</span>);
+                            <span class="kw">continue</span>;
+                        }
+                    };
+
+                    <span class="comment">// Delete decryption shares once we&#39;ve decrypted the preimage
+                    </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposeDecryptionShareKey(contract_id))
+                        .<span class="kw">await</span>;
+
+                    dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>AgreedDecryptionShareContractIdPrefix(contract_id))
+                        .<span class="kw">await</span>;
+
+                    <span class="kw">let </span>decrypted_preimage = <span class="kw">if </span>preimage_vec.len() == <span class="number">32
+                        </span>&amp;&amp; contract.hash == bitcoin_hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage_vec)
+                    {
+                        <span class="kw">let </span>preimage = Preimage(
+                            preimage_vec
+                                .as_slice()
+                                .try_into()
+                                .expect(<span class="string">&quot;Invalid preimage length&quot;</span>),
+                        );
+                        <span class="kw">if </span>preimage.to_public_key().is_ok() {
+                            DecryptedPreimage::Some(preimage)
+                        } <span class="kw">else </span>{
+                            DecryptedPreimage::Invalid
+                        }
+                    } <span class="kw">else </span>{
+                        DecryptedPreimage::Invalid
+                    };
+
+                    <span class="macro">debug!</span>(<span class="question-mark">?</span>decrypted_preimage);
+
+                    <span class="comment">// TODO: maybe define update helper fn
+                    // Update contract
+                    </span><span class="kw">let </span>contract_db_key = ContractKey(contract_id);
+                    <span class="kw">let </span><span class="kw-2">mut </span>contract_account = dbtx
+                        .get_value(<span class="kw-2">&amp;</span>contract_db_key)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;checked before that it exists&quot;</span>);
+                    <span class="kw">let </span><span class="kw-2">mut </span>incoming = <span class="kw">match </span><span class="kw-2">&amp;mut </span>contract_account.contract {
+                        FundedContract::Incoming(incoming) =&gt; incoming,
+                        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;previously checked that it&#39;s an incoming contrac&quot;</span>),
+                    };
+                    incoming.contract.decrypted_preimage = decrypted_preimage.clone();
+                    <span class="macro">trace!</span>(<span class="question-mark">?</span>contract_account, <span class="string">&quot;Updating contract account&quot;</span>);
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>contract_db_key, <span class="kw-2">&amp;</span>contract_account).<span class="kw">await</span>;
+
+                    <span class="comment">// Update output outcome
+                    </span><span class="kw">let </span><span class="kw-2">mut </span>outcome = dbtx
+                        .get_value(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point))
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;outcome was created on funding&quot;</span>);
+                    <span class="kw">let </span>incoming_contract_outcome_preimage = <span class="kw">match </span><span class="kw-2">&amp;mut </span>outcome {
+                        LightningOutputOutcome::Contract {
+                            outcome: ContractOutcome::Incoming(decryption_outcome),
+                            ..
+                        } =&gt; decryption_outcome,
+                        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;We are expeccting an incoming contract&quot;</span>),
+                    };
+                    <span class="kw-2">*</span>incoming_contract_outcome_preimage = decrypted_preimage.clone();
+                    dbtx.insert_entry(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point), <span class="kw-2">&amp;</span>outcome)
                         .<span class="kw">await</span>;
                 }
-                LightningConsensusItem::BlockHeight(height) =&gt; {
-                    peer_heights.insert(peer, height);
+                LightningConsensusItem::BlockHeight(block_height) =&gt; {
+                    <span class="kw">let </span>current_vote = dbtx
+                        .get_value(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id))
+                        .<span class="kw">await
+                        </span>.unwrap_or(<span class="number">0</span>);
+
+                    <span class="comment">// consensus block height can never decrease
+                    </span><span class="kw">if </span>block_height &gt; current_vote {
+                        dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id), <span class="kw-2">&amp;</span>block_height)
+                            .<span class="kw">await</span>;
+                    }
                 }
             }
         }
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightKey, <span class="kw-2">&amp;</span>peer_heights).<span class="kw">await</span>;
         <span class="macro">vec!</span>[]
     }
 
@@ -1604,7 +1738,7 @@
             .into_module_error_other();
         }
 
-        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_height(dbtx).<span class="kw">await</span>.unwrap_or_default();
+        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
         <span class="kw">let </span>pub_key = <span class="kw">match </span>account.contract {
             FundedContract::Outgoing(outgoing) =&gt; {
                 <span class="kw">if </span>outgoing.timelock <span class="kw">as </span>u64 &gt; consensus_height &amp;&amp; !outgoing.cancelled {
@@ -1847,160 +1981,10 @@
     <span class="attr">#[instrument(skip_all)]
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
-        <span class="comment">// Decrypt preimages
-        </span><span class="kw">let </span>preimage_decryption_shares = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>AgreedDecryptionShareKeyPrefix)
-            .<span class="kw">await
-            </span>.map(|(key, value)| (key.<span class="number">0</span>, (key.<span class="number">1</span>, value)))
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-            .<span class="kw">await
-            </span>.into_iter()
-            .into_group_map();
-
-        <span class="kw">let </span><span class="kw-2">mut </span>bad_peers = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>(contract_id, shares) <span class="kw">in </span>preimage_decryption_shares {
-            <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = shares.iter().map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer).collect();
-            <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;decrypt_preimage&quot;</span>, %contract_id);
-            <span class="kw">let </span>_guard = span.enter();
-
-            <span class="kw">let </span>incoming_contract = <span class="kw">match </span><span class="self">self</span>.get_contract_account(dbtx, contract_id).<span class="kw">await </span>{
-                <span class="prelude-val">Some</span>(ContractAccount {
-                    contract: FundedContract::Incoming(incoming),
-                    ..
-                }) =&gt; incoming.contract,
-                <span class="kw">_ </span>=&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Received decryption share for non-existent incoming contract&quot;</span>);
-                    <span class="kw">for </span>peer <span class="kw">in </span>peers {
-                        dbtx.remove_entry(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer))
-                            .<span class="kw">await</span>;
-                    }
-                    <span class="kw">continue</span>;
-                }
-            };
-
-            <span class="kw">let </span>valid_shares: HashMap&lt;PeerId, PreimageDecryptionShare&gt; = shares
-                .into_iter()
-                .filter(|(peer, share)| {
-                    <span class="self">self</span>.validate_decryption_share(
-                        <span class="kw-2">*</span>peer,
-                        share,
-                        <span class="kw-2">&amp;</span>incoming_contract.encrypted_preimage,
-                    )
-                })
-                .collect();
-
-            <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers.sub(<span class="kw-2">&amp;</span>valid_shares.keys().cloned().collect()) {
-                bad_peers.push(peer);
-                <span class="macro">warn!</span>(<span class="string">&quot;{} did not contribute valid decryption shares&quot;</span>, peer);
-            }
-
-            <span class="kw">if </span>valid_shares.len() &lt; <span class="self">self</span>.cfg.consensus.threshold() {
-                <span class="macro">warn!</span>(
-                    valid_shares = %valid_shares.len(),
-                    shares_needed = %<span class="self">self</span>.cfg.consensus.threshold(),
-                    <span class="string">&quot;Too few decryption shares&quot;
-                </span>);
-                <span class="kw">continue</span>;
-            }
-            <span class="macro">debug!</span>(<span class="string">&quot;Beginning to decrypt preimage&quot;</span>);
-
-            <span class="kw">let </span>contract = <span class="self">self
-                </span>.get_contract_account(dbtx, contract_id)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;decryption shares without contracts should be discarded earlier&quot;</span>); <span class="comment">// FIXME: verify
-
-            </span><span class="kw">let </span>(incoming_contract, out_point) = <span class="kw">match </span>contract.contract {
-                FundedContract::Incoming(incoming) =&gt; (incoming.contract, incoming.out_point),
-                <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(
-                    <span class="string">&quot;decryption shares without incoming contracts should be discarded earlier&quot;
-                </span>),
-            };
-
-            <span class="kw">if </span>!<span class="macro">matches!</span>(
-                incoming_contract.decrypted_preimage,
-                DecryptedPreimage::Pending
-            ) {
-                <span class="macro">warn!</span>(<span class="string">&quot;Tried to decrypt the same preimage twice, this should not happen.&quot;</span>);
-                <span class="kw">continue</span>;
-            }
-
-            <span class="kw">let </span>preimage_vec = <span class="kw">match </span><span class="self">self</span>.cfg.consensus.threshold_pub_keys.decrypt(
-                valid_shares
-                    .iter()
-                    .map(|(peer, share)| (peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>)),
-                <span class="kw-2">&amp;</span>incoming_contract.encrypted_preimage.<span class="number">0</span>,
-            ) {
-                <span class="prelude-val">Ok</span>(preimage_vec) =&gt; preimage_vec,
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="comment">// TODO: check if that can happen even though shares are verified before
-                    </span><span class="macro">error!</span>(contract_hash = %incoming_contract.hash, <span class="string">&quot;Failed to decrypt preimage&quot;</span>);
-                    <span class="kw">continue</span>;
-                }
-            };
-
-            <span class="comment">// Delete decryption shares once we&#39;ve decrypted the preimage
-            </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposeDecryptionShareKey(contract_id))
-                .<span class="kw">await</span>;
-            <span class="kw">for </span>peer <span class="kw">in </span>peers {
-                dbtx.remove_entry(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer))
-                    .<span class="kw">await</span>;
-            }
-
-            <span class="kw">let </span>decrypted_preimage = <span class="kw">if </span>preimage_vec.len() == <span class="number">32
-                </span>&amp;&amp; incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage_vec)
-            {
-                <span class="kw">let </span>preimage = Preimage(
-                    preimage_vec
-                        .as_slice()
-                        .try_into()
-                        .expect(<span class="string">&quot;Invalid preimage length&quot;</span>),
-                );
-                <span class="kw">if </span>preimage.to_public_key().is_ok() {
-                    DecryptedPreimage::Some(preimage)
-                } <span class="kw">else </span>{
-                    DecryptedPreimage::Invalid
-                }
-            } <span class="kw">else </span>{
-                DecryptedPreimage::Invalid
-            };
-            <span class="macro">debug!</span>(<span class="question-mark">?</span>decrypted_preimage);
-
-            <span class="comment">// TODO: maybe define update helper fn
-            // Update contract
-            </span><span class="kw">let </span>contract_db_key = ContractKey(contract_id);
-            <span class="kw">let </span><span class="kw-2">mut </span>contract_account = dbtx
-                .get_value(<span class="kw-2">&amp;</span>contract_db_key)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;checked before that it exists&quot;</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>incoming = <span class="kw">match </span><span class="kw-2">&amp;mut </span>contract_account.contract {
-                FundedContract::Incoming(incoming) =&gt; incoming,
-                <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;previously checked that it&#39;s an incoming contrac&quot;</span>),
-            };
-            incoming.contract.decrypted_preimage = decrypted_preimage.clone();
-            <span class="macro">trace!</span>(<span class="question-mark">?</span>contract_account, <span class="string">&quot;Updating contract account&quot;</span>);
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>contract_db_key, <span class="kw-2">&amp;</span>contract_account).<span class="kw">await</span>;
-
-            <span class="comment">// Update output outcome
-            </span><span class="kw">let </span>outcome_db_key = ContractUpdateKey(out_point);
-            <span class="kw">let </span><span class="kw-2">mut </span>outcome = dbtx
-                .get_value(<span class="kw-2">&amp;</span>outcome_db_key)
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;outcome was created on funding&quot;</span>);
-            <span class="kw">let </span>incoming_contract_outcome_preimage = <span class="kw">match </span><span class="kw-2">&amp;mut </span>outcome {
-                LightningOutputOutcome::Contract {
-                    outcome: ContractOutcome::Incoming(decryption_outcome),
-                    ..
-                } =&gt; decryption_outcome,
-                <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;We are expeccting an incoming contract&quot;</span>),
-            };
-            <span class="kw-2">*</span>incoming_contract_outcome_preimage = decrypted_preimage.clone();
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>outcome_db_key, <span class="kw-2">&amp;</span>outcome).<span class="kw">await</span>;
-        }
-
-        bad_peers
+        <span class="macro">vec!</span>[]
     }
 
     <span class="kw">async fn </span>output_status(
@@ -2022,9 +2006,7 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;block_height&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-                    <span class="kw">let </span>future = context.wait_key_exists(BlockHeightKey);
-                    future.<span class="kw">await</span>;
-                    <span class="prelude-val">Ok</span>(module.consensus_height(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(module.consensus_block_height(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
@@ -2082,16 +2064,32 @@
         <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })
     }
 
-    <span class="doccomment">/// Returns the median block height if enough peers have contributed
-    </span><span class="kw">pub async fn </span>consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-        <span class="kw">let </span>peer_heights = dbtx.get_value(<span class="kw-2">&amp;</span>BlockHeightKey).<span class="kw">await</span>.unwrap_or_default();
-        <span class="kw">if </span>peer_heights.len() &lt; <span class="self">self</span>.cfg.consensus.threshold() {
-            <span class="kw">return </span><span class="prelude-val">None</span>;
+    <span class="kw">pub async fn </span>block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.btc_rpc
+            .get_block_height()
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>)
+    }
+
+    <span class="kw">pub async fn </span>consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
+        <span class="kw">let </span>peer_count = <span class="number">3 </span>* (<span class="self">self</span>.cfg.consensus.threshold() / <span class="number">2</span>) + <span class="number">1</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>heights = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>BlockHeightVotePrefix)
+            .<span class="kw">await
+            </span>.map(|(.., height)| height)
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="macro">assert!</span>(heights.len() &lt;= peer_count);
+
+        <span class="kw">while </span>heights.len() &lt; peer_count {
+            heights.push(<span class="number">0</span>);
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>heights: Vec&lt;<span class="kw">_</span>&gt; = peer_heights.values().collect();
         heights.sort_unstable();
-        <span class="prelude-val">Some</span>(<span class="kw-2">**</span>heights.get(heights.len() / <span class="number">2</span>).expect(<span class="string">&quot;items is non-empty&quot;</span>))
+
+        heights[peer_count / <span class="number">2</span>]
     }
 
     <span class="kw">fn </span>validate_decryption_share(
@@ -2439,7 +2437,7 @@
                             <span class="string">&quot;validate_migrations was not able to read any ProposeDecryptionShares&quot;
                         </span>);
                         }
-                        DbKeyPrefix::BlockHeight =&gt; {}
+                        DbKeyPrefix::BlockHeightVote =&gt; {}
                     }
                 }
             },
