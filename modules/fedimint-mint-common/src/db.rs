@@ -38,9 +38,7 @@ impl_db_record!(
 impl_db_lookup!(key = NonceKey, query_prefix = NonceKeyPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ProposedPartialSignatureKey {
-    pub out_point: OutPoint, // tx + output idx
-}
+pub struct ProposedPartialSignatureKey(pub OutPoint);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct ProposedPartialSignaturesKeyPrefix;
@@ -56,18 +54,13 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ReceivedPartialSignatureKey {
-    pub request_id: OutPoint, // tx + output idx
-    pub peer_id: PeerId,
-}
+pub struct ReceivedPartialSignatureKey(pub OutPoint, pub PeerId);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct ReceivedPartialSignaturesKeyPrefix;
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct ReceivedPartialSignatureKeyOutputPrefix {
-    pub request_id: OutPoint, // tx + output idx
-}
+pub struct ReceivedPartialSignatureKeyOutputPrefix(pub OutPoint);
 
 impl_db_record!(
     key = ReceivedPartialSignatureKey,

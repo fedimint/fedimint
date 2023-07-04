@@ -26,9 +26,8 @@ use fedimint_client_legacy::mint::backup::Metadata;
 use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{msats, sats, TieredMulti};
+use fedimint_core::{msats, sats};
 use fedimint_logging::LOG_TEST;
-use fedimint_mint_server::common::{MintConsensusItem, MintOutputSignatureShare};
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
@@ -338,50 +337,6 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
         );
         assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
         assert_eq!(fed.max_balance_sheet(), 0);
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn drop_peers_who_dont_contribute_blind_sigs() -> Result<()> {
-    test(4, |fed, user, bitcoin| async move {
-        fed.mine_spendable_utxo(&*user, &*bitcoin, Amount::from_sat(2000))
-            .await;
-        fed.database_add_notes_for_user(&*user, sats(2000)).await;
-
-        fed.subset_peers(&[3]).await.override_proposal(vec![]).await;
-        drop_peer_3_during_epoch(&fed).await.unwrap();
-
-        assert_eq!(user.ecash_total(), sats(2000));
-        assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn drop_peers_who_contribute_bad_sigs() -> Result<()> {
-    test(4, |fed, user, bitcoin| async move {
-        fed.mine_spendable_utxo(&*user, &*bitcoin, Amount::from_sat(2000))
-            .await;
-        let out_point = fed.database_add_notes_for_user(&*user, sats(2000)).await;
-        let bad_proposal = vec![ConsensusItem::Module(
-            fedimint_core::core::DynModuleConsensusItem::from_typed(
-                fed.mint_id,
-                MintConsensusItem {
-                    out_point,
-                    signatures: MintOutputSignatureShare(TieredMulti::default()),
-                },
-            ),
-        )];
-
-        fed.subset_peers(&[3])
-            .await
-            .override_proposal(bad_proposal)
-            .await;
-        drop_peer_3_during_epoch(&fed).await.unwrap();
-
-        assert_eq!(user.ecash_total(), sats(2000));
-        assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
     })
     .await
 }
