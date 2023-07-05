@@ -1271,6 +1271,7 @@
 <a href="#1271" id="1271">1271</a>
 <a href="#1272" id="1272">1272</a>
 <a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1279,7 +1280,7 @@
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::{Duration, Instant, SystemTime};
+<span class="kw">use </span>std::time::{Duration, SystemTime};
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::{anyhow, ensure};
@@ -1293,6 +1294,7 @@
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
@@ -1898,7 +1900,7 @@
         <span class="self">self</span>.request_with_strategy(
             DiscoverApiVersionSet::new(
                 <span class="self">self</span>.all_members().len(),
-                Instant::now().add(Duration::from_secs(<span class="number">3</span>)),
+                now().add(Duration::from_secs(<span class="number">3</span>)),
                 client_versions.clone(),
             ),
             <span class="string">&quot;version&quot;</span>.to_owned(),
