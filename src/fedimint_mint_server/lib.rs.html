@@ -1125,6 +1125,10 @@
 <a href="#1125" id="1125">1125</a>
 <a href="#1126" id="1126">1126</a>
 <a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1700,7 +1704,11 @@
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>input.iter_items() {
             <span class="kw">let </span>key = NonceKey(note.<span class="number">0</span>);
-            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
+
+            <span class="kw">if </span>dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.is_some() {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin).into_module_error_other();
+            }
+
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(key), <span class="kw-2">&amp;</span>amount)
                 .<span class="kw">await</span>;
         }
