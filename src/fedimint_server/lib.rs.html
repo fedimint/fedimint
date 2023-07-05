@@ -289,6 +289,10 @@
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -428,7 +432,8 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config::api::server_endpoints(), <span class="prelude-val">None</span>);
-        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_api(<span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>, <span class="bool-val">true</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>handler =
+            <span class="self">Self</span>::spawn_api(<span class="string">&quot;config-gen&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>, <span class="bool-val">true</span>).<span class="kw">await</span>;
 
         <span class="kw">let </span>cfg = config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">&quot;should not close&quot;</span>);
         handler.stop().<span class="kw">await</span>;
@@ -450,6 +455,7 @@
         }
 
         <span class="self">Self</span>::spawn_api(
+            <span class="string">&quot;consensus&quot;</span>,
             <span class="kw-2">&amp;</span>cfg.api_bind,
             rpc_module,
             cfg.max_connections,
@@ -464,6 +470,7 @@
     /// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
     /// easily be killed.
     </span><span class="kw">async fn </span>spawn_api&lt;T&gt;(
+        name: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
         api_bind: <span class="kw-2">&amp;</span>SocketAddr,
         module: RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
         max_connections: u32,
@@ -485,7 +492,8 @@
             .build(<span class="kw-2">&amp;</span>api_bind.to_string())
             .<span class="kw">await
             </span>.context(<span class="macro">format!</span>(<span class="string">&quot;Bind address: {api_bind}&quot;</span>))
-            .expect(<span class="string">&quot;Could not start API server&quot;</span>)
+            .context(<span class="macro">format!</span>(<span class="string">&quot;API name: {name}&quot;</span>))
+            .expect(<span class="string">&quot;Could not build API server&quot;</span>)
             .start(module)
             .expect(<span class="string">&quot;Could not start API server&quot;</span>);
         <span class="macro">info!</span>(target: LOG_NET_API, <span class="string">&quot;Starting api on ws://{api_bind}&quot;</span>);
