@@ -68,6 +68,9 @@ pub struct ServerOpts {
     /// The bitcoin network that fedimint will be running on
     #[arg(long, env = "FM_FINALITY_DELAY", default_value = "10")]
     finality_delay: u32,
+
+    #[arg(long, env = "FM_BIND_METRICS_API")]
+    bind_metrics_api: Option<SocketAddr>,
 }
 
 /// `fedimintd` builder
@@ -257,5 +260,28 @@ async fn run(
         },
         db,
     };
-    api.run(task_group).await
+    if let Some(bind_metrics_api) = opts.bind_metrics_api.as_ref() {
+        let (api_result, metrics_api_result) = futures::join!(
+            api.run(task_group.clone()),
+            spawn_metrics_server(bind_metrics_api, task_group)
+        );
+        api_result?;
+        metrics_api_result?;
+    } else {
+        api.run(task_group).await?;
+    }
+    Ok(())
+}
+
+async fn spawn_metrics_server(
+    bind_address: &SocketAddr,
+    mut task_group: TaskGroup,
+) -> anyhow::Result<()> {
+    let rx = fedimint_metrics::run_api_server(bind_address, &mut task_group).await?;
+    info!("Metrics API listening on {bind_address}");
+    let res = rx.await;
+    if res.is_err() {
+        error!("Error shutting down metric api server: {res:?}");
+    }
+    Ok(())
 }

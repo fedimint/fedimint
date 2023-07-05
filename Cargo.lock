@@ -1601,6 +1601,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-ln-common",
+ "fedimint-metrics",
  "fedimint-server",
  "fedimint-testing",
  "futures",
@@ -1687,6 +1688,19 @@ dependencies = [
  "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-metrics"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "fedimint-core",
+ "lazy_static",
+ "prometheus",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2101,6 +2115,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-server",
  "fedimint-logging",
+ "fedimint-metrics",
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
@@ -3829,6 +3844,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "449811d15fbdf5ceb5c1144416066429cf82316e2ec8ce0c1f6f8a02e7bbcf8c"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot 0.12.1",
+ "protobuf",
+ "thiserror",
+]
+
+[[package]]
 name = "prost"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3955,6 +3985,12 @@ checksum = "213622a1460818959ac1181aaeb2dc9c7f63df720db7d788b3e24eacd1983e13"
 dependencies = [
  "prost 0.11.9",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "quote"
