@@ -475,9 +475,10 @@ impl FedimintCli {
             }
         }
 
-        info!("Starting fedimintd (version: {CODE_VERSION})");
-
         TracingSetup::default().init().expect("tracing initializes");
+
+        debug!("Starting fedimint-cli (version: {CODE_VERSION})");
+
         Ok(Self {
             module_gens: ClientModuleGenRegistry::new(),
         })
