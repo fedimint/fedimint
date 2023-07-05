@@ -45,7 +45,7 @@ message PayInvoiceRequest {
 
   double max_fee_percent = 3;
 
-  uint64 timestamp = 4;
+  bytes payment_hash = 4;
 }
 
 message PayInvoiceResponse {

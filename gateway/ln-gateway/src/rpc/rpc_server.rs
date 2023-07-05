@@ -121,7 +121,7 @@ async fn withdraw(
 
 #[instrument(skip_all, err)]
 async fn pay_invoice(
-    Extension(mut gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Gateway>,
     Json(payload): Json<PayInvoicePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let preimage = gateway.handle_pay_invoice_msg(payload).await?;

@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
@@ -216,11 +215,7 @@ impl GatewayPayInvoice {
                 invoice: invoice.to_string(),
                 max_delay,
                 max_fee_percent,
-                timestamp: invoice
-                    .timestamp()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Failed to calculate invoice timestamp")
-                    .as_secs(),
+                payment_hash: invoice.payment_hash().to_vec(),
             })
             .await
         {

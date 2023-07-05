@@ -10,12 +10,13 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::lnrpc::failure::FailureCode;
-use tonic_lnd::lnrpc::{
-    ChanInfoRequest, GetInfoRequest, ListChannelsRequest, ListPaymentsRequest, Payment, SendRequest,
+use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, SendRequest};
+use tonic_lnd::routerrpc::{
+    CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, TrackPaymentRequest,
 };
-use tonic_lnd::routerrpc::{CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction};
+use tonic_lnd::tonic::Code;
 use tonic_lnd::{connect, LndClient};
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
@@ -208,26 +209,46 @@ impl GatewayLndClient {
 
     async fn lookup_payment(
         &self,
-        payment_request: String,
-        _invoice_timestamp: u64,
+        payment_hash: Vec<u8>,
         client: &mut LndClient,
-    ) -> Result<Option<Payment>, GatewayError> {
-        let payments = client
-            .lightning()
-            .list_payments(ListPaymentsRequest {
-                // TODO: Returning ALL payments here is bad, because there could be a lot of
-                // payments We can't filter by timestamp until we fix our tonic_lnd
-                // dependency
-                include_incomplete: true,
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
-            .into_inner()
-            .payments;
-        Ok(payments
-            .into_iter()
-            .find(|payment| payment.payment_request == payment_request))
+    ) -> Result<Option<String>, GatewayError> {
+        // Loop until we successfully get the status of the payment, or determine that
+        // the payment has not been made yet.
+        loop {
+            let payments = client
+                .router()
+                .track_payment_v2(TrackPaymentRequest {
+                    payment_hash: payment_hash.clone(),
+                    no_inflight_updates: true,
+                })
+                .await;
+
+            match payments {
+                Ok(payments) => {
+                    // Block until LND returns the completed payment
+                    if let Some(payment) = payments
+                        .into_inner()
+                        .message()
+                        .await
+                        .map_err(|_| GatewayError::ClientNgError)?
+                    {
+                        return Ok(Some(payment.payment_preimage));
+                    }
+                }
+                Err(e) => {
+                    // Break if we got a response back from the LND node that indicates the payment
+                    // hash was not found.
+                    if e.code() == Code::NotFound {
+                        break;
+                    }
+
+                    warn!("Could not get the status of payment {payment_hash:?}. Trying again in 5 seconds");
+                    sleep(Duration::from_secs(5)).await;
+                }
+            }
+        }
+
+        Ok(None)
     }
 }
 
@@ -353,26 +374,11 @@ impl ILnRpcClient for GatewayLndClient {
         .await?;
 
         // If the payment exists, that means we've already tried to pay the invoice
-        let preimage = if let Some(mut payment) = self
-            .lookup_payment(invoice.invoice.clone(), invoice.timestamp, &mut client)
+        let preimage = if let Some(preimage) = self
+            .lookup_payment(invoice.payment_hash.clone(), &mut client)
             .await?
         {
-            while payment.status == 1 {
-                fedimint_core::task::sleep(Duration::from_millis(50)).await;
-                payment = self
-                    .lookup_payment(invoice.invoice.clone(), invoice.timestamp, &mut client)
-                    .await?
-                    .expect("LND deleted in flight payment");
-            }
-
-            if payment.status != 2 {
-                return Err(GatewayError::LnRpcError(tonic::Status::new(
-                    tonic::Code::Internal,
-                    "LND did not return a preimage",
-                )));
-            }
-
-            bitcoin_hashes::hex::FromHex::from_hex(payment.payment_preimage.as_str())
+            bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str())
                 .map_err(|_| anyhow::anyhow!("Failed to convert preimage"))?
         } else {
             let send_response = client
