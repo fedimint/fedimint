@@ -278,7 +278,7 @@ jobs:
 
   pkgs:
     if: github.ref == 'refs/heads/master'
-    name: "Release packages: ${{ matrix.build }}"
+    name: "Release packages: ${{ matrix.build.pkg }}"
 
     strategy:
       matrix:
