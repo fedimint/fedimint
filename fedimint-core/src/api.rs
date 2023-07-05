@@ -6,7 +6,7 @@ use std::ops::Add;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 use std::{cmp, result};
 
 use anyhow::{anyhow, ensure};
@@ -20,6 +20,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
+use fedimint_core::time::now;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
@@ -625,7 +626,7 @@ where
         self.request_with_strategy(
             DiscoverApiVersionSet::new(
                 self.all_members().len(),
-                Instant::now().add(Duration::from_secs(3)),
+                now().add(Duration::from_secs(3)),
                 client_versions.clone(),
             ),
             "version".to_owned(),

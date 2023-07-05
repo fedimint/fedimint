@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Debug;
 use std::mem;
-use std::time::Instant;
+use std::time::SystemTime;
 
 use anyhow::format_err;
 use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
 use tracing::debug;
 
@@ -261,13 +262,13 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
 
 /// Query strategy that returns when all peers responded or a deadline passed
 pub struct AllOrDeadline<R> {
-    deadline: Instant,
+    deadline: SystemTime,
     num_peers: usize,
     responses: BTreeMap<PeerId, R>,
 }
 
 impl<R> AllOrDeadline<R> {
-    pub fn new(num_peers: usize, deadline: Instant) -> Self {
+    pub fn new(num_peers: usize, deadline: SystemTime) -> Self {
         Self {
             deadline,
             num_peers,
@@ -296,7 +297,7 @@ impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
             Err(_e) => QueryStep::RetryMembers(BTreeSet::from([peer_id])),
         };
 
-        if self.deadline <= Instant::now() {
+        if self.deadline <= now() {
             return QueryStep::Success(mem::take(&mut self.responses));
         }
 
@@ -314,7 +315,7 @@ pub struct DiscoverApiVersionSet {
 impl DiscoverApiVersionSet {
     pub fn new(
         num_peers: usize,
-        deadline: Instant,
+        deadline: SystemTime,
         client_versions: SupportedApiVersionsSummary,
     ) -> Self {
         Self {

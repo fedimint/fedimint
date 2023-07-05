@@ -3,10 +3,29 @@ rules:
 - id: ban-system-time-now
   languages:
     - rust
-  message: Use fedimint_core::time::now instead of std::time::SystemTime::now for better wasm compat.
+  message: Use fedimint_core::time::now instead of std::time::SystemTime::now for better wasm compatibility.
   pattern: std::time::SystemTime::now
 
   severity: WARNING
+
+- id: ban-instant-now
+  languages:
+    - rust
+  message: Use fedimint_core::time::now instead of Instant::now for better wasm compatibility. ATM. there's no good Instant replacement for WASM, so we need to resort to SystemTime.
+  
+  pattern-either:
+    - pattern: std::time::Instant::now
+    - pattern: tokio::time::Instant::now
+
+  severity: WARNING
+  paths:
+    exclude:
+      # doesn't run in wasm
+      - devimint/
+      # server only
+      - fedimint-server/
+      # being phased out
+      - fedimint-client-legacy/
 
 - id: ban-fs-write
   languages:
