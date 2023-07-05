@@ -67,13 +67,24 @@ craneLib.overrideScope' (self: prev: {
     doCheck = false;
   });
 
+  workspaceCargoUdepsDeps = self.buildDepsOnly (prev.commonArgsDepsOnly // {
+    pname = "${self.commonArgs.pname}-udeps-deps";
+    version = "0.0.1";
+    nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
+    # since we filtered all the actual project source, everything will definitely fail
+    # but we only run this step to cache the build artifacts, so we ignore failure with `|| true`
+    buildPhaseCargoCommand = "cargo udeps --all-targets --workspace --profile $CARGO_PROFILE || true";
+    doCheck = false;
+  });
+
   workspaceCargoUdeps = self.mkCargoDerivation (self.commonArgs // {
+    pname = "${self.commonArgs.pname}-udeps";
     version = "0.0.1";
     # no need for inheriting any artifacts, as we are using it as a one-off, and only care
     # about the docs
-    cargoArtifacts = null;
+    cargoArtifacts = self.workspaceCargoUdepsDeps;
     nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-    buildPhaseCargoCommand = "cargo udeps --all-targets --workspace";
+    buildPhaseCargoCommand = "cargo udeps --all-targets --workspace --profile $CARGO_PROFILE";
     doInstallCargoArtifacts = false;
     doCheck = false;
   });
