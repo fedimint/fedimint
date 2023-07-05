@@ -825,6 +825,7 @@
 <a href="#825" id="825">825</a>
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -1302,9 +1303,10 @@
             }
         }
 
-        <span class="macro">info!</span>(<span class="string">&quot;Starting fedimintd (version: {CODE_VERSION})&quot;</span>);
-
         TracingSetup::default().init().expect(<span class="string">&quot;tracing initializes&quot;</span>);
+
+        <span class="macro">debug!</span>(<span class="string">&quot;Starting fedimint-cli (version: {CODE_VERSION})&quot;</span>);
+
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             module_gens: ClientModuleGenRegistry::new(),
         })
