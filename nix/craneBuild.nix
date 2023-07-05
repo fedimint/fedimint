@@ -110,7 +110,7 @@ craneLib.overrideScope' (self: prev: {
     pnameSuffix = "-lcov";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDepsCov;
-    buildPhaseCargoCommand = "mkdir -p $out ; env RUST_LOG=info,timing=debug cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info --  --test-threads=$(($(nproc) * 2))";
+    buildPhaseCargoCommand = "mkdir -p $out ; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info --  --test-threads=$(($(nproc) * 2))";
     installPhaseCommand = "true";
     nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ self.cargo-llvm-cov ];
     doCheck = false;
