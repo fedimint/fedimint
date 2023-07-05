@@ -4,6 +4,9 @@ use std::time::Duration;
 
 use anyhow::bail;
 use bitcoin_hashes::Hash as BitcoinHash;
+use common::db::{
+    ContractAuditAmountKey, ContractAuditAmountKeyPrefix, ContractAuditAmountTotalKey,
+};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
@@ -542,6 +545,10 @@ impl ServerModule for Lightning {
                         amount: amount.amount,
                         contract: contract.contract.clone().to_funded(out_point),
                     });
+                dbtx.insert_entry(
+                    &ContractAuditAmountKey(contract.contract.contract_id()),
+                    &updated_contract_account.amount,
+                );
                 dbtx.insert_entry(&contract_db_key, &updated_contract_account)
                     .await;
 
@@ -772,6 +779,27 @@ impl ServerModule for Lightning {
             *incoming_contract_outcome_preimage = decrypted_preimage.clone();
             dbtx.insert_entry(&outcome_db_key, &outcome).await;
         }
+
+        let mut totalAmount = dbtx
+            .get_value(&ContractAuditAmountTotalKey)
+            .await
+            .unwrap_or(Amount::ZERO);
+        let remove_audit_keys = dbtx
+            .find_by_prefix(&ContractAuditAmountKeyPrefix)
+            .await
+            .map(|(key, amount)| {
+                totalAmount += amount;
+                key
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        for key in remove_audit_keys {
+            dbtx.remove_entry(&key).await;
+        }
+
+        dbtx.insert_entry(&ContractAuditAmountTotalKey, &totalAmount)
+            .await;
 
         bad_peers
     }

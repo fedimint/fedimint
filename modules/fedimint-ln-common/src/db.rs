@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
 use secp256k1::PublicKey;
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -20,6 +20,8 @@ pub enum DbKeyPrefix {
     ContractUpdate = 0x44,
     LightningGateway = 0x45,
     BlockHeight = 0x46,
+    ContractAuditAmount = 0x47,
+    ContractAuditAmountTotal = 0x48,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -41,6 +43,31 @@ impl_db_record!(
     notify_on_modify = true,
 );
 impl_db_lookup!(key = ContractKey, query_prefix = ContractKeyPrefix);
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+pub struct ContractAuditAmountKey(pub ContractId);
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+pub struct ContractAuditAmountKeyPrefix;
+
+impl_db_record!(
+    key = ContractAuditAmountKey,
+    value = Amount,
+    db_prefix = DbKeyPrefix::ContractAuditAmount,
+);
+impl_db_lookup!(
+    key = ContractAuditAmountKey,
+    query_prefix = ContractAuditAmountKeyPrefix
+);
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+pub struct ContractAuditAmountTotalKey;
+
+impl_db_record!(
+    key = ContractAuditAmountTotalKey,
+    value = Amount,
+    db_prefix = DbKeyPrefix::ContractAuditAmountTotal,
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ContractUpdateKey(pub OutPoint);
