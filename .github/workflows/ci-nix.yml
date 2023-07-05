@@ -309,6 +309,9 @@ jobs:
       - name: Check version ${{ matrix.build.bin }}
         run: nix run .#${{ matrix.build.bin }} version-hash && echo "$GITHUB_SHA" && test "$(nix run .#${{ matrix.build.bin }} version-hash)" = "${GITHUB_SHA}"
 
+      - name: Check sha256sum ${{ matrix.build.bin }}
+        run: nix build .#${{ matrix.build.bin }} && sha256sum "./result/bin/${{ matrix.build.bin }}"
+
   notifications:
     # if: github.ref == 'refs/heads/master'
     if: always()
