@@ -12,6 +12,7 @@ use std::net::SocketAddr;
 use std::ops::Sub;
 use std::time::Duration;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_core::api::PeerConnectionStatus;
 use fedimint_core::cancellable::{Cancellable, Cancelled};
@@ -255,6 +256,7 @@ where
         let mut listener = connect
             .listen(cfg.bind_addr)
             .await
+            .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.bind_addr))
             .expect("Could not bind port");
 
         let mut shutdown_rx = task_handle.make_shutdown_rx().await;

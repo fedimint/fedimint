@@ -1,5 +1,6 @@
 use std::env;
 
+use anyhow::Context;
 use fedimint_derive::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;
@@ -20,11 +21,15 @@ pub struct BitcoinRpcConfig {
 impl BitcoinRpcConfig {
     pub fn from_env_vars() -> anyhow::Result<Self> {
         Ok(Self {
-            kind: env::var(FM_BITCOIN_RPC_KIND).map_err(anyhow::Error::from)?,
+            kind: env::var(FM_BITCOIN_RPC_KIND).with_context(|| {
+                anyhow::anyhow!("failure looking up env var {FM_BITCOIN_RPC_KIND}")
+            })?,
             url: env::var(FM_BITCOIN_RPC_URL)
-                .map_err(anyhow::Error::from)?
+                .with_context(|| {
+                    anyhow::anyhow!("failure looking up env var {FM_BITCOIN_RPC_URL}")
+                })?
                 .parse()
-                .map_err(anyhow::Error::from)?,
+                .with_context(|| anyhow::anyhow!("failure parsing env var {FM_BITCOIN_RPC_URL}"))?,
         })
     }
 }
