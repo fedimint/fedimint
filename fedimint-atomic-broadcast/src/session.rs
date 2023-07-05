@@ -25,14 +25,14 @@ use crate::{
 /// - collect signatures until we reach the threshold or a signed block arrives
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
-    index: u64,
+    session_index: u64,
     keychain: Keychain,
     backup_loader: std::io::Cursor<Vec<u8>>,
     backup_saver: db::UnitSaver,
     item_receiver: Receiver<Vec<u8>>,
     network_data_receiver: Receiver<Vec<u8>>,
     outgoing_message_sender: Sender<(Message, Recipient)>,
-    ordered_item_sender: mpsc::Sender<(OrderedItem, u64, oneshot::Sender<Decision>)>,
+    ordered_item_sender: mpsc::Sender<Option<(OrderedItem, oneshot::Sender<Decision>)>>,
     signed_block_receiver: Receiver<SignedBlock>,
 ) -> anyhow::Result<SignedBlock> {
     const MAX_ROUND: u16 = 5000;
@@ -44,7 +44,7 @@ pub async fn run(
     let mut config = aleph_bft::default_config(
         keychain.peer_count().into(),
         keychain.peer_id().to_usize().into(),
-        index,
+        session_index,
     );
 
     // In order to bound a sessions RAM consumption we need to bound its number of
@@ -95,7 +95,10 @@ pub async fn run(
             .cycle()
         {
             if outgoing_message_sender
-                .send((Message::BlockRequest(index), Recipient::Peer(peer_id)))
+                .send((
+                    Message::BlockRequest(session_index),
+                    Recipient::Peer(peer_id),
+                ))
                 .await
                 .is_err()
             {
@@ -110,8 +113,9 @@ pub async fn run(
     // the EXPONENTIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
     // data
     let batches_per_block = EXPONENTIAL_SLOWDOWN_OFFSET * keychain.peer_count() / 3;
-    let mut pending_items = vec![];
     let mut num_batches = 0;
+    let mut item_index = 0;
+    let mut pending_items = vec![];
 
     // we build a block out of the ordered batches until either we have processed
     // n_batches_per_block blocks or a signed block arrives from our peers
@@ -125,16 +129,16 @@ pub async fn run(
                         let peer_id = to_peer_id(node_index);
 
                         for item in items {
-                            let ordered_item = OrderedItem{item, peer_id};
+                            let ordered_item = OrderedItem{item, index: item_index, peer_id};
                             let (decision_sender, decision_receiver) = oneshot::channel();
 
-                            ordered_item_sender.send((
+                            ordered_item_sender.send(Some((
                                 ordered_item.clone(),
-                                index,
                                 decision_sender
-                            )).await?;
+                            ))).await?;
 
                             pending_items.push((ordered_item, decision_receiver));
+                            item_index += 1;
                         }
 
                         num_batches += 1;
@@ -145,7 +149,7 @@ pub async fn run(
             signed_block = signed_block_receiver.recv() => {
                 let SignedBlock{block, signatures} = signed_block?;
 
-                if block.index == index
+                if block.index == session_index
                     && signatures.len() == keychain.threshold()
                     && signatures.iter().all(|(peer_id, sig)| {
                         keychain.verify(&block.header(), sig, to_node_index(*peer_id))
@@ -166,11 +170,10 @@ pub async fn run(
                     for ordered_item in block.items.iter().skip(accepted_items.len()) {
                         let (decision_sender, decision_receiver) = oneshot::channel();
 
-                        ordered_item_sender.send((
+                        ordered_item_sender.send(Some((
                             ordered_item.clone(),
-                            index,
                             decision_sender
-                        )).await?;
+                        ))).await?;
 
                         decision_receivers.push(decision_receiver);
                     }
@@ -204,7 +207,7 @@ pub async fn run(
 
     // sign the block and send the signature to the data_provider to order it
     let block = Block {
-        index,
+        index: session_index,
         items: accepted_items,
     };
     let header = block.header();
@@ -230,7 +233,7 @@ pub async fn run(
             signed_block = signed_block_receiver.recv() => {
                 let SignedBlock{block, signatures}  = signed_block?;
 
-                if block.index == index
+                if block.index == session_index
                     && signatures.len() == keychain.threshold()
                     && signatures.iter().all(|(peer_id, sig)| {
                         keychain.verify(&block.header(), sig, to_node_index(*peer_id))

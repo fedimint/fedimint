@@ -102,7 +102,10 @@ impl aleph_bft::MultiKeychain for Keychain {
     }
 
     fn is_complete(&self, msg: &[u8], partial: &Self::PartialMultisignature) -> bool {
-        partial.iter().count() >= self.threshold()
-            && partial.iter().all(|(i, sig)| self.verify(msg, sig, i))
+        if partial.iter().count() < self.threshold() {
+            return false;
+        }
+
+        partial.iter().all(|(i, sgn)| self.verify(msg, sgn, i))
     }
 }
