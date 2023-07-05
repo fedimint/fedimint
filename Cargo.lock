@@ -827,15 +827,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
-name = "counter"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d458e66999348f56fd3ffcfbb7f7951542075ca8359687c703de6500c1ddccd"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1767,7 +1758,6 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin_hashes 0.11.0",
- "counter",
  "erased-serde",
  "fedimint-core",
  "fedimint-mint-common",

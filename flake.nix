@@ -144,7 +144,10 @@
             workspaceTestDoc = craneLib.workspaceTestDoc;
             workspaceDoc = craneLib.workspaceDoc;
             workspaceDocExport = (craneLib.overrideToolchain toolchain.fenixToolchainDocNightly).workspaceDocExport;
-            workspaceCargoUdeps = (craneLib.overrideToolchain toolchain.fenixToolchainDocNightly).workspaceCargoUdeps;
+            workspaceCargoUdeps = ((craneLib.overrideScope' (self: prev: {
+              # udeps works only with `test` profile
+              commonProfile = "test";
+            })).overrideToolchain toolchain.fenixToolchainDocNightly).workspaceCargoUdeps;
             workspaceCov = craneLib.workspaceCov;
             workspaceAudit = craneLib.workspaceAudit;
           };
