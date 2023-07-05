@@ -1416,6 +1416,10 @@
         <span class="kw-2">&amp;</span>[ModuleConsensusVersion(<span class="number">0</span>)]
     }
 
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(<span class="number">0</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
@@ -1643,10 +1647,6 @@
     <span class="kw">type </span>Common = LightningModuleTypes;
     <span class="kw">type </span>Gen = LightningGen;
     <span class="kw">type </span>VerificationCache = LightningVerificationCache;
-
-    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(<span class="number">0</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
-    }
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">while </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {

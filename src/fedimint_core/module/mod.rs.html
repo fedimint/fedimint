@@ -1293,6 +1293,10 @@
 <a href="#1293" id="1293">1293</a>
 <a href="#1294" id="1294">1294</a>
 <a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -1738,6 +1742,8 @@
 </span><span class="kw">pub trait </span>IServerModuleGen: IDynCommonModuleGen {
     <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>);
 
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions;
+
     <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion;
 
     <span class="doccomment">/// Initialize the [`DynServerModule`] instance from its config
@@ -2155,6 +2161,8 @@
     /// checking purposes.
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion];
 
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions;
+
     <span class="kw">fn </span>kind() -&gt; ModuleKind {
         &lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleGen&gt;::Common::KIND
     }
@@ -2213,6 +2221,10 @@
     <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>) {
         <span class="self">self
     </span>}
+
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::supported_api_versions(<span class="self">self</span>)
+    }
 
     <span class="kw">fn </span>database_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseVersion {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::DATABASE_VERSION
@@ -2375,10 +2387,6 @@
     </span><span class="kw">fn </span>decoder() -&gt; Decoder {
         <span class="self">Self</span>::Common::decoder_builder().build()
     }
-
-    <span class="doccomment">/// Module consensus version this module is running with and the API
-    /// versions it supports in it
-    </span><span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions;
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
     </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);

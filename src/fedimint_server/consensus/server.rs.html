@@ -681,6 +681,9 @@
 <a href="#681" id="681">681</a>
 <a href="#682" id="682">682</a>
 <a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::{max, min};
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
@@ -894,13 +897,16 @@
         <span class="kw">let </span>modules = ModuleRegistry::from(modules);
 
         <span class="kw">let </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt; = Default::default();
+        <span class="kw">let </span>supported_api_versions =
+            ServerConfig::supported_api_versions_summary(<span class="kw-2">&amp;</span>cfg.consensus.modules, <span class="kw-2">&amp;</span>module_inits);
+
         <span class="kw">let </span>consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             db: db.clone(),
             modules: modules.clone(),
             client_cfg,
             api_sender,
-            supported_api_versions: ServerConfig::supported_api_versions_summary(<span class="kw-2">&amp;</span>modules),
+            supported_api_versions,
             latest_contribution_by_peer: Arc::clone(<span class="kw-2">&amp;</span>latest_contribution_by_peer),
             peer_status_channels,
             <span class="comment">// keep the status for a short time to protect the system against a denial-of-service

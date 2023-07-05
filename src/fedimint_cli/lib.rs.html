@@ -825,9 +825,6 @@
 <a href="#825" id="825">825</a>
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
-<a href="#829" id="829">829</a>
-<a href="#830" id="830">830</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -1450,10 +1447,7 @@
                     .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;Invalid JSON-RPC parameters&quot;</span>)<span class="question-mark">?</span>;
                 <span class="kw">let </span>params = ApiRequestErased::new(params);
                 <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(
-                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
-                        .<span class="kw">await</span><span class="question-mark">?
-                        </span>.get_config()
-                        .<span class="kw">await</span>,
+                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>.get_config(),
                 )
                 .into();
                 <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {

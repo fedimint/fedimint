@@ -1198,6 +1198,10 @@
         <span class="kw-2">&amp;</span>[ModuleConsensusVersion(<span class="number">0</span>)]
     }
 
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(<span class="number">0</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ServerModuleConfig,
@@ -1464,10 +1468,6 @@
         <span class="kw">if </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
             std::future::pending().<span class="kw">await
         </span>}
-    }
-
-    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(<span class="number">0</span>, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
     }
 
     <span class="kw">async fn </span>consensus_proposal(

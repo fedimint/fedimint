@@ -677,6 +677,7 @@
 <a href="#677" id="677">677</a>
 <a href="#678" id="678">678</a>
 <a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>register;
 
@@ -935,7 +936,7 @@
                                     operation_id,
                                     time_to_live,
                                     registration_info: registration,
-                                    federation_id: <span class="self">self</span>.get_config().<span class="kw">await</span>.federation_id,
+                                    federation_id: <span class="self">self</span>.get_config().federation_id,
                                 },
                                 state: RegisterWithFederationStates::Register(
                                     RegisterWithFederation {
@@ -1065,10 +1066,16 @@
     <span class="kw">type </span>Module = GatewayClientModule;
     <span class="kw">type </span>Config = LightningClientConfig;
 
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
+            .expect(<span class="string">&quot;no version conficts&quot;</span>)
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: <span class="self">Self</span>::Config,
         _db: Database,
+        _api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
         _api: DynGlobalApi,
@@ -1149,11 +1156,6 @@
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: <span class="self">self</span>.decoder(),
         }
-    }
-
-    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
-            .expect(<span class="string">&quot;no version conficts&quot;</span>)
     }
 
     <span class="kw">fn </span>input_amount(

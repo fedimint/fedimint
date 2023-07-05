@@ -1408,6 +1408,7 @@
 <a href="#1408" id="1408">1408</a>
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
 </pre><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1831,10 +1832,16 @@
     <span class="kw">type </span>Module = MintClientModule;
     <span class="kw">type </span>Config = MintClientConfig;
 
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
+            .expect(<span class="string">&quot;no version conficts&quot;</span>)
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: <span class="self">Self</span>::Config,
         _db: Database,
+        _api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
         _api: DynGlobalApi,
@@ -1890,11 +1897,6 @@
             secret: <span class="self">self</span>.secret.clone(),
             cancel_oob_payment_bc: <span class="self">self</span>.cancel_oob_payment_bc.clone(),
         }
-    }
-
-    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
-            .expect(<span class="string">&quot;no version conficts&quot;</span>)
     }
 
     <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; TransactionItemAmount {

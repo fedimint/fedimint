@@ -111,6 +111,25 @@
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -118,7 +137,9 @@
 <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientModuleConfig};
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen};
+<span class="kw">use </span>fedimint_core::module::{
+    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen, MultiApiVersion,
+};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -134,11 +155,17 @@
     <span class="kw">type </span>Module: ClientModule;
     <span class="kw">type </span>Config: TypedClientModuleConfig;
 
+    <span class="doccomment">/// Api versions of the corresponding server side module&#39;s API
+    /// that this client module implementation can use.
+    </span><span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion;
+
     <span class="doccomment">/// Initialize a [`ClientModule`] instance from its config
+    </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: <span class="self">Self</span>::Config,
         db: Database,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
         api: DynGlobalApi,
@@ -154,12 +181,17 @@
 
     <span class="kw">fn </span>as_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>);
 
-    <span class="kw">async fn </span>init(
+    <span class="doccomment">/// See [`ClientModuleGen::supported_api_versions`]
+    </span><span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion;
+
+    <span class="attr">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ClientModuleConfig,
         db: Database,
         <span class="comment">// FIXME: don&#39;t make modules aware of their instance id
         </span>instance_id: ModuleInstanceId,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: Notifier&lt;DynGlobalClientContext&gt;,
         api: DynGlobalApi,
@@ -183,11 +215,16 @@
         <span class="self">self
     </span>}
 
+    <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModuleGen&gt;::supported_api_versions(<span class="self">self</span>)
+    }
+
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         <span class="comment">// TODO: make dyn type for notifier
         </span>notifier: Notifier&lt;DynGlobalClientContext&gt;,
@@ -198,6 +235,7 @@
             </span>.init(
                 typed_cfg,
                 db,
+                api_version,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
                 api.clone(),

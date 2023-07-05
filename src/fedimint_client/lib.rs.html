@@ -1409,6 +1409,32 @@
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
 <a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1514,7 +1540,7 @@
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
 <span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
@@ -2097,7 +2123,7 @@
     </span>}
 
     <span class="doccomment">/// Returns the config with which the client was initialized.
-    </span><span class="kw">pub async fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+    </span><span class="kw">pub fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
         <span class="kw-2">&amp;</span><span class="self">self</span>.inner.config
     }
 
@@ -2135,40 +2161,57 @@
         })
     }
 
-    <span class="doccomment">/// Query the federation for API version support and then calculate
-    /// the best API version to use (supported by most guardians).
-    </span><span class="kw">pub async fn </span>discover_common_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
+    <span class="kw">pub async fn </span>discover_common_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.api()
-            .discover_api_version_set(<span class="kw-2">&amp;</span><span class="self">self</span>.supported_api_versions_summary().<span class="kw">await</span>)
+            .discover_api_version_set(
+                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(
+                    <span class="self">self</span>.get_config(),
+                    <span class="kw-2">&amp;</span><span class="self">self</span>.inner.module_gens,
+                )
+                .<span class="kw">await</span>,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+
+    <span class="doccomment">/// Query the federation for API version support and then calculate
+    /// the best API version to use (supported by most guardians).
+    </span><span class="kw">pub async fn </span>discover_common_api_version_static(
+        config: <span class="kw-2">&amp;</span>ClientConfig,
+        client_module_gen: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+        api: <span class="kw-2">&amp;</span>DynGlobalApi,
+    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
+        <span class="prelude-val">Ok</span>(api
+            .discover_api_version_set(
+                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_gen).<span class="kw">await</span>,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// [`SupportedApiVersionsSummary`] that the client and its modules support
-    </span><span class="kw">pub async fn </span>supported_api_versions_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedApiVersionsSummary {
-        <span class="kw">let </span>config = <span class="self">self</span>.get_config().<span class="kw">await</span>;
-
+    </span><span class="kw">pub async fn </span>supported_api_versions_summary_static(
+        config: <span class="kw-2">&amp;</span>ClientConfig,
+        client_module_gen: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+    ) -&gt; SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
                 core_consensus: config.consensus_version,
                 api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
                     .expect(<span class="string">&quot;must not have conflicting versions&quot;</span>),
             },
-            modules: <span class="self">self
-                </span>.inner
+            modules: config
                 .modules
-                .iter_modules()
-                .filter_map(|(module_instance_id, <span class="kw">_</span>, module)| {
-                    config
-                        .modules
-                        .get(<span class="kw-2">&amp;</span>module_instance_id)
-                        .map(|module_config| {
+                .iter()
+                .filter_map(|(<span class="kw-2">&amp;</span>module_instance_id, module_config)| {
+                    client_module_gen
+                        .get(module_config.kind())
+                        .map(|module_gen| {
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
                                     core_consensus: config.consensus_version,
                                     module_consensus: module_config.version,
-                                    api: module.supported_api_versions(),
+                                    api: module_gen.supported_api_versions(),
                                 },
                             )
                         })
@@ -2196,6 +2239,7 @@
     federation_meta: BTreeMap&lt;String, String&gt;,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
+    module_gens: ClientModuleGenRegistry,
     executor: Executor&lt;DynGlobalClientContext&gt;,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
@@ -2618,18 +2662,24 @@
 
         <span class="kw">let </span>api = DynGlobalApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span>config));
 
+        <span class="comment">// TODO: pass to module&#39;s `init`
+        </span><span class="kw">let </span>common_api_versions =
+            Client::discover_common_api_version_static(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="kw-2">&amp;</span>api).<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>root_secret = get_client_root_secret::&lt;S&gt;(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 
         <span class="kw">let </span>modules = {
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();
             <span class="kw">for </span>(module_instance, module_config) <span class="kw">in </span>config.modules.clone() {
                 <span class="kw">let </span>kind = module_config.kind().clone();
-                <span class="kw">let </span>module_gen = <span class="kw">match </span><span class="self">self</span>.module_gens.get(<span class="kw-2">&amp;</span>kind) {
-                    <span class="prelude-val">Some</span>(module_gen) =&gt; module_gen,
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">info!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance} not found in module gens, skipping&quot;</span>);
-                        <span class="kw">continue</span>;
-                    }
+                <span class="kw">let </span><span class="prelude-val">Some</span>(module_gen) = <span class="self">self</span>.module_gens.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
+                    <span class="macro">warn!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance} not found in module gens, skipping&quot;</span>);
+                    <span class="kw">continue</span>;
+                };
+
+                <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_version) = common_api_versions.modules.get(<span class="kw-2">&amp;</span>module_instance) <span class="kw">else </span>{
+                    <span class="macro">warn!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance} has not compatible api version, skipping&quot;</span>);
+                    <span class="kw">continue</span>;
                 };
 
                 <span class="kw">let </span>module = module_gen
@@ -2637,6 +2687,7 @@
                         module_config,
                         db.clone(),
                         module_instance,
+                        api_version,
                         <span class="comment">// This is a divergence from the legacy client, where the child secret
                         // keys were derived using *module kind*-specific derivation paths.
                         // Since the new client has to support multiple, segregated modules of
@@ -2676,6 +2727,7 @@
             federation_meta: config.meta,
             primary_module_instance,
             modules,
+            module_gens: <span class="self">self</span>.module_gens.clone(),
             executor,
             api,
             secp_ctx: Secp256k1::new(),

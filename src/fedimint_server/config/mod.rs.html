@@ -792,6 +792,14 @@
 <a href="#792" id="792">792</a>
 <a href="#793" id="793">793</a>
 <a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -807,7 +815,6 @@
     ServerModuleGenRegistry, TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-<span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
@@ -866,13 +873,22 @@
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>supported_api_versions_summary(
-        modules: <span class="kw-2">&amp;</span>ServerModuleRegistry,
+        modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleInstanceId, ServerModuleConsensusConfig&gt;,
+        module_inits: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
     ) -&gt; SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: <span class="self">Self</span>::supported_api_versions(),
             modules: modules
-                .iter_modules()
-                .map(|(id, <span class="kw">_</span>, module)| (id, module.supported_api_versions()))
+                .iter()
+                .map(|(<span class="kw-2">&amp;</span>id, config)| {
+                    (
+                        id,
+                        module_inits
+                            .get(<span class="kw-2">&amp;</span>config.kind)
+                            .expect(<span class="string">&quot;missing module kind gen&quot;</span>)
+                            .supported_api_versions(),
+                    )
+                })
                 .collect(),
         }
     }
