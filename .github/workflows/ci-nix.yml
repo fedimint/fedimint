@@ -34,6 +34,9 @@ jobs:
       - name: Commit check
         run: nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
 
+      - name: Check udeps
+        run: nix build -L .#ci.workspaceCargoUdeps
+
   build:
     strategy:
       matrix:

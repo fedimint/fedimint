@@ -7,20 +7,6 @@ on:
 name: Daily check
 
 jobs:
-  check-unused-dependencies:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: cachix/install-nix-action@v22
-        with:
-          name: fedimint
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        continue-on-error: true
-      - name: Check udeps
-        run: nix build -L .#debug.workspaceCargoUdeps
-
   audit:
     runs-on: ubuntu-latest
     steps:
