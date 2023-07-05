@@ -62,6 +62,10 @@ impl ServerModuleGen for DummyGen {
         &[CONSENSUS_VERSION]
     }
 
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
+    }
+
     /// Initialize the module
     async fn init(
         &self,
@@ -242,10 +246,6 @@ impl ServerModule for Dummy {
     type Common = DummyModuleTypes;
     type Gen = DummyGen;
     type VerificationCache = DummyVerificationCache;
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
-    }
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         // Wait until we have a proposal

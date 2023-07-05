@@ -84,6 +84,10 @@ impl ServerModuleGen for WalletGen {
         &[ModuleConsensusVersion(0)]
     }
 
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
+    }
+
     async fn init(
         &self,
         cfg: ServerModuleConfig,
@@ -275,10 +279,6 @@ impl ServerModule for Wallet {
     type Common = WalletModuleTypes;
     type Gen = WalletGen;
     type VerificationCache = WalletVerificationCache;
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
-    }
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         while !self.consensus_proposal(dbtx).await.forces_new_epoch() {

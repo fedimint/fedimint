@@ -5,7 +5,9 @@ use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientModuleConfig};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
-use fedimint_core::module::{CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen};
+use fedimint_core::module::{
+    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen, MultiApiVersion,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
@@ -21,11 +23,17 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     type Module: ClientModule;
     type Config: TypedClientModuleConfig;
 
+    /// Api versions of the corresponding server side module's API
+    /// that this client module implementation can use.
+    fn supported_api_versions(&self) -> MultiApiVersion;
+
     /// Initialize a [`ClientModule`] instance from its config
+    #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
         cfg: Self::Config,
         db: Database,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         api: DynGlobalApi,
@@ -41,12 +49,17 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
 
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static);
 
+    /// See [`ClientModuleGen::supported_api_versions`]
+    fn supported_api_versions(&self) -> MultiApiVersion;
+
+    #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
         cfg: ClientModuleConfig,
         db: Database,
         // FIXME: don't make modules aware of their instance id
         instance_id: ModuleInstanceId,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: Notifier<DynGlobalClientContext>,
         api: DynGlobalApi,
@@ -70,11 +83,16 @@ where
         self
     }
 
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        <Self as ClientModuleGen>::supported_api_versions(self)
+    }
+
     async fn init(
         &self,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
         notifier: Notifier<DynGlobalClientContext>,
@@ -85,6 +103,7 @@ where
             .init(
                 typed_cfg,
                 db,
+                api_version,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
                 api.clone(),

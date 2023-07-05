@@ -421,10 +421,16 @@ impl ClientModuleGen for MintClientGen {
     type Module = MintClientModule;
     type Config = MintClientConfig;
 
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
+    }
+
     async fn init(
         &self,
         cfg: Self::Config,
         _db: Database,
+        _api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         _api: DynGlobalApi,
@@ -480,11 +486,6 @@ impl ClientModule for MintClientModule {
             secret: self.secret.clone(),
             cancel_oob_payment_bc: self.cancel_oob_payment_bc.clone(),
         }
-    }
-
-    fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
-            .expect("no version conficts")
     }
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {

@@ -211,13 +211,16 @@ impl ConsensusServer {
         let modules = ModuleRegistry::from(modules);
 
         let latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>> = Default::default();
+        let supported_api_versions =
+            ServerConfig::supported_api_versions_summary(&cfg.consensus.modules, &module_inits);
+
         let consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             db: db.clone(),
             modules: modules.clone(),
             client_cfg,
             api_sender,
-            supported_api_versions: ServerConfig::supported_api_versions_summary(&modules),
+            supported_api_versions,
             latest_contribution_by_peer: Arc::clone(&latest_contribution_by_peer),
             peer_status_channels,
             // keep the status for a short time to protect the system against a denial-of-service

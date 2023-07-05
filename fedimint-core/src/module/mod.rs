@@ -443,6 +443,8 @@ where
 pub trait IServerModuleGen: IDynCommonModuleGen {
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static);
 
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
+
     fn database_version(&self) -> DatabaseVersion;
 
     /// Initialize the [`DynServerModule`] instance from its config
@@ -860,6 +862,8 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     /// checking purposes.
     fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
 
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
+
     fn kind() -> ModuleKind {
         <Self as ExtendsCommonModuleGen>::Common::KIND
     }
@@ -917,6 +921,10 @@ where
 {
     fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
         self
+    }
+
+    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
+        <Self as ServerModuleGen>::supported_api_versions(self)
     }
 
     fn database_version(&self) -> DatabaseVersion {
@@ -1080,10 +1088,6 @@ pub trait ServerModule: Debug + Sized {
     fn decoder() -> Decoder {
         Self::Common::decoder_builder().build()
     }
-
-    /// Module consensus version this module is running with and the API
-    /// versions it supports in it
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut ModuleDatabaseTransaction<'_>);

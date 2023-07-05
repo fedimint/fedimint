@@ -103,7 +103,7 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::backup::Metadata;
 use crate::db::ClientSecretKey;
@@ -686,7 +686,7 @@ impl Client {
     }
 
     /// Returns the config with which the client was initialized.
-    pub async fn get_config(&self) -> &ClientConfig {
+    pub fn get_config(&self) -> &ClientConfig {
         &self.inner.config
     }
 
@@ -724,40 +724,57 @@ impl Client {
         })
     }
 
-    /// Query the federation for API version support and then calculate
-    /// the best API version to use (supported by most guardians).
     pub async fn discover_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
         Ok(self
             .api()
-            .discover_api_version_set(&self.supported_api_versions_summary().await)
+            .discover_api_version_set(
+                &Self::supported_api_versions_summary_static(
+                    self.get_config(),
+                    &self.inner.module_gens,
+                )
+                .await,
+            )
+            .await?)
+    }
+
+    /// Query the federation for API version support and then calculate
+    /// the best API version to use (supported by most guardians).
+    pub async fn discover_common_api_version_static(
+        config: &ClientConfig,
+        client_module_gen: &ClientModuleGenRegistry,
+        api: &DynGlobalApi,
+    ) -> anyhow::Result<ApiVersionSet> {
+        Ok(api
+            .discover_api_version_set(
+                &Self::supported_api_versions_summary_static(config, client_module_gen).await,
+            )
             .await?)
     }
 
     /// [`SupportedApiVersionsSummary`] that the client and its modules support
-    pub async fn supported_api_versions_summary(&self) -> SupportedApiVersionsSummary {
-        let config = self.get_config().await;
-
+    pub async fn supported_api_versions_summary_static(
+        config: &ClientConfig,
+        client_module_gen: &ClientModuleGenRegistry,
+    ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
                 core_consensus: config.consensus_version,
                 api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
                     .expect("must not have conflicting versions"),
             },
-            modules: self
-                .inner
+            modules: config
                 .modules
-                .iter_modules()
-                .filter_map(|(module_instance_id, _, module)| {
-                    config
-                        .modules
-                        .get(&module_instance_id)
-                        .map(|module_config| {
+                .iter()
+                .filter_map(|(&module_instance_id, module_config)| {
+                    client_module_gen
+                        .get(module_config.kind())
+                        .map(|module_gen| {
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
                                     core_consensus: config.consensus_version,
                                     module_consensus: module_config.version,
-                                    api: module.supported_api_versions(),
+                                    api: module_gen.supported_api_versions(),
                                 },
                             )
                         })
@@ -785,6 +802,7 @@ struct ClientInner {
     federation_meta: BTreeMap<String, String>,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
+    module_gens: ClientModuleGenRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
@@ -1207,18 +1225,24 @@ impl ClientBuilder {
 
         let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
+        // TODO: pass to module's `init`
+        let common_api_versions =
+            Client::discover_common_api_version_static(&config, &self.module_gens, &api).await?;
+
         let root_secret = get_client_root_secret::<S>(&db).await;
 
         let modules = {
             let mut modules = ClientModuleRegistry::default();
             for (module_instance, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
-                let module_gen = match self.module_gens.get(&kind) {
-                    Some(module_gen) => module_gen,
-                    None => {
-                        info!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
-                        continue;
-                    }
+                let Some(module_gen) = self.module_gens.get(&kind) else {
+                    warn!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
+                    continue;
+                };
+
+                let Some(&api_version) = common_api_versions.modules.get(&module_instance) else {
+                    warn!("Module kind {kind} of instance {module_instance} has not compatible api version, skipping");
+                    continue;
                 };
 
                 let module = module_gen
@@ -1226,6 +1250,7 @@ impl ClientBuilder {
                         module_config,
                         db.clone(),
                         module_instance,
+                        api_version,
                         // This is a divergence from the legacy client, where the child secret
                         // keys were derived using *module kind*-specific derivation paths.
                         // Since the new client has to support multiple, segregated modules of
@@ -1265,6 +1290,7 @@ impl ClientBuilder {
             federation_meta: config.meta,
             primary_module_instance,
             modules,
+            module_gens: self.module_gens.clone(),
             executor,
             api,
             secp_ctx: Secp256k1::new(),

@@ -256,7 +256,7 @@ impl GatewayClientExt for Client {
                                     operation_id,
                                     time_to_live,
                                     registration_info: registration,
-                                    federation_id: self.get_config().await.federation_id,
+                                    federation_id: self.get_config().federation_id,
                                 },
                                 state: RegisterWithFederationStates::Register(
                                     RegisterWithFederation {
@@ -386,10 +386,16 @@ impl ClientModuleGen for GatewayClientGen {
     type Module = GatewayClientModule;
     type Config = LightningClientConfig;
 
+    fn supported_api_versions(&self) -> MultiApiVersion {
+        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+            .expect("no version conficts")
+    }
+
     async fn init(
         &self,
         cfg: Self::Config,
         _db: Database,
+        _api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         _api: DynGlobalApi,
@@ -470,11 +476,6 @@ impl ClientModule for GatewayClientModule {
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: self.decoder(),
         }
-    }
-
-    fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
-            .expect("no version conficts")
     }
 
     fn input_amount(
