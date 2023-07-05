@@ -16,7 +16,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleGen, MultiApiVersion, TransactionItemAmount,
@@ -222,18 +222,14 @@ impl GatewayClientExt for Client {
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
     ) -> anyhow::Result<()> {
-        let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let (gateway, _) = self.get_first_module::<GatewayClientModule>(&KIND);
         let registration_info =
             gateway.to_gateway_registration_info(route_hints, time_to_live, gateway_api);
 
-        let federation_id = self.get_config().await.federation_id;
+        let federation_id = self.get_config().federation_id;
         let mut dbtx = self.db().begin_transaction().await;
         gateway
-            .register_with_federation(
-                &mut dbtx.with_module_prefix(instance.id),
-                federation_id,
-                registration_info,
-            )
+            .register_with_federation(&mut dbtx, federation_id, registration_info)
             .await?;
         dbtx.commit_tx().await;
         Ok(())
@@ -444,7 +440,7 @@ impl GatewayClientModule {
 
     async fn register_with_federation(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         id: FederationId,
         registration: LightningGateway,
     ) -> anyhow::Result<()> {
