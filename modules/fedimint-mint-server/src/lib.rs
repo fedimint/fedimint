@@ -573,7 +573,11 @@ impl ServerModule for Mint {
 
         for (amount, note) in input.iter_items() {
             let key = NonceKey(note.0);
-            dbtx.insert_new_entry(&key, &()).await;
+
+            if dbtx.insert_entry(&key, &()).await.is_some() {
+                return Err(MintError::SpentCoin).into_module_error_other();
+            }
+
             dbtx.insert_new_entry(&MintAuditItemKey::Redemption(key), &amount)
                 .await;
         }
