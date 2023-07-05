@@ -535,6 +535,7 @@ impl ClientModuleGen for LightningClientGen {
         &self,
         cfg: Self::Config,
         _db: Database,
+        _api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         _api: DynGlobalApi,

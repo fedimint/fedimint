@@ -103,7 +103,7 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::backup::Metadata;
 use crate::db::ClientSecretKey;
@@ -1226,7 +1226,7 @@ impl ClientBuilder {
         let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
         // TODO: pass to module's `init`
-        let _common_versions =
+        let common_api_versions =
             Client::discover_common_api_version_static(&config, &self.module_gens, &api).await?;
 
         let root_secret = get_client_root_secret::<S>(&db).await;
@@ -1235,12 +1235,14 @@ impl ClientBuilder {
             let mut modules = ClientModuleRegistry::default();
             for (module_instance, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
-                let module_gen = match self.module_gens.get(&kind) {
-                    Some(module_gen) => module_gen,
-                    None => {
-                        info!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
-                        continue;
-                    }
+                let Some(module_gen) = self.module_gens.get(&kind) else {
+                    warn!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
+                    continue;
+                };
+
+                let Some(&api_version) = common_api_versions.modules.get(&module_instance) else {
+                    warn!("Module kind {kind} of instance {module_instance} has not compatible api version, skipping");
+                    continue;
                 };
 
                 let module = module_gen
@@ -1248,6 +1250,7 @@ impl ClientBuilder {
                         module_config,
                         db.clone(),
                         module_instance,
+                        api_version,
                         // This is a divergence from the legacy client, where the child secret
                         // keys were derived using *module kind*-specific derivation paths.
                         // Since the new client has to support multiple, segregated modules of

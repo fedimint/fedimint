@@ -396,6 +396,7 @@ impl ClientModuleGen for WalletClientGen {
         &self,
         cfg: Self::Config,
         _db: Database,
+        _api_version: ApiVersion,
         _module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         _api: DynGlobalApi,

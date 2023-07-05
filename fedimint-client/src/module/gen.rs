@@ -6,7 +6,7 @@ use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientMo
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::{
-    CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen, MultiApiVersion,
+    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
@@ -28,10 +28,12 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     fn supported_api_versions(&self) -> MultiApiVersion;
 
     /// Initialize a [`ClientModule`] instance from its config
+    #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
         cfg: Self::Config,
         db: Database,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         api: DynGlobalApi,
@@ -50,12 +52,14 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
     /// See [`ClientModuleGen::supported_api_versions`]
     fn supported_api_versions(&self) -> MultiApiVersion;
 
+    #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
         cfg: ClientModuleConfig,
         db: Database,
         // FIXME: don't make modules aware of their instance id
         instance_id: ModuleInstanceId,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         notifier: Notifier<DynGlobalClientContext>,
         api: DynGlobalApi,
@@ -88,6 +92,7 @@ where
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
+        api_version: ApiVersion,
         module_root_secret: DerivableSecret,
         // TODO: make dyn type for notifier
         notifier: Notifier<DynGlobalClientContext>,
@@ -98,6 +103,7 @@ where
             .init(
                 typed_cfg,
                 db,
+                api_version,
                 module_root_secret,
                 notifier.module_notifier(instance_id),
                 api.clone(),
