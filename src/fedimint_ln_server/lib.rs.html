@@ -1224,6 +1224,79 @@
 <a href="#1224" id="1224">1224</a>
 <a href="#1225" id="1225">1225</a>
 <a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a>
+<a href="#1228" id="1228">1228</a>
+<a href="#1229" id="1229">1229</a>
+<a href="#1230" id="1230">1230</a>
+<a href="#1231" id="1231">1231</a>
+<a href="#1232" id="1232">1232</a>
+<a href="#1233" id="1233">1233</a>
+<a href="#1234" id="1234">1234</a>
+<a href="#1235" id="1235">1235</a>
+<a href="#1236" id="1236">1236</a>
+<a href="#1237" id="1237">1237</a>
+<a href="#1238" id="1238">1238</a>
+<a href="#1239" id="1239">1239</a>
+<a href="#1240" id="1240">1240</a>
+<a href="#1241" id="1241">1241</a>
+<a href="#1242" id="1242">1242</a>
+<a href="#1243" id="1243">1243</a>
+<a href="#1244" id="1244">1244</a>
+<a href="#1245" id="1245">1245</a>
+<a href="#1246" id="1246">1246</a>
+<a href="#1247" id="1247">1247</a>
+<a href="#1248" id="1248">1248</a>
+<a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
+<a href="#1268" id="1268">1268</a>
+<a href="#1269" id="1269">1269</a>
+<a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::time::Duration;
 
@@ -1269,12 +1342,63 @@
     ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError, LightningGateway,
     LightningInput, LightningModuleTypes, LightningOutput, LightningOutputOutcome,
 };
+<span class="kw">use </span>fedimint_metrics::{
+    histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
+    Histogram, IntCounter,
+};
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tracing::{debug, error, info_span, instrument, trace, warn};
+
+<span class="macro">lazy_static! </span>{
+    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_INCOMING_OFFER: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
+        <span class="string">&quot;ln_incoming_offer&quot;</span>,
+        <span class="string">&quot;contracts::IncomingContractOffer&quot;
+    </span>))
+    .unwrap();
+    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT: IntCounter =
+        <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
+            <span class="string">&quot;ln_output_outcome_cancel_outgoing_contract&quot;</span>,
+            <span class="string">&quot;LightningOutputOutcome::CancelOutgoingContract&quot;
+        </span>))
+        .unwrap();
+    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
+        <span class="string">&quot;ln_funded_contract_incoming&quot;</span>,
+        <span class="string">&quot;contracts::FundedContract::Incoming&quot;
+    </span>))
+    .unwrap();
+    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
+        <span class="string">&quot;ln_funded_contract_outgoing&quot;</span>,
+        <span class="string">&quot;contracts::FundedContract::Outgoing&quot;
+    </span>))
+    .unwrap();
+    <span class="kw">pub static </span><span class="kw-2">ref </span>AMOUNTS_BUCKETS_SATS: Vec&lt;f64&gt; = <span class="macro">vec!</span>[<span class="number">0.0</span>, <span class="number">0.5</span>, <span class="number">1.0</span>, <span class="number">1000.0</span>];
+    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
+        <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
+            <span class="string">&quot;ln_funded_contract_incoming_account_amounts_sats&quot;</span>,
+            <span class="string">&quot;contracts::FundedContract::Incoming account amount in sats&quot;</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ))
+        .unwrap();
+    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS: Histogram =
+        <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
+            <span class="string">&quot;ln_funded_contract_outgoing_account_amounts_sats&quot;</span>,
+            <span class="string">&quot;contracts::FundedContract::Outgoing account amounts in sats&quot;</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ))
+        .unwrap();
+    <span class="kw">pub static </span><span class="kw-2">ref </span>ALL_METRICS: [Box&lt;<span class="kw">dyn </span>prometheus::core::Collector&gt;; <span class="number">6</span>] = [
+        Box::new(LN_INCOMING_OFFER.clone()),
+        Box::new(LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.clone()),
+        Box::new(LN_FUNDED_CONTRACT_INCOMING.clone()),
+        Box::new(LN_FUNDED_CONTRACT_OUTGOING.clone()),
+        Box::new(LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS.clone()),
+        Box::new(LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS.clone()),
+    ];
+}
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>LightningGen;
@@ -1298,6 +1422,10 @@
         _db: Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
+        <span class="comment">// Ensure all metrics are initialized
+        </span><span class="kw">for </span>metric <span class="kw">in </span>ALL_METRICS.iter() {
+            metric.collect();
+        }
         <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>, task_group)<span class="question-mark">?</span>.into())
     }
 
@@ -1903,8 +2031,24 @@
                         amount: amount.amount,
                         contract: contract.contract.clone().to_funded(out_point),
                     });
-                dbtx.insert_entry(<span class="kw-2">&amp;</span>contract_db_key, <span class="kw-2">&amp;</span>updated_contract_account)
+                <span class="kw">let </span>previous = dbtx
+                    .insert_entry(<span class="kw-2">&amp;</span>contract_db_key, <span class="kw-2">&amp;</span>updated_contract_account)
                     .<span class="kw">await</span>;
+                <span class="kw">let </span>inserted = previous.is_none();
+                <span class="kw">if </span>inserted {
+                    <span class="kw">match </span><span class="kw-2">&amp;</span>updated_contract_account.contract {
+                        FundedContract::Incoming(<span class="kw">_</span>) =&gt; {
+                            LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS
+                                .observe(updated_contract_account.amount.msats <span class="kw">as </span>f64 / <span class="number">1000.0</span>);
+                            LN_FUNDED_CONTRACT_INCOMING.inc();
+                        }
+                        FundedContract::Outgoing(<span class="kw">_</span>) =&gt; {
+                            LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS
+                                .observe(updated_contract_account.amount.msats <span class="kw">as </span>f64 / <span class="number">1000.0</span>);
+                            LN_FUNDED_CONTRACT_OUTGOING.inc();
+                        }
+                    }
+                }
 
                 dbtx.insert_new_entry(
                     <span class="kw-2">&amp;</span>ContractUpdateKey(out_point),
@@ -1944,6 +2088,7 @@
                 <span class="comment">// TODO: sanity-check encrypted preimage size
                 </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OfferKey(offer.hash), <span class="kw-2">&amp;</span>(<span class="kw-2">*</span>offer).clone())
                     .<span class="kw">await</span>;
+                LN_INCOMING_OFFER.inc();
             }
             LightningOutput::CancelOutgoing { contract, .. } =&gt; {
                 <span class="kw">let </span>updated_contract_account = {
@@ -1972,6 +2117,7 @@
                     <span class="kw-2">&amp;</span>LightningOutputOutcome::CancelOutgoingContract { id: <span class="kw-2">*</span>contract },
                 )
                 .<span class="kw">await</span>;
+                LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.inc();
             }
         }
 

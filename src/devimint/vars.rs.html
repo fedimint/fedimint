@@ -170,6 +170,7 @@
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -334,10 +335,11 @@
 //
 // * `id` - ID of the server. Used to calculate port numbers.
 </span><span class="macro">declare_vars! </span>{
-    Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, cfg: <span class="kw-2">&amp;</span>ServerConfig) =&gt; {
+    Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, cfg: <span class="kw-2">&amp;</span>ServerConfig, bind_metrics_api: String) =&gt; {
         FM_BIND_P2P: String = cfg.local.fed_bind.to_string();
         FM_P2P_URL: String = cfg.local.p2p_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.to_string();
         FM_BIND_API: String = cfg.local.api_bind.to_string();
+        FM_BIND_METRICS_API: String = bind_metrics_api;
         FM_API_URL: String = cfg.consensus.api_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.to_string();
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">&quot;server-{}&quot;</span>, cfg.local.identity.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>;
     }

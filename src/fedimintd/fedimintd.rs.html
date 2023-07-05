@@ -259,6 +259,32 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -329,6 +355,9 @@
     <span class="doccomment">/// The bitcoin network that fedimint will be running on
     </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_FINALITY_DELAY&quot;</span>, default_value = <span class="string">&quot;10&quot;</span>)]
     </span>finality_delay: u32,
+
+    <span class="attr">#[arg(long, env = <span class="string">&quot;FM_BIND_METRICS_API&quot;</span>)]
+    </span>bind_metrics_api: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
 }
 
 <span class="doccomment">/// `fedimintd` builder
@@ -518,7 +547,30 @@
         },
         db,
     };
-    api.run(task_group).<span class="kw">await
-</span>}
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(bind_metrics_api) = opts.bind_metrics_api.as_ref() {
+        <span class="kw">let </span>(api_result, metrics_api_result) = <span class="macro">futures::join!</span>(
+            api.run(task_group.clone()),
+            spawn_metrics_server(bind_metrics_api, task_group)
+        );
+        api_result<span class="question-mark">?</span>;
+        metrics_api_result<span class="question-mark">?</span>;
+    } <span class="kw">else </span>{
+        api.run(task_group).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>spawn_metrics_server(
+    bind_address: <span class="kw-2">&amp;</span>SocketAddr,
+    <span class="kw-2">mut </span>task_group: TaskGroup,
+) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>rx = fedimint_metrics::run_api_server(bind_address, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">info!</span>(<span class="string">&quot;Metrics API listening on {bind_address}&quot;</span>);
+    <span class="kw">let </span>res = rx.<span class="kw">await</span>;
+    <span class="kw">if </span>res.is_err() {
+        <span class="macro">error!</span>(<span class="string">&quot;Error shutting down metric api server: {res:?}&quot;</span>);
+    }
+    <span class="prelude-val">Ok</span>(())
+}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimintd" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
