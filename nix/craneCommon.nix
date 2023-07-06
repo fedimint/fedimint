@@ -12,6 +12,10 @@ craneLib.overrideScope' (self: prev: {
   commonSrc = builtins.path { path = src; name = "fedimint"; };
 
   commonProfile = "release";
+  # placeholder we use to avoid actually needing to detect hash via runnning `git`
+  # 012345... for easy recognizability (in case something went wrong),
+  # rest randomized to avoid accidentally overwritting innocent bytes in the binary
+  gitHashPlaceholderValue = "01234569abcdef7afa1d2683a099c7af48a523c1";
 
   filterSrcWithRegexes = regexes: src:
     let
@@ -66,12 +70,18 @@ craneLib.overrideScope' (self: prev: {
     doCheck = false;
   };
 
-  commonEnvs = {
+  # env variables we want to set in all nix derivations & nix develop shell
+  commonEnvsShell = {
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
     ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
     PROTOC = "${pkgs.protobuf}/bin/protoc";
     PROTOC_INCLUDE = "${pkgs.protobuf}/include";
     CARGO_PROFILE = self.commonProfile;
+  };
+
+  # env variables we want to set in all nix derivations (but NOT the nix develop shell)
+  commonEnvs = self.commonEnvsShell // {
+    FEDIMINT_BUILD_FORCE_GIT_HASH = self.gitHashPlaceholderValue;
   };
 
   commonArgsBase = {

@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::config::ServerConfig;
 
 /// Version of the server code (should be the same among peers)
-pub const CODE_VERSION: &str = env!("CODE_VERSION");
+pub const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
 
 /// Client configuration file
 pub const CLIENT_CONFIG: &str = "client";

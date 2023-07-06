@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::VersionHash => {
-            println!("{}", env!("CODE_VERSION"));
+            println!("{}", env!("FEDIMINT_BUILD_CODE_VERSION"));
         }
         Commands::Info => {
             let response = client().get_info().await?;

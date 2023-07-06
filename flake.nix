@@ -87,11 +87,8 @@
           #
           # To avoid impurity, we use a git hash placeholder when building binaries
           # and then replace them with the real git hash in the binaries themselves.
-          replaceGitHash = { package, name }:
+          replaceGitHash = { package, name, placeholder }:
             let
-              # the git hash placeholder we use in `build.rs` scripts when
-              # building in Nix (to preserve purity)
-              hash-placeholder = "01234569afbe457afa1d2683a099c7af48a523c1";
               # the hash we will set if the tree is dirty;
               dirty-hash = "0000000000000000000000000000000000000000";
               # git hash to set (passed by Nix if the tree is clean, or `dirty-hash` when dirty)
@@ -107,7 +104,7 @@
                 cp -a ${package} $out
                 for path in `find $out -type f -executable`; do
                   # need to use a temporary file not to overwrite source as we are reading it
-                  bbe -e 's/${hash-placeholder}/${git-hash}/' $path -o ./tmp || exit 1
+                  bbe -e 's/${placeholder}/${git-hash}/' $path -o ./tmp || exit 1
                   chmod +w $path
                   # use cat to keep all the original permissions etc as they were
                   cat ./tmp > "$path"
@@ -168,7 +165,7 @@
           # `rustPackageOutputs` with git hash replaced from placeholder to a real value
           # To avoid rebuilding too much source needlessly, we replace placeholders with real git hash (which changes on every build),
           # as a very last step.
-          rustPackageOutputsFinal = craneLib: builtins.mapAttrs (name: package: replaceGitHash { inherit name package; }) (rustPackageOutputs craneLib);
+          rustPackageOutputsFinal = craneLib: builtins.mapAttrs (name: package: replaceGitHash { inherit name package; placeholder = craneLib.gitHashPlaceholderValue; }) (rustPackageOutputs craneLib);
 
           # All tests, grouped together, so we can `nix build -L .#cli-test.<name>` or `nix build -L .#ci.cli-test.<name>`, etc.
           cli-test = craneLib: {
@@ -330,9 +327,9 @@
                 let
                   build = craneLibDevShell;
                   commonArgs = build.commonArgs;
-                  commonEnvs = build.commonEnvs;
+                  commonEnvsShell = build.commonEnvsShell;
                 in
-                commonEnvs // {
+                commonEnvsShell // {
                   buildInputs = commonArgs.buildInputs;
                   nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
                     pkgs.rust-analyzer

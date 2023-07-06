@@ -47,7 +47,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
-            println!("{}", env!("CODE_VERSION"));
+            println!("{}", env!("FEDIMINT_BUILD_CODE_VERSION"));
             return Ok(());
         }
     }
