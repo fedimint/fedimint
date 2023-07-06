@@ -215,6 +215,7 @@ impl GatewayPayInvoice {
                 invoice: invoice.to_string(),
                 max_delay,
                 max_fee_percent,
+                payment_hash: invoice.payment_hash().to_vec(),
             })
             .await
         {
