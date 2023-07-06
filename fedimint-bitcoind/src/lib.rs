@@ -5,7 +5,7 @@ use std::future::Future;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::format_err;
+use anyhow::Context;
 pub use anyhow::Result;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
@@ -51,7 +51,13 @@ lazy_static! {
 pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {
     let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
     let maybe_factory = registry.get(&config.kind);
-    let factory = maybe_factory.ok_or(format_err!("{} rpc not registered", config.kind))?;
+    let factory = maybe_factory.with_context(|| {
+        anyhow::anyhow!(
+            "{} rpc not registered, available options: {:?}",
+            config.kind,
+            registry.keys()
+        )
+    })?;
     factory.create_connection(&config.url, handle)
 }
 

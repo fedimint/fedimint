@@ -169,8 +169,8 @@ impl Fedimintd {
                 .await
                 {
                     Ok(()) => {}
-                    Err(e) => {
-                        error!(?e, "Main task returned error, shutting down");
+                    Err(error) => {
+                        error!(?error, "Main task returned error, shutting down");
                         task_group.shutdown().await;
                     }
                 }
