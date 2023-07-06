@@ -1293,7 +1293,7 @@
 
 <span class="kw">impl </span>FedimintCli {
     <span class="kw">pub fn </span>new() -&gt; anyhow::Result&lt;FedimintCli&gt; {
-        <span class="kw">pub const </span>CODE_VERSION: <span class="kw-2">&amp;</span>str = <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>);
+        <span class="kw">pub const </span>CODE_VERSION: <span class="kw-2">&amp;</span>str = <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>arg) = args.nth(<span class="number">1</span>) {
@@ -1368,7 +1368,7 @@
                 <span class="prelude-val">Ok</span>(CliOutput::JoinFederation { joined: connect })
             }
             Command::VersionHash =&gt; <span class="prelude-val">Ok</span>(CliOutput::VersionHash {
-                hash: <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>).to_string(),
+                hash: <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).to_string(),
             }),
             Command::Client(ClientCmd::Restore { secret }) =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();

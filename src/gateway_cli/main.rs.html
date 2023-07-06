@@ -238,7 +238,7 @@
 
     <span class="kw">match </span>cli.command {
         Commands::VersionHash =&gt; {
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;CODE_VERSION&quot;</span>));
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>));
         }
         Commands::Info =&gt; {
             <span class="kw">let </span>response = client().get_info().<span class="kw">await</span><span class="question-mark">?</span>;
