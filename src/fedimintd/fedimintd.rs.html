@@ -456,8 +456,8 @@
                 .<span class="kw">await
                 </span>{
                     <span class="prelude-val">Ok</span>(()) =&gt; {}
-                    <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="string">&quot;Main task returned error, shutting down&quot;</span>);
+                    <span class="prelude-val">Err</span>(error) =&gt; {
+                        <span class="macro">error!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Main task returned error, shutting down&quot;</span>);
                         task_group.shutdown().<span class="kw">await</span>;
                     }
                 }

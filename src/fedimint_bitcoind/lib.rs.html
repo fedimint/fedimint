@@ -223,6 +223,12 @@
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -230,7 +236,7 @@
 <span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::format_err;
+<span class="kw">use </span>anyhow::Context;
 <span class="kw">pub use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
@@ -276,7 +282,13 @@
 </span><span class="kw">pub fn </span>create_bitcoind(config: <span class="kw-2">&amp;</span>BitcoinRpcConfig, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {
     <span class="kw">let </span>registry = BITCOIN_RPC_REGISTRY.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
     <span class="kw">let </span>maybe_factory = registry.get(<span class="kw-2">&amp;</span>config.kind);
-    <span class="kw">let </span>factory = maybe_factory.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;{} rpc not registered&quot;</span>, config.kind))<span class="question-mark">?</span>;
+    <span class="kw">let </span>factory = maybe_factory.with_context(|| {
+        <span class="macro">anyhow::anyhow!</span>(
+            <span class="string">&quot;{} rpc not registered, available options: {:?}&quot;</span>,
+            config.kind,
+            registry.keys()
+        )
+    })<span class="question-mark">?</span>;
     factory.create_connection(<span class="kw-2">&amp;</span>config.url, handle)
 }
 
