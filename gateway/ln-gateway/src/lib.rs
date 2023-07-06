@@ -606,7 +606,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations,
-            version_hash: env!("CODE_VERSION").to_string(),
+            version_hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             lightning_pub_key: node_pub_key.to_hex(),
             lightning_alias: alias,
             fees: self.fees,

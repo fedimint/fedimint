@@ -465,7 +465,7 @@ pub struct FedimintCli {
 
 impl FedimintCli {
     pub fn new() -> anyhow::Result<FedimintCli> {
-        pub const CODE_VERSION: &str = env!("CODE_VERSION");
+        pub const CODE_VERSION: &str = env!("FEDIMINT_BUILD_CODE_VERSION");
 
         let mut args = std::env::args();
         if let Some(ref arg) = args.nth(1) {
@@ -540,7 +540,7 @@ impl FedimintCli {
                 Ok(CliOutput::JoinFederation { joined: connect })
             }
             Command::VersionHash => Ok(CliOutput::VersionHash {
-                hash: env!("CODE_VERSION").to_string(),
+                hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             }),
             Command::Client(ClientCmd::Restore { secret }) => {
                 let mut tg = TaskGroup::new();
