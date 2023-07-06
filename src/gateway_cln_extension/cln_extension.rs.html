@@ -643,6 +643,7 @@
 <a href="#643" id="643">643</a>
 <a href="#644" id="644">644</a>
 <a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1079,6 +1080,7 @@
             invoice,
             max_delay,
             max_fee_percent,
+            payment_hash: <span class="kw">_</span>,
         } = request.into_inner();
 
         <span class="kw">let </span>outcome = <span class="self">self

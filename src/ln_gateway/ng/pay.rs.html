@@ -438,6 +438,7 @@
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
@@ -655,6 +656,7 @@
                 invoice: invoice.to_string(),
                 max_delay,
                 max_fee_percent,
+                payment_hash: invoice.payment_hash().to_vec(),
             })
             .<span class="kw">await
         </span>{
