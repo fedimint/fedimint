@@ -63,8 +63,8 @@ impl GatewayLndClient {
 
             match connect(address.clone(), tls_cert.clone(), macaroon.clone()).await {
                 Ok(client) => break client,
-                Err(_) => {
-                    tracing::warn!("Couldn't connect to LND, retrying in 1 second...");
+                Err(e) => {
+                    tracing::warn!("Couldn't connect to LND, retrying in 1 second... {e:?}");
                     sleep(Duration::from_secs(1)).await;
                 }
             }
