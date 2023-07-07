@@ -74,6 +74,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
 use async_stream::stream;
+use db::{CachedApiVersionSet, CachedApiVersionSetKey};
 use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     WsFederationApi,
@@ -103,7 +104,7 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::backup::Metadata;
 use crate::db::ClientSecretKey;
@@ -782,6 +783,73 @@ impl Client {
                 .collect(),
         }
     }
+
+    /// Load the common api versions to use from cache and start a background
+    /// process to refresh them.
+    ///
+    /// This is a compromise so we not have to wait for version discovery to
+    /// complete every time a [`Client`] is being built.
+    async fn load_and_refresh_common_api_version_static(
+        config: &ClientConfig,
+        module_gens: &ModuleGenRegistry<DynClientModuleGen>,
+        api: &DynGlobalApi,
+        db: &Database,
+    ) -> anyhow::Result<ApiVersionSet> {
+        if let Some(v) = db
+            .begin_transaction()
+            .await
+            .get_value(&CachedApiVersionSetKey)
+            .await
+        {
+            debug!("Found existing cached common api versions");
+            let config = config.clone();
+            let module_gens = module_gens.clone();
+            let api = api.clone();
+            let db = db.clone();
+            // Separate task group, because we actually don't want to be waiting for this to
+            // finish, and it's just best effort.
+            TaskGroup::new()
+                .spawn("refresh_common_api_version_static", |_| async move {
+                    if let Err(e) =
+                        Self::refresh_common_api_version_static(&config, &module_gens, &api, &db)
+                            .await
+                    {
+                        warn!("Failed to discover common api versions: {e}");
+                    }
+                })
+                .await;
+
+            return Ok(v.0);
+        }
+
+        debug!("No existing cached common api versions found, waiting for initial discovery");
+        Self::refresh_common_api_version_static(config, module_gens, api, db).await
+    }
+
+    async fn refresh_common_api_version_static(
+        config: &ClientConfig,
+        module_gens: &ModuleGenRegistry<DynClientModuleGen>,
+        api: &DynGlobalApi,
+        db: &Database,
+    ) -> anyhow::Result<ApiVersionSet> {
+        debug!("Refreshing common api versions");
+
+        let common_api_versions =
+            Client::discover_common_api_version_static(config, module_gens, api).await?;
+
+        debug!("Updating the cached common api versions");
+        let mut dbtx = db.begin_transaction().await;
+        let _ = dbtx
+            .insert_entry(
+                &CachedApiVersionSetKey,
+                &CachedApiVersionSet(common_api_versions.clone()),
+            )
+            .await;
+
+        dbtx.commit_tx().await;
+
+        Ok(common_api_versions)
+    }
 }
 
 /// Resources particular to a module instance
@@ -1225,8 +1293,13 @@ impl ClientBuilder {
 
         let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
-        let common_api_versions =
-            Client::discover_common_api_version_static(&config, &self.module_gens, &api).await?;
+        let common_api_versions = Client::load_and_refresh_common_api_version_static(
+            &config,
+            &self.module_gens,
+            &api,
+            &db,
+        )
+        .await?;
 
         let root_secret = get_client_root_secret::<S>(&db).await;
 

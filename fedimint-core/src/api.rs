@@ -167,7 +167,7 @@ pub trait IFederationApi: Debug + MaybeSend + MaybeSync {
 /// Set of api versions for each component (core + modules)
 ///
 /// E.g. result of federated common api versions discovery.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ApiVersionSet {
     pub core: ApiVersion,
     pub modules: BTreeMap<ModuleInstanceId, ApiVersion>,
@@ -185,6 +185,8 @@ pub trait FederationApiExt: IFederationApi {
         method: String,
         params: ApiRequestErased,
     ) -> FederationResult<FedRet> {
+        let timeout = strategy.request_timeout();
+
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -194,12 +196,24 @@ pub trait FederationApiExt: IFederationApi {
 
         for peer_id in peers {
             futures.push(Box::pin(async {
+                let request = async {
+                    self.request_raw(*peer_id, &method, &[params.to_json()])
+                        .await
+                        .map(AbbreviateDebug)
+                };
+
+                let result = if let Some(timeout) = timeout {
+                    match fedimint_core::task::timeout(timeout, request).await {
+                        Ok(result) => result,
+                        Err(_timeout) => Err(JsonRpcError::RequestTimeout),
+                    }
+                } else {
+                    request.await
+                };
+
                 PeerResponse {
                     peer: *peer_id,
-                    result: self
-                        .request_raw(*peer_id, &method, &[params.to_json()])
-                        .await
-                        .map(AbbreviateDebug),
+                    result,
                 }
             }));
         }
@@ -623,10 +637,11 @@ where
         &self,
         client_versions: &SupportedApiVersionsSummary,
     ) -> FederationResult<ApiVersionSet> {
+        let timeout = Duration::from_secs(60);
         self.request_with_strategy(
             DiscoverApiVersionSet::new(
                 self.all_members().len(),
-                now().add(Duration::from_secs(3)),
+                now().add(timeout),
                 client_versions.clone(),
             ),
             "version".to_owned(),

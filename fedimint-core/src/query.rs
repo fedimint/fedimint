@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Debug;
 use std::mem;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use anyhow::format_err;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -507,6 +507,15 @@ fn discover_common_api_versions_set(
 }
 
 impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVersionSet {
+    fn request_timeout(&self) -> Option<Duration> {
+        Some(
+            self.inner
+                .deadline
+                .duration_since(fedimint_core::time::now())
+                .unwrap_or(Duration::ZERO),
+        )
+    }
+
     fn process(
         &mut self,
         peer: PeerId,
@@ -531,6 +540,10 @@ impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVe
 }
 
 pub trait QueryStrategy<IR, OR = IR> {
+    /// Should requests for this strategy have specific timeouts?
+    fn request_timeout(&self) -> Option<Duration> {
+        None
+    }
     fn process(&mut self, peer_id: PeerId, response: api::MemberResult<IR>) -> QueryStep<OR>;
 }
 

@@ -126,7 +126,7 @@ impl From<u32> for ModuleConsensusVersion {
 /// backward compatibility on both client and server side to accommodate end
 /// user client devices receiving updates at a pace hard to control, and
 /// technical and coordination challenges of upgrading servers.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Decodable, Encodable)]
 pub struct ApiVersion {
     /// Major API version
     ///

@@ -1,6 +1,7 @@
 use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
 
+use fedimint_core::api::ApiVersionSet;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record};
@@ -18,6 +19,7 @@ pub enum DbKeyPrefix {
     ClientSecret = 0x29,
     OperationLog = 0x2c,
     ChronologicalOperationLog = 0x2d,
+    CommonApiVersionCache = 0x2e,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -90,4 +92,16 @@ impl_db_record!(
 impl_db_lookup!(
     key = ChronologicalOperationLogKey,
     query_prefix = ChronologicalOperationLogKeyPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CachedApiVersionSetKey;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CachedApiVersionSet(pub ApiVersionSet);
+
+impl_db_record!(
+    key = CachedApiVersionSetKey,
+    value = CachedApiVersionSet,
+    db_prefix = DbKeyPrefix::CommonApiVersionCache
 );
