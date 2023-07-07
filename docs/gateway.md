@@ -92,10 +92,6 @@ As described in [Running Fedimint for dev testing](./dev-running.md#using-the-ga
 - Help add support to other node implementations by building [gateway-lnrpc-extensions](#gateway-lnrpc-extension) for them. You can parent your brand-new extension in this directory, or in your own repository and we will link to it in this open documentation
 - Contributions are highly welcome!
 
-### Developing Gateway-UI (aka, Mintgate)
-
-See [instructions in Gateway UI readme](../fedimint-ui/apps/gateway-ui/README.md#development)
-
 ## Deploying a Gateway in Production
 
 ### Deploy a gateway-lnrpc-extension

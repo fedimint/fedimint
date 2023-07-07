@@ -96,8 +96,3 @@ tmuxinator:
 # exit tmuxinator session
 exit-tmuxinator:
   tmux kill-session -t fedimint-dev
-
-# starts a 2 guardian federation with setup UI
-run-ui:
-  (cd fedimint-ui && yarn install && yarn build)
-  mprocs -c misc/mprocs-ui.yaml
