@@ -1020,6 +1020,7 @@ async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<
         async move {
             let peer_port = 10000 + 8137 + peer * 2;
             let api_port = peer_port + 1;
+            let metrics_port = 3510 + peer;
 
             let vars = vars::Fedimintd {
                 FM_BIND_P2P: format!("127.0.0.1:{peer_port}"),
@@ -1030,6 +1031,7 @@ async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<
                     .globals
                     .FM_DATA_DIR
                     .join(format!("server-{peer}")),
+                FM_BIND_METRICS_API: format!("127.0.0.1:{metrics_port}"),
             };
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
             let server_addr = &vars.FM_BIND_API;
