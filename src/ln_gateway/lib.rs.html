@@ -729,6 +729,40 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -758,6 +792,7 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>client::StandardGatewayClientBuilder;
+<span class="kw">use </span>db::FederationRegistrationKey;
 <span class="kw">use </span>fedimint_core::api::{FederationError, WsClientConnectInfo};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -775,7 +810,7 @@
 <span class="kw">use </span>gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lnrpc_client::{ILnRpcClient, RouteHtlcStream};
-<span class="kw">use </span>ng::{GatewayClientExt, GatewayClientModule, GatewayExtRegisterStates};
+<span class="kw">use </span>ng::{GatewayClientExt, GatewayClientModule};
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::FederationInfo;
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -907,6 +942,7 @@
             task_group: TaskGroup::new(),
         };
 
+        gw.register_clients_timer().<span class="kw">await</span>;
         gw.load_clients().<span class="kw">await</span><span class="question-mark">?</span>;
         gw.route_htlcs().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -934,6 +970,7 @@
             task_group: TaskGroup::new(),
         };
 
+        gw.register_clients_timer().<span class="kw">await</span>;
         gw.load_clients().<span class="kw">await</span><span class="question-mark">?</span>;
         gw.route_htlcs().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1115,17 +1152,18 @@
         }
     }
 
-    <span class="kw">async fn </span>fetch_lightning_route_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;RouteHint&gt;, PublicKey, String)&gt; {
+    <span class="kw">async fn </span>fetch_lightning_route_info(
+        lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;RouteHint&gt;, PublicKey, String)&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
         <span class="kw">let </span>(route_hints, node_pub_key, alias) = <span class="kw">loop </span>{
-            <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = <span class="self">self
-                </span>.lnrpc
+            <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = lnrpc
                 .routehints()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.try_into()
                 .expect(<span class="string">&quot;Could not parse route hints&quot;</span>);
 
-            <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias } = <span class="self">self</span>.lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
                 .map_err(|e| GatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid node pubkey {}&quot;</span>, e)))<span class="question-mark">?</span>;
 
@@ -1143,6 +1181,45 @@
         };
 
         <span class="prelude-val">Ok</span>((route_hints, node_pub_key, alias))
+    }
+
+    <span class="kw">async fn </span>register_clients_timer(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span>clients = <span class="self">self</span>.clients.clone();
+        <span class="kw">let </span>api = <span class="self">self</span>.api.clone();
+        <span class="kw">let </span>lnrpc = <span class="self">self</span>.lnrpc.clone();
+        <span class="self">self</span>.task_group
+            .spawn(<span class="string">&quot;register clients&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+                <span class="kw">while </span>!handle.is_shutting_down() {
+                    <span class="kw">match </span><span class="self">Self</span>::fetch_lightning_route_info(lnrpc.clone()).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>((route_hints, <span class="kw">_</span>, <span class="kw">_</span>)) =&gt; {
+                            <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>clients.read().<span class="kw">await</span>.iter() {
+                                <span class="kw">if </span>client
+                                    .register_with_federation(
+                                        api.clone(),
+                                        route_hints.clone(),
+                                        GW_ANNOUNCEMENT_TTL,
+                                    )
+                                    .<span class="kw">await
+                                    </span>.is_err()
+                                {
+                                    <span class="macro">error!</span>(<span class="string">&quot;Error registering federation {federation_id}&quot;</span>);
+                                }
+                            }
+                        }
+                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="macro">error!</span>(
+                                <span class="string">&quot;Could not retrieve route hints, gateway will not be registered.&quot;
+                            </span>);
+                        }
+                    }
+
+                    <span class="comment">// Allow a 15% buffer of the TTL before the re-registering gateway
+                    // with the federations.
+                    </span><span class="kw">let </span>registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(<span class="number">0.85</span>);
+                    sleep(registration_delay).<span class="kw">await</span>;
+                }
+            })
+            .<span class="kw">await</span>;
     }
 
     <span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -1185,25 +1262,9 @@
         scid: u64,
         route_hints: Vec&lt;RouteHint&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>register_op = client
+        client
             .register_with_federation(<span class="self">self</span>.api.clone(), route_hints, GW_ANNOUNCEMENT_TTL)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// TODO: Move this inside of the state machine
-        </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>register_sub = client
-                .gateway_subscribe_register(register_op)
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.into_stream();
-            <span class="kw">loop </span>{
-                <span class="kw">let </span>state = register_sub.ok().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">match </span>state {
-                    GatewayExtRegisterStates::Success =&gt; <span class="kw">break</span>,
-                    GatewayExtRegisterStates::Done =&gt; <span class="kw">break</span>,
-                    <span class="kw">_ </span>=&gt; {}
-                }
-            }
-        }
-
         <span class="self">self</span>.clients
             .write()
             .<span class="kw">await
@@ -1219,14 +1280,20 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: FederationId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Arc&lt;fedimint_client::Client&gt;&gt; {
-        <span class="self">self</span>.clients
-            .write()
-            .<span class="kw">await
-            </span>.remove(<span class="kw-2">&amp;</span>federation_id)
-            .ok_or(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;No federation with id {}&quot;</span>,
-                federation_id.to_string()
-            )))
+        <span class="kw">let </span>client =
+            <span class="self">self</span>.clients
+                .write()
+                .<span class="kw">await
+                </span>.remove(<span class="kw-2">&amp;</span>federation_id)
+                .ok_or(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+                    <span class="string">&quot;No federation with id {}&quot;</span>,
+                    federation_id.to_string()
+                )))<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gatewayd_db.begin_transaction().<span class="kw">await</span>;
+        dbtx.remove_entry(<span class="kw-2">&amp;</span>FederationRegistrationKey { id: federation_id })
+            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(client)
     }
 
     <span class="kw">pub async fn </span>select_client(
@@ -1281,7 +1348,7 @@
         };
 
         <span class="kw">let </span>federation_id = gw_client_cfg.config.federation_id;
-        <span class="kw">let </span>(route_hints, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="self">self</span>.fetch_lightning_route_info().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(route_hints, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="self">Self</span>::fetch_lightning_route_info(<span class="self">self</span>.lnrpc.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>client = <span class="self">self
             </span>.client_builder
@@ -1317,7 +1384,8 @@
     <span class="kw">pub async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: InfoPayload) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayInfo&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>federations = Vec::new();
         <span class="kw">let </span>federation_clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>.clone().into_iter();
-        <span class="kw">let </span>(route_hints, node_pub_key, alias) = <span class="self">self</span>.fetch_lightning_route_info().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(route_hints, node_pub_key, alias) =
+            <span class="self">Self</span>::fetch_lightning_route_info(<span class="self">self</span>.lnrpc.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>federation_clients {
             <span class="comment">// TODO: We&#39;re reconstructing these registrations, which could have changed in
             // the meantime, which might break some tests if they&#39;re expecting
