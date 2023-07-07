@@ -1,5 +1,4 @@
 pub mod pay;
-pub mod register;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,14 +14,16 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State}
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleGen, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::contracts::ContractId;
+use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::incoming::{
@@ -38,15 +39,13 @@ use lightning::routing::gossip::RoutingFees;
 use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::info;
 use url::Url;
 
 use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
-use self::register::RegisterWithFederationStateMachine;
+use crate::db::FederationRegistrationKey;
 use crate::gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcRequest};
 use crate::lnrpc_client::ILnRpcClient;
-use crate::ng::register::{
-    RegisterWithFederation, RegisterWithFederationCommon, RegisterWithFederationStates,
-};
 
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
@@ -81,20 +80,10 @@ pub enum GatewayExtReceiveStates {
     FundingFailed(String),
 }
 
-/// The high-level state of a registration operation started with
-/// [`GatewayClientExt::register_with_federation`].
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum GatewayExtRegisterStates {
-    Registering,
-    Success,
-    Done,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GatewayMeta {
     Pay,
     Receive,
-    Register,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -117,7 +106,7 @@ pub trait GatewayClientExt {
         gateway_api: Url,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
-    ) -> anyhow::Result<OperationId>;
+    ) -> anyhow::Result<()>;
 
     /// Attempt fulfill HTLC by buying preimage from the federation
     async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId>;
@@ -127,12 +116,6 @@ pub trait GatewayClientExt {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtReceiveStates>>;
-
-    /// Subscribe to updates when the gateway is registering with the federation
-    async fn gateway_subscribe_register(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtRegisterStates>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -238,61 +221,18 @@ impl GatewayClientExt for Client {
         gateway_api: Url,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
-    ) -> anyhow::Result<OperationId> {
-        let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+    ) -> anyhow::Result<()> {
+        let (gateway, _) = self.get_first_module::<GatewayClientModule>(&KIND);
         let registration_info =
             gateway.to_gateway_registration_info(route_hints, time_to_live, gateway_api);
 
-        self.db()
-            .autocommit(
-                |dbtx| {
-                    Box::pin(async {
-                        let registration = registration_info.clone();
-                        let operation_id = OperationId(rand::random());
-
-                        let state_machines = vec![GatewayClientStateMachines::Register(
-                            RegisterWithFederationStateMachine {
-                                common: RegisterWithFederationCommon {
-                                    operation_id,
-                                    time_to_live,
-                                    registration_info: registration,
-                                    federation_id: self.get_config().federation_id,
-                                },
-                                state: RegisterWithFederationStates::Register(
-                                    RegisterWithFederation {
-                                        backoff_duration: INITIAL_REGISTER_BACKOFF_DURATION,
-                                    },
-                                ),
-                            },
-                        )];
-
-                        let dyn_states = state_machines
-                            .into_iter()
-                            .map(|s| s.into_dyn(instance.id))
-                            .collect();
-
-                        self.add_state_machines(dbtx, dyn_states).await?;
-                        self.operation_log()
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                KIND.as_str(),
-                                GatewayMeta::Register,
-                            )
-                            .await;
-
-                        Ok(operation_id)
-                    })
-                },
-                Some(100),
-            )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow::anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
+        let federation_id = self.get_config().federation_id;
+        let mut dbtx = self.db().begin_transaction().await;
+        gateway
+            .register_with_federation(&mut dbtx, federation_id, registration_info)
+            .await?;
+        dbtx.commit_tx().await;
+        Ok(())
     }
 
     /// Handles an intercepted HTLC by buying a preimage from the federation
@@ -336,33 +276,6 @@ impl GatewayClientExt for Client {
                         }
                     }
                 };
-                yield state;
-            }
-        }))
-    }
-
-    async fn gateway_subscribe_register(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtRegisterStates>> {
-        let (gateway, _instance) = self.get_first_module::<GatewayClientModule>(&KIND);
-        let operation = ln_operation(self, operation_id).await?;
-
-        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
-            stream! {
-                let mut stream = gateway.notifier.subscribe(operation_id).await;
-                let state = loop {
-                    if let Some(GatewayClientStateMachines::Register(state)) = stream.next().await {
-                        match state.state {
-                            RegisterWithFederationStates::Register(_) => yield GatewayExtRegisterStates::Registering,
-                            // If we're waiting for the time to live to expire, that means we've successfully registered before
-                            RegisterWithFederationStates::WaitForTTL(_) => yield GatewayExtRegisterStates::Success,
-                            RegisterWithFederationStates::Done => break GatewayExtRegisterStates::Done,
-                            _ => {}
-                        }
-                    }
-                };
-
                 yield state;
             }
         }))
@@ -525,6 +438,22 @@ impl GatewayClientModule {
         }
     }
 
+    async fn register_with_federation(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        id: FederationId,
+        registration: LightningGateway,
+    ) -> anyhow::Result<()> {
+        self.module_api.register_gateway(&registration).await?;
+        dbtx.insert_entry(&FederationRegistrationKey { id }, &registration)
+            .await;
+        info!(
+            "Successfully registered gateway {} with federation {}",
+            registration.gateway_pub_key, id
+        );
+        Ok(())
+    }
+
     async fn await_paid_invoice(
         &self,
         operation_id: OperationId,
@@ -589,7 +518,6 @@ impl GatewayClientModule {
 pub enum GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
     Receive(IncomingStateMachine),
-    Register(RegisterWithFederationStateMachine),
 }
 
 impl IntoDynInstance for GatewayClientStateMachines {
@@ -622,12 +550,6 @@ impl State for GatewayClientStateMachines {
                     GatewayClientStateMachines::Receive
                 )
             }
-            GatewayClientStateMachines::Register(register_state) => {
-                sm_enum_variant_translation!(
-                    register_state.transitions(context, global_context),
-                    GatewayClientStateMachines::Register
-                )
-            }
         }
     }
 
@@ -635,7 +557,6 @@ impl State for GatewayClientStateMachines {
         match self {
             GatewayClientStateMachines::Pay(pay_state) => pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
-            GatewayClientStateMachines::Register(register_state) => register_state.operation_id(),
         }
     }
 }
