@@ -1225,7 +1225,6 @@ impl ClientBuilder {
 
         let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
-        // TODO: pass to module's `init`
         let common_api_versions =
             Client::discover_common_api_version_static(&config, &self.module_gens, &api).await?;
 
