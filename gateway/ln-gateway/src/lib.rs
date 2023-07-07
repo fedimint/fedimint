@@ -448,7 +448,10 @@ impl Gateway {
                         }
                     }
 
-                    sleep(Duration::from_secs(60)).await;
+                    // Allow a 15% buffer of the TTL before the re-registering gateway
+                    // with the federations.
+                    let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
+                    sleep(registration_delay).await;
                 }
             })
             .await;
