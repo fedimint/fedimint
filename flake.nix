@@ -429,7 +429,7 @@
               # the settings and tools necessary to build and work with the codebase.
               default = pkgs.mkShell (shellCommonNative
                 // {
-                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ toolchain.fenixToolchain pkgs.yarn pkgs.nodejs ];
+                nativeBuildInputs = shellCommonNative.nativeBuildInputs ++ [ toolchain.fenixToolchain ];
               });
 
               nightly = pkgs.mkShell (shellCommonNative

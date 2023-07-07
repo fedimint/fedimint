@@ -189,21 +189,6 @@ function check_cargo_lock() {
 }
 export -f check_cargo_lock
 
-function check_ui_lint() {
-  set -eo pipefail
-
-  if ! command -v npx > /dev/null ; then
-    >&2 echo "Skipping npx check"
-    return 0
-  fi
-
-  # Disable lint-staged for now then revisit how to set it up for the whole workspace
-  # Issue #2488: Enable lint-stage for the whole Fedimint UI workspace
-
-  # npx lint-staged
-}
-export -f check_ui_lint
-
 parallel ::: \
   check_semgrep_all \
   check_semgrep_log \
@@ -213,5 +198,4 @@ parallel ::: \
   check_shellcheck \
   check_eof \
   check_forbidden_dependencies \
-  check_cargo_lock \
-  check_ui_lint
+  check_cargo_lock
