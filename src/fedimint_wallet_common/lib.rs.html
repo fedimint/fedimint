@@ -326,12 +326,6 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
@@ -371,15 +365,24 @@
     Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
 )]
 </span><span class="kw">pub enum </span>WalletConsensusItem {
-    RoundConsensus(RoundConsensusItem),
+    BlockHeight(u32), <span class="comment">/* FIXME: use block hash instead, but needs more complicated
+                       * * verification logic */
+    </span>Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletConsensusItem {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
-            WalletConsensusItem::RoundConsensus(rc) =&gt; {
-                <span class="macro">write!</span>(f, <span class="string">&quot;Wallet Block Height {}&quot;</span>, rc.block_height)
+            WalletConsensusItem::BlockHeight(height) =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">&quot;Wallet Block Height {height}&quot;</span>)
+            }
+            WalletConsensusItem::Feerate(feerate) =&gt; {
+                <span class="macro">write!</span>(
+                    f,
+                    <span class="string">&quot;Wallet Feerate with sats per kvb {}&quot;</span>,
+                    feerate.sats_per_kvb
+                )
             }
             WalletConsensusItem::PegOutSignature(sig) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;Wallet PegOut signature for Bitcoin TxId {}&quot;</span>, sig.txid)
@@ -388,25 +391,10 @@
     }
 }
 
-<span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>RoundConsensusItem {
-    <span class="kw">pub </span>block_height: u32, <span class="comment">/* FIXME: use block hash instead, but needs more complicated
-                            * verification logic */
-    </span><span class="kw">pub </span>fee_rate: Feerate,
-    <span class="kw">pub </span>randomness: [u8; <span class="number">32</span>],
-}
-
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOutSignatureItem {
     <span class="kw">pub </span>txid: Txid,
     <span class="kw">pub </span>signature: Vec&lt;secp256k1::ecdsa::Signature&gt;,
-}
-
-<span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>RoundConsensus {
-    <span class="kw">pub </span>block_height: u32,
-    <span class="kw">pub </span>fee_rate: Feerate,
-    <span class="kw">pub </span>randomness_beacon: [u8; <span class="number">32</span>],
 }
 
 <span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
