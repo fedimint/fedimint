@@ -75,7 +75,7 @@ pub async fn run_webserver(
     Ok(shutdown_receiver)
 }
 
-/// Display gateway ecash note balance
+/// Display high-level information about the Gateway
 #[debug_handler]
 #[instrument(skip_all, err)]
 async fn info(
