@@ -33,7 +33,7 @@ use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
 use fedimint_wallet_server::common::tweakable::Tweakable;
 use fedimint_wallet_server::common::{
-    PegInDescriptor, SpendableUTXO, WalletCommonGen, WalletConsensusItem, WalletInput,
+    PegInDescriptor, SpendableUTXO, WalletCommonGen, WalletInput,
 };
 use fedimint_wallet_server::Wallet;
 use futures::stream::StreamExt;
@@ -262,28 +262,8 @@ fn input_tweaks_output_present(
     (tweaks, contains_peg_out)
 }
 
-fn round_tweak(module_cis: impl Iterator<Item = DynModuleConsensusItem>) -> [u8; 32] {
-    fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
-        lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
-        lhs
-    }
-
-    module_cis
-        .filter_map(|mci| {
-            if mci.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
-                return None;
-            }
-
-            let wci = mci
-                .as_any()
-                .downcast_ref::<WalletConsensusItem>()
-                .expect("Instance id mapping incorrect");
-            match wci {
-                WalletConsensusItem::RoundConsensus(rci) => Some(rci.randomness),
-                WalletConsensusItem::PegOutSignature(_) => None,
-            }
-        })
-        .fold([0; 32], xor)
+fn round_tweak(_module_cis: impl Iterator<Item = DynModuleConsensusItem>) -> [u8; 32] {
+    unimplemented!()
 }
 
 fn tweak_descriptor(

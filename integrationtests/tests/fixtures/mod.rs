@@ -61,7 +61,7 @@ use fedimint_wallet_server::common::db::UTXOKey;
 use fedimint_wallet_server::common::SpendableUTXO;
 use fedimint_wallet_server::{Wallet, WalletGen};
 use futures::executor::block_on;
-use futures::future::{join_all, select_all};
+use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
 use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
@@ -480,7 +480,8 @@ impl FederationTest {
                     ConsensusItem::Module(module) if module.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
                         let wallet_item = module.as_any().downcast_ref::<<<Wallet as ServerModule>::Common as ModuleCommon>::ConsensusItem>().expect("test should use fixed module instances");
                         match wallet_item {
-                            WalletConsensusItem::RoundConsensus(_) => true,
+                            WalletConsensusItem::BlockHeight(_) => true,
+                            WalletConsensusItem::Feerate(_) => true,
                             WalletConsensusItem::PegOutSignature(_) => false
                         }
                     },
@@ -664,19 +665,6 @@ impl FederationTest {
     pub fn max_balance_sheet(&self) -> u64 {
         assert!(self.max_balance_sheet.load(Ordering::SeqCst) >= 0);
         self.max_balance_sheet.load(Ordering::SeqCst) as u64
-    }
-
-    /// Returns true if all fed members have dropped this peer
-    pub async fn has_dropped_peer(&self, peer: u16) -> bool {
-        for server in &self.servers {
-            let mut s = server.lock().await;
-            let proposal = s.fedimint.consensus.get_consensus_proposal().await;
-            s.dropped_peers.append(&mut proposal.drop_peers.clone());
-            if !s.dropped_peers.contains(&PeerId::from(peer)) {
-                return false;
-            }
-        }
-        true
     }
 
     /// Inserts notes directly into the databases of federation nodes
@@ -863,28 +851,6 @@ impl FederationTest {
             }
         }
         proposals
-    }
-
-    /// Runs consensus, but delay peers and only wait for one to complete.
-    /// Useful for testing if a peer has become disconnected.
-    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) -> anyhow::Result<()> {
-        assert_eq!(durations.len(), self.servers.len());
-        // must drop `res` before calling `update_last_consensus`
-        {
-            let res = select_all(
-                self.servers
-                    .iter()
-                    .zip(durations)
-                    .map(|(server, duration)| {
-                        Box::pin(Self::consensus_epoch(server.clone(), duration))
-                    }),
-            )
-            .await;
-
-            res.0?;
-        }
-        self.update_last_consensus().await;
-        Ok(())
     }
 
     /// Force these peers to rejoin consensus, simulating what happens upon node

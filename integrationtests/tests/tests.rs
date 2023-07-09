@@ -17,8 +17,6 @@
 //! is thus undesirable.
 mod fixtures;
 
-use std::time::Duration;
-
 use anyhow::Result;
 use assert_matches::assert_matches;
 use bitcoin::Amount;
@@ -27,17 +25,14 @@ use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{msats, sats};
-use fedimint_logging::LOG_TEST;
 use fedimint_server::consensus::TransactionSubmissionError::TransactionError;
 use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::TransactionError::UnbalancedTransaction;
 use fedimint_wallet_server::common::{PegOutFees, Rbf};
 use futures::future::{join_all, Either};
 use serde::{Deserialize, Serialize};
-use tracing::log::warn;
-use tracing::{info, instrument};
 
-use crate::fixtures::{peers, test, FederationTest};
+use crate::fixtures::{peers, test};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
@@ -55,38 +50,6 @@ async fn wallet_peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
         peg_out.fees.fee_rate.sats_per_kvb = 10;
         // TODO: return a better error message to clients
         assert!(user.submit_peg_out(peg_out).await.is_err());
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[instrument(name = "peg_outs_are_only_allowed_once_per_epoch")]
-async fn wallet_peg_outs_are_only_allowed_once_per_epoch() -> Result<()> {
-    test(2, |fed, user, bitcoin| async move {
-        let address1 = bitcoin.get_new_address().await;
-        let address2 = bitcoin.get_new_address().await;
-
-        fed.mine_and_mint(&*user, &*bitcoin, sats(5000)).await;
-        let (fees, _) = user.peg_out(1000, &address1);
-        let fees = fees.amount().into();
-        user.peg_out(1000, &address2);
-        info!(target: LOG_TEST, ?fees, "Tx fee");
-
-        fed.run_consensus_epochs(2).await;
-        fed.broadcast_transactions().await;
-
-        let received1 = bitcoin.mine_block_and_get_received(&address1).await;
-        let received2 = bitcoin.mine_block_and_get_received(&address2).await;
-
-        assert_eq!(received1 + received2, sats(1000));
-        // either first peg-out failed OR second failed leaving us unissued change
-        assert!(received1 == sats(0) || received2 == sats(0));
-
-        assert_eq!(user.ecash_total(), sats(5000 - 2 * 1000) - fees - fees);
-        user.reissue_ecash_failed_tx().await.unwrap();
-        fed.run_consensus_epochs(2).await; // reissue the notes from the tx that failed
-
-        assert_eq!(user.ecash_total(), sats(5000 - 1000) - fees);
     })
     .await
 }
@@ -279,64 +242,6 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
         // verify we can still issue large amounts (using highest denomination)
         fed.mine_and_mint(&*user_send, &*bitcoin, sats(10_000))
             .await;
-    })
-    .await
-}
-
-async fn drop_peer_3_during_epoch(fed: &FederationTest) -> Result<()> {
-    // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad
-    // proposal
-    fed.subset_peers(&[1, 2, 3])
-        .await
-        .run_consensus_epochs(1)
-        .await;
-    fed.subset_peers(&[0]).await.run_consensus_epochs(1).await;
-
-    // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0
-    // won't be included
-    for maybe_cancelled in join_all(vec![
-        Either::Left(fed.subset_peers(&[1, 2]).await.run_consensus_epochs_wait(1)),
-        Either::Right(
-            fed.subset_peers(&[0, 3])
-                .await
-                .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
-        ),
-    ])
-    .await
-    {
-        maybe_cancelled?;
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn drop_peers_who_dont_contribute_peg_out_psbts() -> Result<()> {
-    test(4, |fed, user, bitcoin| async move {
-        // This test has many assumptions about bitcoin L1 blocks
-        // and FM epochs, so we just lock the node
-        let bitcoin = bitcoin.lock_exclusive().await;
-
-        fed.mine_and_mint(&*user, &*bitcoin, sats(3000)).await;
-
-        let peg_out_address = bitcoin.get_new_address().await;
-        user.peg_out(1000, &peg_out_address);
-        // Ensure peer 0 who received the peg out request is in the next epoch
-        fed.subset_peers(&[0, 1, 2])
-            .await
-            .run_consensus_epochs(1)
-            .await;
-        fed.subset_peers(&[3]).await.run_consensus_epochs(1).await;
-
-        fed.subset_peers(&[3]).await.override_proposal(vec![]).await;
-        drop_peer_3_during_epoch(&fed).await.unwrap();
-
-        fed.broadcast_transactions().await;
-        assert_eq!(
-            bitcoin.mine_block_and_get_received(&peg_out_address).await,
-            sats(1000)
-        );
-        assert!(fed.subset_peers(&[0, 1, 2]).await.has_dropped_peer(3).await);
-        assert_eq!(fed.max_balance_sheet(), 0);
     })
     .await
 }

@@ -1,6 +1,6 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{Infallible, TryInto};
-use std::ops::Sub;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
@@ -15,13 +15,15 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use common::config::WalletConfigConsensus;
-use common::db::DbKeyPrefix;
+use common::db::{
+    BlockHeightVoteKey, BlockHeightVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    PegOutNonceKey,
+};
 use common::{
-    proprietary_tweak_key, IterUnzipWalletConsensusItem, PegOutFees, PegOutSignatureItem,
-    PendingTransaction, ProcessPegOutSigError, RoundConsensus, RoundConsensusItem, SpendableUTXO,
-    UnsignedTransaction, UnzipWalletConsensusItem, WalletCommonGen, WalletConsensusItem,
-    WalletError, WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome,
-    CONFIRMATION_TARGET,
+    proprietary_tweak_key, PegOutFees, PegOutSignatureItem, PendingTransaction,
+    ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonGen,
+    WalletConsensusItem, WalletError, WalletInput, WalletModuleTypes, WalletOutput,
+    WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -52,21 +54,20 @@ use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGen
 use fedimint_wallet_common::db::{
     BlockHashKey, BlockHashKeyPrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
     PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
     UnsignedTransactionPrefixKey,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::Rbf;
-use futures::{stream, StreamExt};
+use futures::StreamExt;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
 use rand::rngs::OsRng;
-use rand::Rng;
 use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 #[derive(Debug, Clone)]
 pub struct WalletGen;
@@ -241,10 +242,9 @@ impl ServerModuleGen for WalletGen {
                         "Pending Transactions"
                     );
                 }
-                DbKeyPrefix::RoundConsensus => {
-                    let round_consensus = dbtx.get_value(&RoundConsensusKey).await;
-                    if let Some(round_consensus) = round_consensus {
-                        wallet.insert("Round Consensus".to_string(), Box::new(round_consensus));
+                DbKeyPrefix::PegOutNonce => {
+                    if let Some(nonce) = dbtx.get_value(&PegOutNonceKey).await {
+                        wallet.insert("Peg Out Nonce".to_string(), Box::new(nonce));
                     }
                 }
                 DbKeyPrefix::UnsignedTransaction => {
@@ -265,6 +265,28 @@ impl ServerModuleGen for WalletGen {
                         SpendableUTXO,
                         wallet,
                         "UTXOs"
+                    );
+                }
+
+                DbKeyPrefix::BlockHeightVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        BlockHeightVotePrefix,
+                        BlockHeightVoteKey,
+                        u32,
+                        wallet,
+                        "Block Height Votes"
+                    );
+                }
+
+                DbKeyPrefix::FeeRateVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FeeRateVotePrefix,
+                        FeeRateVoteKey,
+                        Feerate,
+                        wallet,
+                        "Fee Rate Votes"
                     );
                 }
             }
@@ -290,37 +312,7 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<WalletConsensusItem> {
-        let our_target_height = self.target_height().await;
-
-        // In case the wallet just got created the height is not committed to the DB yet
-        // but will be set to 0 first, so we can assume that here.
-        let last_consensus_height = self.consensus_height(dbtx).await.unwrap_or(0);
-
-        let proposed_height = if our_target_height >= last_consensus_height {
-            our_target_height
-        } else {
-            warn!(
-                "The block height shrunk, new proposal would be {}, but we are sticking to the last consensus height {}.",
-                our_target_height,
-                last_consensus_height
-            );
-            last_consensus_height
-        };
-
-        let fee_rate = self
-            .btc_rpc
-            .get_fee_rate(CONFIRMATION_TARGET)
-            .await
-            .expect("bitcoind rpc failed")
-            .unwrap_or(self.cfg.consensus.default_fee);
-
-        let round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
-            block_height: proposed_height,
-            fee_rate,
-            randomness: OsRng.gen(),
-        });
-
-        let items = dbtx
+        let mut items = dbtx
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .await
             .map(|(key, val)| {
@@ -329,51 +321,100 @@ impl ServerModule for Wallet {
                     signature: val,
                 })
             })
-            .chain(stream::once(async { round_ci }))
             .collect::<Vec<WalletConsensusItem>>()
             .await;
 
-        // We force new epochs only if height changed, or we have peg-outs (more than
-        // just round_ci item)
-        if last_consensus_height < proposed_height || 1 < items.len() {
-            ConsensusProposal::Trigger(items)
-        } else {
-            ConsensusProposal::Contribute(items)
+        let block_height_proposal = self
+            .block_height()
+            .await
+            .saturating_sub(self.cfg.consensus.finality_delay);
+
+        if block_height_proposal != self.consensus_block_height(dbtx).await {
+            items.push(WalletConsensusItem::BlockHeight(block_height_proposal));
         }
+
+        let fee_rate_proposal = self.fee_rate().await;
+
+        if fee_rate_proposal != self.consensus_fee_rate(dbtx).await {
+            items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
+        }
+
+        ConsensusProposal::new_auto_trigger(items)
     }
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, WalletConsensusItem)>,
-        consensus_peers: &BTreeSet<PeerId>,
+        _consensus_peers: &BTreeSet<PeerId>,
     ) -> Vec<PeerId> {
         trace!(?consensus_items, "Received consensus proposals");
 
-        // Separate round consensus items from signatures for peg-out tx. While
-        // signatures can be processed separately, all round consensus items
-        // need to be available at once.
-        let UnzipWalletConsensusItem {
-            peg_out_signature: peg_out_signatures,
-            round_consensus: round_items,
-        } = consensus_items.into_iter().unzip_wallet_consensus_item();
+        for (peer_id, item) in consensus_items {
+            match item {
+                WalletConsensusItem::BlockHeight(block_height) => {
+                    let current_vote = dbtx
+                        .get_value(&BlockHeightVoteKey(peer_id))
+                        .await
+                        .unwrap_or(0);
 
-        // Save signatures to the database
-        self.save_peg_out_signatures(dbtx, peg_out_signatures).await;
+                    // consensus block height can never decrease
+                    match block_height.cmp(&current_vote) {
+                        Ordering::Greater => {
+                            let old_consensus_height = self.consensus_block_height(dbtx).await;
 
-        let last_height = self.consensus_height(dbtx).await.unwrap_or(0);
+                            dbtx.insert_entry(&BlockHeightVoteKey(peer_id), &block_height)
+                                .await;
 
-        match Self::round_consensus(last_height, round_items, consensus_peers) {
-            Ok(round_consensus) => {
-                self.sync_up_to_consensus_height(dbtx, round_consensus.block_height)
-                    .await;
+                            let new_consensus_height = self.consensus_block_height(dbtx).await;
 
-                dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
-                    .await;
-                vec![]
+                            if new_consensus_height > old_consensus_height {
+                                self.sync_up_to_consensus_height(
+                                    dbtx,
+                                    old_consensus_height,
+                                    new_consensus_height,
+                                )
+                                .await;
+                            }
+                        }
+                        Ordering::Less => {
+                            warn!("Peer block height vote decreased");
+                        }
+                        Ordering::Equal => {}
+                    }
+                }
+                WalletConsensusItem::Feerate(feerate) => {
+                    dbtx.insert_entry(&FeeRateVoteKey(peer_id), &feerate).await;
+                }
+                WalletConsensusItem::PegOutSignature(peg_out_signature) => {
+                    let txid = peg_out_signature.txid;
+                    let unsigned_key = UnsignedTransactionKey(txid);
+
+                    if let Some(mut unsigned) = dbtx.get_value(&unsigned_key).await {
+                        if self
+                            .sign_peg_out_psbt(&mut unsigned.psbt, &peer_id, &peg_out_signature)
+                            .is_ok()
+                        {
+                            dbtx.insert_entry(&unsigned_key, &unsigned).await;
+
+                            if let Ok(pending_tx) = self.finalize_peg_out_psbt(unsigned) {
+                                // We were able to finalize the transaction, so we will delete the
+                                // PSBT and instead keep the
+                                // extracted tx for periodic transmission
+                                // and to accept the change into our wallet eventually once
+                                // it confirms.
+                                dbtx.insert_new_entry(&PendingTransactionKey(txid), &pending_tx)
+                                    .await;
+                                dbtx.remove_entry(&PegOutTxSignatureCI(txid)).await;
+                                dbtx.remove_entry(&unsigned_key).await;
+                            }
+                        }
+                    }
+                }
             }
-            Err(dropped_peers) => dropped_peers,
         }
+
+        vec![]
     }
 
     fn build_verification_cache<'a>(
@@ -437,7 +478,7 @@ impl ServerModule for Wallet {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         output: &WalletOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let fee_rate = self.current_round_consensus(dbtx).await.unwrap().fee_rate;
+        let fee_rate = self.consensus_fee_rate(dbtx).await;
         let tx = self
             .create_peg_out_tx(dbtx, output)
             .await
@@ -517,58 +558,10 @@ impl ServerModule for Wallet {
 
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
-        consensus_peers: &BTreeSet<PeerId>,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        _consensus_peers: &BTreeSet<PeerId>,
+        _dbtx: &mut ModuleDatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
-        // Sign and finalize any unsigned transactions that have signatures
-        let unsigned_txs = dbtx
-            .find_by_prefix(&UnsignedTransactionPrefixKey)
-            .await
-            .collect::<Vec<(UnsignedTransactionKey, UnsignedTransaction)>>()
-            .await;
-
-        let unsigned_txs = unsigned_txs
-            .into_iter()
-            .filter(|(_, unsigned)| !unsigned.signatures.is_empty());
-
-        let mut drop_peers = Vec::<PeerId>::new();
-        for (key, mut unsigned) in unsigned_txs {
-            let signers: BTreeSet<PeerId> = unsigned
-                .signatures
-                .iter()
-                .filter_map(|(peer, sig)| {
-                    match self.sign_peg_out_psbt(&mut unsigned.psbt, peer, sig) {
-                        Ok(_) => Some(*peer),
-                        Err(error) => {
-                            warn!("Error with {} partial sig {:?}", peer, error);
-                            None
-                        }
-                    }
-                })
-                .collect();
-
-            for peer in consensus_peers.sub(&signers) {
-                error!("Dropping {:?} for not contributing sigs to PSBT", peer);
-                drop_peers.push(peer);
-            }
-
-            match self.finalize_peg_out_psbt(unsigned) {
-                Ok(pending_tx) => {
-                    // We were able to finalize the transaction, so we will delete the PSBT and
-                    // instead keep the extracted tx for periodic transmission
-                    // and to accept the change into our wallet eventually once
-                    // it confirms.
-                    dbtx.insert_new_entry(&PendingTransactionKey(key.0), &pending_tx)
-                        .await;
-                    dbtx.remove_entry(&PegOutTxSignatureCI(key.0)).await;
-                    dbtx.remove_entry(&key).await;
-                }
-                Err(e) => {
-                    warn!("Unable to finalize PSBT due to {:?}", e)
-                }
-            }
-        }
-        drop_peers
+        vec![]
     }
 
     async fn output_status(
@@ -602,21 +595,23 @@ impl ServerModule for Wallet {
             api_endpoint! {
                 "block_height",
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    Ok(module.consensus_height(&mut context.dbtx()).await.unwrap_or(0))
+                    Ok(module.consensus_block_height(&mut context.dbtx()).await)
                 }
             },
             api_endpoint! {
                 "peg_out_fees",
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let consensus = module.current_round_consensus(&mut context.dbtx()).await.unwrap();
+                    let feerate = module.consensus_fee_rate(&mut context.dbtx()).await;
+                    let nonce = module.consensus_nonce(&mut context.dbtx()).await;
+
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
                         vec![],
                         module.available_utxos(&mut context.dbtx()).await,
-                        consensus.fee_rate,
-                        &consensus.randomness_beacon,
+                        feerate,
+                        &nonce,
                         None
                     );
 
@@ -700,34 +695,6 @@ impl Wallet {
         };
 
         Ok(wallet)
-    }
-
-    async fn save_peg_out_signatures<'a>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a>,
-        signatures: Vec<(PeerId, PegOutSignatureItem)>,
-    ) {
-        let mut cache: BTreeMap<Txid, UnsignedTransaction> = dbtx
-            .find_by_prefix(&UnsignedTransactionPrefixKey)
-            .await
-            .map(|(key, val)| (key.0, val))
-            .collect()
-            .await;
-
-        for (peer, sig) in signatures.into_iter() {
-            match cache.get_mut(&sig.txid) {
-                Some(unsigned) => unsigned.signatures.push((peer, sig)),
-                None => warn!(
-                    "{} sent peg-out signature for unknown PSBT {}",
-                    peer, sig.txid
-                ),
-            }
-        }
-
-        for (txid, unsigned) in cache.into_iter() {
-            dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
-                .await;
-        }
     }
 
     /// Try to attach signatures to a pending peg-out tx.
@@ -832,112 +799,76 @@ impl Wallet {
         })
     }
 
-    /// Calculates all the round items from peers, returning the same consensus
-    /// for all peers or peers that should be banned for misbehaving
-    fn round_consensus(
-        last_height: u32,
-        items: Vec<(PeerId, RoundConsensusItem)>,
-        consensus_peers: &BTreeSet<PeerId>,
-    ) -> Result<RoundConsensus, Vec<PeerId>> {
-        fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
-            lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
-            lhs
-        }
-
-        let mut banned_peers = vec![];
-
-        let mut dedup = BTreeMap::new();
-        for (peer, item) in items.into_iter() {
-            if dedup.insert(peer, item).is_some() {
-                warn!("Banning peer {} for multiple RoundConsensusItem", peer);
-                banned_peers.push(peer);
-            }
-        }
-
-        for peer in consensus_peers {
-            if dedup.get(peer).is_none() {
-                warn!(
-                    "Banning peer {} for not submitting a RoundConsensusItem",
-                    peer
-                );
-                banned_peers.push(*peer);
-            }
-        }
-
-        // If peers misbehaved, we cannot determine this consensus round
-        if !banned_peers.is_empty() {
-            return Err(banned_peers);
-        }
-
-        let items: Vec<_> = dedup.values().collect();
-
-        let mut fees: Vec<_> = items.iter().map(|item| item.fee_rate).collect();
-        fees.sort_unstable();
-        let fee_rate = *fees.get(fees.len() / 2).expect("items is non-empty");
-
-        let mut heights: Vec<_> = items.iter().map(|item| item.block_height).collect();
-        heights.sort_unstable();
-        let block_height = heights[heights.len() / 2];
-        if block_height < last_height {
-            panic!(
-                "Median proposed consensus block height shrunk from {last_height} to {block_height}, the federation is broken"
-            );
-        }
-
-        let randoms: Vec<_> = items.iter().map(|item| item.randomness).collect();
-        let randomness_beacon = randoms.into_iter().fold([0; 32], xor);
-
-        Ok(RoundConsensus {
-            block_height,
-            fee_rate,
-            randomness_beacon,
-        })
-    }
-
-    pub async fn current_round_consensus(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> Option<RoundConsensus> {
-        dbtx.get_value(&RoundConsensusKey).await
-    }
-
-    pub async fn target_height(&self) -> u32 {
-        let our_network_height = self
-            .btc_rpc
+    pub async fn block_height(&self) -> u32 {
+        self.btc_rpc
             .get_block_height()
             .await
-            .expect("bitcoind rpc failed") as u32;
-        our_network_height.saturating_sub(self.cfg.consensus.finality_delay)
+            .expect("bitcoind rpc failed") as u32
     }
 
-    pub async fn consensus_height(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Option<u32> {
-        self.current_round_consensus(dbtx)
+    pub async fn fee_rate(&self) -> Feerate {
+        self.btc_rpc
+            .get_fee_rate(CONFIRMATION_TARGET)
             .await
-            .map(|rc| rc.block_height)
+            .expect("bitcoind rpc failed")
+            .unwrap_or(self.cfg.consensus.default_fee)
+    }
+
+    pub async fn consensus_block_height(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u32 {
+        let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
+
+        let mut heights = dbtx
+            .find_by_prefix(&BlockHeightVotePrefix)
+            .await
+            .map(|(.., height)| height)
+            .collect::<Vec<_>>()
+            .await;
+
+        assert!(heights.len() <= peer_count);
+
+        while heights.len() < peer_count {
+            heights.push(0);
+        }
+
+        heights.sort_unstable();
+
+        heights[peer_count / 2]
+    }
+
+    pub async fn consensus_fee_rate(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Feerate {
+        let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
+
+        let mut rates = dbtx
+            .find_by_prefix(&FeeRateVotePrefix)
+            .await
+            .map(|(.., rate)| rate)
+            .collect::<Vec<_>>()
+            .await;
+
+        assert!(rates.len() <= peer_count);
+
+        while rates.len() < peer_count {
+            rates.push(self.cfg.consensus.default_fee);
+        }
+
+        rates.sort_unstable();
+
+        rates[peer_count / 2]
+    }
+
+    pub async fn consensus_nonce(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> [u8; 32] {
+        let nonce = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
+        dbtx.insert_entry(&PegOutNonceKey, &(nonce + 1)).await;
+
+        nonce.consensus_hash::<sha256::Hash>().into_inner()
     }
 
     async fn sync_up_to_consensus_height<'a>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
+        old_height: u32,
         new_height: u32,
     ) {
-        let old_height = self
-            .consensus_height(dbtx)
-            .await
-            .unwrap_or_else(|| new_height.saturating_sub(self.cfg.consensus.finality_delay));
-        if new_height < old_height {
-            info!(
-                new_height,
-                old_height, "Nothing to sync, new height is lower than old height, doing nothing."
-            );
-            return;
-        }
-
-        if new_height == old_height {
-            debug!(height = old_height, "Height didn't change");
-            return;
-        }
-
         info!(
             new_height,
             block_to_go = new_height - old_height,
@@ -1064,11 +995,7 @@ impl Wallet {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         output: &WalletOutput,
     ) -> Result<UnsignedTransaction, WalletError> {
-        let change_tweak = self
-            .current_round_consensus(dbtx)
-            .await
-            .unwrap()
-            .randomness_beacon;
+        let change_tweak = self.consensus_nonce(dbtx).await;
 
         match output {
             WalletOutput::PegOut(peg_out) => self.offline_wallet().create_tx(
@@ -1512,70 +1439,17 @@ impl<'a> StatelessWallet<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+
     use std::str::FromStr;
 
     use bitcoin::Network::{Bitcoin, Testnet};
     use bitcoin::{Address, Amount, Network, OutPoint, Txid};
-    use fedimint_core::{BitcoinHash, Feerate, PeerId};
-    use fedimint_wallet_common::{
-        PegOut, PegOutFees, Rbf, RoundConsensus, RoundConsensusItem, WalletOutput,
-    };
+    use fedimint_core::{BitcoinHash, Feerate};
+    use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutput};
     use miniscript::descriptor::Wsh;
 
     use crate::common::PegInDescriptor;
-    use crate::{
-        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, Wallet, WalletError,
-    };
-
-    fn round_item(block_height: u32, fee_rate: u64, random: u8) -> RoundConsensusItem {
-        RoundConsensusItem {
-            block_height,
-            fee_rate: Feerate {
-                sats_per_kvb: fee_rate,
-            },
-            randomness: [random; 32],
-        }
-    }
-
-    fn round_consensus(block_height: u32, fee_rate: u64, random: u8) -> RoundConsensus {
-        RoundConsensus {
-            block_height,
-            fee_rate: Feerate {
-                sats_per_kvb: fee_rate,
-            },
-            randomness_beacon: [random; 32],
-        }
-    }
-
-    #[test]
-    fn processes_round_consensus_items() {
-        let peers = &BTreeSet::from([PeerId::from(0), PeerId::from(1), PeerId::from(2)]);
-
-        // properly selects median fees / height and xor randomness
-        let consensus = Wallet::round_consensus(
-            0,
-            vec![
-                (PeerId::from(0), round_item(1, 4, 7)),
-                (PeerId::from(1), round_item(2, 5, 8)),
-                (PeerId::from(2), round_item(3, 6, 9)),
-            ],
-            peers,
-        );
-        assert_eq!(consensus, Ok(round_consensus(2, 5, 7 ^ 8 ^ 9)));
-
-        // drops peers that submit duplicate items or don't submit any
-        let consensus = Wallet::round_consensus(
-            0,
-            vec![
-                (PeerId::from(0), round_item(1, 4, 7)),
-                (PeerId::from(1), round_item(2, 5, 8)),
-                (PeerId::from(1), round_item(3, 6, 9)),
-            ],
-            peers,
-        );
-        assert_eq!(consensus, Err(vec![PeerId::from(1), PeerId::from(2)]));
-    }
+    use crate::{CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletError};
 
     #[test]
     fn create_tx_should_validate_amounts() {
@@ -1692,17 +1566,18 @@ mod fedimint_migration_tests {
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
-    use fedimint_core::{BitcoinHash, Feerate, OutPoint, ServerModule, TransactionId};
+    use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
     use fedimint_wallet_common::db::{
-        BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix, PegOutBitcoinTransaction,
-        PegOutBitcoinTransactionPrefix, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
-        PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey,
+        BlockHashKey, BlockHashKeyPrefix, BlockHeightVoteKey, BlockHeightVotePrefix, DbKeyPrefix,
+        FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
+        PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
+        PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
         UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
     };
     use fedimint_wallet_common::{
-        PegOutFees, PendingTransaction, Rbf, RoundConsensus, SpendableUTXO, UnsignedTransaction,
-        WalletCommonGen, WalletOutputOutcome,
+        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction, WalletCommonGen,
+        WalletOutputOutcome,
     };
     use futures::StreamExt;
     use rand::rngs::OsRng;
@@ -1729,15 +1604,19 @@ mod fedimint_migration_tests {
             tweak: BYTE_32,
             amount: Amount::from_sat(10000),
         };
+
         dbtx.insert_new_entry(&utxo, &spendable_utxo).await;
 
-        let round_consensus = RoundConsensus {
-            block_height: 5000,
-            fee_rate: Feerate { sats_per_kvb: 1000 },
-            randomness_beacon: BYTE_32,
-        };
-        dbtx.insert_new_entry(&RoundConsensusKey, &round_consensus)
+        dbtx.insert_new_entry(&PegOutNonceKey, &1).await;
+
+        dbtx.insert_new_entry(&BlockHeightVoteKey(PeerId::from(0)), &1)
             .await;
+
+        dbtx.insert_new_entry(
+            &FeeRateVoteKey(PeerId::from(0)),
+            &Feerate { sats_per_kvb: 10 },
+        )
+        .await;
 
         let unsigned_transaction_key = UnsignedTransactionKey(Txid::from_slice(&BYTE_32).unwrap());
 
@@ -1950,9 +1829,9 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any PendingTransactions"
                             );
                         }
-                        DbKeyPrefix::RoundConsensus => {
+                        DbKeyPrefix::PegOutNonce => {
                             assert!(dbtx
-                                .get_value(&RoundConsensusKey)
+                                .get_value(&PegOutNonceKey)
                                 .await
                                 .is_some());
                         }
@@ -1978,6 +1857,30 @@ mod fedimint_migration_tests {
                             assert!(
                                 num_utxos > 0,
                                 "validate_migrations was not able to read any UTXOs"
+                            );
+                        }
+                        DbKeyPrefix::BlockHeightVote => {
+                            let heights = dbtx
+                                .find_by_prefix(&BlockHeightVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_heights = heights.len();
+                            assert!(
+                                num_heights > 0,
+                                "validate_migrations was not able to read any block height votes"
+                            );
+                        }
+                        DbKeyPrefix::FeeRateVote => {
+                            let rates = dbtx
+                                .find_by_prefix(&FeeRateVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_rates = rates.len();
+                            assert!(
+                                num_rates > 0,
+                                "validate_migrations was not able to read any fee rate votes"
                             );
                         }
                     }
