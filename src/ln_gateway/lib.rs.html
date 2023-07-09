@@ -763,6 +763,11 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1367,6 +1372,8 @@
             <span class="self">self</span>.api.clone(),
         );
 
+        <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
+
         <span class="self">self</span>.register_client(client, federation_id, channel_id, route_hints)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1378,6 +1385,7 @@
         <span class="prelude-val">Ok</span>(FederationInfo {
             federation_id,
             registration,
+            balance_msat,
         })
     }
 
@@ -1396,10 +1404,12 @@
                 GW_ANNOUNCEMENT_TTL,
                 <span class="self">self</span>.api.clone(),
             );
+            <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
 
             federations.push(FederationInfo {
                 federation_id,
                 registration,
+                balance_msat,
             });
         }
 

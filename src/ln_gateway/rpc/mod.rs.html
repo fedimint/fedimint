@@ -179,6 +179,7 @@
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
 <a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -243,6 +244,7 @@
     </span><span class="kw">pub </span>federation_id: FederationId,
     <span class="doccomment">/// Information we registered with the fed
     </span><span class="kw">pub </span>registration: LightningGateway,
+    <span class="kw">pub </span>balance_msat: Amount,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
