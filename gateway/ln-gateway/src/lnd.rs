@@ -10,7 +10,10 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::lnrpc::failure::FailureCode;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, SendRequest};
+use tonic_lnd::lnrpc::fee_limit::Limit;
+use tonic_lnd::lnrpc::{
+    ChanInfoRequest, FeeLimit, GetInfoRequest, ListChannelsRequest, SendRequest,
+};
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, TrackPaymentRequest,
 };
@@ -365,7 +368,14 @@ impl ILnRpcClient for GatewayLndClient {
         Ok(GetRouteHintsResponse { route_hints })
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
+    async fn pay(&self, request: PayInvoiceRequest) -> crate::Result<PayInvoiceResponse> {
+        let PayInvoiceRequest {
+            invoice,
+            max_fee_msat,
+            payment_hash,
+            ..
+        } = request;
+
         let mut client = Self::connect(
             self.address.clone(),
             self.tls_cert.clone(),
@@ -375,16 +385,26 @@ impl ILnRpcClient for GatewayLndClient {
 
         // If the payment exists, that means we've already tried to pay the invoice
         let preimage = if let Some(preimage) = self
-            .lookup_payment(invoice.payment_hash.clone(), &mut client)
+            .lookup_payment(payment_hash.clone(), &mut client)
             .await?
         {
             bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str())
                 .map_err(|_| anyhow::anyhow!("Failed to convert preimage"))?
         } else {
+            // LND API allows fee limits in the `i64` range, but we use `u64` for
+            // max_fee_msat. This means we can only set an enforceable fee limit
+            // between 0 and i64::MAX
+            let fee_cap: i64 = max_fee_msat
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("max_fee_msat exceeds valid LND fee limit ranges"))?;
+
             let send_response = client
                 .lightning()
                 .send_payment_sync(SendRequest {
-                    payment_request: invoice.invoice.to_string(),
+                    payment_request: invoice.to_string(),
+                    fee_limit: Some(FeeLimit {
+                        limit: Some(Limit::FixedMsat(fee_cap)),
+                    }),
                     ..Default::default()
                 })
                 .await

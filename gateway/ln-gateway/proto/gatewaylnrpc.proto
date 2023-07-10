@@ -43,7 +43,7 @@ message PayInvoiceRequest {
 
   uint64 max_delay = 2;
 
-  double max_fee_percent = 3;
+  uint64 max_fee_msat = 3;
 
   bytes payment_hash = 4;
 }

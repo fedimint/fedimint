@@ -433,7 +433,7 @@ impl GatewayLightning for ClnRpcService {
         let PayInvoiceRequest {
             invoice,
             max_delay,
-            max_fee_percent,
+            max_fee_msat,
             payment_hash: _,
         } = request.into_inner();
 
@@ -446,13 +446,13 @@ impl GatewayLightning for ClnRpcService {
                 amount_msat: None,
                 label: None,
                 riskfactor: None,
-                maxfeepercent: Some(max_fee_percent),
                 retry_for: None,
                 maxdelay: Some(max_delay as u16),
                 exemptfee: None,
                 localinvreqid: None,
                 exclude: None,
-                maxfee: None,
+                maxfee: Some(cln_rpc::primitives::Amount::from_msat(max_fee_msat)),
+                maxfeepercent: None,
                 description: None,
             }))
             .await
