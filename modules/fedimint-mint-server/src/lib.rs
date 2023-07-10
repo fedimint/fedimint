@@ -1,7 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -17,8 +17,9 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
-    OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount,
+    ConsensusDecision, NumPeers, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
+    TieredMultiZip,
 };
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
@@ -34,7 +35,7 @@ use fedimint_mint_common::db::{
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
     BlindNonce, MintCommonGen, MintConsensusItem, MintError, MintInput, MintModuleTypes,
-    MintOutput, MintOutputBlindSignatures, MintOutputOutcome, MintOutputSignatureShare, Note,
+    MintOutput, MintOutputBlindSignatures, MintOutputOutcome, MintOutputSignatureShare,
     DEFAULT_MAX_NOTES_PER_DENOMINATION,
 };
 use fedimint_server::config::distributedgen::{scalar, PeerHandleOps};
@@ -49,7 +50,7 @@ use tbs::{
     AggregatePublicKey, PublicKeyShare, SecretKeyShare,
 };
 use threshold_crypto::group::Curve;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 #[derive(Debug, Clone)]
 pub struct MintGen;
@@ -331,7 +332,7 @@ pub struct Mint {
 impl ServerModule for Mint {
     type Common = MintModuleTypes;
     type Gen = MintGen;
-    type VerificationCache = VerifiedNotes;
+    type VerificationCache = VerificationCache;
 
     async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
         if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
@@ -355,197 +356,168 @@ impl ServerModule for Mint {
         )
     }
 
-    async fn begin_consensus_epoch<'a, 'b>(
+    async fn process_consensus_item<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, MintConsensusItem)>,
-        _consensus_peers: &BTreeSet<PeerId>,
-    ) -> Vec<PeerId> {
-        for (peer_id, consensus_item) in consensus_items {
-            let out_point = consensus_item.out_point;
-            let signatures = consensus_item.signatures;
+        consensus_item: MintConsensusItem,
+        peer_id: PeerId,
+    ) -> anyhow::Result<ConsensusDecision> {
+        let out_point = consensus_item.out_point;
+        let signatures = consensus_item.signatures;
 
-            // check if we already obtained the blinded threshold signature
-            if dbtx.get_value(&OutputOutcomeKey(out_point)).await.is_some() {
-                continue;
-            }
-
-            // check if we already have a valid signature share for this peer
-            if dbtx
-                .get_value(&ReceivedPartialSignatureKey(out_point, peer_id))
-                .await
-                .is_some()
-            {
-                warn!("Received a redundant mint signature share");
-                continue;
-            }
-
-            // check if we are collecting signature shares for this out_point
-            let our_contribution = match dbtx
-                .get_value(&ProposedPartialSignatureKey(out_point))
-                .await
-            {
-                Some(contribution) => contribution,
-                None => {
-                    warn!("Received mint signature share for non-existent out point");
-                    continue;
-                }
-            };
-
-            // check if we have received one signature per blinded note
-            if !signatures.0.structural_eq(&our_contribution.0) {
-                warn!("Received mint signature share with invalid structure");
-                continue;
-            }
-
-            // obtain the correct messages to be signed from our contribution
-            let reference_messages = our_contribution
-                .0
-                .iter_items()
-                .map(|(_amt, (msg, _sig))| msg);
-
-            // check if the received signatures are valid for the reference_messages
-            if !signatures.0.iter_items().zip(reference_messages).all(
-                // the key used for the signature is different for every peer and amount
-                |((amount, (.., sig)), ref_msg)| match self.pub_key_shares[&peer_id].tier(&amount) {
-                    Ok(amount_key) => verify_blind_share(*ref_msg, *sig, *amount_key),
-                    Err(_) => false,
-                },
-            ) {
-                warn!("Received mint signature share with invalid signature");
-                continue;
-            }
-
-            // this is the first valid signature share by this peer so we store it
-            dbtx.insert_new_entry(
-                &ReceivedPartialSignatureKey(out_point, peer_id),
-                &signatures,
-            )
-            .await;
-
-            // retrieve all received valid signature shares for this out_point
-            let signature_shares = dbtx
-                .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix(out_point))
-                .await
-                .map(|(key, partial_sig)| (key.1, partial_sig))
-                .collect::<Vec<_>>()
-                .await;
-
-            // check if we have enough signature shares to combine
-            if signature_shares.len() < self.cfg.consensus.peer_tbs_pks.threshold() {
-                continue;
-            }
-
-            // combine valid signature shares
-            let blind_signatures = TieredMultiZip::new(
-                signature_shares
-                    .iter()
-                    .map(|(_peer, sig_share)| sig_share.0.iter_items())
-                    .collect(),
-            )
-            .map(|(amt, sig_shares)| {
-                let peer_ids = signature_shares.iter().map(|(peer, _)| *peer);
-
-                let sig = combine_valid_shares(
-                    sig_shares
-                        .into_iter()
-                        .zip(peer_ids)
-                        .map(|((.., share), peer)| (peer.to_usize(), *share)),
-                    self.cfg.consensus.peer_tbs_pks.threshold(),
-                );
-
-                (amt, sig)
-            })
-            .collect::<TieredMulti<_>>();
-
-            // remove received signature shares
-            dbtx.remove_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix(out_point))
-                .await;
-
-            // remove proposed signature share
-            dbtx.remove_entry(&ProposedPartialSignatureKey(out_point))
-                .await;
-
-            // insert the final blind signatures
-            dbtx.insert_entry(
-                &OutputOutcomeKey(out_point),
-                &MintOutputBlindSignatures(blind_signatures),
-            )
-            .await;
-
-            let mut redemptions = Amount::from_sats(0);
-            let mut issuances = Amount::from_sats(0);
-            let remove_audit_keys = dbtx
-                .find_by_prefix(&MintAuditItemKeyPrefix)
-                .await
-                .map(|(key, amount)| {
-                    match key {
-                        MintAuditItemKey::Issuance(_) => issuances += amount,
-                        MintAuditItemKey::IssuanceTotal => issuances += amount,
-                        MintAuditItemKey::Redemption(_) => redemptions += amount,
-                        MintAuditItemKey::RedemptionTotal => redemptions += amount,
-                    }
-                    key
-                })
-                .collect::<Vec<_>>()
-                .await;
-
-            for key in remove_audit_keys {
-                dbtx.remove_entry(&key).await;
-            }
-
-            dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
-                .await;
-            dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
-                .await;
+        if dbtx.get_value(&OutputOutcomeKey(out_point)).await.is_some() {
+            // We already obtained a threshold of blind signature shares
+            return Ok(ConsensusDecision::Discard);
         }
 
-        vec![]
+        if dbtx
+            .get_value(&ReceivedPartialSignatureKey(out_point, peer_id))
+            .await
+            .is_some()
+        {
+            // We already received a valid signature share by this peer
+            return Ok(ConsensusDecision::Discard);
+        }
+
+        // check if we are collecting signature shares for this out_point
+        let our_contribution = dbtx
+            .get_value(&ProposedPartialSignatureKey(out_point))
+            .await
+            .context("Out point for this signature share does not exist")?;
+
+        // check if we have received one signature per blinded note
+        if !signatures.0.structural_eq(&our_contribution.0) {
+            bail!("Signature share structure is invalid");
+        }
+
+        // obtain the correct messages to be signed from our contribution
+        let reference_messages = our_contribution
+            .0
+            .iter_items()
+            .map(|(_amt, (msg, _sig))| msg);
+
+        // check if the received signatures are valid for the reference_messages
+        if !signatures.0.iter_items().zip(reference_messages).all(
+            // the key used for the signature is different for every peer and amount
+            |((amount, (.., sig)), ref_msg)| match self.pub_key_shares[&peer_id].tier(&amount) {
+                Ok(amount_key) => verify_blind_share(*ref_msg, *sig, *amount_key),
+                Err(_) => false,
+            },
+        ) {
+            bail!("Signature share signature is invalid");
+        }
+
+        // we save the first valid signature share by this peer
+        dbtx.insert_new_entry(
+            &ReceivedPartialSignatureKey(out_point, peer_id),
+            &signatures,
+        )
+        .await;
+
+        // retrieve all valid signature shares previously received for this out point
+        let signature_shares = dbtx
+            .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix(out_point))
+            .await
+            .map(|(key, partial_sig)| (key.1, partial_sig))
+            .collect::<Vec<_>>()
+            .await;
+
+        // check if we have enough signature shares to combine
+        if signature_shares.len() < self.cfg.consensus.peer_tbs_pks.threshold() {
+            return Ok(ConsensusDecision::Accept);
+        }
+
+        // combine valid signature shares
+        let blind_signatures = TieredMultiZip::new(
+            signature_shares
+                .iter()
+                .map(|(_peer, sig_share)| sig_share.0.iter_items())
+                .collect(),
+        )
+        .map(|(amt, sig_shares)| {
+            let peer_ids = signature_shares.iter().map(|(peer, _)| *peer);
+
+            let sig = combine_valid_shares(
+                sig_shares
+                    .into_iter()
+                    .zip(peer_ids)
+                    .map(|((.., share), peer)| (peer.to_usize(), *share)),
+                self.cfg.consensus.peer_tbs_pks.threshold(),
+            );
+
+            (amt, sig)
+        })
+        .collect::<TieredMulti<_>>();
+
+        dbtx.remove_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix(out_point))
+            .await;
+
+        dbtx.remove_entry(&ProposedPartialSignatureKey(out_point))
+            .await;
+
+        dbtx.insert_entry(
+            &OutputOutcomeKey(out_point),
+            &MintOutputBlindSignatures(blind_signatures),
+        )
+        .await;
+
+        // TODO: move the db compaction somewhere more appropriate, possibly in the
+        // audit method?
+        let mut redemptions = Amount::from_sats(0);
+        let mut issuances = Amount::from_sats(0);
+        let remove_audit_keys = dbtx
+            .find_by_prefix(&MintAuditItemKeyPrefix)
+            .await
+            .map(|(key, amount)| {
+                match key {
+                    MintAuditItemKey::Issuance(_) => issuances += amount,
+                    MintAuditItemKey::IssuanceTotal => issuances += amount,
+                    MintAuditItemKey::Redemption(_) => redemptions += amount,
+                    MintAuditItemKey::RedemptionTotal => redemptions += amount,
+                }
+                key
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        for key in remove_audit_keys {
+            dbtx.remove_entry(&key).await;
+        }
+
+        dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
+            .await;
+        dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
+            .await;
+
+        Ok(ConsensusDecision::Accept)
     }
 
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a MintInput> + MaybeSend,
+        _inputs: impl Iterator<Item = &'a MintInput> + MaybeSend,
     ) -> Self::VerificationCache {
-        // We build a lookup table for checking the validity of all notes for certain
-        // amounts. This calculation can happen massively in parallel since
-        // verification is a pure function and thus has no side effects.
-        let iter = inputs.flat_map(|inputs| inputs.0.iter_items());
-
-        #[cfg(not(target_family = "wasm"))]
-        let iter = iter.par_bridge();
-
-        let valid_notes = iter
-            .filter_map(|(amount, note)| {
-                let amount_key = self.pub_key.get(&amount)?;
-                if note.verify(*amount_key) {
-                    Some((*note, amount))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        VerifiedNotes { valid_notes }
+        VerificationCache
     }
 
     async fn validate_input<'a, 'b>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
-        verification_cache: &Self::VerificationCache,
+        _verification_cache: &Self::VerificationCache,
         input: &'a MintInput,
     ) -> Result<InputMeta, ModuleError> {
-        for (amount, note) in input.iter_items() {
-            let note_valid = verification_cache
-                .valid_notes
-                .get(note) // We validated the note
-                .map(|notet_amount| *notet_amount == amount) // It has the right amount tier
-                .unwrap_or(false); // If we didn't validate the note return false
+        let iter = input.iter_items();
 
-            if !note_valid {
-                return Err(MintError::InvalidSignature).into_module_error_other();
-            }
+        #[cfg(not(target_family = "wasm"))]
+        let iter = iter.par_bridge();
 
+        if !iter.all(|(amount, note)| match self.pub_key.get(&amount) {
+            Some(amount_key) => note.verify(*amount_key),
+            None => false,
+        }) {
+            return Err(MintError::InvalidSignature).into_module_error_other();
+        }
+
+        for (.., note) in input.iter_items() {
             if dbtx.get_value(&NonceKey(note.0)).await.is_some() {
                 return Err(MintError::SpentCoin).into_module_error_other();
             }
@@ -641,14 +613,6 @@ impl ServerModule for Mint {
         .await;
 
         Ok(amount)
-    }
-
-    async fn end_consensus_epoch<'a, 'b>(
-        &'a self,
-        _consensus_peers: &BTreeSet<PeerId>,
-        _dbtx: &mut ModuleDatabaseTransaction<'b>,
-    ) -> Vec<PeerId> {
-        vec![]
     }
 
     async fn output_status(
@@ -892,11 +856,9 @@ mod test {
 }
 
 #[derive(Debug, Clone)]
-pub struct VerifiedNotes {
-    valid_notes: HashMap<Note, Amount>,
-}
+pub struct VerificationCache;
 
-impl fedimint_core::server::VerificationCache for VerifiedNotes {}
+impl fedimint_core::server::VerificationCache for VerificationCache {}
 
 #[cfg(test)]
 mod fedimint_migration_tests {

@@ -45,9 +45,7 @@ use fedimint_mint_server::MintGen;
 use fedimint_server::config::api::{ConfigGenParamsLocal, ConfigGenSettings};
 use fedimint_server::config::{gen_cert_and_key, max_connections, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::{ConsensusServer, EpochMessage};
-use fedimint_server::consensus::{
-    ConsensusProposal, HbbftConsensusOutcome, TransactionSubmissionError,
-};
+use fedimint_server::consensus::{ConsensusProposal, HbbftConsensusOutcome};
 use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
 use fedimint_server::net::connect::{parse_host_port, Connector, TlsTcpConnector};
 use fedimint_server::net::peers::{DelayCalculator, PeerConnector};
@@ -508,7 +506,7 @@ impl FederationTest {
     pub async fn submit_transaction(
         &self,
         transaction: fedimint_server::transaction::Transaction,
-    ) -> Result<(), TransactionSubmissionError> {
+    ) -> anyhow::Result<()> {
         for server in &self.servers {
             server
                 .lock()
@@ -519,6 +517,7 @@ impl FederationTest {
                 .submit_transaction(transaction.clone())
                 .await?;
         }
+
         Ok(())
     }
 
@@ -693,12 +692,15 @@ impl FederationTest {
                 signature: None,
             };
 
+            let module_ids = transaction
+                .outputs
+                .iter()
+                .map(|output| output.module_instance_id())
+                .collect::<Vec<_>>();
+
             dbtx.insert_entry(
                 &fedimint_server::db::AcceptedTransactionKey(out_point.txid),
-                &fedimint_server::consensus::AcceptedTransaction {
-                    epoch: 0,
-                    transaction,
-                },
+                &module_ids,
             )
             .await;
 

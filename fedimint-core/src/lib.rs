@@ -398,3 +398,22 @@ pub enum CoreError {
     #[error("Mismatching outcome variant: expected {0}, got {1}")]
     MismatchingVariant(&'static str, &'static str),
 }
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+pub enum ConsensusDecision {
+    Accept,
+    Discard,
+}

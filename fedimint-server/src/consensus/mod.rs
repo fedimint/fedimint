@@ -6,35 +6,33 @@ pub mod server;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::FromIterator;
 
+use anyhow::bail;
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
-use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
-use fedimint_core::module::{ModuleError, TransactionItemAmount};
+use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::server::DynVerificationCache;
-use fedimint_core::{timing, Amount, NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_core::{timing, Amount, ConsensusDecision, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_CONSENSUS;
 use futures::future::select_all;
 use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use thiserror::Error;
-use tracing::{error, info_span, instrument, trace, warn, Instrument};
+use tracing::{instrument, warn};
 
 use crate::config::ServerConfig;
-use crate::consensus::TransactionSubmissionError::TransactionReplayError;
 use crate::db::{
-    AcceptedTransactionKey, ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey,
-    DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
+    AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureShareKey,
+    ClientConfigSignatureSharePrefix, ConsensusUpgradeKey, EpochHistoryKey, LastEpochKey,
 };
 use crate::net::api::ConsensusApi;
 use crate::transaction::{Transaction, TransactionError};
 
-pub type HbbftSerdeConsensusOutcome = hbbft::honey_badger::Batch<Vec<SerdeConsensusItem>, PeerId>;
-pub type HbbftConsensusOutcome = hbbft::honey_badger::Batch<Vec<ConsensusItem>, PeerId>;
+pub type HbbftSerdeConsensusOutcome = Batch<Vec<SerdeConsensusItem>, PeerId>;
+pub type HbbftConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
 pub type HbbftMessage = hbbft::honey_badger::Message<PeerId>;
 
 // TODO remove HBBFT `Batch` from `ConsensusOutcome`
@@ -89,12 +87,6 @@ pub struct FedimintConsensus {
     pub api_event_cache: HashSet<ApiEvent>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
-pub struct AcceptedTransaction {
-    pub epoch: u64,
-    pub transaction: Transaction,
-}
-
 #[derive(Debug)]
 struct VerificationCaches {
     caches: HashMap<ModuleInstanceId, DynVerificationCache>,
@@ -142,35 +134,43 @@ impl FedimintConsensus {
                 |dbtx| {
                     let consensus_outcome = consensus_outcome.clone();
                     let reference_rejected_txs = reference_rejected_txs.clone();
-                    let peers: BTreeSet<PeerId> = consensus_outcome.contributions.keys().copied().collect();
 
                     Box::pin(async move {
-                        let epoch = consensus_outcome.epoch;
-                        let outcome = consensus_outcome.clone();
+                        let mut rejected_txs = BTreeSet::new();
 
-                        let UnzipConsensusItem {
-                            epoch_outcome_signature_share: _epoch_outcome_signature_share_cis,
-                            client_config_signature_share: _client_config_signature_share_cis,
-                            transaction: transaction_cis,
-                            consensus_upgrade: consensus_upgrade_cis,
-                            module: module_cis,
-                        } = consensus_outcome
+                        let items = consensus_outcome.clone()
                             .contributions
                             .into_iter()
-                            .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
-                            .unzip_consensus_item();
+                            .flat_map(|(peer_id, items)| items.into_iter().map(move |item| (peer_id, item)));
 
-                        self.process_module_consensus_items(dbtx, &module_cis, &peers).await;
-                        self.process_upgrade_items(dbtx, &consensus_upgrade_cis).await;
+                        for (peer_id, consensus_item) in items {
+                            dbtx.set_tx_savepoint()
+                                .await
+                                .expect("Setting transaction savepoint failed");
 
-                        let rejected_txs = self
-                            .process_transactions(dbtx, epoch, &transaction_cis)
-                            .await;
+                            let decision = match self.process_consensus_item(dbtx, consensus_item.clone(), peer_id).await {
+                                Ok(decision) => decision,
+                                Err(error) => {
+                                    warn!(target: "consensus", "Invalid consensus item from {peer_id}: {error}");
+                                    ConsensusDecision::Discard
+                                }
+                            };
+
+                            if decision == ConsensusDecision::Discard {
+                                dbtx.rollback_tx_to_savepoint()
+                                    .await
+                                    .expect("Rolling back transaction to savepoint failed");
+
+                                if let ConsensusItem::Transaction(transaction) = consensus_item {
+                                    rejected_txs.insert(transaction.tx_hash());
+                                }
+                            }
+                        }
 
                         if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
                             // Result of the consensus are supposed to be deterministic.
                             // If our result is not the same as what the (honest) majority of the federation
-                            // signed over, it's a catastrophical bug/mismatch of Federation's fedimintd
+                            // signed over, it's a catastrophic bug/mismatch of Federation's fedimintd
                             // implementations.
                             assert_eq!(
                                 reference_rejected_txs, &rejected_txs,
@@ -179,8 +179,9 @@ impl FedimintConsensus {
                         }
 
                         let epoch_history = self
-                            .finalize_process_epoch(dbtx, outcome.clone(), rejected_txs, &peers)
+                            .save_epoch_history(consensus_outcome, dbtx, &mut vec![], rejected_txs)
                             .await;
+
                         Result::<_, ()>::Ok(epoch_history)
                     })
                 },
@@ -190,6 +191,7 @@ impl FedimintConsensus {
             .expect("Committing consensus epoch failed");
 
         let audit = self.audit().await;
+
         if audit.sum().milli_sat < 0 {
             panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
         }
@@ -197,198 +199,157 @@ impl FedimintConsensus {
         epoch_history
     }
 
-    /// Calls `begin_consensus_epoch` on all modules, dispatching their
-    /// consensus items
-    async fn process_module_consensus_items(
+    async fn process_consensus_item(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        module_cis: &[(PeerId, fedimint_core::core::DynModuleConsensusItem)],
-        consensus_peers: &BTreeSet<PeerId>,
-    ) {
-        let _timing /* logs on drop */ = timing::TimeReporter::new("process_module_consensus_items");
-        let mut drop_peers = vec![];
-        let per_module_cis: HashMap<
-            ModuleInstanceId,
-            Vec<(PeerId, fedimint_core::core::DynModuleConsensusItem)>,
-        > = module_cis
-            .iter()
-            .cloned()
-            .into_group_map_by(|(_peer, mci)| mci.module_instance_id());
+        consensus_item: ConsensusItem,
+        peer_id: PeerId,
+    ) -> anyhow::Result<ConsensusDecision> {
+        match consensus_item {
+            ConsensusItem::Module(module_item) => {
+                let moduletx = &mut dbtx.with_module_prefix(module_item.module_instance_id());
 
-        for (module_key, module_cis) in per_module_cis {
-            let moduletx = &mut dbtx.with_module_prefix(module_key);
-            let mut module_drop_peers = self
-                .modules
-                .get_expect(module_key)
-                .begin_consensus_epoch(moduletx, module_cis, consensus_peers)
-                .await;
-            drop_peers.append(&mut module_drop_peers);
-        }
-
-        for peer in drop_peers {
-            dbtx.insert_entry(&DropPeerKey(peer), &()).await;
-        }
-    }
-
-    /// Applies all valid fedimint transactions to the database transaction
-    /// `dbtx` and returns a set of invalid transactions that were filtered
-    /// out
-    async fn process_transactions(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        epoch: u64,
-        transactions: &[(PeerId, Transaction)],
-    ) -> BTreeSet<TransactionId> {
-        let _timing /* logs on drop */ = timing::TimeReporter::new("process_transactions");
-        // Process transactions
-        let mut rejected_txs: BTreeSet<TransactionId> = BTreeSet::new();
-
-        let caches = self.build_verification_caches(transactions.iter().map(|(_, tx)| tx));
-        let mut processed_txs: HashSet<TransactionId> = HashSet::new();
-
-        for (_, transaction) in transactions.iter().cloned() {
-            let txid: TransactionId = transaction.tx_hash();
-            if !processed_txs.insert(txid) {
-                // Avoid processing duplicate tx from different peers
-                continue;
+                self.modules
+                    .get_expect(module_item.module_instance_id())
+                    .process_consensus_item(moduletx, module_item, peer_id)
+                    .await
             }
-
-            let span = info_span!("Processing transaction");
-            async {
-                trace!(?transaction);
-
-                dbtx.set_tx_savepoint()
+            ConsensusItem::Transaction(transaction) => {
+                if dbtx
+                    .get_value(&AcceptedTransactionKey(transaction.tx_hash()))
                     .await
-                    .expect("Error setting transaction savepoint");
-                // TODO: use borrowed transaction
-                match self
-                    .process_transaction(dbtx, transaction.clone(), &caches)
-                    .await
+                    .is_some()
                 {
-                    Ok(()) => {
-                        dbtx.insert_entry(
-                            &AcceptedTransactionKey(txid),
-                            &AcceptedTransaction { epoch, transaction },
+                    bail!("The transaction is already accepted");
+                }
+
+                let txid = transaction.tx_hash();
+                let caches = self.build_verification_caches(transaction.clone());
+
+                let mut funding_verifier = FundingVerifier::default();
+                let mut public_keys = Vec::new();
+
+                for input in transaction.inputs.iter() {
+                    let meta = self
+                        .modules
+                        .get_expect(input.module_instance_id())
+                        .apply_input(
+                            &mut dbtx.with_module_prefix(input.module_instance_id()),
+                            input,
+                            caches.get_cache(input.module_instance_id()),
                         )
-                        .await;
-                    }
-                    Err(error) => {
-                        rejected_txs.insert(txid);
-                        dbtx.rollback_tx_to_savepoint()
-                            .await
-                            .expect("Error rolling back to transaction savepoint");
-                        warn!(target: LOG_CONSENSUS, %error, "Transaction failed");
-                        // do not insert a RejectedTransactionKey because there must already be
-                        // AcceptedTransactionKey
-                        if !matches!(error, TransactionReplayError(_)) {
-                            dbtx.insert_entry(&RejectedTransactionKey(txid), &format!("{error:?}"))
-                                .await;
-                        }
-                    }
+                        .await?;
+
+                    funding_verifier.add_input(meta.amount);
+                    public_keys.push(meta.pub_keys);
                 }
+
+                transaction.validate_signature(public_keys.into_iter().flatten())?;
+
+                for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
+                    let amount = self
+                        .modules
+                        .get_expect(output.module_instance_id())
+                        .apply_output(
+                            &mut dbtx.with_module_prefix(output.module_instance_id()),
+                            output,
+                            OutPoint { txid, out_idx },
+                        )
+                        .await?;
+
+                    funding_verifier.add_output(amount);
+                }
+
+                funding_verifier.verify_funding()?;
+
+                let modules_ids = transaction
+                    .outputs
+                    .iter()
+                    .map(|output| output.module_instance_id())
+                    .collect::<Vec<_>>();
+
+                dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
+                    .await;
+
+                Ok(ConsensusDecision::Accept)
             }
-            .instrument(span)
-            .await;
-        }
+            ConsensusItem::ClientConfigSignatureShare(signature_share) => {
+                if dbtx
+                    .get_isolated()
+                    .get_value(&ClientConfigSignatureKey)
+                    .await
+                    .is_some()
+                {
+                    // Client config is already signed
+                    return Ok(ConsensusDecision::Discard);
+                }
 
-        rejected_txs
-    }
+                if dbtx
+                    .get_value(&ClientConfigSignatureShareKey(peer_id))
+                    .await
+                    .is_some()
+                {
+                    // Already received a valid signature share for this peer
+                    return Ok(ConsensusDecision::Discard);
+                }
 
-    /// Saves the epoch history, calls `end_consensus_epoch` on all modules and
-    /// bans misbehaving peers
-    async fn finalize_process_epoch(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        outcome: HbbftConsensusOutcome,
-        rejected_txs: BTreeSet<TransactionId>,
-        consensus_peers: &BTreeSet<PeerId>,
-    ) -> SignedEpochOutcome {
-        let _timing /* logs on drop */ = timing::TimeReporter::new("finalize_process_epoch");
-        let mut drop_peers = Vec::<PeerId>::new();
+                let pks = self.cfg.consensus.auth_pk_set.clone();
 
-        self.save_client_config_sig(dbtx, &outcome, &mut drop_peers)
-            .await;
+                if !pks
+                    .public_key_share(peer_id.to_usize())
+                    .verify(&signature_share.0, self.api.client_cfg.consensus_hash())
+                {
+                    bail!("Client config signature share is invalid");
+                }
 
-        let epoch_history = self
-            .save_epoch_history(outcome.clone(), dbtx, &mut drop_peers, rejected_txs)
-            .await;
+                // we have received the first valid signature share for this peer
+                dbtx.insert_new_entry(&ClientConfigSignatureShareKey(peer_id), &signature_share)
+                    .await;
 
-        for (module_key, _, module) in self.modules.iter_modules() {
-            let module_drop_peers = module
-                .end_consensus_epoch(consensus_peers, &mut dbtx.with_module_prefix(module_key))
+                // collect all valid signature shares received previously
+                let signature_shares = dbtx
+                    .find_by_prefix(&ClientConfigSignatureSharePrefix)
+                    .await
+                    .map(|(key, share)| (key.0.to_usize(), share.0))
+                    .collect::<Vec<_>>()
+                    .await;
+
+                if signature_shares.len() <= pks.threshold() {
+                    return Ok(ConsensusDecision::Accept);
+                }
+
+                let threshold_signature = pks
+                    .combine_signatures(signature_shares.iter().map(|(peer, share)| (peer, share)))
+                    .expect("All signature shares are valid");
+
+                dbtx.remove_by_prefix(&ClientConfigSignatureSharePrefix)
+                    .await;
+
+                dbtx.insert_entry(
+                    &ClientConfigSignatureKey,
+                    &SerdeSignature(threshold_signature),
+                )
                 .await;
-            drop_peers.extend(module_drop_peers);
-        }
 
-        for peer in drop_peers {
-            dbtx.insert_entry(&DropPeerKey(peer), &()).await;
-        }
-
-        epoch_history
-    }
-
-    /// If the client config hash isn't already signed, aggregate signature
-    /// shares from peers dropping those that don't contribute.
-    async fn save_client_config_sig(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        outcome: &HbbftConsensusOutcome,
-        drop_peers: &mut Vec<PeerId>,
-    ) {
-        let sig = dbtx
-            .get_isolated()
-            .get_value(&ClientConfigSignatureKey)
-            .await;
-
-        if sig.is_none() {
-            let _timing /* logs on drop */ = timing::TimeReporter::new("combine and verify client config sigs");
-            let client_hash = self.api.client_cfg.consensus_hash();
-            let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
-            let pks = self.cfg.consensus.auth_pk_set.clone();
-
-            let shares: BTreeMap<_, _> = outcome
-                .contributions
-                .iter()
-                .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
-                .filter_map(|(peer, item)| match item {
-                    ConsensusItem::ClientConfigSignatureShare(sig) => Some((peer, sig.clone())),
-                    _ => None,
-                })
-                .collect();
-
-            match combine_sigs(&pks, &shares, &client_hash) {
-                Ok(final_sig) => {
-                    assert!(pks.public_key().verify(&final_sig.0, client_hash));
-                    dbtx.insert_entry(&ClientConfigSignatureKey, &final_sig)
-                        .await;
-                }
-                Err(contributing_peers) => {
-                    warn!(
-                        target: LOG_CONSENSUS,
-                        "Did not receive enough valid client config sig shares"
-                    );
-                    for peer in peers {
-                        if !contributing_peers.contains(&peer) {
-                            drop_peers.push(peer);
-                        }
-                    }
-                }
+                Ok(ConsensusDecision::Accept)
             }
-        }
-    }
+            ConsensusItem::ConsensusUpgrade(..) => {
+                let mut peers = dbtx
+                    .get_value(&ConsensusUpgradeKey)
+                    .await
+                    .unwrap_or_default();
 
-    /// Adds any new upgrade items to the set of signaling peers
-    async fn process_upgrade_items(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        upgrade_signals: &[(PeerId, ConsensusUpgrade)],
-    ) {
-        if !upgrade_signals.is_empty() {
-            let _timing /* logs on drop */ = timing::TimeReporter::new("process_upgrade_items");
-            let maybe_exists = dbtx.get_value(&ConsensusUpgradeKey).await;
-            let mut peers = maybe_exists.unwrap_or_default();
-            peers.extend(upgrade_signals.iter().map(|(peer, _)| peer));
-            dbtx.insert_entry(&ConsensusUpgradeKey, &peers).await;
+                if !peers.insert(peer_id) {
+                    // Already received an upgrade signal by this peer
+                    return Ok(ConsensusDecision::Discard);
+                }
+
+                dbtx.insert_entry(&ConsensusUpgradeKey, &peers).await;
+
+                Ok(ConsensusDecision::Accept)
+            }
+            // these items are handled in save_epoch_history
+            ConsensusItem::EpochOutcomeSignatureShare(..) => Ok(ConsensusDecision::Accept),
         }
     }
 
@@ -479,13 +440,6 @@ impl FedimintConsensus {
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
         let mut dbtx = self.db.begin_transaction().await;
 
-        let drop_peers = dbtx
-            .find_by_prefix(&DropPeerKeyPrefix)
-            .await
-            .map(|(key, _)| key.0)
-            .collect()
-            .await;
-
         let mut items: Vec<ConsensusItem> = self
             .api_event_cache
             .iter()
@@ -539,6 +493,8 @@ impl FedimintConsensus {
             items.push(item);
         }
 
+        let drop_peers = vec![];
+
         ConsensusProposal {
             items,
             drop_peers,
@@ -546,72 +502,11 @@ impl FedimintConsensus {
         }
     }
 
-    async fn process_transaction<'a>(
-        &self,
-        dbtx: &mut DatabaseTransaction<'a>,
-        transaction: Transaction,
-        caches: &VerificationCaches,
-    ) -> Result<(), TransactionSubmissionError> {
-        let mut funding_verifier = FundingVerifier::default();
-
-        let tx_hash = transaction.tx_hash();
-
-        if dbtx
-            .get_value(&AcceptedTransactionKey(tx_hash))
-            .await
-            .is_some()
-        {
-            return Err(TransactionReplayError(tx_hash));
-        }
-
-        let mut pub_keys = Vec::new();
-        for input in transaction.inputs.iter() {
-            let meta = self
-                .modules
-                .get_expect(input.module_instance_id())
-                .apply_input(
-                    &mut dbtx.with_module_prefix(input.module_instance_id()),
-                    input,
-                    caches.get_cache(input.module_instance_id()),
-                )
-                .await
-                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
-            pub_keys.push(meta.pub_keys);
-            funding_verifier.add_input(meta.amount);
-        }
-        transaction.validate_signature(pub_keys.into_iter().flatten())?;
-
-        for (idx, output) in transaction.outputs.into_iter().enumerate() {
-            let out_point = OutPoint {
-                txid: tx_hash,
-                out_idx: idx as u64,
-            };
-            let amount = self
-                .modules
-                .get_expect(output.module_instance_id())
-                .apply_output(
-                    &mut dbtx.with_module_prefix(output.module_instance_id()),
-                    &output,
-                    out_point,
-                )
-                .await
-                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
-            funding_verifier.add_output(amount);
-        }
-
-        funding_verifier.verify_funding()?;
-
-        Ok(())
-    }
-
-    fn build_verification_caches<'a>(
-        &self,
-        transactions: impl Iterator<Item = &'a Transaction> + Send,
-    ) -> VerificationCaches {
+    fn build_verification_caches(&self, transaction: Transaction) -> VerificationCaches {
         let _timing /* logs on drop */ = timing::TimeReporter::new("build_verification_caches");
-        let module_inputs = transactions
-            .flat_map(|tx| tx.inputs.iter())
-            .cloned()
+        let module_inputs = transaction
+            .inputs
+            .into_iter()
             .into_group_map_by(|input| input.module_instance_id());
 
         // TODO: should probably run in parallel, but currently only the mint does
@@ -672,16 +567,4 @@ impl Default for FundingVerifier {
             fee_amount: Amount::ZERO,
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum TransactionSubmissionError {
-    #[error("High level transaction error: {0}")]
-    TransactionError(#[from] TransactionError),
-    #[error("Module input or output error in tx {0}: {1}")]
-    ModuleError(TransactionId, ModuleError),
-    #[error("Transaction channel was closed")]
-    TxChannelError,
-    #[error("Transaction was already successfully processed: {0}")]
-    TransactionReplayError(TransactionId),
 }
