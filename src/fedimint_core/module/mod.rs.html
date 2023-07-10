@@ -1490,13 +1490,13 @@
 
 <span class="kw">impl </span>AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static</span>)&gt; <span class="kw">for </span>DynCommonModuleGen {
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static</span>)) {
-        <span class="self">self</span>.<span class="number">0</span>.as_ref()
+        <span class="self">self</span>.inner.as_ref()
     }
 }
 
 <span class="kw">impl </span>DynCommonModuleGen {
     <span class="kw">pub fn </span>from_inner(inner: Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static</span>)&gt;) -&gt; <span class="self">Self </span>{
-        DynCommonModuleGen(inner)
+        DynCommonModuleGen { inner }
     }
 }
 
@@ -1507,7 +1507,7 @@
 
 <span class="kw">impl </span>AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>&gt; <span class="kw">for </span>DynServerModuleGen {
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>) {
-        <span class="self">self</span>.<span class="number">0</span>.as_common()
+        <span class="self">self</span>.inner.as_common()
     }
 }
 <span class="kw">pub trait </span>CommonModuleGen: Debug + Sized {

@@ -668,8 +668,8 @@
                 <span class="kw-2">&amp;</span><span class="self">self</span>,
                 writer: <span class="kw-2">&amp;mut </span>W,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-                <span class="self">self</span>.<span class="number">1</span>.consensus_encode(writer)<span class="question-mark">?</span>;
-                <span class="self">self</span>.<span class="number">0</span>.consensus_encode_dyn(writer)
+                <span class="self">self</span>.module_instance_id.consensus_encode(writer)<span class="question-mark">?</span>;
+                <span class="self">self</span>.inner.consensus_encode_dyn(writer)
             }
         }
 
@@ -731,8 +731,8 @@
             <span class="kw">where
                 </span>H: std::hash::Hasher
             {
-                <span class="self">self</span>.<span class="number">1</span>.hash(state);
-                <span class="self">self</span>.<span class="number">0</span>.dyn_hash().hash(state);
+                <span class="self">self</span>.module_instance_id.hash(state);
+                <span class="self">self</span>.inner.dyn_hash().hash(state);
             }
         }
     };
@@ -877,7 +877,7 @@
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>PartialEq <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
-                <span class="kw">if </span><span class="self">self</span>.<span class="number">1 </span>!= other.<span class="number">1 </span>{
+                <span class="kw">if </span><span class="self">self</span>.module_instance_id != other.module_instance_id {
                     <span class="kw">return </span><span class="bool-val">false</span>;
                 }
                 <span class="self">self</span>.erased_eq_no_instance_id(other)
@@ -894,7 +894,7 @@
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-                std::fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+                std::fmt::Display::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.inner, f)
             }
         }
     };
@@ -904,7 +904,7 @@
     (<span class="macro-nonterminal">$newtype</span>:ty) =&gt; {
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span><span class="macro-nonterminal">$newtype </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-                f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="self">self</span>.<span class="number">1</span>, <span class="self">self</span>.<span class="number">0</span>))
+                f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{}-{}&quot;</span>, <span class="self">self</span>.module_instance_id, <span class="self">self</span>.inner))
             }
         }
     };

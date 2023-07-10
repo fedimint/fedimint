@@ -1781,7 +1781,7 @@
     </span>T: IGlobalClientContext,
 {
     <span class="kw">fn </span>from(inner: Arc&lt;T&gt;) -&gt; <span class="self">Self </span>{
-        DynGlobalClientContext(inner)
+        DynGlobalClientContext { inner }
     }
 }
 

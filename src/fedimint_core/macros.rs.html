@@ -261,6 +261,9 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Define &quot;dyn newtype&quot; (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
@@ -351,14 +354,14 @@
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
-        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>(<span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt;);
+        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name </span>{ inner: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt; }
 
         <span class="kw">impl </span><span class="macro-nonterminal">std::ops::Deref </span><span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>);
 
             <span class="kw">fn </span><span class="macro-nonterminal">deref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-                <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
-            </span>}
+                <span class="kw-2">&amp;*</span><span class="self">self</span>.inner
+            }
 
         }
 
@@ -367,13 +370,13 @@
             </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">&#39;static</span>,
         {
             <span class="kw">fn </span>from(i: I) -&gt; <span class="self">Self </span>{
-                <span class="self">Self</span>(<span class="macro-nonterminal">$container::new</span>(i))
+                <span class="self">Self </span>{ inner: <span class="macro-nonterminal">$container::new</span>(i) }
             }
         }
 
         <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-                std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+                std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.inner, f)
             }
         }
     };
@@ -381,14 +384,14 @@
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
-        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;(<span class="macro-nonterminal">$container</span>&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; + Send + <span class="macro-nonterminal">$lifetime</span>&gt;);
+        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; { inner: <span class="macro-nonterminal">$container</span>&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; + Send + <span class="macro-nonterminal">$lifetime</span>&gt; }
 
         <span class="kw">impl</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; std::ops::Deref <span class="kw">for </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; {
             <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; + <span class="macro-nonterminal">$lifetime</span>);
 
             <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-                <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
-            </span>}
+                <span class="kw-2">&amp;*</span><span class="self">self</span>.inner
+            }
         }
 
         <span class="kw">impl</span>&lt;<span class="macro-nonterminal">$lifetime</span>, I&gt; From&lt;I&gt; <span class="kw">for </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;
@@ -408,37 +411,40 @@
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
-        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>(<span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt;, <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>);
+        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name </span>{
+            module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>,
+            inner: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt;,
+        }
 
-        <span class="kw">impl </span>std::ops::Deref <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
+        <span class="kw">impl </span><span class="macro-nonterminal">std::ops::Deref </span><span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>);
 
             <span class="kw">fn </span><span class="macro-nonterminal">deref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-                <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
-            </span>}
+                <span class="kw-2">&amp;*</span><span class="self">self</span>.inner
+            }
 
         }
 
         <span class="kw">impl </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">pub fn </span>module_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ::fedimint_core::core::ModuleInstanceId {
-                <span class="self">self</span>.<span class="number">1
-            </span>}
+                <span class="self">self</span>.module_instance_id
+            }
 
             <span class="kw">pub fn </span>from_typed&lt;I&gt;(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -&gt; <span class="self">Self
             </span><span class="kw">where
                 </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">&#39;static </span>{
 
-                <span class="self">Self</span>(<span class="macro-nonterminal">$container::new</span>(typed), module_instance_id)
+                <span class="self">Self </span>{ inner: <span class="macro-nonterminal">$container::new</span>(typed), module_instance_id }
             }
 
             <span class="kw">pub fn </span>from_parts(module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>, dynbox: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>)&gt;) -&gt; <span class="macro-nonterminal">Self </span>{
-                <span class="self">Self</span>(dynbox, module_instance_id)
+                <span class="self">Self </span>{ inner: dynbox, module_instance_id }
             }
         }
 
         <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-                std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+                std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.inner, f)
             }
         }
     };
@@ -446,7 +452,7 @@
         <span class="macro-nonterminal">$vis</span>:vis <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(<span class="macro-nonterminal">$container</span>:ident&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
     ) =&gt; {
         $(<span class="attr">#[<span class="macro-nonterminal">$outer</span>]</span>)*
-        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;(<span class="macro-nonterminal">$container</span>&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; + Send + <span class="macro-nonterminal">$lifetime</span>&gt;, ModuleInstanceId);
+        <span class="macro-nonterminal">$vis </span><span class="kw">struct </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt;{ inner: <span class="macro-nonterminal">$container</span>&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; + Send + <span class="macro-nonterminal">$lifetime</span>&gt;, module_instance_id: ModuleInstanceId }
 
         <span class="kw">impl </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">pub fn </span>module_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ::fedimint_core::core::ModuleInstanceId {
@@ -457,7 +463,7 @@
             </span><span class="kw">where
                 </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">&#39;static </span>{
 
-                <span class="self">Self</span>(<span class="macro-nonterminal">$container::new</span>(typed), module_instance_id)
+                <span class="self">Self </span>{ inner: <span class="macro-nonterminal">$container::new</span>(typed), module_instance_id }
             }
         }
 
@@ -465,8 +471,8 @@
             <span class="kw">type </span>Target = <span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">&#39;static</span>);
 
             <span class="kw">fn </span><span class="macro-nonterminal">deref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-                <span class="kw-2">&amp;*</span><span class="self">self</span>.<span class="number">0
-            </span>}
+                <span class="kw-2">&amp;*</span><span class="self">self</span>.inner
+            }
         }
     };
 }
@@ -476,15 +482,15 @@
     (<span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;) =&gt; {
         <span class="kw">impl</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; std::ops::DerefMut <span class="kw">for </span><span class="macro-nonterminal">$name</span>&lt;<span class="macro-nonterminal">$lifetime</span>&gt; {
             <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-                <span class="kw-2">&amp;mut *</span><span class="self">self</span>.<span class="number">0
-            </span>}
+                <span class="kw-2">&amp;mut *</span><span class="self">self</span>.inner
+            }
         }
     };
     (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
         <span class="kw">impl </span>std::ops::DerefMut <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>&lt;<span class="self">Self </span><span class="kw">as </span>std::ops::Deref&gt;::Target {
-                <span class="kw-2">&amp;mut *</span><span class="self">self</span>.<span class="number">0
-            </span>}
+                <span class="kw-2">&amp;mut *</span><span class="self">self</span>.inner
+            }
         }
     };
 }
@@ -519,7 +525,7 @@
     (<span class="macro-nonterminal">$name</span>:ident) =&gt; {
         <span class="kw">impl </span>Clone <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
-                <span class="self">self</span>.<span class="number">0</span>.clone(<span class="self">self</span>.<span class="number">1</span>)
+                <span class="self">self</span>.inner.clone(<span class="self">self</span>.module_instance_id)
             }
         }
     };
