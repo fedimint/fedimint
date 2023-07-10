@@ -8,7 +8,7 @@ use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::bitcoin::Txid;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
-use devimint::federation::{run_config_gen, Federation, Fedimintd};
+use devimint::federation::{Federation, Fedimintd};
 use devimint::util::{poll, poll_value, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
@@ -1014,11 +1014,25 @@ async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result
 async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let fed_size = process_mgr.globals.FM_FED_SIZE;
-    let members = run_config_gen(process_mgr, fed_size, false).await?;
     // don't drop fedimintds
-    let _fedimintds = futures::future::try_join_all(members.into_iter().map(|(peer, vars)| {
+    let _fedimintds = futures::future::try_join_all((0..fed_size).into_iter().map(|peer| {
         let bitcoind = bitcoind.clone();
         async move {
+            let peer_port = 10000 + 8137 + peer * 2;
+            let api_port = peer_port + 1;
+            let metrics_port = 3510 + peer;
+
+            let vars = vars::Fedimintd {
+                FM_BIND_P2P: format!("127.0.0.1:{peer_port}"),
+                FM_P2P_URL: format!("fedimint://127.0.0.1:{peer_port}"),
+                FM_BIND_API: format!("127.0.0.1:{api_port}"),
+                FM_API_URL: format!("ws://127.0.0.1:{api_port}"),
+                FM_DATA_DIR: process_mgr
+                    .globals
+                    .FM_DATA_DIR
+                    .join(format!("server-{peer}")),
+                FM_BIND_METRICS_API: format!("127.0.0.1:{metrics_port}"),
+            };
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
             let server_addr = &vars.FM_BIND_API;
 
