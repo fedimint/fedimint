@@ -10,12 +10,11 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::lnrpc::failure::FailureCode;
-use tonic_lnd::lnrpc::fee_limit::Limit;
-use tonic_lnd::lnrpc::{
-    ChanInfoRequest, FeeLimit, GetInfoRequest, ListChannelsRequest, SendRequest,
-};
+use tonic_lnd::lnrpc::payment::PaymentStatus;
+use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::routerrpc::{
-    CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, TrackPaymentRequest,
+    CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
+    TrackPaymentRequest,
 };
 use tonic_lnd::tonic::Code;
 use tonic_lnd::{connect, LndClient};
@@ -31,6 +30,8 @@ use crate::lnrpc_client::{ILnRpcClient, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
 use crate::GatewayError;
 
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
+
+const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
 
 pub struct GatewayLndClient {
     /// LND client
@@ -242,16 +243,14 @@ impl GatewayLndClient {
                     // Break if we got a response back from the LND node that indicates the payment
                     // hash was not found.
                     if e.code() == Code::NotFound {
-                        break;
+                        return Ok(None);
                     }
 
-                    warn!("Could not get the status of payment {payment_hash:?}. Trying again in 5 seconds");
+                    warn!("Could not get the status of payment {payment_hash:?} Error: {e:?}. Trying again in 5 seconds");
                     sleep(Duration::from_secs(5)).await;
                 }
             }
         }
-
-        Ok(None)
     }
 }
 
@@ -384,7 +383,7 @@ impl ILnRpcClient for GatewayLndClient {
         .await?;
 
         // If the payment exists, that means we've already tried to pay the invoice
-        let preimage = if let Some(preimage) = self
+        let preimage: Vec<u8> = if let Some(preimage) = self
             .lookup_payment(payment_hash.clone(), &mut client)
             .await?
         {
@@ -394,31 +393,46 @@ impl ILnRpcClient for GatewayLndClient {
             // LND API allows fee limits in the `i64` range, but we use `u64` for
             // max_fee_msat. This means we can only set an enforceable fee limit
             // between 0 and i64::MAX
-            let fee_cap: i64 = max_fee_msat
+            let fee_limit_msat: i64 = max_fee_msat
                 .try_into()
                 .map_err(|_| anyhow::anyhow!("max_fee_msat exceeds valid LND fee limit ranges"))?;
 
-            let send_response = client
-                .lightning()
-                .send_payment_sync(SendRequest {
-                    payment_request: invoice.to_string(),
-                    fee_limit: Some(FeeLimit {
-                        limit: Some(Limit::FixedMsat(fee_cap)),
-                    }),
+            let payments = client
+                .router()
+                .send_payment_v2(SendPaymentRequest {
+                    payment_request: invoice,
+                    allow_self_payment: true,
+                    no_inflight_updates: true,
+                    timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
+                    fee_limit_msat,
                     ..Default::default()
                 })
                 .await
-                .map_err(|e| anyhow::anyhow!(format!("LND error: {e:?}")))?
-                .into_inner();
+                .map_err(|e| {
+                    GatewayError::Other(anyhow!("Failed to make outgoing payment: {e:?}"))
+                })?;
 
-            if send_response.payment_preimage.is_empty() {
-                return Err(GatewayError::LnRpcError(tonic::Status::new(
-                    tonic::Code::Internal,
-                    "LND did not return a preimage",
-                )));
-            };
-
-            send_response.payment_preimage
+            match payments
+                .into_inner()
+                .message()
+                .await
+                .map_err(|_| GatewayError::ClientNgError)?
+            {
+                Some(payment) if payment.status() == PaymentStatus::Succeeded => {
+                    bitcoin_hashes::hex::FromHex::from_hex(payment.payment_preimage.as_str())
+                        .map_err(|_| anyhow::anyhow!("Failed to convert preimage"))?
+                }
+                Some(payment) => {
+                    return Err(GatewayError::Other(anyhow!(
+                        "LND failed to complete payment: {payment:?}"
+                    )));
+                }
+                _ => {
+                    return Err(GatewayError::Other(anyhow!(
+                        "Failed to get payment status for payment_hash {payment_hash:?}"
+                    )));
+                }
+            }
         };
 
         return Ok(PayInvoiceResponse { preimage });
