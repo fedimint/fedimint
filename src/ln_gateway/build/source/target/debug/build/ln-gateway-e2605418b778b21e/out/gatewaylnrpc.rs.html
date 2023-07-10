@@ -646,8 +646,8 @@
     </span><span class="kw">pub </span>invoice: ::prost::alloc::string::String,
     <span class="attr">#[prost(uint64, tag = <span class="string">&quot;2&quot;</span>)]
     </span><span class="kw">pub </span>max_delay: u64,
-    <span class="attr">#[prost(double, tag = <span class="string">&quot;3&quot;</span>)]
-    </span><span class="kw">pub </span>max_fee_percent: f64,
+    <span class="attr">#[prost(uint64, tag = <span class="string">&quot;3&quot;</span>)]
+    </span><span class="kw">pub </span>max_fee_msat: u64,
     <span class="attr">#[prost(bytes = <span class="string">&quot;vec&quot;</span>, tag = <span class="string">&quot;4&quot;</span>)]
     </span><span class="kw">pub </span>payment_hash: ::prost::alloc::vec::Vec&lt;u8&gt;,
 }

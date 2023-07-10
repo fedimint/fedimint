@@ -461,6 +461,26 @@
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -473,7 +493,10 @@
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic::Status;
 <span class="kw">use </span>tonic_lnd::lnrpc::failure::FailureCode;
-<span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, SendRequest};
+<span class="kw">use </span>tonic_lnd::lnrpc::fee_limit::Limit;
+<span class="kw">use </span>tonic_lnd::lnrpc::{
+    ChanInfoRequest, FeeLimit, GetInfoRequest, ListChannelsRequest, SendRequest,
+};
 <span class="kw">use </span>tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, TrackPaymentRequest,
 };
@@ -828,7 +851,14 @@
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse { route_hints })
     }
 
-    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="kw">crate</span>::Result&lt;PayInvoiceResponse&gt; {
+    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, request: PayInvoiceRequest) -&gt; <span class="kw">crate</span>::Result&lt;PayInvoiceResponse&gt; {
+        <span class="kw">let </span>PayInvoiceRequest {
+            invoice,
+            max_fee_msat,
+            payment_hash,
+            ..
+        } = request;
+
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
@@ -838,16 +868,26 @@
 
         <span class="comment">// If the payment exists, that means we&#39;ve already tried to pay the invoice
         </span><span class="kw">let </span>preimage = <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = <span class="self">self
-            </span>.lookup_payment(invoice.payment_hash.clone(), <span class="kw-2">&amp;mut </span>client)
+            </span>.lookup_payment(payment_hash.clone(), <span class="kw-2">&amp;mut </span>client)
             .<span class="kw">await</span><span class="question-mark">?
         </span>{
             bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str())
                 .map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to convert preimage&quot;</span>))<span class="question-mark">?
         </span>} <span class="kw">else </span>{
+            <span class="comment">// LND API allows fee limits in the `i64` range, but we use `u64` for
+            // max_fee_msat. This means we can only set an enforceable fee limit
+            // between 0 and i64::MAX
+            </span><span class="kw">let </span>fee_cap: i64 = max_fee_msat
+                .try_into()
+                .map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;max_fee_msat exceeds valid LND fee limit ranges&quot;</span>))<span class="question-mark">?</span>;
+
             <span class="kw">let </span>send_response = client
                 .lightning()
                 .send_payment_sync(SendRequest {
-                    payment_request: invoice.invoice.to_string(),
+                    payment_request: invoice.to_string(),
+                    fee_limit: <span class="prelude-val">Some</span>(FeeLimit {
+                        limit: <span class="prelude-val">Some</span>(Limit::FixedMsat(fee_cap)),
+                    }),
                     ..Default::default()
                 })
                 .<span class="kw">await

@@ -1079,7 +1079,7 @@
         <span class="kw">let </span>PayInvoiceRequest {
             invoice,
             max_delay,
-            max_fee_percent,
+            max_fee_msat,
             payment_hash: <span class="kw">_</span>,
         } = request.into_inner();
 
@@ -1092,13 +1092,13 @@
                 amount_msat: <span class="prelude-val">None</span>,
                 label: <span class="prelude-val">None</span>,
                 riskfactor: <span class="prelude-val">None</span>,
-                maxfeepercent: <span class="prelude-val">Some</span>(max_fee_percent),
                 retry_for: <span class="prelude-val">None</span>,
                 maxdelay: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u16),
                 exemptfee: <span class="prelude-val">None</span>,
                 localinvreqid: <span class="prelude-val">None</span>,
                 exclude: <span class="prelude-val">None</span>,
-                maxfee: <span class="prelude-val">None</span>,
+                maxfee: <span class="prelude-val">Some</span>(cln_rpc::primitives::Amount::from_msat(max_fee_msat)),
+                maxfeepercent: <span class="prelude-val">None</span>,
                 description: <span class="prelude-val">None</span>,
             }))
             .<span class="kw">await
