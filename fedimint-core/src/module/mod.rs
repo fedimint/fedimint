@@ -497,13 +497,13 @@ dyn_newtype_define!(
 
 impl AsRef<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)> for DynCommonModuleGen {
     fn as_ref(&self) -> &(maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)) {
-        self.0.as_ref()
+        self.inner.as_ref()
     }
 }
 
 impl DynCommonModuleGen {
     pub fn from_inner(inner: Arc<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)>) -> Self {
-        DynCommonModuleGen(inner)
+        DynCommonModuleGen { inner }
     }
 }
 
@@ -514,7 +514,7 @@ dyn_newtype_define!(
 
 impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynServerModuleGen {
     fn as_ref(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
-        self.0.as_common()
+        self.inner.as_common()
     }
 }
 pub trait CommonModuleGen: Debug + Sized {

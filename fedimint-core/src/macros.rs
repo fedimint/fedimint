@@ -88,13 +88,13 @@ macro_rules! _dyn_newtype_define_inner {
         $vis:vis $name:ident($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
-        $vis struct $name($container<$crate::maybe_add_send_sync!(dyn $trait + 'static)>);
+        $vis struct $name { inner: $container<$crate::maybe_add_send_sync!(dyn $trait + 'static)> }
 
         impl std::ops::Deref for $name {
             type Target = $crate::maybe_add_send_sync!(dyn $trait + 'static);
 
             fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-                &*self.0
+                &*self.inner
             }
 
         }
@@ -104,13 +104,13 @@ macro_rules! _dyn_newtype_define_inner {
             I: $trait + $crate::task::MaybeSend + $crate::task::MaybeSync + 'static,
         {
             fn from(i: I) -> Self {
-                Self($container::new(i))
+                Self { inner: $container::new(i) }
             }
         }
 
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Debug::fmt(&self.0, f)
+                std::fmt::Debug::fmt(&self.inner, f)
             }
         }
     };
@@ -118,13 +118,13 @@ macro_rules! _dyn_newtype_define_inner {
         $vis:vis $name:ident<$lifetime:lifetime>($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
-        $vis struct $name<$lifetime>($container<dyn $trait<$lifetime> + Send + $lifetime>);
+        $vis struct $name<$lifetime> { inner: $container<dyn $trait<$lifetime> + Send + $lifetime> }
 
         impl<$lifetime> std::ops::Deref for $name<$lifetime> {
             type Target = $crate::maybe_add_send!(dyn $trait<$lifetime> + $lifetime);
 
             fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-                &*self.0
+                &*self.inner
             }
         }
 
@@ -145,37 +145,40 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
         $vis:vis $name:ident($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
-        $vis struct $name($container<$crate::maybe_add_send_sync!(dyn $trait + 'static)>, $crate::core::ModuleInstanceId);
+        $vis struct $name {
+            module_instance_id: $crate::core::ModuleInstanceId,
+            inner: $container<$crate::maybe_add_send_sync!(dyn $trait + 'static)>,
+        }
 
         impl std::ops::Deref for $name {
             type Target = $crate::maybe_add_send_sync!(dyn $trait + 'static);
 
             fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-                &*self.0
+                &*self.inner
             }
 
         }
 
         impl $name {
             pub fn module_instance_id(&self) -> ::fedimint_core::core::ModuleInstanceId {
-                self.1
+                self.module_instance_id
             }
 
             pub fn from_typed<I>(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -> Self
             where
                 I: $trait + $crate::task::MaybeSend + $crate::task::MaybeSync + 'static {
 
-                Self($container::new(typed), module_instance_id)
+                Self { inner: $container::new(typed), module_instance_id }
             }
 
             pub fn from_parts(module_instance_id: $crate::core::ModuleInstanceId, dynbox: $container<$crate::maybe_add_send_sync!(dyn $trait + 'static)>) -> Self {
-                Self(dynbox, module_instance_id)
+                Self { inner: dynbox, module_instance_id }
             }
         }
 
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Debug::fmt(&self.0, f)
+                std::fmt::Debug::fmt(&self.inner, f)
             }
         }
     };
@@ -183,7 +186,7 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
         $vis:vis $name:ident<$lifetime:lifetime>($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
-        $vis struct $name<$lifetime>($container<dyn $trait<$lifetime> + Send + $lifetime>, ModuleInstanceId);
+        $vis struct $name<$lifetime>{ inner: $container<dyn $trait<$lifetime> + Send + $lifetime>, module_instance_id: ModuleInstanceId }
 
         impl $name {
             pub fn module_instance_id(&self) -> ::fedimint_core::core::ModuleInstanceId {
@@ -194,7 +197,7 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
             where
                 I: $trait + $crate::task::MaybeSend + $crate::task::MaybeSync + 'static {
 
-                Self($container::new(typed), module_instance_id)
+                Self { inner: $container::new(typed), module_instance_id }
             }
         }
 
@@ -202,7 +205,7 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
             type Target = $crate::maybe_add_send_sync!(dyn $trait + 'static);
 
             fn deref(&self) -> &<Self as std::ops::Deref>::Target {
-                &*self.0
+                &*self.inner
             }
         }
     };
@@ -213,14 +216,14 @@ macro_rules! _dyn_newtype_impl_deref_mut {
     ($name:ident<$lifetime:lifetime>) => {
         impl<$lifetime> std::ops::DerefMut for $name<$lifetime> {
             fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
-                &mut *self.0
+                &mut *self.inner
             }
         }
     };
     ($name:ident) => {
         impl std::ops::DerefMut for $name {
             fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
-                &mut *self.0
+                &mut *self.inner
             }
         }
     };
@@ -256,7 +259,7 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id {
     ($name:ident) => {
         impl Clone for $name {
             fn clone(&self) -> Self {
-                self.0.clone(self.1)
+                self.inner.clone(self.module_instance_id)
             }
         }
     };
