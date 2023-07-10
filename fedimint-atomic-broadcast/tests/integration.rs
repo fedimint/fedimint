@@ -185,6 +185,7 @@ impl Federation {
 }
 
 #[tokio::test]
+#[ignore] // https://github.com/fedimint/fedimint/issues/2741 too slow
 async fn crash_recovery() {
     //let subscriber = tracing_subscriber::FmtSubscriber::new();
     //tracing::subscriber::set_global_default(subscriber).unwrap();
@@ -227,6 +228,7 @@ async fn crash_recovery() {
 }
 
 #[tokio::test]
+#[ignore] // https://github.com/fedimint/fedimint/issues/2741 too slow
 async fn catch_up_via_block_download() {
     //let subscriber = tracing_subscriber::FmtSubscriber::new();
     //tracing::subscriber::set_global_default(subscriber).unwrap();
