@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::format_err;
+use anyhow::{format_err, Context as _};
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -84,15 +84,9 @@ impl DummyClientExt for Client {
             .await?;
 
         // Wait for the output of the primary module
-        if self
-            .await_primary_module_output(op_id, OutPoint { txid, out_idx: 0 })
+        self.await_primary_module_output(op_id, OutPoint { txid, out_idx: 0 })
             .await
-            .is_err()
-        {
-            return Err(anyhow::anyhow!(
-                "Error waiting for the output of print_money"
-            ));
-        }
+            .context("Waiting for the output of print_money")?;
 
         Ok((op_id, OutPoint { txid, out_idx: 0 }))
     }
