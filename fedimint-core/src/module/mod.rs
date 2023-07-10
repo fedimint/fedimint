@@ -943,6 +943,10 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
         let mut reader = std::io::Cursor::new(&self.0);
         let module_instance =
             ModuleInstanceId::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
+
+        let _total_len =
+            u32::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())? as usize;
+
         // No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
         decoder.decode(
