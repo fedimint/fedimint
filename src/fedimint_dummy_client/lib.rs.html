@@ -348,16 +348,10 @@
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
 <a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::format_err;
+<span class="kw">use </span>anyhow::{format_err, Context <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
@@ -440,15 +434,9 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Wait for the output of the primary module
-        </span><span class="kw">if </span><span class="self">self
-            </span>.await_primary_module_output(op_id, OutPoint { txid, out_idx: <span class="number">0 </span>})
+        </span><span class="self">self</span>.await_primary_module_output(op_id, OutPoint { txid, out_idx: <span class="number">0 </span>})
             .<span class="kw">await
-            </span>.is_err()
-        {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Error waiting for the output of print_money&quot;
-            </span>));
-        }
+            </span>.context(<span class="string">&quot;Waiting for the output of print_money&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((op_id, OutPoint { txid, out_idx: <span class="number">0 </span>}))
     }
