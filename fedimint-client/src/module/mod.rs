@@ -410,7 +410,7 @@ dyn_newtype_define!(
 
 impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModule {
     fn as_ref(&self) -> &maybe_add_send_sync!(dyn IClientModule + 'static) {
-        self.0.as_ref()
+        self.inner.as_ref()
     }
 }
 

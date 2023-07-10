@@ -342,7 +342,7 @@ dyn_newtype_define! {
 
 impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
     fn as_ref(&self) -> &(dyn IGlobalFederationApi + 'static) {
-        self.0.as_ref()
+        self.inner.as_ref()
     }
 }
 

@@ -101,8 +101,8 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 &self,
                 writer: &mut W,
             ) -> Result<usize, std::io::Error> {
-                self.1.consensus_encode(writer)?;
-                self.0.consensus_encode_dyn(writer)
+                self.module_instance_id.consensus_encode(writer)?;
+                self.inner.consensus_encode_dyn(writer)
             }
         }
 
@@ -164,8 +164,8 @@ macro_rules! module_plugin_trait_define{
             where
                 H: std::hash::Hasher
             {
-                self.1.hash(state);
-                self.0.dyn_hash().hash(state);
+                self.module_instance_id.hash(state);
+                self.inner.dyn_hash().hash(state);
             }
         }
     };
@@ -310,7 +310,7 @@ macro_rules! newtype_impl_eq_passthrough_with_instance_id {
     ($newtype:ty) => {
         impl PartialEq for $newtype {
             fn eq(&self, other: &Self) -> bool {
-                if self.1 != other.1 {
+                if self.module_instance_id != other.module_instance_id {
                     return false;
                 }
                 self.erased_eq_no_instance_id(other)
@@ -327,7 +327,7 @@ macro_rules! newtype_impl_display_passthrough {
     ($newtype:ty) => {
         impl std::fmt::Display for $newtype {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Display::fmt(&self.0, f)
+                std::fmt::Display::fmt(&self.inner, f)
             }
         }
     };
@@ -337,7 +337,7 @@ macro_rules! newtype_impl_display_passthrough_with_instance_id {
     ($newtype:ty) => {
         impl std::fmt::Display for $newtype {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_fmt(format_args!("{}-{}", self.1, self.0))
+                f.write_fmt(format_args!("{}-{}", self.module_instance_id, self.inner))
             }
         }
     };

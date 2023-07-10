@@ -344,7 +344,7 @@ where
     T: IGlobalClientContext,
 {
     fn from(inner: Arc<T>) -> Self {
-        DynGlobalClientContext(inner)
+        DynGlobalClientContext { inner }
     }
 }
 
