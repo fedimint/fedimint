@@ -531,7 +531,7 @@
     <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, fed.server_gens.clone());
     <span class="kw">let </span><span class="kw-2">mut </span>fedimintd_envs = BTreeMap::new();
     <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>configs {
-        <span class="kw">let </span>bind_metrics_api = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, <span class="number">3000 </span>+ peer.to_usize());
+        <span class="kw">let </span>bind_metrics_api = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, <span class="number">3510 </span>+ peer.to_usize());
         <span class="kw">let </span>envs = vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="kw-2">&amp;</span>cfg, bind_metrics_api).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>password = cfg.private.api_auth.<span class="number">0</span>.clone();
         <span class="kw">let </span>data_dir = envs.FM_DATA_DIR.clone();
