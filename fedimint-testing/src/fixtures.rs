@@ -28,8 +28,7 @@ use crate::ln::LightningTest;
 /// A default timeout for things happening in tests
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Offset from the normal port by 30000 to avoid collisions
-static BASE_PORT: AtomicU16 = AtomicU16::new(38173);
+static BASE_PORT: AtomicU16 = AtomicU16::new(18173);
 
 /// A tool for easily writing fedimint integration tests
 pub struct Fixtures {
