@@ -571,6 +571,34 @@
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
 </pre><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 
 </span><span class="kw">use </span>std::collections::VecDeque;
@@ -913,12 +941,24 @@
         <span class="self">self</span>.inner.is_shutting_down.load(SeqCst)
     }
 
-    <span class="kw">pub async fn </span>on_shutdown(
+    <span class="doccomment">/// Run `f` on shutdown.
+    ///
+    /// If TaskGroup is already shuting down, run the function immediately.
+    </span><span class="kw">pub async fn </span>on_shutdown(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="comment">// f: FnOnce() -&gt; BoxFuture&lt;&#39;static, ()&gt; + Send + &#39;static
         </span>f: Box&lt;<span class="kw">dyn </span>FnOnce() -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, ()&gt; + Send + <span class="lifetime">&#39;static</span>&gt;,
     ) {
-        <span class="self">self</span>.inner.on_shutdown.lock().<span class="kw">await</span>.push(f)
+        <span class="comment">// NOTE: hold the lock to avoid race if shutdown happens immediately after
+        // checking here.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>on_shutdown = <span class="self">self</span>.inner.on_shutdown.lock().<span class="kw">await</span>;
+        <span class="kw">if </span><span class="self">self</span>.is_shutting_down() {
+            <span class="comment">// release lock before calling f.
+            </span>drop(on_shutdown);
+            f().<span class="kw">await</span>;
+        } <span class="kw">else </span>{
+            on_shutdown.push(f);
+        }
     }
 
     <span class="doccomment">/// Make a [`oneshot::Receiver`] that will fire on shutdown
@@ -1144,5 +1184,21 @@
 
 <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">impl</span>&lt;T&gt; MaybeSync <span class="kw">for </span>T {}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="attr">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>test_task_group() -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+        tg.spawn(<span class="string">&quot;shutdown waiter&quot;</span>, |handle| <span class="kw">async move </span>{
+            handle.make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await
+        </span>})
+        .<span class="kw">await</span>;
+        tg.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
