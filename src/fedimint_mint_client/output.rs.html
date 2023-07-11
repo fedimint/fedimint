@@ -381,6 +381,11 @@
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
@@ -521,10 +526,15 @@
     }
 
     <span class="kw">async fn </span>await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
-        global_context
-            .await_tx_rejected(common.operation_id, common.out_point.txid)
-            .<span class="kw">await</span>;
-    }
+        <span class="kw">if </span>global_context
+            .await_tx_accepted(common.operation_id, common.out_point.txid)
+            .<span class="kw">await
+            </span>.is_err()
+        {
+            <span class="kw">return</span>;
+        }
+        std::future::pending().<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>transition_tx_rejected&lt;<span class="lifetime">&#39;a</span>&gt;(
         old_state: MintOutputStateMachine,
