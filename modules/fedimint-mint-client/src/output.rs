@@ -138,9 +138,14 @@ impl MintOutputStatesCreated {
     }
 
     async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
-        global_context
-            .await_tx_rejected(common.operation_id, common.out_point.txid)
-            .await;
+        if global_context
+            .await_tx_accepted(common.operation_id, common.out_point.txid)
+            .await
+            .is_err()
+        {
+            return;
+        }
+        std::future::pending().await
     }
 
     async fn transition_tx_rejected<'a>(
