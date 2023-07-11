@@ -91,9 +91,24 @@
 <a href="#91" id="91">91</a>
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::marker::PhantomData;
 
+<span class="kw">use </span>fedimint_core::api::ApiVersionSet;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
@@ -111,6 +126,7 @@
     ClientSecret = <span class="number">0x29</span>,
     OperationLog = <span class="number">0x2c</span>,
     ChronologicalOperationLog = <span class="number">0x2d</span>,
+    CommonApiVersionCache = <span class="number">0x2e</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -183,6 +199,18 @@
 <span class="macro">impl_db_lookup!</span>(
     key = ChronologicalOperationLogKey,
     query_prefix = ChronologicalOperationLogKeyPrefix
+);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CachedApiVersionSetKey;
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CachedApiVersionSet(<span class="kw">pub </span>ApiVersionSet);
+
+<span class="macro">impl_db_record!</span>(
+    key = CachedApiVersionSetKey,
+    value = CachedApiVersionSet,
+    db_prefix = DbKeyPrefix::CommonApiVersionCache
 );
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

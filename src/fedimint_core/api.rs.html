@@ -1272,6 +1272,21 @@
 <a href="#1272" id="1272">1272</a>
 <a href="#1273" id="1273">1273</a>
 <a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1441,7 +1456,7 @@
 <span class="doccomment">/// Set of api versions for each component (core + modules)
 ///
 /// E.g. result of federated common api versions discovery.
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ApiVersionSet {
     <span class="kw">pub </span>core: ApiVersion,
     <span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ApiVersion&gt;,
@@ -1459,6 +1474,8 @@
         method: String,
         params: ApiRequestErased,
     ) -&gt; FederationResult&lt;FedRet&gt; {
+        <span class="kw">let </span>timeout = strategy.request_timeout();
+
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
         <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
@@ -1468,12 +1485,24 @@
 
         <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
             futures.push(Box::pin(<span class="kw">async </span>{
+                <span class="kw">let </span>request = <span class="kw">async </span>{
+                    <span class="self">self</span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
+                        .<span class="kw">await
+                        </span>.map(AbbreviateDebug)
+                };
+
+                <span class="kw">let </span>result = <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
+                    <span class="kw">match </span>fedimint_core::task::timeout(timeout, request).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(result) =&gt; result,
+                        <span class="prelude-val">Err</span>(_timeout) =&gt; <span class="prelude-val">Err</span>(JsonRpcError::RequestTimeout),
+                    }
+                } <span class="kw">else </span>{
+                    request.<span class="kw">await
+                </span>};
+
                 PeerResponse {
                     peer: <span class="kw-2">*</span>peer_id,
-                    result: <span class="self">self
-                        </span>.request_raw(<span class="kw-2">*</span>peer_id, <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
-                        .<span class="kw">await
-                        </span>.map(AbbreviateDebug),
+                    result,
                 }
             }));
         }
@@ -1897,10 +1926,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client_versions: <span class="kw-2">&amp;</span>SupportedApiVersionsSummary,
     ) -&gt; FederationResult&lt;ApiVersionSet&gt; {
+        <span class="kw">let </span>timeout = Duration::from_secs(<span class="number">60</span>);
         <span class="self">self</span>.request_with_strategy(
             DiscoverApiVersionSet::new(
                 <span class="self">self</span>.all_members().len(),
-                now().add(Duration::from_secs(<span class="number">3</span>)),
+                now().add(timeout),
                 client_versions.clone(),
             ),
             <span class="string">&quot;version&quot;</span>.to_owned(),

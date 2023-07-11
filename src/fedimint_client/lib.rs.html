@@ -1435,6 +1435,78 @@
 <a href="#1435" id="1435">1435</a>
 <a href="#1436" id="1436">1436</a>
 <a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1511,6 +1583,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_stream::stream;
+<span class="kw">use </span>db::{CachedApiVersionSet, CachedApiVersionSetKey};
 <span class="kw">use </span>fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     WsFederationApi,
@@ -1540,7 +1613,7 @@
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>tracing::{info, warn};
+<span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
 <span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
@@ -2219,6 +2292,73 @@
                 .collect(),
         }
     }
+
+    <span class="doccomment">/// Load the common api versions to use from cache and start a background
+    /// process to refresh them.
+    ///
+    /// This is a compromise so we not have to wait for version discovery to
+    /// complete every time a [`Client`] is being built.
+    </span><span class="kw">async fn </span>load_and_refresh_common_api_version_static(
+        config: <span class="kw-2">&amp;</span>ClientConfig,
+        module_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry&lt;DynClientModuleGen&gt;,
+        api: <span class="kw-2">&amp;</span>DynGlobalApi,
+        db: <span class="kw-2">&amp;</span>Database,
+    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = db
+            .begin_transaction()
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>CachedApiVersionSetKey)
+            .<span class="kw">await
+        </span>{
+            <span class="macro">debug!</span>(<span class="string">&quot;Found existing cached common api versions&quot;</span>);
+            <span class="kw">let </span>config = config.clone();
+            <span class="kw">let </span>module_gens = module_gens.clone();
+            <span class="kw">let </span>api = api.clone();
+            <span class="kw">let </span>db = db.clone();
+            <span class="comment">// Separate task group, because we actually don&#39;t want to be waiting for this to
+            // finish, and it&#39;s just best effort.
+            </span>TaskGroup::new()
+                .spawn(<span class="string">&quot;refresh_common_api_version_static&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) =
+                        <span class="self">Self</span>::refresh_common_api_version_static(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>module_gens, <span class="kw-2">&amp;</span>api, <span class="kw-2">&amp;</span>db)
+                            .<span class="kw">await
+                    </span>{
+                        <span class="macro">warn!</span>(<span class="string">&quot;Failed to discover common api versions: {e}&quot;</span>);
+                    }
+                })
+                .<span class="kw">await</span>;
+
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(v.<span class="number">0</span>);
+        }
+
+        <span class="macro">debug!</span>(<span class="string">&quot;No existing cached common api versions found, waiting for initial discovery&quot;</span>);
+        <span class="self">Self</span>::refresh_common_api_version_static(config, module_gens, api, db).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>refresh_common_api_version_static(
+        config: <span class="kw-2">&amp;</span>ClientConfig,
+        module_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry&lt;DynClientModuleGen&gt;,
+        api: <span class="kw-2">&amp;</span>DynGlobalApi,
+        db: <span class="kw-2">&amp;</span>Database,
+    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
+        <span class="macro">debug!</span>(<span class="string">&quot;Refreshing common api versions&quot;</span>);
+
+        <span class="kw">let </span>common_api_versions =
+            Client::discover_common_api_version_static(config, module_gens, api).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="macro">debug!</span>(<span class="string">&quot;Updating the cached common api versions&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let _ </span>= dbtx
+            .insert_entry(
+                <span class="kw-2">&amp;</span>CachedApiVersionSetKey,
+                <span class="kw-2">&amp;</span>CachedApiVersionSet(common_api_versions.clone()),
+            )
+            .<span class="kw">await</span>;
+
+        dbtx.commit_tx().<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>(common_api_versions)
+    }
 }
 
 <span class="doccomment">/// Resources particular to a module instance
@@ -2662,9 +2802,13 @@
 
         <span class="kw">let </span>api = DynGlobalApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span>config));
 
-        <span class="comment">// TODO: pass to module&#39;s `init`
-        </span><span class="kw">let </span>common_api_versions =
-            Client::discover_common_api_version_static(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="kw-2">&amp;</span>api).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>common_api_versions = Client::load_and_refresh_common_api_version_static(
+            <span class="kw-2">&amp;</span>config,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens,
+            <span class="kw-2">&amp;</span>api,
+            <span class="kw-2">&amp;</span>db,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>root_secret = get_client_root_secret::&lt;S&gt;(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 

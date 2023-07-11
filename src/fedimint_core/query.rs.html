@@ -557,10 +557,23 @@
 <a href="#557" id="557">557</a>
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
-<span class="kw">use </span>std::time::SystemTime;
+<span class="kw">use </span>std::time::{Duration, SystemTime};
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -1066,6 +1079,15 @@
 }
 
 <span class="kw">impl </span>QueryStrategy&lt;SupportedApiVersionsSummary, ApiVersionSet&gt; <span class="kw">for </span>DiscoverApiVersionSet {
+    <span class="kw">fn </span>request_timeout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Duration&gt; {
+        <span class="prelude-val">Some</span>(
+            <span class="self">self</span>.inner
+                .deadline
+                .duration_since(fedimint_core::time::now())
+                .unwrap_or(Duration::ZERO),
+        )
+    }
+
     <span class="kw">fn </span>process(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         peer: PeerId,
@@ -1090,6 +1112,10 @@
 }
 
 <span class="kw">pub trait </span>QueryStrategy&lt;IR, OR = IR&gt; {
+    <span class="doccomment">/// Should requests for this strategy have specific timeouts?
+    </span><span class="kw">fn </span>request_timeout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Duration&gt; {
+        <span class="prelude-val">None
+    </span>}
     <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, response: api::MemberResult&lt;IR&gt;) -&gt; QueryStep&lt;OR&gt;;
 }
 
