@@ -501,7 +501,7 @@
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, TrackPaymentRequest,
 };
 <span class="kw">use </span>tonic_lnd::tonic::Code;
-<span class="kw">use </span>tonic_lnd::{connect, LndClient};
+<span class="kw">use </span>tonic_lnd::{connect, Client <span class="kw">as </span>LndClient};
 <span class="kw">use </span>tracing::{error, info, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
