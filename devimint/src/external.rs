@@ -15,7 +15,7 @@ use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::sleep;
 use tonic_lnd::lnrpc::GetInfoRequest;
-use tonic_lnd::LndClient;
+use tonic_lnd::Client as LndClient;
 use tracing::{info, warn};
 
 use crate::cmd;
@@ -190,7 +190,7 @@ impl Lightningd {
 
 #[derive(Clone)]
 pub struct Lnd {
-    pub(crate) client: Arc<Mutex<tonic_lnd::LndClient>>,
+    pub(crate) client: Arc<Mutex<LndClient>>,
     pub(crate) process: ProcessHandle,
     pub(crate) _bitcoind: Bitcoind,
 }
