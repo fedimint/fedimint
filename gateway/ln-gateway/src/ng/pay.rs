@@ -138,18 +138,22 @@ impl GatewayPayInvoice {
         common: GatewayPayCommon,
     ) -> Vec<StateTransition<GatewayPayStateMachine>> {
         vec![StateTransition::new(
-            Self::await_buy_preimage(global_context, self.contract_id, context),
+            Self::await_get_payment_parameters(global_context, self.contract_id, context.clone()),
             move |_dbtx, result, _old_state| {
-                Box::pin(Self::transition_bought_preimage(result, common.clone()))
+                Box::pin(Self::transition_buy_preimage(
+                    context.clone(),
+                    result,
+                    common.clone(),
+                ))
             },
         )]
     }
 
-    async fn await_buy_preimage(
+    async fn await_get_payment_parameters(
         global_context: DynGlobalClientContext,
         contract_id: ContractId,
         context: GatewayClientContext,
-    ) -> Result<(OutgoingContractAccount, Preimage), OutgoingPaymentError> {
+    ) -> Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError> {
         let account = global_context
             .module_api()
             .fetch_contract(contract_id)
@@ -189,19 +193,14 @@ impl GatewayPayInvoice {
                 error: e,
                 contract: outgoing_contract_account.clone(),
             })?;
-            let preimage = Self::await_buy_preimage_over_lightning(
-                context,
-                payment_parameters,
-                outgoing_contract_account.clone(),
-            )
-            .await?;
-            return Ok((outgoing_contract_account, preimage));
+
+            return Ok((outgoing_contract_account, payment_parameters));
         }
 
         Err(OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id })
     }
 
-    async fn await_buy_preimage_over_lightning(
+    async fn buy_preimage_over_lightning(
         context: GatewayClientContext,
         buy_preimage: PaymentParameters,
         contract: OutgoingContractAccount,
@@ -228,17 +227,35 @@ impl GatewayPayInvoice {
         }
     }
 
-    async fn transition_bought_preimage(
-        result: Result<(OutgoingContractAccount, Preimage), OutgoingPaymentError>,
+    async fn transition_buy_preimage(
+        context: GatewayClientContext,
+        result: Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError>,
         common: GatewayPayCommon,
     ) -> GatewayPayStateMachine {
         match result {
-            Ok((contract, preimage)) => GatewayPayStateMachine {
-                common,
-                state: GatewayPayStates::ClaimOutgoingContract(Box::new(
-                    GatewayPayClaimOutgoingContract { contract, preimage },
-                )),
-            },
+            Ok((contract, payment_parameters)) => {
+                let preimage_result = Self::buy_preimage_over_lightning(
+                    context,
+                    payment_parameters,
+                    contract.clone(),
+                )
+                .await;
+
+                match preimage_result {
+                    Ok(preimage) => GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::ClaimOutgoingContract(Box::new(
+                            GatewayPayClaimOutgoingContract { contract, preimage },
+                        )),
+                    },
+                    Err(e) => GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract { contract, error: e },
+                        )),
+                    },
+                }
+            }
             Err(e) => match e.clone() {
                 OutgoingPaymentError::InvalidOutgoingContract { error: _, contract } => {
                     GatewayPayStateMachine {
@@ -310,7 +327,7 @@ impl GatewayPayInvoice {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
