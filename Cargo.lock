@@ -1003,7 +1003,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tonic_lnd",
+ "tonic_lnd 0.5.0",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -1920,7 +1920,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.23.4",
  "tokio-stream",
- "tonic_lnd",
+ "tonic_lnd 0.5.0",
  "tracing",
  "url",
 ]
@@ -3203,7 +3203,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.8.3",
  "tonic-build 0.8.4",
- "tonic_lnd",
+ "tonic_lnd 0.5.1",
  "tower-http",
  "tracing",
  "url",
@@ -5439,6 +5439,22 @@ dependencies = [
 name = "tonic_lnd"
 version = "0.5.0"
 source = "git+https://github.com/fedimint/tonic_lnd?branch=lnd-client-features#500b5c5bfee9f96f63a4e6f3ffccdbe0a82cea1e"
+dependencies = [
+ "hex",
+ "prost 0.9.0",
+ "rustls 0.19.1",
+ "rustls-pemfile",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.6.2",
+ "tonic-build 0.5.2",
+ "webpki 0.21.4",
+]
+
+[[package]]
+name = "tonic_lnd"
+version = "0.5.1"
+source = "git+https://github.com/fedimint/tonic_lnd?branch=master#d0c8f1fea035dbfae9398aa388664112bc4dfd2a"
 dependencies = [
  "hex",
  "prost 0.9.0",

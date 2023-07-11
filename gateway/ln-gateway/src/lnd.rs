@@ -18,7 +18,7 @@ use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, TrackPaymentRequest,
 };
 use tonic_lnd::tonic::Code;
-use tonic_lnd::{connect, LndClient};
+use tonic_lnd::{connect, Client as LndClient};
 use tracing::{error, info, trace, warn};
 
 use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
