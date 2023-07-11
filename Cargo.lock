@@ -1003,7 +1003,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tonic_lnd 0.5.0",
+ "tonic_lnd 0.5.1",
  "tower-http",
  "tracing",
  "tracing-subscriber",
