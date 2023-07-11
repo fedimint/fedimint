@@ -1421,7 +1421,7 @@ pub fn client_decoders<'a>(
     let mut modules = BTreeMap::new();
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
-            info!("Detected configuration for unsupported module kind: {kind}");
+            info!("Detected configuration for unsupported module id: {id}, kind: {kind}");
             continue
         };
 

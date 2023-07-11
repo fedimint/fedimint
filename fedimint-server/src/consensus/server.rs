@@ -152,7 +152,7 @@ impl ConsensusServer {
         for (module_id, module_cfg) in &cfg.consensus.modules {
             let kind = module_cfg.kind.clone();
             let Some(init) = module_inits.get(&kind) else {
-                bail!("Detected configuration for unsupported module kind: {kind}")
+                bail!("Detected configuration for unsupported module id: {module_id}, kind: {kind}")
             };
             info!(target: LOG_CORE,
                 module_instance_id = *module_id, kind = %kind, "Init module");

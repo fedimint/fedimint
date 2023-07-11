@@ -122,7 +122,7 @@ impl<'a> DatabaseDump<'a> {
                 let kind = &module_cfg.kind;
 
                 let Some(init) = self.module_inits.get(kind) else {
-                    panic!("Detected configuration for unsupported module kind: {kind}")
+                    panic!("Detected configuration for unsupported module id: {module_id}, kind: {kind}")
                 };
 
                 if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
