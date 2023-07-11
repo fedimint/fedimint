@@ -1,0 +1,60 @@
+version: '3'
+
+services:
+  gatewayd:
+    image: fedimint/gatewayd:master
+    command: gatewayd lnd
+    environment:
+      # Path to folder containing gateway config and data files
+      - FM_GATEWAY_DATA_DIR=/gateway_data
+      # Gateway webserver listen address
+      - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:8175
+      # Public URL from which the webserver API is reachable
+      - FM_GATEWAY_API_ADDR=ws://gatewayd:8175
+      # Gateway webserver authentication password
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+      # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
+      - FM_GATEWAY_FEES=0,0
+      # LND RPC address
+      - FM_LND_RPC_ADDR=https://lnd:10009
+      # LND TLS cert file path
+      - FM_LND_TLS_CERT=/lnd_data/tls.cert
+      # LND macaroon file path
+      - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/signet/admin.macaroon
+    volumes:
+      - gateway_datadir:/gateway_data
+      - lnd_datadir:/lnd_data
+    ports:
+      - '8175:8175'
+    depends_on:
+      - lnd
+    restart: always
+
+  lnd:
+    image: lightninglabs/lnd:v0.16.4-beta
+    entrypoint: bash
+    command:
+      - -c
+      - lnd --bitcoin.active --bitcoin.signet --bitcoin.dnsseed=0 --bitcoin.node=bitcoind --protocol.wumbo-channels --bitcoind.rpchost=bitcoind --bitcoind.rpcuser=bitcoin --bitcoind.rpcpass=bitcoin --bitcoind.zmqpubrawblock=tcp://bitcoind:28332 --bitcoind.zmqpubrawtx=tcp://bitcoind:28333 --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --tlsextradomain=lnd --noseedbackup
+    ports:
+      - '10009:10009'
+      - '0.0.0.0:9735:9735'
+    volumes:
+      - lnd_datadir:/root/.lnd
+    depends_on:
+      - bitcoind
+    restart: always
+
+  bitcoind:
+    image: fedimint/mutinynet-bitcoind:latest
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:28332 -zmqpubrawtx=tcp://[::]:28333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - 'bitcoin_datadir:/root/.bitcoin'
+    restart: always
+
+volumes:
+  bitcoin_datadir:
+  lnd_datadir:
+  gateway_datadir:
