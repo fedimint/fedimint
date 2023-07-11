@@ -870,10 +870,13 @@ impl ClientInner {
     }
 
     fn context_gen(self: &Arc<Self>) -> ModuleGlobalContextGen {
-        let client_inner = self.clone();
+        let client_inner = Arc::downgrade(self);
         Arc::new(move |module_instance, operation| {
             ModuleGlobalClientContext {
-                client: client_inner.clone(),
+                client: client_inner
+                    .clone()
+                    .upgrade()
+                    .expect("ModuleGlobalContextGen called after client was dropped"),
                 module_instance_id: module_instance,
                 operation,
             }
