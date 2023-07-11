@@ -340,12 +340,24 @@ impl TaskHandle {
         self.inner.is_shutting_down.load(SeqCst)
     }
 
+    /// Run `f` on shutdown.
+    ///
+    /// If TaskGroup is already shuting down, run the function immediately.
     pub async fn on_shutdown(
         &self,
         // f: FnOnce() -> BoxFuture<'static, ()> + Send + 'static
         f: Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send + 'static>,
     ) {
-        self.inner.on_shutdown.lock().await.push(f)
+        // NOTE: hold the lock to avoid race if shutdown happens immediately after
+        // checking here.
+        let mut on_shutdown = self.inner.on_shutdown.lock().await;
+        if self.is_shutting_down() {
+            // release lock before calling f.
+            drop(on_shutdown);
+            f().await;
+        } else {
+            on_shutdown.push(f);
+        }
     }
 
     /// Make a [`oneshot::Receiver`] that will fire on shutdown
@@ -571,3 +583,19 @@ impl<T: Sync> MaybeSync for T {}
 
 #[cfg(target_family = "wasm")]
 impl<T> MaybeSync for T {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test(tokio::test)]
+    async fn test_task_group() -> anyhow::Result<()> {
+        let mut tg = TaskGroup::new();
+        tg.spawn("shutdown waiter", |handle| async move {
+            handle.make_shutdown_rx().await.await
+        })
+        .await;
+        tg.shutdown_join_all(None).await?;
+        Ok(())
+    }
+}
