@@ -12,13 +12,14 @@ mod tls;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
-use std::io::{Error, Read, Write};
+use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
 
 use anyhow::format_err;
 use bitcoin_hashes::hex::{FromHex, ToHex};
 pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
+use lightning::util::ser::{Readable, Writeable};
 use thiserror::Error;
 use url::Url;
 
@@ -144,7 +145,27 @@ impl DecodeError {
     }
 }
 
-macro_rules! impl_encode_decode_num {
+pub use lightning::util::ser::BigSize;
+
+impl Encodable for BigSize {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut writer = CountWrite::from(writer);
+        self.write(&mut writer)?;
+        Ok(usize::try_from(writer.count()).expect("can't overflow"))
+    }
+}
+
+impl Decodable for BigSize {
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        BigSize::read(r)
+            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
+    }
+}
+
+macro_rules! impl_encode_decode_num_as_plain {
     ($num_type:ty) => {
         impl Encodable for $num_type {
             fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
@@ -167,10 +188,31 @@ macro_rules! impl_encode_decode_num {
     };
 }
 
-impl_encode_decode_num!(u64);
-impl_encode_decode_num!(u32);
-impl_encode_decode_num!(u16);
-impl_encode_decode_num!(u8);
+macro_rules! impl_encode_decode_num_as_bigsize {
+    ($num_type:ty) => {
+        impl Encodable for $num_type {
+            fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+                BigSize(*self as u64).consensus_encode(writer)
+            }
+        }
+
+        impl Decodable for $num_type {
+            fn consensus_decode<D: std::io::Read>(
+                d: &mut D,
+                _modules: &ModuleDecoderRegistry,
+            ) -> Result<Self, crate::encoding::DecodeError> {
+                let varint = BigSize::consensus_decode(d, &Default::default())
+                    .map_err(crate::encoding::DecodeError::from_err)?;
+                <$num_type>::try_from(varint.0).map_err(crate::encoding::DecodeError::from_err)
+            }
+        }
+    };
+}
+
+impl_encode_decode_num_as_bigsize!(u64);
+impl_encode_decode_num_as_bigsize!(u32);
+impl_encode_decode_num_as_bigsize!(u16);
+impl_encode_decode_num_as_plain!(u8);
 
 macro_rules! impl_encode_decode_tuple {
     ($($x:ident),*) => (
@@ -611,6 +653,46 @@ impl Decodable for Cow<'static, str> {
     }
 }
 
+/// A writer counting number of writes written to it
+///
+/// Copy&pasted from <https://github.com/SOF3/count-write> which
+/// uses Apache license (and it's a trivial amount of code, repeating
+/// on stack overflow).
+pub struct CountWrite<W> {
+    inner: W,
+    count: u64,
+}
+
+impl<W> CountWrite<W> {
+    /// Returns the number of bytes successfull written so far
+    pub fn count(&self) -> u64 {
+        self.count
+    }
+
+    /// Extracts the inner writer, discarding this wrapper
+    pub fn into_inner(self) -> W {
+        self.inner
+    }
+}
+
+impl<W> From<W> for CountWrite<W> {
+    fn from(inner: W) -> Self {
+        Self { inner, count: 0 }
+    }
+}
+
+impl<W: Write> Write for CountWrite<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        self.count += written as u64;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
@@ -664,7 +746,7 @@ mod tests {
             vec: vec![1, 2, 3],
             num: 42,
         };
-        let bytes = [0, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 0, 0, 0, 42];
+        let bytes = [3, 1, 2, 3, 42];
 
         test_roundtrip_expected(reference, &bytes);
     }
@@ -675,7 +757,7 @@ mod tests {
         struct TestStruct(Vec<u8>, u32);
 
         let reference = TestStruct(vec![1, 2, 3], 42);
-        let bytes = [0, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 0, 0, 0, 42];
+        let bytes = [3, 1, 2, 3, 42];
 
         test_roundtrip_expected(reference, &bytes);
     }
@@ -689,16 +771,13 @@ mod tests {
         }
 
         let test_cases = [
-            (
-                TestEnum::Foo(Some(42)),
-                vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 42],
-            ),
-            (TestEnum::Foo(None), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            (TestEnum::Foo(Some(42)), vec![0, 1, 42]),
+            (TestEnum::Foo(None), vec![0, 0]),
             (
                 TestEnum::Bar {
                     bazz: vec![1, 2, 3],
                 },
-                vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3],
+                vec![1, 3, 1, 2, 3],
             ),
         ];
 
