@@ -473,7 +473,7 @@
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 <span class="kw">use </span>tokio::time::sleep;
 <span class="kw">use </span>tonic_lnd::lnrpc::GetInfoRequest;
-<span class="kw">use </span>tonic_lnd::LndClient;
+<span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::cmd;
@@ -648,7 +648,7 @@
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Lnd {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) client: Arc&lt;Mutex&lt;tonic_lnd::LndClient&gt;&gt;,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) client: Arc&lt;Mutex&lt;LndClient&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) process: ProcessHandle,
     <span class="kw">pub</span>(<span class="kw">crate</span>) _bitcoind: Bitcoind,
 }
