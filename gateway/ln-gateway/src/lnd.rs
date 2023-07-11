@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use fedimint_core::task::{sleep, TaskGroup};
 use secp256k1::PublicKey;
@@ -236,7 +236,14 @@ impl GatewayLndClient {
                         .await
                         .map_err(|_| GatewayError::ClientNgError)?
                     {
-                        return Ok(Some(payment.payment_preimage));
+                        if payment.status() == PaymentStatus::Succeeded {
+                            return Ok(Some(payment.payment_preimage));
+                        }
+
+                        let failure_reason = payment.failure_reason();
+                        return Err(GatewayError::Other(anyhow!(
+                            "LND payment failed. Failure Reason: {failure_reason:?}"
+                        )));
                     }
                 }
                 Err(e) => {
@@ -416,18 +423,18 @@ impl ILnRpcClient for GatewayLndClient {
                 .into_inner()
                 .message()
                 .await
-                .map_err(|_| GatewayError::ClientNgError)?
+                .context("Failed to get payment status")?
             {
                 Some(payment) if payment.status() == PaymentStatus::Succeeded => {
                     bitcoin_hashes::hex::FromHex::from_hex(payment.payment_preimage.as_str())
-                        .map_err(|_| anyhow::anyhow!("Failed to convert preimage"))?
+                        .context("Failed to convert preimage")?
                 }
                 Some(payment) => {
                     return Err(GatewayError::Other(anyhow!(
                         "LND failed to complete payment: {payment:?}"
                     )));
                 }
-                _ => {
+                None => {
                     return Err(GatewayError::Other(anyhow!(
                         "Failed to get payment status for payment_hash {payment_hash:?}"
                     )));
