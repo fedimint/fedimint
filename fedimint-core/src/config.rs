@@ -451,7 +451,7 @@ where
         let mut modules = BTreeMap::new();
         for (id, kind) in module_kinds {
             let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module kind: {kind}")
+                anyhow::bail!("Detected configuration for unsupported module id: {id}, kind: {kind}")
             };
 
             modules.insert(id, (kind.clone(), init.as_ref().decoder()));

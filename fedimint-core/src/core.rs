@@ -101,8 +101,21 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 &self,
                 writer: &mut W,
             ) -> Result<usize, std::io::Error> {
-                self.module_instance_id.consensus_encode(writer)?;
-                self.inner.consensus_encode_dyn(writer)
+                let mut written = self.module_instance_id.consensus_encode(writer)?;
+
+                let mut buf = Vec::with_capacity(512);
+                let buf_written = self.inner.consensus_encode_dyn(&mut buf)?;
+                assert_eq!(buf.len(), buf_written);
+
+                let buf_len_u32 = u32::try_from(buf.len())
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+                written += buf_len_u32.consensus_encode(writer)?;
+
+                writer.write_all(buf.as_slice())?;
+                written += buf.len();
+
+                Ok(written)
             }
         }
 
@@ -111,12 +124,28 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 reader: &mut R,
                 modules: &$crate::module::registry::ModuleDecoderRegistry,
             ) -> Result<Self, fedimint_core::encoding::DecodeError> {
-                let key = fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
-                modules.get_expect(key).decode(reader, key, modules)
+                let module_instance_id =
+                    fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
+                let total_len = u32::consensus_decode(reader, modules)? as usize;
+                let mut buf = Vec::with_capacity(512);
+                while buf.len() < total_len {
+                    let prev_len = buf.len();
+                    let new_len = std::cmp::min(total_len, prev_len.saturating_add(512));
+                    buf.resize(new_len, 0u8);
+                    reader
+                        .read_exact(&mut buf[prev_len..])
+                        .map_err(|e| fedimint_core::encoding::DecodeError::new_custom(e.into()))?;
+                }
+                modules.get_expect(module_instance_id).decode(
+                    &mut &buf[..],
+                    module_instance_id,
+                    modules,
+                )
             }
         }
     };
 }
+
 /// Define a "plugin" trait
 ///
 /// "Plugin trait" is a trait that a developer of a mint module
