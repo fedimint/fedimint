@@ -2976,7 +2976,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
     <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
         <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
-            <span class="macro">info!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>);
+            <span class="macro">info!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {id}, kind: {kind}&quot;</span>);
             <span class="kw">continue
         </span>};
 

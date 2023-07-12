@@ -991,6 +991,10 @@
 <a href="#991" id="991">991</a>
 <a href="#992" id="992">992</a>
 <a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
@@ -1936,6 +1940,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
         <span class="kw">let </span>module_instance =
             ModuleInstanceId::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>_total_len =
+            u32::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">? </span><span class="kw">as </span>usize;
+
         <span class="comment">// No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
         </span>decoder.decode(

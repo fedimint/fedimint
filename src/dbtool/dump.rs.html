@@ -564,7 +564,7 @@
                 <span class="kw">let </span>kind = <span class="kw-2">&amp;</span>module_cfg.kind;
 
                 <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.module_inits.get(kind) <span class="kw">else </span>{
-                    <span class="macro">panic!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>)
+                    <span class="macro">panic!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {module_id}, kind: {kind}&quot;</span>)
                 };
 
                 <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; !<span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span>kind.to_string()) {

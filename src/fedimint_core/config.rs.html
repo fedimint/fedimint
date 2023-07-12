@@ -1282,7 +1282,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
         <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
             <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.<span class="number">0</span>.get(kind) <span class="kw">else </span>{
-                <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Detected configuration for unsupported module kind: {kind}&quot;</span>)
+                <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {id}, kind: {kind}&quot;</span>)
             };
 
             modules.insert(id, (kind.clone(), init.as_ref().decoder()));
