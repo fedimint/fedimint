@@ -57,7 +57,7 @@ pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmou
     }
 }
 
-pub fn parse_gateway_pub_key(s: &str) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
+pub fn parse_gateway_redeem_key(s: &str) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
     secp256k1::XOnlyPublicKey::from_str(s)
 }
 

@@ -150,7 +150,7 @@ impl GatewayClientConfig {
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
-            gateway_pub_key: self.redeem_key.x_only_public_key().0,
+            gateway_redeem_key: self.redeem_key.x_only_public_key().0,
             node_pub_key: self.node_pub_key,
             api: self.api.clone(),
             route_hints,
@@ -811,22 +811,22 @@ impl Client<UserClientConfig> {
     /// advance.
     pub async fn switch_active_gateway(
         &self,
-        gateway_pub_key: Option<secp256k1::XOnlyPublicKey>,
+        gateway_redeem_key: Option<secp256k1::XOnlyPublicKey>,
     ) -> Result<LightningGateway> {
         let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
             debug!("Could not find any gateways");
             return Err(ClientError::NoGateways);
         };
-        let gateway = match gateway_pub_key {
+        let gateway = match gateway_redeem_key {
             // If a pubkey was provided, try to select and activate a gateway with that pubkey.
             Some(pub_key) => gateways
                 .into_iter()
-                .find(|g| g.gateway_pub_key == pub_key)
+                .find(|g| g.gateway_redeem_key == pub_key)
                 .ok_or_else(|| {
                     debug!(
                         "Could not find gateway with gateway public key {:?}",
-                        gateway_pub_key
+                        gateway_redeem_key
                     );
                     ClientError::GatewayNotFound
                 })?,

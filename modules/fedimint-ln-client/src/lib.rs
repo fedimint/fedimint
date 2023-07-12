@@ -74,7 +74,7 @@ pub trait LightningClientExt {
     async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway>;
 
     /// Sets the gateway to be used by all other operations
-    async fn set_active_gateway(&self, gateway_pub_key: &XOnlyPublicKey) -> anyhow::Result<()>;
+    async fn set_active_gateway(&self, gateway_redeem_key: &XOnlyPublicKey) -> anyhow::Result<()>;
 
     /// Gateways actively registered with the fed
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
@@ -205,7 +205,7 @@ impl LightningClientExt for Client {
     }
 
     /// Switches the clients active gateway to a registered gateway.
-    async fn set_active_gateway(&self, gateway_pub_key: &XOnlyPublicKey) -> anyhow::Result<()> {
+    async fn set_active_gateway(&self, gateway_redeem_key: &XOnlyPublicKey) -> anyhow::Result<()> {
         let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let mut dbtx = instance.db.begin_transaction().await;
 
@@ -216,11 +216,11 @@ impl LightningClientExt for Client {
         };
         let gateway = gateways
             .into_iter()
-            .find(|g| &g.gateway_pub_key == gateway_pub_key)
+            .find(|g| &g.gateway_redeem_key == gateway_redeem_key)
             .ok_or_else(|| {
                 anyhow::anyhow!(
                     "Could not find gateway with gateway public key {:?}",
-                    gateway_pub_key
+                    gateway_redeem_key
                 )
             })?;
 
@@ -663,7 +663,7 @@ impl LightningClientModule {
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
-            gateway_key: gateway.gateway_pub_key,
+            gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock as u32,
             user_key: user_sk.x_only_public_key().0,
             invoice,

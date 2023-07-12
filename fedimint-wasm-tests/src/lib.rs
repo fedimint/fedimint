@@ -79,7 +79,9 @@ mod tests {
             .find(|x| x.api.to_string() == "http://127.0.0.1:28175/")
             .expect("no gateway with api http://127.0.0.1:28175");
 
-        client.set_active_gateway(&lnd_gw.gateway_pub_key).await?;
+        client
+            .set_active_gateway(&lnd_gw.gateway_redeem_key)
+            .await?;
         let (opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None)
             .await?;
@@ -109,7 +111,9 @@ mod tests {
             .find(|x| x.api.to_string() == "http://127.0.0.1:28175/")
             .expect("no gateway with api http://127.0.0.1:28175");
 
-        client.set_active_gateway(&lnd_gw.gateway_pub_key).await?;
+        client
+            .set_active_gateway(&lnd_gw.gateway_redeem_key)
+            .await?;
         let (opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None)
             .await?;

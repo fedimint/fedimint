@@ -130,13 +130,13 @@ impl Gatewayd {
         }
     }
 
-    pub async fn gateway_pub_key(&self) -> Result<String> {
+    pub async fn gateway_redeem_key(&self) -> Result<String> {
         let info = cmd!(self, "info").out_json().await?;
-        let gateway_pub_key = info["federations"][0]["registration"]["gateway_pub_key"]
+        let gateway_redeem_key = info["federations"][0]["registration"]["gateway_redeem_key"]
             .as_str()
-            .context("gateway_pub_key must be a string")?
+            .context("gateway_redeem_key must be a string")?
             .to_owned();
-        Ok(gateway_pub_key)
+        Ok(gateway_redeem_key)
     }
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {

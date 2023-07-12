@@ -429,7 +429,7 @@ impl GatewayClientModule {
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
-            gateway_pub_key: self.redeem_key.x_only_public_key().0,
+            gateway_redeem_key: self.redeem_key.x_only_public_key().0,
             node_pub_key: self.node_pub_key,
             api,
             route_hints,
@@ -449,7 +449,7 @@ impl GatewayClientModule {
             .await;
         info!(
             "Successfully registered gateway {} with federation {}",
-            registration.gateway_pub_key, id
+            registration.gateway_redeem_key, id
         );
         Ok(())
     }

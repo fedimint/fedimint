@@ -1155,7 +1155,7 @@ mod fedimint_migration_tests {
 
         let gateway = LightningGateway {
             mint_channel_id: 100,
-            gateway_pub_key: pk.x_only_public_key().0,
+            gateway_redeem_key: pk.x_only_public_key().0,
             node_pub_key: pk,
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),

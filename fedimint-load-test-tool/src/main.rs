@@ -797,11 +797,11 @@ async fn get_gateway_public_key(
             cmd!(GatewayClnCli, "info").out_json().await
         }
     }?;
-    let gateway_pub_key = gateway_json["federations"][0]["registration"]["gateway_pub_key"]
+    let gateway_redeem_key = gateway_json["federations"][0]["registration"]["gateway_redeem_key"]
         .as_str()
-        .context("Missing gateway_pub_key field")?;
+        .context("Missing gateway_redeem_key field")?;
 
-    Ok(gateway_pub_key.into())
+    Ok(gateway_redeem_key.into())
 }
 
 async fn get_cfg_from_args(args: &ConnectCommonArgs) -> anyhow::Result<ClientConfig> {
