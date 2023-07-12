@@ -430,6 +430,23 @@
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
 <a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
@@ -570,18 +587,22 @@
         common: GatewayPayCommon,
     ) -&gt; Vec&lt;StateTransition&lt;GatewayPayStateMachine&gt;&gt; {
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_buy_preimage(global_context, <span class="self">self</span>.contract_id, context),
+            <span class="self">Self</span>::await_get_payment_parameters(global_context, <span class="self">self</span>.contract_id, context.clone()),
             <span class="kw">move </span>|_dbtx, result, _old_state| {
-                Box::pin(<span class="self">Self</span>::transition_bought_preimage(result, common.clone()))
+                Box::pin(<span class="self">Self</span>::transition_buy_preimage(
+                    context.clone(),
+                    result,
+                    common.clone(),
+                ))
             },
         )]
     }
 
-    <span class="kw">async fn </span>await_buy_preimage(
+    <span class="kw">async fn </span>await_get_payment_parameters(
         global_context: DynGlobalClientContext,
         contract_id: ContractId,
         context: GatewayClientContext,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, Preimage), OutgoingPaymentError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt; {
         <span class="kw">let </span>account = global_context
             .module_api()
             .fetch_contract(contract_id)
@@ -621,19 +642,14 @@
                 error: e,
                 contract: outgoing_contract_account.clone(),
             })<span class="question-mark">?</span>;
-            <span class="kw">let </span>preimage = <span class="self">Self</span>::await_buy_preimage_over_lightning(
-                context,
-                payment_parameters,
-                outgoing_contract_account.clone(),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Ok</span>((outgoing_contract_account, preimage));
+
+            <span class="kw">return </span><span class="prelude-val">Ok</span>((outgoing_contract_account, payment_parameters));
         }
 
         <span class="prelude-val">Err</span>(OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id })
     }
 
-    <span class="kw">async fn </span>await_buy_preimage_over_lightning(
+    <span class="kw">async fn </span>buy_preimage_over_lightning(
         context: GatewayClientContext,
         buy_preimage: PaymentParameters,
         contract: OutgoingContractAccount,
@@ -660,17 +676,35 @@
         }
     }
 
-    <span class="kw">async fn </span>transition_bought_preimage(
-        result: <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, Preimage), OutgoingPaymentError&gt;,
+    <span class="kw">async fn </span>transition_buy_preimage(
+        context: GatewayClientContext,
+        result: <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt;,
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>((contract, preimage)) =&gt; GatewayPayStateMachine {
-                common,
-                state: GatewayPayStates::ClaimOutgoingContract(Box::new(
-                    GatewayPayClaimOutgoingContract { contract, preimage },
-                )),
-            },
+            <span class="prelude-val">Ok</span>((contract, payment_parameters)) =&gt; {
+                <span class="kw">let </span>preimage_result = <span class="self">Self</span>::buy_preimage_over_lightning(
+                    context,
+                    payment_parameters,
+                    contract.clone(),
+                )
+                .<span class="kw">await</span>;
+
+                <span class="kw">match </span>preimage_result {
+                    <span class="prelude-val">Ok</span>(preimage) =&gt; GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::ClaimOutgoingContract(Box::new(
+                            GatewayPayClaimOutgoingContract { contract, preimage },
+                        )),
+                    },
+                    <span class="prelude-val">Err</span>(e) =&gt; GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract { contract, error: e },
+                        )),
+                    },
+                }
+            }
             <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">match </span>e.clone() {
                 OutgoingPaymentError::InvalidOutgoingContract { error: <span class="kw">_</span>, contract } =&gt; {
                     GatewayPayStateMachine {
@@ -742,7 +776,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
