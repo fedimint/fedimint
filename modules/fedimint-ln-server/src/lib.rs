@@ -5,8 +5,8 @@ use anyhow::{bail, Context};
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -214,18 +214,13 @@ impl ServerModuleGen for LightningGen {
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<ClientModuleConfig> {
+    ) -> anyhow::Result<LightningClientConfig> {
         let config = LightningConfigConsensus::from_erased(config)?;
-        Ok(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            &LightningClientConfig {
-                threshold_pub_key: config.threshold_pub_keys.public_key(),
-                fee_consensus: config.fee_consensus,
-                network: config.network,
-            },
-        )
-        .expect("Serialization can't fail"))
+        Ok(LightningClientConfig {
+            threshold_pub_key: config.threshold_pub_keys.public_key(),
+            fee_consensus: config.fee_consensus,
+            network: config.network,
+        })
     }
 
     async fn dump_database(

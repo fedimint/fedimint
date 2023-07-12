@@ -3,8 +3,8 @@ use std::iter::FromIterator;
 
 use anyhow::{bail, Context};
 use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
@@ -218,7 +218,7 @@ impl ServerModuleGen for MintGen {
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<ClientModuleConfig> {
+    ) -> anyhow::Result<MintClientConfig> {
         let config = MintConfigConsensus::from_erased(config)?;
         let pub_keys = TieredMultiZip::new(
             config
@@ -237,17 +237,12 @@ impl ServerModuleGen for MintGen {
             (amt, agg_key)
         });
 
-        Ok(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            &MintClientConfig {
-                tbs_pks: Tiered::from_iter(pub_keys),
-                fee_consensus: config.fee_consensus.clone(),
-                peer_tbs_pks: config.peer_tbs_pks.clone(),
-                max_notes_per_denomination: config.max_notes_per_denomination,
-            },
-        )
-        .expect("Serialization can't fail"))
+        Ok(MintClientConfig {
+            tbs_pks: Tiered::from_iter(pub_keys),
+            fee_consensus: config.fee_consensus.clone(),
+            peer_tbs_pks: config.peer_tbs_pks.clone(),
+            max_notes_per_denomination: config.max_notes_per_denomination,
+        })
     }
 
     async fn dump_database(
@@ -796,7 +791,7 @@ impl Mint {
 #[cfg(test)]
 mod test {
     use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
-    use fedimint_core::module::ServerModuleGen;
+    use fedimint_core::module::{ModuleConsensusVersion, ServerModuleGen};
     use fedimint_core::{Amount, PeerId};
     use fedimint_mint_common::config::FeeConsensus;
 
@@ -820,9 +815,15 @@ mod test {
             })
             .unwrap(),
         );
-        let client_cfg = MintGen
-            .get_client_config(&mint_cfg[&PeerId::from(0)].consensus)
-            .unwrap();
+        let client_cfg = ClientModuleConfig::from_typed(
+            0,
+            MintGen::kind(),
+            ModuleConsensusVersion(0),
+            MintGen
+                .get_client_config(&mint_cfg[&PeerId::from(0)].consensus)
+                .unwrap(),
+        )
+        .unwrap();
 
         (mint_cfg.into_values().collect(), client_cfg)
     }

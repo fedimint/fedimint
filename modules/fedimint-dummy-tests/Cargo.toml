@@ -21,3 +21,6 @@ fedimint-core ={ path = "../../fedimint-core" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 tokio = { version = "1.26.0", features = ["sync"] }
+
+[dev-dependencies]
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }

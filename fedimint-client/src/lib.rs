@@ -1265,6 +1265,8 @@ impl ClientBuilder {
             tx_submission_sm_decoder(),
         );
 
+        let config = config.redecode_raw(&decoders)?;
+
         let db = match self.db.ok_or(anyhow!("No database was provided"))? {
             DatabaseSource::Fresh(db) => Database::new_from_box(db, decoders.clone()),
             DatabaseSource::Reuse(client) => {

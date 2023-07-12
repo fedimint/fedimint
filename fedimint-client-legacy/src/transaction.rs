@@ -4,6 +4,7 @@ use fedimint_core::core::client::ClientModule;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::task::MaybeSend;
 use fedimint_core::Amount;
 use rand::{CryptoRng, RngCore};
 use secp256k1::Secp256k1;
@@ -262,13 +263,13 @@ impl TransactionBuilder {
 
     pub fn change_required<C>(&self, client: &Client<C>) -> Amount
     where
-        C: AsRef<ClientConfig> + Clone + Send,
+        C: AsRef<ClientConfig> + Clone + MaybeSend,
     {
         self.input_amount(client) - self.output_amount(client) - self.fee_amount(client)
     }
 
     /// Builds and signs the final transaction with correct change
-    pub async fn build<C: AsRef<ClientConfig> + Clone + Send, R: RngCore + CryptoRng>(
+    pub async fn build<C: AsRef<ClientConfig> + Clone + MaybeSend, R: RngCore + CryptoRng>(
         self,
         client: &Client<C>,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -316,7 +317,7 @@ impl TransactionBuilder {
         client: &'a Client<C>,
     ) -> impl Iterator<Item = TransactionItemAmount> + 'a
     where
-        C: AsRef<ClientConfig> + Clone + Send,
+        C: AsRef<ClientConfig> + Clone + MaybeSend,
     {
         self.tx.inputs.iter().map(|i| match i {
             Input::Mint(input) => client.mint_client().input_amount(input),
@@ -330,7 +331,7 @@ impl TransactionBuilder {
         client: &'a Client<C>,
     ) -> impl Iterator<Item = TransactionItemAmount> + 'a
     where
-        C: AsRef<ClientConfig> + Clone + Send + 'a,
+        C: AsRef<ClientConfig> + Clone + MaybeSend + 'a,
     {
         self.tx.outputs.iter().map(|o| match o {
             Output::Mint(output) => client.mint_client().output_amount(output),
@@ -341,7 +342,7 @@ impl TransactionBuilder {
 
     fn input_amount<C>(&self, client: &Client<C>) -> Amount
     where
-        C: AsRef<ClientConfig> + Send + Clone,
+        C: AsRef<ClientConfig> + MaybeSend + Clone,
     {
         self.input_amount_iter(client)
             .map(|amount_info| amount_info.amount)
@@ -350,7 +351,7 @@ impl TransactionBuilder {
 
     fn output_amount<C>(&self, client: &Client<C>) -> Amount
     where
-        C: AsRef<ClientConfig> + Send + Clone,
+        C: AsRef<ClientConfig> + MaybeSend + Clone,
     {
         self.output_amount_iter(client)
             .map(|amount_info| amount_info.amount)
@@ -359,7 +360,7 @@ impl TransactionBuilder {
 
     fn fee_amount<C>(&self, client: &Client<C>) -> Amount
     where
-        C: AsRef<ClientConfig> + Send + Clone,
+        C: AsRef<ClientConfig> + MaybeSend + Clone,
     {
         self.input_amount_iter(client)
             .chain(self.output_amount_iter(client))

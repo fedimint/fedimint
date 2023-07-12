@@ -107,10 +107,10 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 let buf_written = self.inner.consensus_encode_dyn(&mut buf)?;
                 assert_eq!(buf.len(), buf_written);
 
-                let buf_len_u32 = u32::try_from(buf.len())
+                let buf_len = u64::try_from(buf.len())
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-                written += buf_len_u32.consensus_encode(writer)?;
+                written += buf_len.consensus_encode(writer)?;
 
                 writer.write_all(buf.as_slice())?;
                 written += buf.len();
@@ -126,21 +126,24 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             ) -> Result<Self, fedimint_core::encoding::DecodeError> {
                 let module_instance_id =
                     fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
-                let total_len = u32::consensus_decode(reader, modules)? as usize;
-                let mut buf = Vec::with_capacity(512);
-                while buf.len() < total_len {
-                    let prev_len = buf.len();
-                    let new_len = std::cmp::min(total_len, prev_len.saturating_add(512));
-                    buf.resize(new_len, 0u8);
-                    reader
-                        .read_exact(&mut buf[prev_len..])
-                        .map_err(|e| fedimint_core::encoding::DecodeError::new_custom(e.into()))?;
+                let total_len_u64 = u64::consensus_decode(reader, modules)?;
+                let mut reader = reader.take(total_len_u64);
+                let val = modules
+                    .get(module_instance_id)
+                    .ok_or_else(|| {
+                        fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
+                            "Module decoder not available: {module_instance_id}"
+                        ))
+                    })?
+                    .decode(&mut reader, module_instance_id, modules)?;
+
+                if reader.limit() != 0 {
+                    return Err(fedimint_core::encoding::DecodeError::new_custom(
+                        anyhow::anyhow!("Dyn type did not consume all bytes during decoding"),
+                    ));
                 }
-                modules.get_expect(module_instance_id).decode(
-                    &mut &buf[..],
-                    module_instance_id,
-                    modules,
-                )
+
+                Ok(val)
             }
         }
     };
@@ -254,16 +257,6 @@ macro_rules! plugin_types_trait_impl_config {
                 )
             }
         }
-
-        impl fedimint_core::config::TypedClientModuleConfig for $cfg_client {
-            fn kind(&self) -> fedimint_core::core::ModuleKind {
-                <$common_gen as fedimint_core::module::CommonModuleGen>::KIND
-            }
-
-            fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-                <$common_gen as fedimint_core::module::CommonModuleGen>::CONSENSUS_VERSION
-            }
-        }
     };
 }
 
@@ -271,12 +264,23 @@ macro_rules! plugin_types_trait_impl_config {
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl_common {
-    ($types:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty) => {
+    ($types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty) => {
         impl fedimint_core::module::ModuleCommon for $types {
+            type ClientConfig = $client_config;
             type Input = $input;
             type Output = $output;
             type OutputOutcome = $outcome;
             type ConsensusItem = $ci;
+        }
+
+        impl fedimint_core::core::ClientConfig for $client_config {}
+
+        impl fedimint_core::core::IntoDynInstance for $client_config {
+            type DynType = fedimint_core::core::DynClientConfig;
+
+            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+                fedimint_core::core::DynClientConfig::from_typed(instance_id, self)
+            }
         }
 
         impl fedimint_core::core::Input for $input {}
@@ -477,6 +481,33 @@ impl Debug for Decoder {
         write!(f, "Decoder(registered_types = {})", self.decode_fns.len())
     }
 }
+
+pub trait IClientConfig: Debug + Display + DynEncodable {
+    fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn clone(&self, instance_id: ModuleInstanceId) -> DynClientConfig;
+    fn dyn_hash(&self) -> u64;
+    fn erased_eq_no_instance_id(&self, other: &DynClientConfig) -> bool;
+}
+
+module_plugin_trait_define! {
+    DynClientConfig, ClientConfig, IClientConfig,
+    { }
+    {
+        erased_eq_no_instance_id!(DynClientConfig);
+    }
+}
+
+dyn_newtype_define_with_instance_id! {
+    /// An owned, immutable input to a [`Transaction`](fedimint_core::transaction::Transaction)
+    pub DynClientConfig(Box<IClientConfig>)
+}
+module_dyn_newtype_impl_encode_decode!(DynClientConfig);
+
+dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynClientConfig);
+
+newtype_impl_eq_passthrough_with_instance_id!(DynClientConfig);
+
+newtype_impl_display_passthrough_with_instance_id!(DynClientConfig);
 
 /// Something that can be an [`DynInput`] in a
 /// [`Transaction`](fedimint_core::transaction::Transaction)

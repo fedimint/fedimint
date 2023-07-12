@@ -11,6 +11,7 @@ use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::KeyPair;
 use fedimint_core::epoch::SignedEpochOutcome;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, PeerId, TieredMulti, TransactionId};
@@ -270,6 +271,8 @@ pub trait ILegacyLightningClient {
 pub trait ILegacyTestClient:
     Sync + ILegacyWalletClient + ILegacyMintClient + ILegacyLightningClient
 {
+    fn decoders(&self) -> ModuleDecoderRegistry;
+
     /// Helper to make restore ecash less verbose
     async fn restore_ecash(&self, gap_limit: usize, task_group: &mut TaskGroup) -> Metadata {
         self.restore_ecash_from_federation(gap_limit, task_group)

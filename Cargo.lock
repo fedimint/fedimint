@@ -1520,6 +1520,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-server",
  "fedimint-testing",
+ "threshold_crypto",
  "tokio",
 ]
 

@@ -1,6 +1,7 @@
 use std::hash::Hash;
 
 pub use common::{BackupRequest, SignedBackupRequest};
+use config::MintClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
@@ -106,6 +107,8 @@ impl CommonModuleGen for MintCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
+    type ClientConfig = MintClientConfig;
+
     fn decoder() -> Decoder {
         MintModuleTypes::decoder_builder().build()
     }
@@ -208,6 +211,7 @@ impl Extend<(Amount, BlindNonce)> for MintOutput {
 
 plugin_types_trait_impl_common!(
     MintModuleTypes,
+    MintClientConfig,
     MintInput,
     MintOutput,
     MintOutputOutcome,

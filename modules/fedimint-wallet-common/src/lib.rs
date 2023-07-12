@@ -4,6 +4,7 @@ use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
+use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
@@ -179,6 +180,9 @@ pub struct WalletCommonGen;
 impl CommonModuleGen for WalletCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
+
+    type ClientConfig = WalletClientConfig;
+
     fn decoder() -> Decoder {
         WalletModuleTypes::decoder()
     }
@@ -262,6 +266,7 @@ impl Eq for PegOutSignatureItem {}
 
 plugin_types_trait_impl_common!(
     WalletModuleTypes,
+    WalletClientConfig,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,

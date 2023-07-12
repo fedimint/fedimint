@@ -324,7 +324,6 @@ impl ExtendsCommonModuleGen for DummyClientGen {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleGen for DummyClientGen {
     type Module = DummyClientModule;
-    type Config = DummyClientConfig;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -333,7 +332,7 @@ impl ClientModuleGen for DummyClientGen {
 
     async fn init(
         &self,
-        cfg: Self::Config,
+        cfg: DummyClientConfig,
         _db: Database,
         _api_version: ApiVersion,
         module_root_secret: DerivableSecret,

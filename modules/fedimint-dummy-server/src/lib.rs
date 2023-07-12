@@ -4,8 +4,8 @@ use std::string::ToString;
 use anyhow::bail;
 use async_trait::async_trait;
 use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
@@ -146,17 +146,12 @@ impl ServerModuleGen for DummyGen {
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<ClientModuleConfig> {
+    ) -> anyhow::Result<DummyClientConfig> {
         let config = DummyConfigConsensus::from_erased(config)?;
-        Ok(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            &(DummyClientConfig {
-                tx_fee: config.tx_fee,
-                fed_public_key: config.public_key_set.public_key(),
-            }),
-        )
-        .expect("Serialization can't fail"))
+        Ok(DummyClientConfig {
+            tx_fee: config.tx_fee,
+            fed_public_key: config.public_key_set.public_key(),
+        })
     }
 
     /// Validates the private/public key of configs

@@ -42,8 +42,9 @@ impl Federation {
 
         let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
         let cfg_path = workdir.join("client.json");
-        let cfg: UserClientConfig = load_from_file(&cfg_path)?;
+        let mut cfg: UserClientConfig = load_from_file(&cfg_path)?;
         let decoders = module_decode_stubs();
+        cfg.0 = cfg.0.redecode_raw(&decoders)?;
         let db = Database::new(MemDatabase::new(), module_decode_stubs());
         let module_gens = ClientModuleGenRegistry::from(vec![
             DynClientModuleGen::from(WalletClientGen::default()),
@@ -127,9 +128,9 @@ impl Federation {
     }
 
     pub async fn await_block_sync(&self) -> Result<()> {
-        let wallet_cfg: WalletClientConfig = self
+        let wallet_cfg: &WalletClientConfig = self
             .client
-            .config()
+            .config_ref()
             .0
             .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)?;
         let finality_delay = wallet_cfg.finality_delay;

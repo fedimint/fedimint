@@ -351,6 +351,10 @@ impl ILegacyLightningClient for LegacyTestUser<UserClientConfig> {
 
 #[async_trait]
 impl ILegacyTestClient for LegacyTestUser<UserClientConfig> {
+    fn decoders(&self) -> ModuleDecoderRegistry {
+        self.client.decoders().clone()
+    }
+
     fn new_client_with_peers(&self, peers: Vec<PeerId>) -> Box<dyn ILegacyTestClient> {
         Box::new(LegacyTestUser::new(
             self.config.clone(),
