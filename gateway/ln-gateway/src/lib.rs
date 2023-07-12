@@ -275,6 +275,8 @@ impl Gateway {
                         if let Some(ln_mode) = ln_mode.clone() {
                             let mut lnrpc = Self::create_boxxed_lightning_client(ln_mode).await;
 
+                            const RETRY_DURATION: Duration = Duration::from_secs(5);
+
                             // Re-create the HTLC stream if the connection breaks
                             match lnrpc
                                 .route_htlcs(ln_receiver.into(), &mut TaskGroup::new())
@@ -284,13 +286,13 @@ impl Gateway {
                                     // Blocks until the connection to the lightning node breaks
                                     info!("Established HTLC stream");
                                     Self::handle_htlc_stream(stream, sender, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
-                                    tracing::warn!("HTLC Stream Lightning connection broken");
+                                    tracing::warn!("HTLC Stream Lightning connection broken, retrying after {} seconds", RETRY_DURATION.as_secs());
                                 }
                                 Err(_) => {
-                                    error!("route_htlcs failed to open HTLC stream. Waiting 5 seconds and trying again");
-                                    sleep(Duration::from_secs(5)).await;
+                                    error!("route_htlcs failed to open HTLC stream. Waiting {} seconds and trying again", RETRY_DURATION.as_secs());
                                 }
                             }
+                            sleep(RETRY_DURATION).await;
                         } else {
                             break;
                         }
