@@ -813,22 +813,22 @@ impl Client<UserClientConfig> {
     /// advance.
     pub async fn switch_active_gateway(
         &self,
-        gateway_redeem_key: Option<secp256k1::XOnlyPublicKey>,
+        gateway_public_key: Option<secp256k1::PublicKey>,
     ) -> Result<LightningGateway> {
         let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
             debug!("Could not find any gateways");
             return Err(ClientError::NoGateways);
         };
-        let gateway = match gateway_redeem_key {
+        let gateway = match gateway_public_key {
             // If a pubkey was provided, try to select and activate a gateway with that pubkey.
             Some(pub_key) => gateways
                 .into_iter()
-                .find(|g| g.gateway_redeem_key == pub_key)
+                .find(|g| g.gateway_public_key == pub_key)
                 .ok_or_else(|| {
                     debug!(
                         "Could not find gateway with gateway public key {:?}",
-                        gateway_redeem_key
+                        gateway_public_key
                     );
                     ClientError::GatewayNotFound
                 })?,

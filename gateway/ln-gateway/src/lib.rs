@@ -219,14 +219,14 @@ impl Gateway {
     async fn get_gateway_public_key(gatewayd_db: Database) -> secp256k1::PublicKey {
         let mut dbtx = gatewayd_db.begin_transaction().await;
         if let Some(key_pair) = dbtx.get_value(&GatewaydPublicKey {}).await {
-            return key_pair.public_key();
+            key_pair.public_key()
         } else {
             let context = secp256k1::Secp256k1::new();
             let (secret, public) = context.generate_keypair(&mut OsRng);
             let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
             dbtx.insert_new_entry(&GatewaydPublicKey, &key_pair).await;
             dbtx.commit_tx().await;
-            return public;
+            public
         }
     }
 
@@ -440,7 +440,7 @@ impl Gateway {
         let clients = self.clients.clone();
         let api = self.api.clone();
         let lnrpc = self.lnrpc.clone();
-        let gateway_public_key = self.public_key.clone();
+        let gateway_public_key = self.public_key;
         self.task_group
             .spawn("register clients", move |handle| async move {
                 while !handle.is_shutting_down() {
@@ -452,7 +452,7 @@ impl Gateway {
                                         api.clone(),
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
-                                        gateway_public_key.clone(),
+                                        gateway_public_key,
                                     )
                                     .await
                                     .is_err()

@@ -78,8 +78,8 @@ pub enum ClientCmd {
     ListGateways,
     /// Switch active gateway
     SwitchGateway {
-        #[clap(value_parser = parse_gateway_redeem_key)]
-        pubkey: secp256k1::XOnlyPublicKey,
+        #[clap(value_parser = parse_gateway_public_key)]
+        pubkey: secp256k1::PublicKey,
     },
     /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress,
@@ -120,8 +120,8 @@ pub enum ClientCmd {
     PrintSecret,
 }
 
-pub fn parse_gateway_redeem_key(s: &str) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
-    secp256k1::XOnlyPublicKey::from_str(s)
+pub fn parse_gateway_public_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
+    secp256k1::PublicKey::from_str(s)
 }
 
 fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {

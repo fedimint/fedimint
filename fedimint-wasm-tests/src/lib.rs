@@ -80,7 +80,7 @@ mod tests {
             .expect("no gateway with api http://127.0.0.1:28175");
 
         client
-            .set_active_gateway(&lnd_gw.gateway_redeem_key)
+            .set_active_gateway(&lnd_gw.gateway_public_key)
             .await?;
         let (opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None)
@@ -112,7 +112,7 @@ mod tests {
             .expect("no gateway with api http://127.0.0.1:28175");
 
         client
-            .set_active_gateway(&lnd_gw.gateway_redeem_key)
+            .set_active_gateway(&lnd_gw.gateway_public_key)
             .await?;
         let (opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None)

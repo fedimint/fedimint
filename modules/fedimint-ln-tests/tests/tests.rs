@@ -41,9 +41,9 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
         .connect_fed(&fed)
         .await
         .registration
-        .gateway_redeem_key;
+        .gateway_public_key;
     assert_eq!(
-        client.select_active_gateway().await?.gateway_redeem_key,
+        client.select_active_gateway().await?.gateway_public_key,
         key1
     );
 
@@ -51,13 +51,13 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
         .connect_fed(&fed)
         .await
         .registration
-        .gateway_redeem_key;
+        .gateway_public_key;
     let gateways = client.fetch_registered_gateways().await.unwrap();
     assert_eq!(gateways.len(), 2);
 
     client.set_active_gateway(&key2).await?;
     assert_eq!(
-        client.select_active_gateway().await?.gateway_redeem_key,
+        client.select_active_gateway().await?.gateway_public_key,
         key2
     );
     Ok(())

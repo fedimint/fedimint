@@ -457,7 +457,7 @@ impl GatewayClientModule {
             .await;
         info!(
             "Successfully registered gateway {} with federation {}",
-            registration.gateway_redeem_key, id
+            registration.gateway_public_key, id
         );
         Ok(())
     }
