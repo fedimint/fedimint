@@ -147,6 +147,7 @@ impl GatewayClientConfig {
         &self,
         route_hints: Vec<modules::ln::route_hints::RouteHint>,
         time_to_live: Duration,
+        gateway_public_key: secp256k1::PublicKey,
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
@@ -156,6 +157,7 @@ impl GatewayClientConfig {
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
             fees: self.fees,
+            gateway_public_key,
         }
     }
 }

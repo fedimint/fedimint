@@ -1165,6 +1165,7 @@ mod fedimint_migration_tests {
                 base_msat: 0,
                 proportional_millionths: 0,
             },
+            gateway_public_key: pk,
         };
         dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
             .await;

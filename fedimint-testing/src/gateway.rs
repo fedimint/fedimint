@@ -51,6 +51,10 @@ impl GatewayTest {
             .unwrap()
     }
 
+    pub fn get_gateway_public_key(&self) -> secp256k1::PublicKey {
+        self.gateway.public_key
+    }
+
     pub(crate) async fn new(
         base_port: u16,
         password: String,

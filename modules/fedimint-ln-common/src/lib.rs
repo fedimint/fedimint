@@ -197,6 +197,7 @@ pub struct LightningGateway {
     /// Gateway configured routing fees
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
+    pub gateway_public_key: secp256k1::PublicKey,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
