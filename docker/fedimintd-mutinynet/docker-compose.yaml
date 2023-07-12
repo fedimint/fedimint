@@ -1,4 +1,6 @@
 # Important: 127.0.0.1 should be replaced by the external ip address of the machine
+version: '3'
+
 services:
   fedimintd:
     image: fedimint/fedimintd:master
@@ -18,15 +20,19 @@ services:
       # so it will be prefixed by wss:// instead of ws://
       - FM_API_URL=ws://127.0.0.1:8174
     restart: always
+    platform: linux/amd64
+
   guardian-ui:
     image: fedimintui/guardian-ui:latest
     ports:
       - "0.0.0.0:3000:3000"
     environment:
+      - PORT=3000
       - REACT_APP_FM_CONFIG_API=ws://127.0.0.1:8174
     depends_on:
       - fedimintd
     restart: always
+    platform: linux/amd64
 
 volumes:
   fedimintd_data:
