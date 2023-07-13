@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -32,7 +33,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
-    async fn route_htlcs<'a>(&mut self, task_group: &mut TaskGroup) -> Result<RouteHtlcStream<'a>>;
+    // Consumes the current lightning client because `route_htlcs` should only be
+    // called once. A stream of intercepted HTLCs and a `Arc<dyn ILnRpcClient>
+    // are returned to the caller. The caller can use this new client to
+    // interact with the lightning node.
+    async fn route_htlcs<'a>(
+        self: Box<Self>,
+        task_group: &mut TaskGroup,
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>)>;
 
     async fn complete_htlc(&self, htlc: InterceptHtlcResponse) -> Result<EmptyResponse>;
 }
@@ -106,12 +114,15 @@ impl ILnRpcClient for NetworkLnRpcClient {
     }
 
     async fn route_htlcs<'a>(
-        &mut self,
+        self: Box<Self>,
         _task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>> {
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>)> {
         let mut client = Self::connect(self.connection_url.clone()).await?;
         let res = client.route_htlcs(EmptyRequest {}).await?;
-        Ok(Box::pin(res.into_inner()))
+        Ok((
+            Box::pin(res.into_inner()),
+            Arc::new(Self::new(self.connection_url.clone()).await),
+        ))
     }
 
     async fn complete_htlc(&self, htlc: InterceptHtlcResponse) -> Result<EmptyResponse> {

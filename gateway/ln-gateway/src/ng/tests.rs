@@ -44,7 +44,7 @@ fn fixtures() -> Fixtures {
 async fn gateway_test<B>(
     f: impl FnOnce(
             GatewayTest,
-            Arc<dyn LightningTest>,
+            Box<dyn LightningTest>,
             FederationTest,
             Client, // User Client
         ) -> B
@@ -54,10 +54,12 @@ where
     B: Future<Output = anyhow::Result<()>>,
 {
     let fixtures = fixtures();
-    let lnd = fixtures.lnd().await;
-    let cln = fixtures.cln().await;
+    let lnd1 = fixtures.lnd().await;
+    let cln1 = fixtures.cln().await;
+    let lnd2 = fixtures.lnd().await;
+    let cln2 = fixtures.cln().await;
 
-    for (node, other_node) in vec![(lnd.clone(), cln.clone()), (cln, lnd)] {
+    for (node, other_node) in vec![(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
         let user_client = fed.new_client().await;
         let mut gateway = fixtures.new_gateway(node).await;

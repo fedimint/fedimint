@@ -46,7 +46,7 @@ use url::Url;
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
 use crate::db::FederationRegistrationKey;
-use crate::gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcRequest};
+use crate::gatewaylnrpc::InterceptHtlcRequest;
 use crate::lnrpc_client::ILnRpcClient;
 use crate::ng::complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 
@@ -293,7 +293,8 @@ impl GatewayClientExt for Client {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientGen {
-    pub lightning_client: Arc<dyn ILnRpcClient>,
+    pub lnrpc: Arc<dyn ILnRpcClient>,
+    pub node_pub_key: secp256k1::PublicKey,
     pub timelock_delta: u64,
     pub mint_channel_id: u64,
     pub fees: RoutingFees,
@@ -323,17 +324,14 @@ impl ClientModuleGen for GatewayClientGen {
         _api: DynGlobalApi,
         module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
-        let GetNodeInfoResponse { pub_key, alias: _ } = self.lightning_client.info().await?;
-        let node_pub_key = PublicKey::from_slice(&pub_key)
-            .map_err(|e| anyhow::anyhow!("Invalid node pubkey {}", e))?;
         Ok(GatewayClientModule {
+            lnrpc: self.lnrpc.clone(),
             cfg,
             notifier,
             redeem_key: module_root_secret
                 .child_key(ChildId(0))
                 .to_secp_key(&Secp256k1::new()),
-            node_pub_key,
-            lightning_client: self.lightning_client.clone(),
+            node_pub_key: self.node_pub_key,
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
             fees: self.fees,
@@ -375,6 +373,7 @@ pub enum GatewayError {
 
 #[derive(Debug)]
 pub struct GatewayClientModule {
+    lnrpc: Arc<dyn ILnRpcClient>,
     cfg: LightningClientConfig,
     pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
@@ -382,7 +381,6 @@ pub struct GatewayClientModule {
     timelock_delta: u64,
     mint_channel_id: u64,
     fees: RoutingFees,
-    lightning_client: Arc<dyn ILnRpcClient>,
     module_api: DynModuleApi,
 }
 
@@ -393,7 +391,7 @@ impl ClientModule for GatewayClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
-            lnrpc: self.lightning_client.clone(),
+            lnrpc: self.lnrpc.clone(),
             redeem_key: self.redeem_key,
             timelock_delta: self.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),

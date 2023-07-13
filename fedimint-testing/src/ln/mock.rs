@@ -85,10 +85,6 @@ impl LightningTest for FakeLightningTest {
     fn is_shared(&self) -> bool {
         false
     }
-
-    fn as_rpc(&self) -> Arc<dyn ILnRpcClient> {
-        Arc::new(self.clone())
-    }
 }
 
 #[async_trait]
@@ -127,10 +123,10 @@ impl ILnRpcClient for FakeLightningTest {
     }
 
     async fn route_htlcs<'a>(
-        &mut self,
+        self: Box<Self>,
         _task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        Ok(Box::pin(stream::iter(vec![])))
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
+        Ok((Box::pin(stream::iter(vec![])), Arc::new(Self::new())))
     }
 
     async fn complete_htlc(

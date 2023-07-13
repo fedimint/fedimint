@@ -235,79 +235,6 @@ impl ClnRpcService {
             })
             .map_err(ClnExtensionError::RpcError)?
     }
-
-    async fn complete_htlc(
-        complete_request: InterceptHtlcResponse,
-        interceptors: Arc<ClnHtlcInterceptor>,
-    ) -> Result<(), Status> {
-        let InterceptHtlcResponse {
-            action,
-            incoming_chan_id,
-            htlc_id,
-            ..
-        } = complete_request;
-        if let Some(outcome) = interceptors
-            .outcomes
-            .lock()
-            .await
-            .remove(&(incoming_chan_id, htlc_id))
-        {
-            // Translate action request into a cln rpc response for
-            // `htlc_accepted` event
-            let htlca_res = match action {
-                Some(Action::Settle(Settle { preimage })) => {
-                    let assert_pk: Result<[u8; 32], TryFromSliceError> =
-                        preimage.as_slice().try_into();
-                    if let Ok(pk) = assert_pk {
-                        serde_json::json!({ "result": "resolve", "payment_key": pk.to_hex() })
-                    } else {
-                        htlc_processing_failure()
-                    }
-                }
-                Some(Action::Cancel(Cancel { reason: _ })) => {
-                    // TODO: Translate the reason into a BOLT 4 failure message
-                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                    htlc_processing_failure()
-                }
-                Some(Action::Forward(Forward {})) => {
-                    serde_json::json!({ "result": "continue" })
-                }
-                None => {
-                    error!(
-                        ?incoming_chan_id,
-                        ?htlc_id,
-                        "No action specified for intercepted htlc"
-                    );
-                    return Err(Status::internal(
-                        "No action specified on this intercepted htlc",
-                    ));
-                }
-            };
-
-            // Send translated response to the HTLC interceptor for submission
-            // to the cln rpc
-            match outcome.send(htlca_res) {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        "Failed to send htlc_accepted response to interceptor: {:?}",
-                        e
-                    );
-                    return Err(Status::internal(
-                        "Failed to send htlc_accepted response to interceptor",
-                    ));
-                }
-            };
-        } else {
-            error!(
-                ?incoming_chan_id,
-                ?htlc_id,
-                "No interceptor reference found for this processed htlc",
-            );
-            return Err(Status::internal("No interceptor reference found for htlc"));
-        }
-        Ok(())
-    }
 }
 
 #[tonic::async_trait]
@@ -484,6 +411,7 @@ impl GatewayLightning for ClnRpcService {
 
         let mut sender = self.interceptor.sender.lock().await;
         *sender = Some(gatewayd_sender.clone());
+        debug!("Gateway channel sender replaced");
 
         Ok(tonic::Response::new(ReceiverStream::new(gatewayd_receiver)))
     }
@@ -492,8 +420,74 @@ impl GatewayLightning for ClnRpcService {
         &self,
         intercept_response: tonic::Request<InterceptHtlcResponse>,
     ) -> Result<tonic::Response<EmptyResponse>, Status> {
-        let complete_htlc = intercept_response.into_inner();
-        Self::complete_htlc(complete_htlc, self.interceptor.clone()).await?;
+        let InterceptHtlcResponse {
+            action,
+            incoming_chan_id,
+            htlc_id,
+            ..
+        } = intercept_response.into_inner();
+
+        if let Some(outcome) = self
+            .interceptor
+            .outcomes
+            .lock()
+            .await
+            .remove(&(incoming_chan_id, htlc_id))
+        {
+            // Translate action request into a cln rpc response for
+            // `htlc_accepted` event
+            let htlca_res = match action {
+                Some(Action::Settle(Settle { preimage })) => {
+                    let assert_pk: Result<[u8; 32], TryFromSliceError> =
+                        preimage.as_slice().try_into();
+                    if let Ok(pk) = assert_pk {
+                        serde_json::json!({ "result": "resolve", "payment_key": pk.to_hex() })
+                    } else {
+                        htlc_processing_failure()
+                    }
+                }
+                Some(Action::Cancel(Cancel { reason: _ })) => {
+                    // TODO: Translate the reason into a BOLT 4 failure message
+                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                    htlc_processing_failure()
+                }
+                Some(Action::Forward(Forward {})) => {
+                    serde_json::json!({ "result": "continue" })
+                }
+                None => {
+                    error!(
+                        ?incoming_chan_id,
+                        ?htlc_id,
+                        "No action specified for intercepted htlc"
+                    );
+                    return Err(Status::internal(
+                        "No action specified on this intercepted htlc",
+                    ));
+                }
+            };
+
+            // Send translated response to the HTLC interceptor for submission
+            // to the cln rpc
+            match outcome.send(htlca_res) {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        "Failed to send htlc_accepted response to interceptor: {:?}",
+                        e
+                    );
+                    return Err(Status::internal(
+                        "Failed to send htlc_accepted response to interceptor",
+                    ));
+                }
+            };
+        } else {
+            error!(
+                ?incoming_chan_id,
+                ?htlc_id,
+                "No interceptor reference found for this processed htlc",
+            );
+            return Err(Status::internal("No interceptor reference found for htlc"));
+        }
         Ok(tonic::Response::new(EmptyResponse {}))
     }
 }

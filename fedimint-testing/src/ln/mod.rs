@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -57,6 +56,4 @@ pub trait LightningTest: ILnRpcClient {
 
     /// Is this a LN instance shared with other tests
     fn is_shared(&self) -> bool;
-
-    fn as_rpc(&self) -> Arc<dyn ILnRpcClient>;
 }

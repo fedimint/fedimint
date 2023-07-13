@@ -3189,7 +3189,6 @@ dependencies = [
  "fedimint-testing",
  "fedimint-wallet-client",
  "futures",
- "lazy_static",
  "lightning",
  "lightning-invoice",
  "prost 0.11.9",

@@ -1,12 +1,13 @@
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use fedimint_core::task::{sleep, TaskGroup};
 use secp256k1::PublicKey;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::lnrpc::failure::FailureCode;
@@ -33,19 +34,21 @@ type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
 
-lazy_static::lazy_static! {
-    static ref LND_SENDER: RwLock<Option<mpsc::Sender<ForwardHtlcInterceptResponse>>> = RwLock::new(None);
-}
-
 pub struct GatewayLndClient {
     /// LND client
     address: String,
     tls_cert: String,
     macaroon: String,
+    lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
 }
 
 impl GatewayLndClient {
-    pub async fn new(address: String, tls_cert: String, macaroon: String) -> Self {
+    pub async fn new(
+        address: String,
+        tls_cert: String,
+        macaroon: String,
+        lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
+    ) -> Self {
         info!(
             "Gateway configured to connect to LND LnRpcClient at \n address: {},\n tls cert path: {},\n macaroon path: {} ",
             address, tls_cert, macaroon
@@ -54,6 +57,7 @@ impl GatewayLndClient {
             address,
             tls_cert,
             macaroon,
+            lnd_sender,
         }
     }
 
@@ -421,9 +425,9 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn route_htlcs<'a>(
-        &mut self,
+        self: Box<Self>,
         task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>, GatewayError> {
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
         const CHANNEL_SIZE: usize = 100;
 
         // Channel to send intercepted htlc to actor for processing
@@ -435,16 +439,26 @@ impl ILnRpcClient for GatewayLndClient {
 
         self.spawn_interceptor(task_group, lnd_sender.clone(), lnd_rx, actor_sender.clone())
             .await?;
-        let mut sender = LND_SENDER.write().await;
-        *sender = Some(lnd_sender);
-        Ok(Box::pin(ReceiverStream::new(actor_receiver)))
+        let new_client = Arc::new(
+            Self::new(
+                self.address.clone(),
+                self.tls_cert.clone(),
+                self.macaroon.clone(),
+                Some(lnd_sender.clone()),
+            )
+            .await,
+        );
+        if new_client.lnd_sender.is_none() {
+            info!("route_htlcs called, LND_SENDER is not none");
+        }
+        Ok((Box::pin(ReceiverStream::new(actor_receiver)), new_client))
     }
 
     async fn complete_htlc(
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, GatewayError> {
-        if let Some(lnd_sender) = LND_SENDER.read().await.clone() {
+        if let Some(lnd_sender) = self.lnd_sender.clone() {
             let InterceptHtlcResponse {
                 action,
                 incoming_chan_id,

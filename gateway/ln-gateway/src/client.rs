@@ -43,6 +43,7 @@ impl StandardGatewayClientBuilder {
     pub async fn build(
         &self,
         config: FederationConfig,
+        node_pub_key: secp256k1::PublicKey,
         lnrpc: Arc<dyn ILnRpcClient>,
         tg: &mut TaskGroup,
     ) -> Result<fedimint_client::Client> {
@@ -55,7 +56,8 @@ impl StandardGatewayClientBuilder {
 
         let mut registry = self.registry.clone();
         registry.attach(GatewayClientGen {
-            lightning_client: lnrpc,
+            lnrpc,
+            node_pub_key,
             fees: config.fees,
             timelock_delta: config.timelock_delta,
             mint_channel_id: config.mint_channel_id,

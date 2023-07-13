@@ -22,7 +22,7 @@ pub async fn run_webserver(
     authkey: String,
     bind_addr: SocketAddr,
     mut gateway: Gateway,
-) -> axum::response::Result<oneshot::Receiver<()>> {
+) -> axum::response::Result<oneshot::Sender<()>> {
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
@@ -58,21 +58,7 @@ pub async fn run_webserver(
         })
         .await;
 
-    let handle = gateway.task_group.make_handle();
-    handle
-        .on_shutdown(Box::new(|| {
-            Box::pin(async move {
-                // Send shutdown signal to the webserver
-                let res = tx.send(());
-                if res.is_err() {
-                    error!("Error shutting down gatewayd webserver: {res:?}");
-                }
-            })
-        }))
-        .await;
-    let shutdown_receiver = handle.make_shutdown_rx().await;
-
-    Ok(shutdown_receiver)
+    Ok(tx)
 }
 
 /// Display high-level information about the Gateway
