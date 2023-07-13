@@ -4,12 +4,12 @@ This directory contains files to help run federation components with `docker`.
 
 To install `docker` and `docker-compose`, follow standard directions on web.
 
-## Running fedimintd + guardian-ui
+## Running fedimintd + guardian-ui for mutinynet
 
-Enter the specific directory for `fedimintd`:
+Enter the specific directory for `fedimintd-mutinynet`:
 
 ```bash
-cd docker/fedimintd
+cd docker/fedimintd-mutinynet
 ```
 
 Replace `127.0.0.1` with your external ip address, e.g:
@@ -38,7 +38,7 @@ To access the ui externally you can use `http://your-external-ip:3000` (if you o
 
 ### Changing configuration
 
-By default the `docker-compose` is configured for [mutinynet signet](https://blog.mutinywallet.com/mutinynet/), but this can be altered by changing the following environment variables on `docker-compose.yaml`:
+The `docker-compose` is configured for [mutinynet signet](https://blog.mutinywallet.com/mutinynet/), but this can be altered by changing the following environment variables on `docker-compose.yaml`:
 
 ```
 - FM_BITCOIN_RPC_KIND=...
