@@ -27,7 +27,7 @@ use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use client::StandardGatewayClientBuilder;
-use db::{FederationRegistrationKey, GatewaydPublicKey};
+use db::{FederationRegistrationKey, GatewayPublicKey};
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
@@ -218,13 +218,13 @@ impl Gateway {
 
     async fn get_gateway_public_key(gatewayd_db: Database) -> secp256k1::PublicKey {
         let mut dbtx = gatewayd_db.begin_transaction().await;
-        if let Some(key_pair) = dbtx.get_value(&GatewaydPublicKey {}).await {
+        if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
             key_pair.public_key()
         } else {
             let context = secp256k1::Secp256k1::new();
             let (secret, public) = context.generate_keypair(&mut OsRng);
             let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
-            dbtx.insert_new_entry(&GatewaydPublicKey, &key_pair).await;
+            dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
             dbtx.commit_tx().await;
             public
         }

@@ -48,10 +48,10 @@ impl_db_record!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
-pub struct GatewaydPublicKey;
+pub struct GatewayPublicKey;
 
 impl_db_record!(
-    key = GatewaydPublicKey,
+    key = GatewayPublicKey,
     value = secp256k1::KeyPair,
     db_prefix = DbKeyPrefix::GatewayPublicKey,
 );
