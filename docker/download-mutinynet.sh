@@ -24,7 +24,7 @@ FEDIMINTD_DIR=fedimintd
 
 EXTERNAL_IP=$(curl -sSL ifconfig.me)
 
-read -p "Enter the external IP of your server [$EXTERNAL_IP]: " -a external_ip
+read -p "Enter the external IP of your server [$EXTERNAL_IP]: " -a external_ip < /dev/tty
 if [[ -z ${external_ip[*]} ]]; then
   external_ip=$EXTERNAL_IP
 fi
@@ -34,18 +34,18 @@ replace_external_ip() {
   sed -i "s/127.0.0.1/$external_ip/g" $path
 }
 
-read -p "Do you want to install fedimintd? [Y/n] " -n 1 -r -a fedimintd_install
+read -p "Do you want to install fedimintd? [Y/n] " -n 1 -r -a fedimintd_install < /dev/tty
 if [[ ${fedimintd_install[*]} =~ ^[Yy]?$ ]]; then
   mkdir -p $FEDIMINTD_DIR
   download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/fedimintd-mutinynet/docker-compose.yaml $FEDIMINTD_DIR/docker-compose.yaml
   replace_external_ip $FEDIMINTD_DIR/docker-compose.yaml
 fi
 
-read -p "Do you want to install the LN gateway? [Y/n] " -n 1 -r -a gateway_install
+read -p "Do you want to install the LN gateway? [Y/n] " -n 1 -r -a gateway_install < /dev/tty
 if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
   # ask the user for the gateway password
   DEFAUT_GATEWAY_PASSWORD=thereisnosecondbest
-  read -p "Enter the password for the LN gateway: [$DEFAUT_GATEWAY_PASSWORD]" -a gateway_password
+  read -p "Enter the password for the LN gateway: [$DEFAUT_GATEWAY_PASSWORD] " -a gateway_password < /dev/tty
   if [[ -z ${gateway_password[*]} ]]; then
     gateway_password=$DEFAUT_GATEWAY_PASSWORD
   fi
