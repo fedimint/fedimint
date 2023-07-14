@@ -55,7 +55,6 @@ jobs:
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             timeout: 60
             run-tests: false
-
     name: "Build on ${{ matrix.host }}"
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
@@ -213,7 +212,6 @@ jobs:
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#cross.${{ matrix.target }}.client-pkgs
 
-
   containers:
     name: "Containers"
     runs-on: buildjet-8vcpu-ubuntu-2004
@@ -290,7 +288,7 @@ jobs:
           - pkg: gateway-pkgs
             bin: gateway-cli
 
-    runs-on: buildjet-4vcpu-ubuntu-2004
+    runs-on: ubuntu-20.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
@@ -312,6 +310,12 @@ jobs:
       - name: Check sha256sum ${{ matrix.build.bin }}
         run: nix build .#${{ matrix.build.bin }} && sha256sum "./result/bin/${{ matrix.build.bin }}"
 
+      - name: Upload bin artifact
+        uses: actions/upload-artifact@v3
+        with: 
+          name: ${{ matrix.build.bin }}
+          path: "./result/bin/${{ matrix.build.bin }}" 
+
   notifications:
     # if: github.ref == 'refs/heads/master'
     if: always()
@@ -332,3 +336,39 @@ jobs:
         webhook: ${{ secrets.DISCORD_WEBHOOK }}
         # current job is a success, but that's not what we're interested in
         status: failure
+
+  deb-binary:
+    name: "Bundling for DEB and RPM"
+    runs-on: ubuntu-20.04 
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v3
+        if: github.ref == 'refs/heads/master'
+      - uses: cachix/install-nix-action@v22
+        if: github.ref == 'refs/heads/master'
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v12
+        if: github.ref == 'refs/heads/master'
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+      - name: Build DEB package
+        run: nix bundle --bundler github:NixOS/bundlers#toDEB --accept-flake-config -o fedimintd.bundled.deb .#fedimintd
+      - name: Copy binary from symlink
+        run: cp -L fedimintd.bundled.deb/fedimintd-bin-fedimintd_1.0_amd64.deb .
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with: 
+          name: "deb-bundle"
+          path: fedimintd-bin-fedimintd_1.0_amd64.deb
+      - name: Build RPM package
+        run: nix bundle --bundler github:NixOS/bundlers#toRPM --accept-flake-config -o fedimintd.bundled.rpm .#fedimintd
+      - name: Copy binary from symlink
+        run: cp -L fedimintd.bundled.rpm/fedimintd-bin-fedimintd-1.0-1.x86_64.rpm .
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with: 
+          name: "deb-bundle"
+          path: fedimintd-bin-fedimintd-1.0-1.x86_64.rpm
