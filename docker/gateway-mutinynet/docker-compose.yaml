@@ -11,7 +11,7 @@ services:
       # Gateway webserver listen address
       - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:8175
       # Public URL from which the webserver API is reachable
-      - FM_GATEWAY_API_ADDR=ws://gatewayd:8175
+      - FM_GATEWAY_API_ADDR=http://127.0.0.1:8175
       # Gateway webserver authentication password
       - FM_GATEWAY_PASSWORD=thereisnosecondbest
       # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
