@@ -630,7 +630,6 @@
 <a href="#630" id="630">630</a>
 <a href="#631" id="631">631</a>
 <a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>deposit;
@@ -1057,9 +1056,8 @@
         Network::Regtest =&gt; {
             Url::parse(<span class="string">&quot;http://127.0.0.1:50002/&quot;</span>).expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>)
         }
-        network =&gt; {
-            <span class="macro">panic!</span>(<span class="string">&quot;Don&#39;t know an electrs server for network: {network}&quot;</span>);
-        }
+        Network::Signet =&gt; Url::parse(<span class="string">&quot;https://mutinynet.com/api/&quot;</span>)
+            .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
     };
     BitcoinRpcConfig {
         kind: <span class="string">&quot;esplora&quot;</span>.to_string(),
