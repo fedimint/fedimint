@@ -7,7 +7,9 @@ use fedimint_core::core::{
 };
 use fedimint_core::module::ServerModuleGen;
 use fedimint_core::{Amount, Tiered};
-use fedimint_ln_server::common::config::LightningGenParams;
+use fedimint_ln_server::common::config::{
+    LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
+};
 use fedimint_ln_server::LightningGen;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintGen;
@@ -59,6 +61,9 @@ pub fn attach_default_module_gen_params(
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_LN,
             LightningGen::kind(),
-            LightningGenParams::regtest(bitcoin_rpc),
+            LightningGenParams {
+                local: LightningGenParamsLocal { bitcoin_rpc },
+                consensus: LightningGenParamsConsensus { network },
+            },
         );
 }
