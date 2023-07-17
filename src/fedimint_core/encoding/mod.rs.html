@@ -824,6 +824,42 @@
 <a href="#824" id="824">824</a>
 <a href="#825" id="825">825</a>
 <a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -840,6 +876,7 @@
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
+<span class="kw">use </span>std::{cmp, mem};
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
@@ -1054,8 +1091,43 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>len = u64::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        (<span class="number">0</span>..len).map(|<span class="kw">_</span>| T::consensus_decode(d, modules)).collect()
+
+        <span class="comment">// `collect` under the hood uses `FromIter::from_iter`, which can potentially be
+        // backed by code like:
+        // &lt;https://github.com/rust-lang/rust/blob/fe03b46ee4688a99d7155b4f9dcd875b6903952d/library/alloc/src/vec/spec_from_iter_nested.rs#L31&gt;
+        // This can take `size_hint` from input iterator and pre-allocate memory
+        // upfront with `Vec::with_capacity`. Because of that untrusted `len`
+        // should not be used directly.
+        </span><span class="kw">let </span>cap_len = cmp::min(<span class="number">8_000 </span>/ mem::size_of::&lt;T&gt;() <span class="kw">as </span>u64, len);
+
+        <span class="comment">// Up to a cap, use the (potentially specialized for better perf in stdlib)
+        // `from_iter`.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>v: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..cap_len)
+            .map(|<span class="kw">_</span>| T::consensus_decode(d, modules))
+            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, DecodeError&gt;&gt;()<span class="question-mark">?</span>;
+
+        <span class="comment">// Add any excess manually avoiding any surprises.
+        </span><span class="kw">while </span>(v.len() <span class="kw">as </span>u64) &lt; len {
+            v.push(T::consensus_decode(d, modules)<span class="question-mark">?</span>);
+        }
+
+        <span class="macro">assert_eq!</span>(v.len() <span class="kw">as </span>u64, len);
+
+        <span class="prelude-val">Ok</span>(v)
     }
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>vec_decode_sanity() {
+    <span class="kw">let </span>buf = [
+        <span class="number">0xffu8</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,
+    ];
+
+    <span class="comment">// On malicious large len, return an error instead of panicking.
+    // Note: This was supposed to expose the panic, but I was not able to trigger it
+    // for some reason.
+    </span><span class="macro">assert!</span>(Vec::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>Default::default()).is_err());
+    <span class="macro">assert!</span>(Vec::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>Default::default()).is_err());
 }
 
 <span class="kw">impl</span>&lt;T, <span class="kw">const </span>SIZE: usize&gt; Encodable <span class="kw">for </span>[T; SIZE]
