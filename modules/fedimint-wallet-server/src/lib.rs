@@ -371,7 +371,8 @@ impl ServerModule for Wallet {
 
                 let new_consensus_height = self.consensus_block_height(dbtx).await;
 
-                if new_consensus_height > old_consensus_height {
+                // only sync from the first non-default consensus block height
+                if new_consensus_height > old_consensus_height && old_consensus_height > 0 {
                     self.sync_up_to_consensus_height(
                         dbtx,
                         old_consensus_height,
