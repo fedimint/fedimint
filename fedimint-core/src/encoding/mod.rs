@@ -14,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{cmp, mem};
 
 use anyhow::format_err;
 use bitcoin_hashes::hex::{FromHex, ToHex};
@@ -228,8 +229,43 @@ where
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let len = u64::consensus_decode(d, modules)?;
-        (0..len).map(|_| T::consensus_decode(d, modules)).collect()
+
+        // `collect` under the hood uses `FromIter::from_iter`, which can potentially be
+        // backed by code like:
+        // <https://github.com/rust-lang/rust/blob/fe03b46ee4688a99d7155b4f9dcd875b6903952d/library/alloc/src/vec/spec_from_iter_nested.rs#L31>
+        // This can take `size_hint` from input iterator and pre-allocate memory
+        // upfront with `Vec::with_capacity`. Because of that untrusted `len`
+        // should not be used directly.
+        let cap_len = cmp::min(8_000 / mem::size_of::<T>() as u64, len);
+
+        // Up to a cap, use the (potentially specialized for better perf in stdlib)
+        // `from_iter`.
+        let mut v: Vec<_> = (0..cap_len)
+            .map(|_| T::consensus_decode(d, modules))
+            .collect::<Result<Vec<_>, DecodeError>>()?;
+
+        // Add any excess manually avoiding any surprises.
+        while (v.len() as u64) < len {
+            v.push(T::consensus_decode(d, modules)?);
+        }
+
+        assert_eq!(v.len() as u64, len);
+
+        Ok(v)
     }
+}
+
+#[test]
+fn vec_decode_sanity() {
+    let buf = [
+        0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    // On malicious large len, return an error instead of panicking.
+    // Note: This was supposed to expose the panic, but I was not able to trigger it
+    // for some reason.
+    assert!(Vec::<u8>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
+    assert!(Vec::<u16>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
 }
 
 impl<T, const SIZE: usize> Encodable for [T; SIZE]
