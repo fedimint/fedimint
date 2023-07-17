@@ -1042,11 +1042,10 @@ async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result
     result
 }
 
-async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<()> {
+async fn run_ui(process_mgr: &ProcessManager) -> Result<Vec<Fedimintd>> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let fed_size = process_mgr.globals.FM_FED_SIZE;
-    // don't drop fedimintds
-    let _fedimintds = futures::future::try_join_all((0..fed_size).into_iter().map(|peer| {
+    let fedimintds = futures::future::try_join_all((0..fed_size).into_iter().map(|peer| {
         let bitcoind = bitcoind.clone();
         async move {
             let peer_port = 10000 + 8137 + peer * 2;
@@ -1077,8 +1076,7 @@ async fn run_ui(process_mgr: &ProcessManager, task_group: &TaskGroup) -> Result<
     }))
     .await?;
 
-    task_group.make_handle().make_shutdown_rx().await.await?;
-    Ok(())
+    Ok(fedimintds)
 }
 
 use std::fmt::Write;
@@ -1136,7 +1134,9 @@ async fn main() -> Result<()> {
         }
         Cmd::RunUi => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            run_ui(&process_mgr, &task_group).await?
+            let fedimintds = run_ui(&process_mgr).await?;
+            let _daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
+            task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::LatencyTests => {
             let (process_mgr, _) = setup(args.common).await?;
