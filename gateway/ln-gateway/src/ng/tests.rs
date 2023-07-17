@@ -438,9 +438,9 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let node = fixtures.lnd().await;
     let fed = fixtures.new_fed().await;
     let user_client = fed.new_client().await;
-    let mut gateway = fixtures.new_gateway(node).await;
-    gateway.connect_fed(&fed).await;
-    let gateway = gateway.remove_client(&fed).await;
+    let mut gateway_test = fixtures.new_gateway(node).await;
+    gateway_test.connect_fed(&fed).await;
+    let gateway = gateway_test.remove_client(&fed).await;
 
     let mut fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
     let fake_route_hints = Vec::new();
@@ -450,6 +450,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
             fake_api.clone(),
             fake_route_hints.clone(),
             GW_ANNOUNCEMENT_TTL,
+            gateway_test.get_gateway_id(),
         )
         .await?;
     let gateways = user_client.fetch_registered_gateways().await?;
@@ -459,7 +460,12 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     fake_api = Url::from_str("http://127.0.0.1:8176").unwrap();
 
     gateway
-        .register_with_federation(fake_api.clone(), fake_route_hints, GW_ANNOUNCEMENT_TTL)
+        .register_with_federation(
+            fake_api.clone(),
+            fake_route_hints,
+            GW_ANNOUNCEMENT_TTL,
+            gateway_test.get_gateway_id(),
+        )
         .await?;
     let gateways = user_client.fetch_registered_gateways().await?;
     assert!(gateways.into_iter().any(|gateway| gateway.api == fake_api));

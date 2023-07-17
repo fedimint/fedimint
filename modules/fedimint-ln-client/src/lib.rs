@@ -49,7 +49,6 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::XOnlyPublicKey;
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -74,7 +73,7 @@ pub trait LightningClientExt {
     async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway>;
 
     /// Sets the gateway to be used by all other operations
-    async fn set_active_gateway(&self, gateway_pub_key: &XOnlyPublicKey) -> anyhow::Result<()>;
+    async fn set_active_gateway(&self, gateway_id: &secp256k1::PublicKey) -> anyhow::Result<()>;
 
     /// Gateways actively registered with the fed
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
@@ -205,7 +204,7 @@ impl LightningClientExt for Client {
     }
 
     /// Switches the clients active gateway to a registered gateway.
-    async fn set_active_gateway(&self, gateway_pub_key: &XOnlyPublicKey) -> anyhow::Result<()> {
+    async fn set_active_gateway(&self, gateway_id: &secp256k1::PublicKey) -> anyhow::Result<()> {
         let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let mut dbtx = instance.db.begin_transaction().await;
 
@@ -216,12 +215,9 @@ impl LightningClientExt for Client {
         };
         let gateway = gateways
             .into_iter()
-            .find(|g| &g.gateway_pub_key == gateway_pub_key)
+            .find(|g| &g.gateway_id == gateway_id)
             .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Could not find gateway with gateway public key {:?}",
-                    gateway_pub_key
-                )
+                anyhow::anyhow!("Could not find gateway with gateway id {:?}", gateway_id)
             })?;
 
         dbtx.insert_entry(&LightningGatewayKey, &gateway).await;
@@ -663,7 +659,7 @@ impl LightningClientModule {
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
-            gateway_key: gateway.gateway_pub_key,
+            gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock as u32,
             user_key: user_sk.x_only_public_key().0,
             invoice,

@@ -166,8 +166,8 @@ impl Federation {
     }
 
     pub async fn use_gateway(&self, gw: &Gatewayd) -> Result<()> {
-        let gateway_pub_key = gw.gateway_pub_key().await?;
-        cmd!(self, "switch-gateway", gateway_pub_key.clone())
+        let gateway_id = gw.gateway_id().await?;
+        cmd!(self, "switch-gateway", gateway_id.clone())
             .run()
             .await?;
         info!(

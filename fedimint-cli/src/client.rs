@@ -78,8 +78,8 @@ pub enum ClientCmd {
     ListGateways,
     /// Switch active gateway
     SwitchGateway {
-        #[clap(value_parser = parse_gateway_pub_key)]
-        pubkey: secp256k1::XOnlyPublicKey,
+        #[clap(value_parser = parse_gateway_id)]
+        gateway_id: secp256k1::PublicKey,
     },
     /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress,
@@ -120,8 +120,8 @@ pub enum ClientCmd {
     PrintSecret,
 }
 
-pub fn parse_gateway_pub_key(s: &str) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
-    secp256k1::XOnlyPublicKey::from_str(s)
+pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
+    secp256k1::PublicKey::from_str(s)
 }
 
 fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
@@ -290,8 +290,8 @@ pub async fn handle_ng_command(
                 });
             Ok(serde_json::to_value(gateways_json).unwrap())
         }
-        ClientCmd::SwitchGateway { pubkey } => {
-            client.set_active_gateway(&pubkey).await?;
+        ClientCmd::SwitchGateway { gateway_id } => {
+            client.set_active_gateway(&gateway_id).await?;
             let gateway = client.select_active_gateway().await?;
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);

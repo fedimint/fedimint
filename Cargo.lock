@@ -1914,6 +1914,7 @@ dependencies = [
  "lightning-invoice",
  "ln-gateway",
  "rand",
+ "secp256k1 0.24.3",
  "secp256k1-zkp",
  "serde",
  "tempfile",

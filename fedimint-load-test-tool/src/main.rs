@@ -118,9 +118,9 @@ struct LoadTestArgs {
 
     #[arg(
         long,
-        help = "Gateway public key. If none, retrieve one according to --generate-invoice-with"
+        help = "Gateway Id. If none, retrieve one according to --generate-invoice-with"
     )]
-    gateway_public_key: Option<String>,
+    gateway_id: Option<String>,
 
     #[arg(
         long,
@@ -255,10 +255,10 @@ async fn main() -> anyhow::Result<()> {
                 try_get_notes_cli(&Amount::from_sats(2000), 5).await?
             };
 
-            let gateway_public_key = if let Some(gateway_public_key) = args.gateway_public_key {
-                Some(gateway_public_key)
+            let gateway_id = if let Some(gateway_id) = args.gateway_id {
+                Some(gateway_id)
             } else if let Some(generate_invoice_with) = args.generate_invoice_with {
-                Some(get_gateway_public_key(generate_invoice_with).await?)
+                Some(get_gateway_id(generate_invoice_with).await?)
             } else {
                 None
             };
@@ -286,7 +286,7 @@ async fn main() -> anyhow::Result<()> {
                 args.invoices_per_user,
                 Duration::from_secs(args.ln_payment_sleep_secs),
                 invoices,
-                gateway_public_key,
+                gateway_id,
                 args.notes_per_user,
                 args.note_denomination,
                 args.invoice_amount,
@@ -324,7 +324,7 @@ async fn run_load_test(
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
     invoices_from_file: Vec<Invoice>,
-    gateway_public_key: Option<String>,
+    gateway_id: Option<String>,
     notes_per_user: u16,
     note_denomination: Amount,
     invoice_amount: Amount,
@@ -345,8 +345,8 @@ async fn run_load_test(
             .as_ref()
             .map(|db_path| db_path.join(format!("user_{u}.db")));
         let client = build_client(&cfg, &mut tg, user_db.as_ref()).await?;
-        if let Some(gateway_public_key) = &gateway_public_key {
-            switch_default_gateway(&client, gateway_public_key).await?;
+        if let Some(gateway_id) = &gateway_id {
+            switch_default_gateway(&client, gateway_id).await?;
         }
         users_clients.push(client);
     }
@@ -784,9 +784,7 @@ async fn handle_metrics_summary(
     Ok(())
 }
 
-async fn get_gateway_public_key(
-    generate_invoice_with: LnInvoiceGeneration,
-) -> anyhow::Result<String> {
+async fn get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -> anyhow::Result<String> {
     let gateway_json = match generate_invoice_with {
         LnInvoiceGeneration::ClnLightningCli => {
             // If we are paying a lnd invoice, we use the cln gateway
@@ -797,11 +795,11 @@ async fn get_gateway_public_key(
             cmd!(GatewayClnCli, "info").out_json().await
         }
     }?;
-    let gateway_pub_key = gateway_json["federations"][0]["registration"]["gateway_pub_key"]
+    let gateway_id = gateway_json["federations"][0]["registration"]["gateway_id"]
         .as_str()
-        .context("Missing gateway_pub_key field")?;
+        .context("Missing gateway_id field")?;
 
-    Ok(gateway_pub_key.into())
+    Ok(gateway_id.into())
 }
 
 async fn get_cfg_from_args(args: &ConnectCommonArgs) -> anyhow::Result<ClientConfig> {

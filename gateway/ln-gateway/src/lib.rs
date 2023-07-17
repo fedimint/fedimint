@@ -27,7 +27,7 @@ use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use client::StandardGatewayClientBuilder;
-use db::FederationRegistrationKey;
+use db::{FederationRegistrationKey, GatewayPublicKey};
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
@@ -46,6 +46,7 @@ use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use ng::{GatewayClientExt, GatewayClientModule};
+use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::FederationInfo;
 use secp256k1::PublicKey;
@@ -151,6 +152,7 @@ pub struct Gateway {
     gatewayd_db: Database,
     api: Url,
     task_group: TaskGroup,
+    pub gateway_id: secp256k1::PublicKey,
 }
 
 impl Gateway {
@@ -172,9 +174,10 @@ impl Gateway {
             channel_id_generator: Arc::new(Mutex::new(AtomicU64::new(INITIAL_SCID))),
             lightning_mode: Some(lightning_mode),
             fees,
-            gatewayd_db,
+            gatewayd_db: gatewayd_db.clone(),
             api,
             task_group: TaskGroup::new(),
+            gateway_id: Self::get_gateway_id(gatewayd_db).await,
         };
 
         gw.register_clients_timer().await;
@@ -200,9 +203,10 @@ impl Gateway {
             channel_id_generator: Arc::new(Mutex::new(AtomicU64::new(INITIAL_SCID))),
             lightning_mode: None,
             fees,
-            gatewayd_db,
+            gatewayd_db: gatewayd_db.clone(),
             api,
             task_group: TaskGroup::new(),
+            gateway_id: Self::get_gateway_id(gatewayd_db).await,
         };
 
         gw.register_clients_timer().await;
@@ -210,6 +214,20 @@ impl Gateway {
         gw.route_htlcs().await?;
 
         Ok(gw)
+    }
+
+    async fn get_gateway_id(gatewayd_db: Database) -> secp256k1::PublicKey {
+        let mut dbtx = gatewayd_db.begin_transaction().await;
+        if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
+            key_pair.public_key()
+        } else {
+            let context = secp256k1::Secp256k1::new();
+            let (secret, public) = context.generate_keypair(&mut OsRng);
+            let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
+            dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
+            dbtx.commit_tx().await;
+            public
+        }
     }
 
     async fn create_lightning_client(mode: LightningMode) -> Arc<dyn ILnRpcClient> {
@@ -422,6 +440,7 @@ impl Gateway {
         let clients = self.clients.clone();
         let api = self.api.clone();
         let lnrpc = self.lnrpc.clone();
+        let gateway_id = self.gateway_id;
         self.task_group
             .spawn("register clients", move |handle| async move {
                 while !handle.is_shutting_down() {
@@ -433,6 +452,7 @@ impl Gateway {
                                         api.clone(),
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
+                                        gateway_id,
                                     )
                                     .await
                                     .is_err()
@@ -498,7 +518,12 @@ impl Gateway {
         route_hints: Vec<RouteHint>,
     ) -> Result<()> {
         client
-            .register_with_federation(self.api.clone(), route_hints, GW_ANNOUNCEMENT_TTL)
+            .register_with_federation(
+                self.api.clone(),
+                route_hints,
+                GW_ANNOUNCEMENT_TTL,
+                self.gateway_id,
+            )
             .await?;
         self.clients
             .write()
@@ -600,6 +625,7 @@ impl Gateway {
             route_hints.clone(),
             GW_ANNOUNCEMENT_TTL,
             self.api.clone(),
+            self.gateway_id,
         );
 
         let balance_msat = client.get_balance().await;
@@ -633,6 +659,7 @@ impl Gateway {
                 route_hints.clone(),
                 GW_ANNOUNCEMENT_TTL,
                 self.api.clone(),
+                self.gateway_id,
             );
             let balance_msat = client.get_balance().await;
 

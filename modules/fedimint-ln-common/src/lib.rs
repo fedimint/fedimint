@@ -184,7 +184,7 @@ pub struct LightningGateway {
     /// gateway.
     pub mint_channel_id: u64,
     /// Key used to pay the gateway
-    pub gateway_pub_key: secp256k1::XOnlyPublicKey,
+    pub gateway_redeem_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub api: Url,
     /// Route hints to reach the LN node of the gateway.
@@ -197,6 +197,7 @@ pub struct LightningGateway {
     /// Gateway configured routing fees
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
+    pub gateway_id: secp256k1::PublicKey,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

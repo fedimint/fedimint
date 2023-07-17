@@ -9,6 +9,7 @@ use lightning::routing::gossip::RoutingFees;
 pub enum DbKeyPrefix {
     FederationConfig = 0x04,
     FederationRegistration = 0x05,
+    GatewayPublicKey = 0x06,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -44,4 +45,13 @@ impl_db_record!(
     key = FederationRegistrationKey,
     value = LightningGateway,
     db_prefix = DbKeyPrefix::FederationRegistration,
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub struct GatewayPublicKey;
+
+impl_db_record!(
+    key = GatewayPublicKey,
+    value = secp256k1::KeyPair,
+    db_prefix = DbKeyPrefix::GatewayPublicKey,
 );
