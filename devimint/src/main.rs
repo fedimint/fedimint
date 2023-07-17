@@ -11,7 +11,8 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{Federation, Fedimintd};
 use devimint::util::{poll, poll_value, ProcessManager};
 use devimint::{
-    cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, LightningNode, Lightningd, Lnd,
+    cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, Gatewayd, LightningNode, Lightningd,
+    Lnd,
 };
 use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::task::TaskGroup;
@@ -837,88 +838,118 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
     gateways[1].set_lightning_node(LightningNode::Lnd(new_lnd.clone()));
 
     tracing::info!("Retrying info...");
+    const MAX_RETRIES: usize = 10;
+    const RETRY_INTERVAL: Duration = Duration::from_secs(1);
     for gw in gateways {
-        // Verify that after the lightning node has restarted, the gateway
-        // automatically reconnects and can query the lightning node
-        // info again.
-        let mut info_cmd = cmd!(gw, "info");
-        assert!(info_cmd.run().await.is_ok());
-
-        fed.use_gateway(&gw).await?;
-        tracing::info!("Creating invoice....");
-        let ln_response_val = cmd!(
-            fed,
-            "ln-invoice",
-            "--amount=1000msat",
-            "--description='incoming-over-cln-gw'"
-        )
-        .out_json()
-        .await?;
-        let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
-        let invoice = ln_invoice_response.invoice;
-
-        match gw.ln {
-            Some(LightningNode::Cln(_cln)) => {
-                // Pay the invoice using LND
-                let payment = new_lnd
-                    .client_lock()
-                    .await?
-                    .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
-                        payment_request: invoice.clone(),
-                        ..Default::default()
-                    })
-                    .await?
-                    .into_inner();
-
-                let payment_status = new_lnd
-                    .client_lock()
-                    .await?
-                    .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
-                        include_incomplete: true,
-                        ..Default::default()
-                    })
-                    .await?
-                    .into_inner()
-                    .payments
-                    .into_iter()
-                    .find(|p| p.payment_hash == payment.payment_hash.to_hex())
-                    .context("payment not in list")?
-                    .status();
-                anyhow::ensure!(
-                    payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded
-                );
-            }
-            Some(LightningNode::Lnd(_lnd)) => {
-                // Pay the invoice using CLN
-                let invoice_status = new_cln
-                    .request(cln_rpc::model::PayRequest {
-                        bolt11: invoice,
-                        amount_msat: None,
-                        label: None,
-                        riskfactor: None,
-                        maxfeepercent: None,
-                        retry_for: None,
-                        maxdelay: None,
-                        exemptfee: None,
-                        localinvreqid: None,
-                        exclude: None,
-                        maxfee: None,
-                        description: None,
-                    })
-                    .await?
-                    .status;
-                anyhow::ensure!(matches!(
-                    invoice_status,
-                    cln_rpc::model::PayStatus::COMPLETE
-                ));
-            }
-            None => {
-                panic!("Lightning node did not come back up correctly");
+        for i in 0..MAX_RETRIES {
+            match do_try_create_and_pay_invoice(&gw, &fed, &new_cln, &new_lnd).await {
+                Ok(_) => break,
+                Err(e) => {
+                    if i == MAX_RETRIES - 1 {
+                        return Err(e);
+                    } else {
+                        tracing::debug!(
+                            "Pay invoice for gateway {} failed with {e:?}, retrying in {} seconds (try {}/{MAX_RETRIES})",
+                            gw.ln
+                                .as_ref()
+                                .map(|ln| ln.name().to_string())
+                                .unwrap_or_default(),
+                            RETRY_INTERVAL.as_secs(),
+                            i + 1,
+                        );
+                        fedimint_core::task::sleep(RETRY_INTERVAL).await;
+                    }
+                }
             }
         }
     }
 
     info!(LOG_DEVIMINT, "lightning_reconnect_test: success");
+    Ok(())
+}
+
+async fn do_try_create_and_pay_invoice(
+    gw: &Gatewayd,
+    fed: &Federation,
+    new_cln: &Lightningd,
+    new_lnd: &Lnd,
+) -> anyhow::Result<()> {
+    // Verify that after the lightning node has restarted, the gateway
+    // automatically reconnects and can query the lightning node
+    // info again.
+    let mut info_cmd = cmd!(gw, "info");
+    assert!(info_cmd.run().await.is_ok());
+
+    fed.use_gateway(gw).await?;
+    tracing::info!("Creating invoice....");
+    let ln_response_val = cmd!(
+        fed,
+        "ln-invoice",
+        "--amount=1000msat",
+        "--description='incoming-over-cln-gw'"
+    )
+    .out_json()
+    .await?;
+    let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
+    let invoice = ln_invoice_response.invoice;
+
+    match gw.ln.as_ref() {
+        Some(LightningNode::Cln(_cln)) => {
+            // Pay the invoice using LND
+            let payment = new_lnd
+                .client_lock()
+                .await?
+                .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+                    payment_request: invoice.clone(),
+                    ..Default::default()
+                })
+                .await?
+                .into_inner();
+
+            let payment_status = new_lnd
+                .client_lock()
+                .await?
+                .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
+                    include_incomplete: true,
+                    ..Default::default()
+                })
+                .await?
+                .into_inner()
+                .payments
+                .into_iter()
+                .find(|p| p.payment_hash == payment.payment_hash.to_hex())
+                .context("payment not in list")?
+                .status();
+            anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
+        }
+        Some(LightningNode::Lnd(_lnd)) => {
+            // Pay the invoice using CLN
+            let invoice_status = new_cln
+                .request(cln_rpc::model::PayRequest {
+                    bolt11: invoice,
+                    amount_msat: None,
+                    label: None,
+                    riskfactor: None,
+                    maxfeepercent: None,
+                    retry_for: None,
+                    maxdelay: None,
+                    exemptfee: None,
+                    localinvreqid: None,
+                    exclude: None,
+                    maxfee: None,
+                    description: None,
+                })
+                .await?
+                .status;
+            anyhow::ensure!(matches!(
+                invoice_status,
+                cln_rpc::model::PayStatus::COMPLETE
+            ));
+        }
+        None => {
+            panic!("Lightning node did not come back up correctly");
+        }
+    }
     Ok(())
 }
 
