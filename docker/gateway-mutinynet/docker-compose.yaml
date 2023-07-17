@@ -154,7 +154,7 @@ services:
     restart: always
 
   bitcoind:
-    image: fedimint/mutinynet-bitcoind:latest
+    image: fedimint/mutinynet-bitcoind:master
     command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
     ports:
       - 0.0.0.0:38333:38333
