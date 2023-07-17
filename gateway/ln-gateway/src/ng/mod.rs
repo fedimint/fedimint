@@ -106,7 +106,7 @@ pub trait GatewayClientExt {
         gateway_api: Url,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
-        gateway_public_key: secp256k1::PublicKey,
+        gateway_id: secp256k1::PublicKey,
     ) -> anyhow::Result<()>;
 
     /// Attempt fulfill HTLC by buying preimage from the federation
@@ -222,14 +222,14 @@ impl GatewayClientExt for Client {
         gateway_api: Url,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
-        gateway_public_key: secp256k1::PublicKey,
+        gateway_id: secp256k1::PublicKey,
     ) -> anyhow::Result<()> {
         let (gateway, _) = self.get_first_module::<GatewayClientModule>(&KIND);
         let registration_info = gateway.to_gateway_registration_info(
             route_hints,
             time_to_live,
             gateway_api,
-            gateway_public_key,
+            gateway_id,
         );
 
         let federation_id = self.get_config().federation_id;
@@ -432,7 +432,7 @@ impl GatewayClientModule {
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
         api: Url,
-        gateway_public_key: secp256k1::PublicKey,
+        gateway_id: secp256k1::PublicKey,
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
@@ -442,7 +442,7 @@ impl GatewayClientModule {
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
             fees: self.fees,
-            gateway_public_key,
+            gateway_id,
         }
     }
 
@@ -457,7 +457,7 @@ impl GatewayClientModule {
             .await;
         info!(
             "Successfully registered gateway {} with federation {}",
-            registration.gateway_public_key, id
+            registration.gateway_id, id
         );
         Ok(())
     }

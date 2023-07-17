@@ -235,16 +235,13 @@ pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
     }
 }
 
-pub async fn switch_default_gateway(
-    client: &Client,
-    gateway_public_key: &str,
-) -> anyhow::Result<()> {
-    let gateway_public_key = parse_gateway_public_key(gateway_public_key)?;
-    client.set_active_gateway(&gateway_public_key).await?;
+pub async fn switch_default_gateway(client: &Client, gateway_id: &str) -> anyhow::Result<()> {
+    let gateway_id = parse_gateway_id(gateway_id)?;
+    client.set_active_gateway(&gateway_id).await?;
     Ok(())
 }
 
-pub fn parse_gateway_public_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
+pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
     secp256k1::PublicKey::from_str(s)
 }
 

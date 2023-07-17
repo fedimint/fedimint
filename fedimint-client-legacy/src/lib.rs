@@ -147,7 +147,7 @@ impl GatewayClientConfig {
         &self,
         route_hints: Vec<modules::ln::route_hints::RouteHint>,
         time_to_live: Duration,
-        gateway_public_key: secp256k1::PublicKey,
+        gateway_id: secp256k1::PublicKey,
     ) -> LightningGateway {
         LightningGateway {
             mint_channel_id: self.mint_channel_id,
@@ -157,7 +157,7 @@ impl GatewayClientConfig {
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
             fees: self.fees,
-            gateway_public_key,
+            gateway_id,
         }
     }
 }
@@ -813,22 +813,22 @@ impl Client<UserClientConfig> {
     /// advance.
     pub async fn switch_active_gateway(
         &self,
-        gateway_public_key: Option<secp256k1::PublicKey>,
+        gateway_id: Option<secp256k1::PublicKey>,
     ) -> Result<LightningGateway> {
         let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
             debug!("Could not find any gateways");
             return Err(ClientError::NoGateways);
         };
-        let gateway = match gateway_public_key {
+        let gateway = match gateway_id {
             // If a pubkey was provided, try to select and activate a gateway with that pubkey.
             Some(pub_key) => gateways
                 .into_iter()
-                .find(|g| g.gateway_public_key == pub_key)
+                .find(|g| g.gateway_id == pub_key)
                 .ok_or_else(|| {
                     debug!(
                         "Could not find gateway with gateway public key {:?}",
-                        gateway_public_key
+                        gateway_id
                     );
                     ClientError::GatewayNotFound
                 })?,

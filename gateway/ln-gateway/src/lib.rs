@@ -152,7 +152,7 @@ pub struct Gateway {
     gatewayd_db: Database,
     api: Url,
     task_group: TaskGroup,
-    pub public_key: secp256k1::PublicKey,
+    pub gateway_id: secp256k1::PublicKey,
 }
 
 impl Gateway {
@@ -177,7 +177,7 @@ impl Gateway {
             gatewayd_db: gatewayd_db.clone(),
             api,
             task_group: TaskGroup::new(),
-            public_key: Self::get_gateway_public_key(gatewayd_db).await,
+            gateway_id: Self::get_gateway_id(gatewayd_db).await,
         };
 
         gw.register_clients_timer().await;
@@ -206,7 +206,7 @@ impl Gateway {
             gatewayd_db: gatewayd_db.clone(),
             api,
             task_group: TaskGroup::new(),
-            public_key: Self::get_gateway_public_key(gatewayd_db).await,
+            gateway_id: Self::get_gateway_id(gatewayd_db).await,
         };
 
         gw.register_clients_timer().await;
@@ -216,7 +216,7 @@ impl Gateway {
         Ok(gw)
     }
 
-    async fn get_gateway_public_key(gatewayd_db: Database) -> secp256k1::PublicKey {
+    async fn get_gateway_id(gatewayd_db: Database) -> secp256k1::PublicKey {
         let mut dbtx = gatewayd_db.begin_transaction().await;
         if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
             key_pair.public_key()
@@ -440,7 +440,7 @@ impl Gateway {
         let clients = self.clients.clone();
         let api = self.api.clone();
         let lnrpc = self.lnrpc.clone();
-        let gateway_public_key = self.public_key;
+        let gateway_id = self.gateway_id;
         self.task_group
             .spawn("register clients", move |handle| async move {
                 while !handle.is_shutting_down() {
@@ -452,7 +452,7 @@ impl Gateway {
                                         api.clone(),
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
-                                        gateway_public_key,
+                                        gateway_id,
                                     )
                                     .await
                                     .is_err()
@@ -522,7 +522,7 @@ impl Gateway {
                 self.api.clone(),
                 route_hints,
                 GW_ANNOUNCEMENT_TTL,
-                self.public_key,
+                self.gateway_id,
             )
             .await?;
         self.clients
@@ -625,7 +625,7 @@ impl Gateway {
             route_hints.clone(),
             GW_ANNOUNCEMENT_TTL,
             self.api.clone(),
-            self.public_key,
+            self.gateway_id,
         );
 
         let balance_msat = client.get_balance().await;
@@ -659,7 +659,7 @@ impl Gateway {
                 route_hints.clone(),
                 GW_ANNOUNCEMENT_TTL,
                 self.api.clone(),
-                self.public_key,
+                self.gateway_id,
             );
             let balance_msat = client.get_balance().await;
 

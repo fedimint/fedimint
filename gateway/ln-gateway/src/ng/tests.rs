@@ -450,7 +450,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
             fake_api.clone(),
             fake_route_hints.clone(),
             GW_ANNOUNCEMENT_TTL,
-            gateway_test.get_gateway_public_key(),
+            gateway_test.get_gateway_id(),
         )
         .await?;
     let gateways = user_client.fetch_registered_gateways().await?;
@@ -464,7 +464,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
             fake_api.clone(),
             fake_route_hints,
             GW_ANNOUNCEMENT_TTL,
-            gateway_test.get_gateway_public_key(),
+            gateway_test.get_gateway_id(),
         )
         .await?;
     let gateways = user_client.fetch_registered_gateways().await?;
