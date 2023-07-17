@@ -905,7 +905,10 @@ pub trait ServerModule: Debug + Sized {
 /// that holds the data as serialized
 // bytes internally.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct SerdeModuleEncoding<T: Encodable + Decodable>(Vec<u8>, #[serde(skip)] PhantomData<T>);
+pub struct SerdeModuleEncoding<T: Encodable + Decodable>(
+    #[serde(with = "::fedimint_core::encoding::as_hex")] Vec<u8>,
+    #[serde(skip)] PhantomData<T>,
+);
 
 impl<T: Encodable + Decodable> From<&T> for SerdeModuleEncoding<T> {
     fn from(value: &T) -> Self {
