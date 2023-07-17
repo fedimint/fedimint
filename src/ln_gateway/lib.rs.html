@@ -768,6 +768,33 @@
 <a href="#768" id="768">768</a>
 <a href="#769" id="769">769</a>
 <a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -797,7 +824,7 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>client::StandardGatewayClientBuilder;
-<span class="kw">use </span>db::FederationRegistrationKey;
+<span class="kw">use </span>db::{FederationRegistrationKey, GatewayPublicKey};
 <span class="kw">use </span>fedimint_core::api::{FederationError, WsClientConnectInfo};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -816,6 +843,7 @@
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 <span class="kw">use </span>ng::{GatewayClientExt, GatewayClientModule};
+<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::FederationInfo;
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -921,6 +949,7 @@
     gatewayd_db: Database,
     api: Url,
     task_group: TaskGroup,
+    <span class="kw">pub </span>gateway_id: secp256k1::PublicKey,
 }
 
 <span class="kw">impl </span>Gateway {
@@ -942,9 +971,10 @@
             channel_id_generator: Arc::new(Mutex::new(AtomicU64::new(INITIAL_SCID))),
             lightning_mode: <span class="prelude-val">Some</span>(lightning_mode),
             fees,
-            gatewayd_db,
+            gatewayd_db: gatewayd_db.clone(),
             api,
             task_group: TaskGroup::new(),
+            gateway_id: <span class="self">Self</span>::get_gateway_id(gatewayd_db).<span class="kw">await</span>,
         };
 
         gw.register_clients_timer().<span class="kw">await</span>;
@@ -970,9 +1000,10 @@
             channel_id_generator: Arc::new(Mutex::new(AtomicU64::new(INITIAL_SCID))),
             lightning_mode: <span class="prelude-val">None</span>,
             fees,
-            gatewayd_db,
+            gatewayd_db: gatewayd_db.clone(),
             api,
             task_group: TaskGroup::new(),
+            gateway_id: <span class="self">Self</span>::get_gateway_id(gatewayd_db).<span class="kw">await</span>,
         };
 
         gw.register_clients_timer().<span class="kw">await</span>;
@@ -980,6 +1011,20 @@
         gw.route_htlcs().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(gw)
+    }
+
+    <span class="kw">async fn </span>get_gateway_id(gatewayd_db: Database) -&gt; secp256k1::PublicKey {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gatewayd_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(key_pair) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey {}).<span class="kw">await </span>{
+            key_pair.public_key()
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>context = secp256k1::Secp256k1::new();
+            <span class="kw">let </span>(secret, public) = context.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+            <span class="kw">let </span>key_pair = secp256k1::KeyPair::from_secret_key(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>secret);
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>GatewayPublicKey, <span class="kw-2">&amp;</span>key_pair).<span class="kw">await</span>;
+            dbtx.commit_tx().<span class="kw">await</span>;
+            public
+        }
     }
 
     <span class="kw">async fn </span>create_lightning_client(mode: LightningMode) -&gt; Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
@@ -1192,6 +1237,7 @@
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.clone();
         <span class="kw">let </span>api = <span class="self">self</span>.api.clone();
         <span class="kw">let </span>lnrpc = <span class="self">self</span>.lnrpc.clone();
+        <span class="kw">let </span>gateway_id = <span class="self">self</span>.gateway_id;
         <span class="self">self</span>.task_group
             .spawn(<span class="string">&quot;register clients&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                 <span class="kw">while </span>!handle.is_shutting_down() {
@@ -1203,6 +1249,7 @@
                                         api.clone(),
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
+                                        gateway_id,
                                     )
                                     .<span class="kw">await
                                     </span>.is_err()
@@ -1268,7 +1315,12 @@
         route_hints: Vec&lt;RouteHint&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         client
-            .register_with_federation(<span class="self">self</span>.api.clone(), route_hints, GW_ANNOUNCEMENT_TTL)
+            .register_with_federation(
+                <span class="self">self</span>.api.clone(),
+                route_hints,
+                GW_ANNOUNCEMENT_TTL,
+                <span class="self">self</span>.gateway_id,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.clients
             .write()
@@ -1370,6 +1422,7 @@
             route_hints.clone(),
             GW_ANNOUNCEMENT_TTL,
             <span class="self">self</span>.api.clone(),
+            <span class="self">self</span>.gateway_id,
         );
 
         <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
@@ -1403,6 +1456,7 @@
                 route_hints.clone(),
                 GW_ANNOUNCEMENT_TTL,
                 <span class="self">self</span>.api.clone(),
+                <span class="self">self</span>.gateway_id,
             );
             <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
 

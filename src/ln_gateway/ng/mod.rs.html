@@ -599,6 +599,14 @@
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
 <a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::sync::Arc;
@@ -707,6 +715,7 @@
         gateway_api: Url,
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
+        gateway_id: secp256k1::PublicKey,
     ) -&gt; anyhow::Result&lt;()&gt;;
 
     <span class="doccomment">/// Attempt fulfill HTLC by buying preimage from the federation
@@ -822,10 +831,15 @@
         gateway_api: Url,
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
+        gateway_id: secp256k1::PublicKey,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>(gateway, <span class="kw">_</span>) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span>registration_info =
-            gateway.to_gateway_registration_info(route_hints, time_to_live, gateway_api);
+        <span class="kw">let </span>registration_info = gateway.to_gateway_registration_info(
+            route_hints,
+            time_to_live,
+            gateway_api,
+            gateway_id,
+        );
 
         <span class="kw">let </span>federation_id = <span class="self">self</span>.get_config().federation_id;
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
@@ -1027,15 +1041,17 @@
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
         api: Url,
+        gateway_id: secp256k1::PublicKey,
     ) -&gt; LightningGateway {
         LightningGateway {
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
-            gateway_pub_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
+            gateway_redeem_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
             node_pub_key: <span class="self">self</span>.node_pub_key,
             api,
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
             fees: <span class="self">self</span>.fees,
+            gateway_id,
         }
     }
 
@@ -1050,7 +1066,7 @@
             .<span class="kw">await</span>;
         <span class="macro">info!</span>(
             <span class="string">&quot;Successfully registered gateway {} with federation {}&quot;</span>,
-            registration.gateway_pub_key, id
+            registration.gateway_id, id
         );
         <span class="prelude-val">Ok</span>(())
     }

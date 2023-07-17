@@ -92,6 +92,10 @@
 <a href="#92" id="92">92</a>
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -143,6 +147,10 @@
         rpc.connect_federation(ConnectFedPayload { connect })
             .<span class="kw">await
             </span>.unwrap()
+    }
+
+    <span class="kw">pub fn </span>get_gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
+        <span class="self">self</span>.gateway.gateway_id
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(

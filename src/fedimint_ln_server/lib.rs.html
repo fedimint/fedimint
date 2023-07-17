@@ -1297,6 +1297,7 @@
 <a href="#1297" id="1297">1297</a>
 <a href="#1298" id="1298">1298</a>
 <a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::time::Duration;
 
@@ -2454,7 +2455,7 @@
 
         <span class="kw">let </span>gateway = LightningGateway {
             mint_channel_id: <span class="number">100</span>,
-            gateway_pub_key: pk.x_only_public_key().<span class="number">0</span>,
+            gateway_redeem_key: pk.x_only_public_key().<span class="number">0</span>,
             node_pub_key: pk,
             api: Url::parse(<span class="string">&quot;http://example.com&quot;</span>)
                 .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
@@ -2464,6 +2465,7 @@
                 base_msat: <span class="number">0</span>,
                 proportional_millionths: <span class="number">0</span>,
             },
+            gateway_id: pk,
         };
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(pk), <span class="kw-2">&amp;</span>gateway)
             .<span class="kw">await</span>;

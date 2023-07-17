@@ -449,8 +449,8 @@
     }
 
     <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>gateway_pub_key = gw.gateway_pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_pub_key.clone())
+        <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_id.clone())
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(

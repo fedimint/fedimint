@@ -1721,6 +1721,8 @@
 <a href="#1721" id="1721">1721</a>
 <a href="#1722" id="1722">1722</a>
 <a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1870,15 +1872,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         route_hints: Vec&lt;modules::ln::route_hints::RouteHint&gt;,
         time_to_live: Duration,
+        gateway_id: secp256k1::PublicKey,
     ) -&gt; LightningGateway {
         LightningGateway {
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
-            gateway_pub_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
+            gateway_redeem_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
             node_pub_key: <span class="self">self</span>.node_pub_key,
             api: <span class="self">self</span>.api.clone(),
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
             fees: <span class="self">self</span>.fees,
+            gateway_id,
         }
     }
 }
@@ -2534,22 +2538,22 @@
     /// advance.
     </span><span class="kw">pub async fn </span>switch_active_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_pub_key: <span class="prelude-ty">Option</span>&lt;secp256k1::XOnlyPublicKey&gt;,
+        gateway_id: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;LightningGateway&gt; {
         <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>gateways.is_empty() {
             <span class="macro">debug!</span>(<span class="string">&quot;Could not find any gateways&quot;</span>);
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NoGateways);
         };
-        <span class="kw">let </span>gateway = <span class="kw">match </span>gateway_pub_key {
+        <span class="kw">let </span>gateway = <span class="kw">match </span>gateway_id {
             <span class="comment">// If a pubkey was provided, try to select and activate a gateway with that pubkey.
             </span><span class="prelude-val">Some</span>(pub_key) =&gt; gateways
                 .into_iter()
-                .find(|g| g.gateway_pub_key == pub_key)
+                .find(|g| g.gateway_id == pub_key)
                 .ok_or_else(|| {
                     <span class="macro">debug!</span>(
                         <span class="string">&quot;Could not find gateway with gateway public key {:?}&quot;</span>,
-                        gateway_pub_key
+                        gateway_id
                     );
                     ClientError::GatewayNotFound
                 })<span class="question-mark">?</span>,

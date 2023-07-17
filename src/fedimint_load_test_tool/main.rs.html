@@ -822,8 +822,6 @@
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
 <a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -944,9 +942,9 @@
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Gateway public key. If none, retrieve one according to --generate-invoice-with&quot;
+        help = <span class="string">&quot;Gateway Id. If none, retrieve one according to --generate-invoice-with&quot;
     </span>)]
-    </span>gateway_public_key: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    </span>gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
     <span class="attr">#[arg(
         long,
@@ -1081,10 +1079,10 @@
                 try_get_notes_cli(<span class="kw-2">&amp;</span>Amount::from_sats(<span class="number">2000</span>), <span class="number">5</span>).<span class="kw">await</span><span class="question-mark">?
             </span>};
 
-            <span class="kw">let </span>gateway_public_key = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_public_key) = args.gateway_public_key {
-                <span class="prelude-val">Some</span>(gateway_public_key)
+            <span class="kw">let </span>gateway_id = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_id) = args.gateway_id {
+                <span class="prelude-val">Some</span>(gateway_id)
             } <span class="kw">else if let </span><span class="prelude-val">Some</span>(generate_invoice_with) = args.generate_invoice_with {
-                <span class="prelude-val">Some</span>(get_gateway_public_key(generate_invoice_with).<span class="kw">await</span><span class="question-mark">?</span>)
+                <span class="prelude-val">Some</span>(get_gateway_id(generate_invoice_with).<span class="kw">await</span><span class="question-mark">?</span>)
             } <span class="kw">else </span>{
                 <span class="prelude-val">None
             </span>};
@@ -1112,7 +1110,7 @@
                 args.invoices_per_user,
                 Duration::from_secs(args.ln_payment_sleep_secs),
                 invoices,
-                gateway_public_key,
+                gateway_id,
                 args.notes_per_user,
                 args.note_denomination,
                 args.invoice_amount,
@@ -1150,7 +1148,7 @@
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
     invoices_from_file: Vec&lt;Invoice&gt;,
-    gateway_public_key: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
     notes_per_user: u16,
     note_denomination: Amount,
     invoice_amount: Amount,
@@ -1171,8 +1169,8 @@
             .as_ref()
             .map(|db_path| db_path.join(<span class="macro">format!</span>(<span class="string">&quot;user_{u}.db&quot;</span>)));
         <span class="kw">let </span>client = build_client(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;mut </span>tg, user_db.as_ref()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_public_key) = <span class="kw-2">&amp;</span>gateway_public_key {
-            switch_default_gateway(<span class="kw-2">&amp;</span>client, gateway_public_key).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_id) = <span class="kw-2">&amp;</span>gateway_id {
+            switch_default_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         users_clients.push(client);
     }
@@ -1610,9 +1608,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>get_gateway_public_key(
-    generate_invoice_with: LnInvoiceGeneration,
-) -&gt; anyhow::Result&lt;String&gt; {
+<span class="kw">async fn </span>get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>gateway_json = <span class="kw">match </span>generate_invoice_with {
         LnInvoiceGeneration::ClnLightningCli =&gt; {
             <span class="comment">// If we are paying a lnd invoice, we use the cln gateway
@@ -1623,11 +1619,11 @@
             </span><span class="macro">cmd!</span>(GatewayClnCli, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await
         </span>}
     }<span class="question-mark">?</span>;
-    <span class="kw">let </span>gateway_pub_key = gateway_json[<span class="string">&quot;federations&quot;</span>][<span class="number">0</span>][<span class="string">&quot;registration&quot;</span>][<span class="string">&quot;gateway_pub_key&quot;</span>]
+    <span class="kw">let </span>gateway_id = gateway_json[<span class="string">&quot;federations&quot;</span>][<span class="number">0</span>][<span class="string">&quot;registration&quot;</span>][<span class="string">&quot;gateway_id&quot;</span>]
         .as_str()
-        .context(<span class="string">&quot;Missing gateway_pub_key field&quot;</span>)<span class="question-mark">?</span>;
+        .context(<span class="string">&quot;Missing gateway_id field&quot;</span>)<span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>(gateway_pub_key.into())
+    <span class="prelude-val">Ok</span>(gateway_id.into())
 }
 
 <span class="kw">async fn </span>get_cfg_from_args(args: <span class="kw-2">&amp;</span>ConnectCommonArgs) -&gt; anyhow::Result&lt;ClientConfig&gt; {

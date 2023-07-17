@@ -366,13 +366,13 @@
         }
     }
 
-    <span class="kw">pub async fn </span>gateway_pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">pub async fn </span>gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>info = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>gateway_pub_key = info[<span class="string">&quot;federations&quot;</span>][<span class="number">0</span>][<span class="string">&quot;registration&quot;</span>][<span class="string">&quot;gateway_pub_key&quot;</span>]
+        <span class="kw">let </span>gateway_id = info[<span class="string">&quot;federations&quot;</span>][<span class="number">0</span>][<span class="string">&quot;registration&quot;</span>][<span class="string">&quot;gateway_id&quot;</span>]
             .as_str()
-            .context(<span class="string">&quot;gateway_pub_key must be a string&quot;</span>)<span class="question-mark">?
+            .context(<span class="string">&quot;gateway_id must be a string&quot;</span>)<span class="question-mark">?
             </span>.to_owned();
-        <span class="prelude-val">Ok</span>(gateway_pub_key)
+        <span class="prelude-val">Ok</span>(gateway_id)
     }
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {

@@ -429,6 +429,7 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -615,7 +616,7 @@
     /// gateway.
     </span><span class="kw">pub </span>mint_channel_id: u64,
     <span class="doccomment">/// Key used to pay the gateway
-    </span><span class="kw">pub </span>gateway_pub_key: secp256k1::XOnlyPublicKey,
+    </span><span class="kw">pub </span>gateway_redeem_key: secp256k1::XOnlyPublicKey,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
     <span class="kw">pub </span>api: Url,
     <span class="doccomment">/// Route hints to reach the LN node of the gateway.
@@ -628,6 +629,7 @@
     <span class="doccomment">/// Gateway configured routing fees
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_routing_fees&quot;</span>)]
     </span><span class="kw">pub </span>fees: RoutingFees,
+    <span class="kw">pub </span>gateway_id: secp256k1::PublicKey,
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

@@ -513,8 +513,8 @@
     </span>ListGateways,
     <span class="doccomment">/// Switch active gateway
     </span>SwitchGateway {
-        <span class="attr">#[clap(value_parser = parse_gateway_pub_key)]
-        </span>pubkey: secp256k1::XOnlyPublicKey,
+        <span class="attr">#[clap(value_parser = parse_gateway_id)]
+        </span>gateway_id: secp256k1::PublicKey,
     },
     <span class="doccomment">/// Generate a new deposit address, funds sent to it can later be claimed
     </span>DepositAddress,
@@ -555,8 +555,8 @@
     </span>PrintSecret,
 }
 
-<span class="kw">pub fn </span>parse_gateway_pub_key(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::XOnlyPublicKey, secp256k1::Error&gt; {
-    secp256k1::XOnlyPublicKey::from_str(s)
+<span class="kw">pub fn </span>parse_gateway_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
+    secp256k1::PublicKey::from_str(s)
 }
 
 <span class="kw">fn </span>parse_secret(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">64</span>], hex::Error&gt; {
@@ -725,8 +725,8 @@
                 });
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateways_json).unwrap())
         }
-        ClientCmd::SwitchGateway { pubkey } =&gt; {
-            client.set_active_gateway(<span class="kw-2">&amp;</span>pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+        ClientCmd::SwitchGateway { gateway_id } =&gt; {
+            client.set_active_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>gateway = client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
             gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
