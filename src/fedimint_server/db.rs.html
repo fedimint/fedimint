@@ -372,56 +372,17 @@
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
 <a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::api::ClientConfigDownloadToken;
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SignedEpochOutcome};
+<span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
-
-<span class="kw">use </span><span class="kw">crate</span>::consensus::AcceptedTransaction;
 
 <span class="kw">pub const </span>GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
@@ -429,11 +390,10 @@
 #[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     AcceptedTransaction = <span class="number">0x02</span>,
-    DropPeer = <span class="number">0x03</span>,
-    RejectedTransaction = <span class="number">0x04</span>,
     EpochHistory = <span class="number">0x05</span>,
     LastEpoch = <span class="number">0x06</span>,
     ClientConfigSignature = <span class="number">0x07</span>,
+    ClientConfigSignatureShare = <span class="number">0x3</span>,
     ConsensusUpgrade = <span class="number">0x08</span>,
     ClientConfigDownload = <span class="number">0x09</span>,
     Module = MODULE_GLOBAL_PREFIX,
@@ -453,7 +413,7 @@
 
 <span class="macro">impl_db_record!</span>(
     key = AcceptedTransactionKey,
-    value = AcceptedTransaction,
+    value = Vec&lt;ModuleInstanceId&gt;,
     db_prefix = DbKeyPrefix::AcceptedTransaction,
     notify_on_modify = <span class="bool-val">true</span>,
 );
@@ -461,36 +421,6 @@
     key = AcceptedTransactionKey,
     query_prefix = AcceptedTransactionKeyPrefix
 );
-
-<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>RejectedTransactionKey(<span class="kw">pub </span>TransactionId);
-
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>RejectedTransactionKeyPrefix;
-
-<span class="macro">impl_db_record!</span>(
-    key = RejectedTransactionKey,
-    value = String,
-    db_prefix = DbKeyPrefix::RejectedTransaction,
-    notify_on_modify = <span class="bool-val">true</span>,
-);
-<span class="macro">impl_db_lookup!</span>(
-    key = RejectedTransactionKey,
-    query_prefix = RejectedTransactionKeyPrefix
-);
-
-<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>DropPeerKey(<span class="kw">pub </span>PeerId);
-
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>DropPeerKeyPrefix;
-
-<span class="macro">impl_db_record!</span>(
-    key = DropPeerKey,
-    value = (),
-    db_prefix = DbKeyPrefix::DropPeer,
-);
-<span class="macro">impl_db_lookup!</span>(key = DropPeerKey, query_prefix = DropPeerKeyPrefix);
 
 <span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>EpochHistoryKey(<span class="kw">pub </span>u64);
@@ -517,18 +447,28 @@
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ClientConfigSignatureKey;
 
-<span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>ClientConfigSignatureKeyPrefix;
-
 <span class="macro">impl_db_record!</span>(
     key = ClientConfigSignatureKey,
     value = SerdeSignature,
     db_prefix = DbKeyPrefix::ClientConfigSignature,
     notify_on_modify = <span class="bool-val">true
 </span>);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>ClientConfigSignatureShareKey(<span class="kw">pub </span>PeerId);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ClientConfigSignatureSharePrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = ClientConfigSignatureShareKey,
+    value = SerdeSignatureShare,
+    db_prefix = DbKeyPrefix::ClientConfigSignatureShare,
+);
+
 <span class="macro">impl_db_lookup!</span>(
-    key = ClientConfigSignatureKey,
-    query_prefix = ClientConfigSignatureKeyPrefix
+    key = ClientConfigSignatureShareKey,
+    query_prefix = ClientConfigSignatureSharePrefix
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
@@ -589,16 +529,14 @@
     <span class="kw">use </span>threshold_crypto::SignatureShare;
 
     <span class="kw">use super</span>::{
-        AcceptedTransactionKey, ClientConfigSignatureKey, ConsensusUpgradeKey, DropPeerKey,
-        EpochHistoryKey, LastEpochKey, RejectedTransactionKey,
+        AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
+        ConsensusUpgradeKey, EpochHistoryKey, LastEpochKey,
     };
-    <span class="kw">use </span><span class="kw">crate</span>::consensus::AcceptedTransaction;
     <span class="kw">use </span><span class="kw">crate</span>::core::DynOutput;
     <span class="kw">use </span><span class="kw">crate</span>::db::{
         get_global_database_migrations, AcceptedTransactionKeyPrefix, ClientConfigDownloadKey,
-        ClientConfigDownloadKeyPrefix, ClientConfigSignatureKeyPrefix, DbKeyPrefix,
-        DropPeerKeyPrefix, EpochHistoryKeyPrefix, RejectedTransactionKeyPrefix,
-        GLOBAL_DATABASE_VERSION,
+        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix,
+        EpochHistoryKeyPrefix, GLOBAL_DATABASE_VERSION,
     };
 
     <span class="doccomment">/// Create a database with version 0 data. The database produced is not
@@ -632,22 +570,18 @@
             signature: <span class="prelude-val">Some</span>(schnorr),
         };
 
-        <span class="kw">let </span>accepted_tx = AcceptedTransaction {
-            epoch: <span class="number">6</span>,
-            transaction: transaction.clone(),
-        };
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>accepted_tx_id, <span class="kw-2">&amp;</span>accepted_tx).<span class="kw">await</span>;
+        <span class="kw">let </span>module_ids = transaction
+            .outputs
+            .iter()
+            .map(|output| output.module_instance_id())
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        dbtx.insert_new_entry(
-            <span class="kw-2">&amp;</span>RejectedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap()),
-            <span class="kw-2">&amp;</span><span class="string">&quot;Test Rejection Reason&quot;</span>.to_string(),
-        )
-        .<span class="kw">await</span>;
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>DropPeerKey(<span class="number">1</span>.into()), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>accepted_tx_id, <span class="kw-2">&amp;</span>module_ids).<span class="kw">await</span>;
 
         <span class="kw">let </span>epoch_history_key = EpochHistoryKey(<span class="number">6</span>);
 
         <span class="kw">let </span>sig_share = SignatureShare(Standard.sample(<span class="kw-2">&amp;mut </span>OsRng));
+
         <span class="kw">let </span>consensus_items = <span class="macro">vec!</span>[
             ConsensusItem::ConsensusUpgrade(ConsensusUpgrade),
             ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig_share.clone())),
@@ -667,6 +601,7 @@
             hash: secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>BYTE_8),
             signature: <span class="prelude-val">Some</span>(SerdeSignature(Standard.sample(<span class="kw-2">&amp;mut </span>OsRng))),
         };
+
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>epoch_history_key, <span class="kw-2">&amp;</span>signed_epoch_outcome)
             .<span class="kw">await</span>;
 
@@ -676,6 +611,13 @@
         <span class="kw">let </span>serde_sig = SerdeSignature(Standard.sample(<span class="kw-2">&amp;mut </span>OsRng));
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientConfigSignatureKey, <span class="kw-2">&amp;</span>serde_sig)
             .<span class="kw">await</span>;
+
+        <span class="kw">let </span>serde_sig_share = SerdeSignatureShare(Standard.sample(<span class="kw-2">&amp;mut </span>OsRng));
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>ClientConfigSignatureShareKey(PeerId::from(<span class="number">0</span>)),
+            <span class="kw-2">&amp;</span>serde_sig_share,
+        )
+        .<span class="kw">await</span>;
 
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>ClientConfigDownloadKey(ClientConfigDownloadToken(OsRng::default().gen())),
@@ -742,30 +684,6 @@
                                     <span class="string">&quot;validate_migrations was not able to read any AcceptedTransactions&quot;
                                 </span>);
                             }
-                            DbKeyPrefix::DropPeer =&gt; {
-                                <span class="kw">let </span>dropped_peers = dbtx
-                                    .find_by_prefix(<span class="kw-2">&amp;</span>DropPeerKeyPrefix)
-                                    .<span class="kw">await
-                                    </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                                    .<span class="kw">await</span>;
-                                <span class="kw">let </span>num_dropped_peers = dropped_peers.len();
-                                <span class="macro">assert!</span>(
-                                    num_dropped_peers &gt; <span class="number">0</span>,
-                                    <span class="string">&quot;validate_migrations was not able to read any DroppedPeers&quot;
-                                </span>);
-                            }
-                            DbKeyPrefix::RejectedTransaction =&gt; {
-                                <span class="kw">let </span>rejected_transactions = dbtx
-                                    .find_by_prefix(<span class="kw-2">&amp;</span>RejectedTransactionKeyPrefix)
-                                    .<span class="kw">await
-                                    </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                                    .<span class="kw">await</span>;
-                                <span class="kw">let </span>num_rejected_transactions = rejected_transactions.len();
-                                <span class="macro">assert!</span>(
-                                    num_rejected_transactions &gt; <span class="number">0</span>,
-                                    <span class="string">&quot;validate_migrations was not able to read any RejectedTransactions&quot;
-                                </span>);
-                            }
                             DbKeyPrefix::EpochHistory =&gt; {
                                 <span class="kw">let </span>epoch_history = dbtx
                                     .find_by_prefix(<span class="kw-2">&amp;</span>EpochHistoryKeyPrefix)
@@ -782,15 +700,21 @@
                                 <span class="macro">assert!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>LastEpochKey).<span class="kw">await</span>.is_some());
                             }
                             DbKeyPrefix::ClientConfigSignature =&gt; {
-                                <span class="kw">let </span>client_config_sigs = dbtx
-                                    .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigSignatureKeyPrefix)
+                                dbtx
+                                    .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
+                                    .<span class="kw">await
+                                    </span>.expect(<span class="string">&quot;validate_migrations was not able to read the ClientConfigSignature&quot;</span>);
+                            }
+                            DbKeyPrefix::ClientConfigSignatureShare =&gt; {
+                                <span class="kw">let </span>signature_shares = dbtx
+                                    .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigSignatureSharePrefix)
                                     .<span class="kw">await
                                     </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                     .<span class="kw">await</span>;
-                                <span class="kw">let </span>num_sigs = client_config_sigs.len();
+                                <span class="kw">let </span>num_signature_shares = signature_shares.len();
                                 <span class="macro">assert!</span>(
-                                    num_sigs &gt; <span class="number">0</span>,
-                                    <span class="string">&quot;validate_migrations was not able to read any ClientConfigSignatures&quot;
+                                    num_signature_shares &gt; <span class="number">0</span>,
+                                    <span class="string">&quot;validate_migrations was not able to read any ClientConfigSignatureShares&quot;
                                 </span>);
                             }
                             DbKeyPrefix::ConsensusUpgrade =&gt; {

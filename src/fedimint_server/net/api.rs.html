@@ -763,42 +763,6 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -839,12 +803,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::api::{get_verification_hashes, ApiResult};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::{
-    AcceptedTransaction, ApiEvent, FundingVerifier, TransactionSubmissionError,
-};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::{ApiEvent, FundingVerifier};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigSignatureKey, EpochHistoryKey,
-    LastEpochKey, RejectedTransactionKey,
+    LastEpochKey,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::SerdeTransaction;
@@ -893,10 +855,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.supported_api_versions
     }
 
-    <span class="kw">pub async fn </span>submit_transaction(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        transaction: Transaction,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionSubmissionError&gt; {
+    <span class="kw">pub async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// we already processed the transaction before the request was received
         </span><span class="kw">if </span><span class="self">self
             </span>.transaction_status(transaction.tx_hash())
@@ -926,8 +885,7 @@
                     <span class="kw-2">&amp;</span>cache,
                     input,
                 )
-                .<span class="kw">await
-                </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
             pub_keys.push(meta.pub_keys);
             funding_verifier.add_input(meta.amount);
@@ -942,8 +900,7 @@
                     <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
                     output,
                 )
-                .<span class="kw">await
-                </span>.map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))<span class="question-mark">?</span>;
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             funding_verifier.add_output(amount);
         }
 
@@ -951,86 +908,57 @@
 
         <span class="self">self</span>.api_sender
             .send(ApiEvent::Transaction(transaction))
-            .<span class="kw">await
-            </span>.map_err(|_e| TransactionSubmissionError::TxChannelError)<span class="question-mark">?</span>;
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>transaction_status(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::outcome::TransactionStatus&gt; {
+    <span class="kw">pub async fn </span>transaction_status(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionStatus&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; =
-            dbtx.get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid)).<span class="kw">await</span>;
+        <span class="kw">let </span>module_ids = dbtx.get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid)).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(accepted) = accepted {
-            <span class="kw">return </span><span class="prelude-val">Some</span>(
-                <span class="self">self</span>.accepted_transaction_status(txid, accepted, <span class="kw-2">&amp;mut </span>dbtx)
-                    .<span class="kw">await</span>,
-            );
-        }
-
-        <span class="kw">let </span>rejected: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="self">self
-            </span>.db
-            .begin_transaction()
-            .<span class="kw">await
-            </span>.get_value(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid))
+        <span class="kw">let </span>status = <span class="self">self
+            </span>.accepted_transaction_status(txid, module_ids, <span class="kw-2">&amp;mut </span>dbtx)
             .<span class="kw">await</span>;
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(message) = rejected {
-            <span class="kw">return </span><span class="prelude-val">Some</span>(TransactionStatus::Rejected(message));
-        }
-
-        <span class="prelude-val">None
-    </span>}
-
-    <span class="kw">pub async fn </span>wait_transaction_status(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        txid: TransactionId,
-    ) -&gt; <span class="kw">crate</span>::outcome::TransactionStatus {
-        <span class="kw">let </span>accepted_key = AcceptedTransactionKey(txid);
-        <span class="kw">let </span>rejected_key = RejectedTransactionKey(txid);
-        <span class="macro">tokio::select! </span>{
-            (accepted, <span class="kw-2">mut </span>dbtx) = <span class="self">self</span>.db.wait_key_check(<span class="kw-2">&amp;</span>accepted_key, std::convert::identity) =&gt; {
-                <span class="self">self</span>.accepted_transaction_status(txid, accepted, <span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await
-            </span>}
-            rejected = <span class="self">self</span>.db.wait_key_exists(<span class="kw-2">&amp;</span>rejected_key) =&gt; {
-                TransactionStatus::Rejected(rejected)
-            }
-        }
+        <span class="prelude-val">Some</span>(status)
     }
+
+    <span class="kw">pub async fn </span>wait_transaction_status(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; TransactionStatus {
+        <span class="kw">let </span>(outputs, <span class="kw-2">mut </span>dbtx) = <span class="self">self
+            </span>.db
+            .wait_key_check(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), std::convert::identity)
+            .<span class="kw">await</span>;
+
+        <span class="self">self</span>.accepted_transaction_status(txid, outputs, <span class="kw-2">&amp;mut </span>dbtx)
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>accepted_transaction_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
-        accepted: AcceptedTransaction,
+        module_ids: Vec&lt;ModuleInstanceId&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; TransactionStatus {
         <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
-        <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>accepted.transaction.outputs.iter().enumerate() {
-            <span class="kw">let </span>outpoint = OutPoint {
-                txid,
-                out_idx: out_idx <span class="kw">as </span>u64,
-            };
+
+        <span class="kw">for </span>(module_id, out_idx) <span class="kw">in </span>module_ids.into_iter().zip(<span class="number">0u64</span>..) {
             <span class="kw">let </span>outcome = <span class="self">self
                 </span>.modules
-                .get_expect(output.module_instance_id())
+                .get_expect(module_id)
                 .output_status(
-                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
-                    outpoint,
-                    output.module_instance_id(),
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_id),
+                    OutPoint { txid, out_idx },
+                    module_id,
                 )
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;the transaction was processed, so must be known&quot;</span>);
+                </span>.expect(<span class="string">&quot;the transaction was accepted&quot;</span>);
+
             outputs.push((<span class="kw-2">&amp;</span>outcome).into())
         }
 
-        TransactionStatus::Accepted {
-            epoch: accepted.epoch,
-            outputs,
-        }
+        TransactionStatus::Accepted { epoch: <span class="number">0</span>, outputs }
     }
 
     <span class="kw">pub async fn </span>download_client_config(
@@ -1423,11 +1351,11 @@
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ExpiringCache&lt;T&gt; {
     data: Arc&lt;tokio::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;(T, Instant)&gt;&gt;&gt;,
-    duration: std::time::Duration,
+    duration: Duration,
 }
 
 <span class="kw">impl</span>&lt;T: Clone&gt; ExpiringCache&lt;T&gt; {
-    <span class="kw">pub fn </span>new(duration: std::time::Duration) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(duration: Duration) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             data: Arc::new(tokio::sync::Mutex::new(<span class="prelude-val">None</span>)),
             duration,

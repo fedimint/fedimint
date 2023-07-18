@@ -1892,16 +1892,12 @@
 <a href="#1892" id="1892">1892</a>
 <a href="#1893" id="1893">1893</a>
 <a href="#1894" id="1894">1894</a>
-<a href="#1895" id="1895">1895</a>
-<a href="#1896" id="1896">1896</a>
-<a href="#1897" id="1897">1897</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
-<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{bail, format_err};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -1942,8 +1938,8 @@
 </span><span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeers,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, ConsensusDecision,
+    Feerate, NumPeers, OutPoint, PeerId, ServerModule,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">pub use </span>fedimint_wallet_common <span class="kw">as </span>common;
@@ -2239,79 +2235,85 @@
         ConsensusProposal::new_auto_trigger(items)
     }
 
-    <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        consensus_items: Vec&lt;(PeerId, WalletConsensusItem)&gt;,
-        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
-    ) -&gt; Vec&lt;PeerId&gt; {
-        <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_items, <span class="string">&quot;Received consensus proposals&quot;</span>);
+        consensus_item: WalletConsensusItem,
+        peer_id: PeerId,
+    ) -&gt; anyhow::Result&lt;ConsensusDecision&gt; {
+        <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_item, <span class="string">&quot;Received consensus proposals&quot;</span>);
 
-        <span class="kw">for </span>(peer_id, item) <span class="kw">in </span>consensus_items {
-            <span class="kw">match </span>item {
-                WalletConsensusItem::BlockHeight(block_height) =&gt; {
-                    <span class="kw">let </span>current_vote = dbtx
-                        .get_value(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id))
-                        .<span class="kw">await
-                        </span>.unwrap_or(<span class="number">0</span>);
+        <span class="kw">match </span>consensus_item {
+            WalletConsensusItem::BlockHeight(block_height) =&gt; {
+                <span class="kw">let </span>current_vote = dbtx
+                    .get_value(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id))
+                    .<span class="kw">await
+                    </span>.unwrap_or(<span class="number">0</span>);
 
-                    <span class="comment">// consensus block height can never decrease
-                    </span><span class="kw">match </span>block_height.cmp(<span class="kw-2">&amp;</span>current_vote) {
-                        Ordering::Greater =&gt; {
-                            <span class="kw">let </span>old_consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
-
-                            dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id), <span class="kw-2">&amp;</span>block_height)
-                                .<span class="kw">await</span>;
-
-                            <span class="kw">let </span>new_consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
-
-                            <span class="kw">if </span>new_consensus_height &gt; old_consensus_height {
-                                <span class="self">self</span>.sync_up_to_consensus_height(
-                                    dbtx,
-                                    old_consensus_height,
-                                    new_consensus_height,
-                                )
-                                .<span class="kw">await</span>;
-                            }
-                        }
-                        Ordering::Less =&gt; {
-                            <span class="macro">warn!</span>(<span class="string">&quot;Peer block height vote decreased&quot;</span>);
-                        }
-                        Ordering::Equal =&gt; {}
-                    }
+                <span class="kw">if </span>block_height &lt; current_vote {
+                    <span class="macro">bail!</span>(<span class="string">&quot;Block height vote decreased&quot;</span>);
                 }
-                WalletConsensusItem::Feerate(feerate) =&gt; {
-                    dbtx.insert_entry(<span class="kw-2">&amp;</span>FeeRateVoteKey(peer_id), <span class="kw-2">&amp;</span>feerate).<span class="kw">await</span>;
+
+                <span class="kw">if </span>block_height == current_vote {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
                 }
-                WalletConsensusItem::PegOutSignature(peg_out_signature) =&gt; {
-                    <span class="kw">let </span>txid = peg_out_signature.txid;
-                    <span class="kw">let </span>unsigned_key = UnsignedTransactionKey(txid);
 
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>unsigned) = dbtx.get_value(<span class="kw-2">&amp;</span>unsigned_key).<span class="kw">await </span>{
-                        <span class="kw">if </span><span class="self">self
-                            </span>.sign_peg_out_psbt(<span class="kw-2">&amp;mut </span>unsigned.psbt, <span class="kw-2">&amp;</span>peer_id, <span class="kw-2">&amp;</span>peg_out_signature)
-                            .is_ok()
-                        {
-                            dbtx.insert_entry(<span class="kw-2">&amp;</span>unsigned_key, <span class="kw-2">&amp;</span>unsigned).<span class="kw">await</span>;
+                <span class="kw">let </span>old_consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
 
-                            <span class="kw">if let </span><span class="prelude-val">Ok</span>(pending_tx) = <span class="self">self</span>.finalize_peg_out_psbt(unsigned) {
-                                <span class="comment">// We were able to finalize the transaction, so we will delete the
-                                // PSBT and instead keep the
-                                // extracted tx for periodic transmission
-                                // and to accept the change into our wallet eventually once
-                                // it confirms.
-                                </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PendingTransactionKey(txid), <span class="kw-2">&amp;</span>pending_tx)
-                                    .<span class="kw">await</span>;
-                                dbtx.remove_entry(<span class="kw-2">&amp;</span>PegOutTxSignatureCI(txid)).<span class="kw">await</span>;
-                                dbtx.remove_entry(<span class="kw-2">&amp;</span>unsigned_key).<span class="kw">await</span>;
-                            }
-                        }
-                    }
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id), <span class="kw-2">&amp;</span>block_height)
+                    .<span class="kw">await</span>;
+
+                <span class="kw">let </span>new_consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
+
+                <span class="comment">// only sync from the first non-default consensus block height
+                </span><span class="kw">if </span>new_consensus_height &gt; old_consensus_height &amp;&amp; old_consensus_height &gt; <span class="number">0 </span>{
+                    <span class="self">self</span>.sync_up_to_consensus_height(
+                        dbtx,
+                        old_consensus_height,
+                        new_consensus_height,
+                    )
+                    .<span class="kw">await</span>;
+                }
+            }
+            WalletConsensusItem::Feerate(feerate) =&gt; {
+                <span class="kw">if </span><span class="prelude-val">Some</span>(feerate) == dbtx.insert_entry(<span class="kw-2">&amp;</span>FeeRateVoteKey(peer_id), <span class="kw-2">&amp;</span>feerate).<span class="kw">await </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+                }
+            }
+            WalletConsensusItem::PegOutSignature(peg_out_signature) =&gt; {
+                <span class="kw">let </span>txid = peg_out_signature.txid;
+
+                <span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>PendingTransactionKey(txid)).<span class="kw">await</span>.is_some() {
+                    <span class="comment">// We already received a threshold of valid signatures
+                    </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+                }
+
+                <span class="kw">let </span><span class="kw-2">mut </span>unsigned = dbtx
+                    .get_value(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid))
+                    .<span class="kw">await
+                    </span>.context(<span class="string">&quot;Unsigned transaction does not exist&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="self">self</span>.sign_peg_out_psbt(<span class="kw-2">&amp;mut </span>unsigned.psbt, <span class="kw-2">&amp;</span>peer_id, <span class="kw-2">&amp;</span>peg_out_signature)
+                    .context(<span class="string">&quot;Peg out signature is invalid&quot;</span>)<span class="question-mark">?</span>;
+
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>unsigned)
+                    .<span class="kw">await</span>;
+
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(pending_tx) = <span class="self">self</span>.finalize_peg_out_psbt(unsigned) {
+                    <span class="comment">// We were able to finalize the transaction, so we will delete the
+                    // PSBT and instead keep the extracted tx for periodic transmission
+                    // as well as to accept the change into our wallet eventually once
+                    // it confirms.
+                    </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PendingTransactionKey(txid), <span class="kw-2">&amp;</span>pending_tx)
+                        .<span class="kw">await</span>;
+
+                    dbtx.remove_entry(<span class="kw-2">&amp;</span>PegOutTxSignatureCI(txid)).<span class="kw">await</span>;
+                    dbtx.remove_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid)).<span class="kw">await</span>;
                 }
             }
         }
 
-        <span class="macro">vec!</span>[]
+        <span class="prelude-val">Ok</span>(ConsensusDecision::Accept)
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -2451,14 +2453,6 @@
         )
         .<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(amount)
-    }
-
-    <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-    ) -&gt; Vec&lt;PeerId&gt; {
-        <span class="macro">vec!</span>[]
     }
 
     <span class="kw">async fn </span>output_status(

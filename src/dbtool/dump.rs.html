@@ -432,14 +432,6 @@
 <a href="#432" id="432">432</a>
 <a href="#433" id="433">433</a>
 <a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -452,6 +444,7 @@
 <span class="kw">use </span>fedimint_core::db::notifications::Notifications;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::epoch::SerdeSignatureShare;
 <span class="kw">use </span>fedimint_core::module::DynServerModuleGen;
 <span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -624,25 +617,6 @@
                         <span class="string">&quot;Accepted Transactions&quot;
                     </span>);
                 }
-                ConsensusRange::DbKeyPrefix::DropPeer =&gt; {
-                    <span class="macro">push_db_key_items!</span>(
-                        dbtx,
-                        ConsensusRange::DropPeerKeyPrefix,
-                        ConsensusRange::DropPeerKey,
-                        consensus,
-                        <span class="string">&quot;Dropped Peers&quot;
-                    </span>);
-                }
-                ConsensusRange::DbKeyPrefix::RejectedTransaction =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        ConsensusRange::RejectedTransactionKeyPrefix,
-                        ConsensusRange::RejectedTransactionKey,
-                        String,
-                        consensus,
-                        <span class="string">&quot;Rejected Transactions&quot;
-                    </span>);
-                }
                 ConsensusRange::DbKeyPrefix::EpochHistory =&gt; {
                     <span class="macro">push_db_pair_items_no_serde!</span>(
                         dbtx,
@@ -660,13 +634,23 @@
                     }
                 }
                 ConsensusRange::DbKeyPrefix::ClientConfigSignature =&gt; {
+                    <span class="kw">let </span>signature = dbtx
+                        .get_value(<span class="kw-2">&amp;</span>ConsensusRange::ClientConfigSignatureKey)
+                        .<span class="kw">await</span>;
+
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(signature) = signature {
+                        consensus
+                            .insert(<span class="string">&quot;Client Config Signature&quot;</span>.to_string(), Box::new(signature));
+                    }
+                }
+                ConsensusRange::DbKeyPrefix::ClientConfigSignatureShare =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         dbtx,
-                        ConsensusRange::ClientConfigSignatureKeyPrefix,
-                        ConsensusRange::ClientConfigSignatureKey,
-                        fedimint_core::epoch::SerdeSignature,
+                        ConsensusRange::ClientConfigSignatureSharePrefix,
+                        ConsensusRange::ClientConfigSignatureShareKey,
+                        SerdeSignatureShare,
                         consensus,
-                        <span class="string">&quot;Client Config Signature&quot;
+                        <span class="string">&quot;Client Config Download&quot;
                     </span>);
                 }
                 ConsensusRange::DbKeyPrefix::ConsensusUpgrade =&gt; {

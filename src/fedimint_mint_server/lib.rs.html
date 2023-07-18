@@ -1091,48 +1091,10 @@
 <a href="#1091" id="1091">1091</a>
 <a href="#1092" id="1092">1092</a>
 <a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a>
-<a href="#1097" id="1097">1097</a>
-<a href="#1098" id="1098">1098</a>
-<a href="#1099" id="1099">1099</a>
-<a href="#1100" id="1100">1100</a>
-<a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a>
-<a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a>
-<a href="#1111" id="1111">1111</a>
-<a href="#1112" id="1112">1112</a>
-<a href="#1113" id="1113">1113</a>
-<a href="#1114" id="1114">1114</a>
-<a href="#1115" id="1115">1115</a>
-<a href="#1116" id="1116">1116</a>
-<a href="#1117" id="1117">1117</a>
-<a href="#1118" id="1118">1118</a>
-<a href="#1119" id="1119">1119</a>
-<a href="#1120" id="1120">1120</a>
-<a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a>
-<a href="#1123" id="1123">1123</a>
-<a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a>
-<a href="#1126" id="1126">1126</a>
-<a href="#1127" id="1127">1127</a>
-<a href="#1128" id="1128">1128</a>
-<a href="#1129" id="1129">1129</a>
-<a href="#1130" id="1130">1130</a>
-<a href="#1131" id="1131">1131</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
-<span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>fedimint_core::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
     ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1148,8 +1110,9 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, TaskGroup};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
-    OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount,
+    ConsensusDecision, NumPeers, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
+    TieredMultiZip,
 };
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_mint_common::config::{
@@ -1165,7 +1128,7 @@
 <span class="kw">pub use </span>fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>fedimint_mint_common::{
     BlindNonce, MintCommonGen, MintConsensusItem, MintError, MintInput, MintModuleTypes,
-    MintOutput, MintOutputBlindSignatures, MintOutputOutcome, MintOutputSignatureShare, Note,
+    MintOutput, MintOutputBlindSignatures, MintOutputOutcome, MintOutputSignatureShare,
     DEFAULT_MAX_NOTES_PER_DENOMINATION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::{scalar, PeerHandleOps};
@@ -1180,7 +1143,7 @@
     AggregatePublicKey, PublicKeyShare, SecretKeyShare,
 };
 <span class="kw">use </span>threshold_crypto::group::Curve;
-<span class="kw">use </span>tracing::{debug, info, warn};
+<span class="kw">use </span>tracing::{debug, info};
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintGen;
@@ -1462,7 +1425,7 @@
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Mint {
     <span class="kw">type </span>Common = MintModuleTypes;
     <span class="kw">type </span>Gen = MintGen;
-    <span class="kw">type </span>VerificationCache = VerifiedNotes;
+    <span class="kw">type </span>VerificationCache = VerificationCache;
 
     <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">if </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
@@ -1486,197 +1449,168 @@
         )
     }
 
-    <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        consensus_items: Vec&lt;(PeerId, MintConsensusItem)&gt;,
-        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
-    ) -&gt; Vec&lt;PeerId&gt; {
-        <span class="kw">for </span>(peer_id, consensus_item) <span class="kw">in </span>consensus_items {
-            <span class="kw">let </span>out_point = consensus_item.out_point;
-            <span class="kw">let </span>signatures = consensus_item.signatures;
+        consensus_item: MintConsensusItem,
+        peer_id: PeerId,
+    ) -&gt; anyhow::Result&lt;ConsensusDecision&gt; {
+        <span class="kw">let </span>out_point = consensus_item.out_point;
+        <span class="kw">let </span>signatures = consensus_item.signatures;
 
-            <span class="comment">// check if we already obtained the blinded threshold signature
-            </span><span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point)).<span class="kw">await</span>.is_some() {
-                <span class="kw">continue</span>;
-            }
-
-            <span class="comment">// check if we already have a valid signature share for this peer
-            </span><span class="kw">if </span>dbtx
-                .get_value(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKey(out_point, peer_id))
-                .<span class="kw">await
-                </span>.is_some()
-            {
-                <span class="macro">warn!</span>(<span class="string">&quot;Received a redundant mint signature share&quot;</span>);
-                <span class="kw">continue</span>;
-            }
-
-            <span class="comment">// check if we are collecting signature shares for this out_point
-            </span><span class="kw">let </span>our_contribution = <span class="kw">match </span>dbtx
-                .get_value(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey(out_point))
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Some</span>(contribution) =&gt; contribution,
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Received mint signature share for non-existent out point&quot;</span>);
-                    <span class="kw">continue</span>;
-                }
-            };
-
-            <span class="comment">// check if we have received one signature per blinded note
-            </span><span class="kw">if </span>!signatures.<span class="number">0</span>.structural_eq(<span class="kw-2">&amp;</span>our_contribution.<span class="number">0</span>) {
-                <span class="macro">warn!</span>(<span class="string">&quot;Received mint signature share with invalid structure&quot;</span>);
-                <span class="kw">continue</span>;
-            }
-
-            <span class="comment">// obtain the correct messages to be signed from our contribution
-            </span><span class="kw">let </span>reference_messages = our_contribution
-                .<span class="number">0
-                </span>.iter_items()
-                .map(|(_amt, (msg, _sig))| msg);
-
-            <span class="comment">// check if the received signatures are valid for the reference_messages
-            </span><span class="kw">if </span>!signatures.<span class="number">0</span>.iter_items().zip(reference_messages).all(
-                <span class="comment">// the key used for the signature is different for every peer and amount
-                </span>|((amount, (.., sig)), ref_msg)| <span class="kw">match </span><span class="self">self</span>.pub_key_shares[<span class="kw-2">&amp;</span>peer_id].tier(<span class="kw-2">&amp;</span>amount) {
-                    <span class="prelude-val">Ok</span>(amount_key) =&gt; verify_blind_share(<span class="kw-2">*</span>ref_msg, <span class="kw-2">*</span>sig, <span class="kw-2">*</span>amount_key),
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-                },
-            ) {
-                <span class="macro">warn!</span>(<span class="string">&quot;Received mint signature share with invalid signature&quot;</span>);
-                <span class="kw">continue</span>;
-            }
-
-            <span class="comment">// this is the first valid signature share by this peer so we store it
-            </span>dbtx.insert_new_entry(
-                <span class="kw-2">&amp;</span>ReceivedPartialSignatureKey(out_point, peer_id),
-                <span class="kw-2">&amp;</span>signatures,
-            )
-            .<span class="kw">await</span>;
-
-            <span class="comment">// retrieve all received valid signature shares for this out_point
-            </span><span class="kw">let </span>signature_shares = dbtx
-                .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKeyOutputPrefix(out_point))
-                .<span class="kw">await
-                </span>.map(|(key, partial_sig)| (key.<span class="number">1</span>, partial_sig))
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                .<span class="kw">await</span>;
-
-            <span class="comment">// check if we have enough signature shares to combine
-            </span><span class="kw">if </span>signature_shares.len() &lt; <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold() {
-                <span class="kw">continue</span>;
-            }
-
-            <span class="comment">// combine valid signature shares
-            </span><span class="kw">let </span>blind_signatures = TieredMultiZip::new(
-                signature_shares
-                    .iter()
-                    .map(|(_peer, sig_share)| sig_share.<span class="number">0</span>.iter_items())
-                    .collect(),
-            )
-            .map(|(amt, sig_shares)| {
-                <span class="kw">let </span>peer_ids = signature_shares.iter().map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer);
-
-                <span class="kw">let </span>sig = combine_valid_shares(
-                    sig_shares
-                        .into_iter()
-                        .zip(peer_ids)
-                        .map(|((.., share), peer)| (peer.to_usize(), <span class="kw-2">*</span>share)),
-                    <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold(),
-                );
-
-                (amt, sig)
-            })
-            .collect::&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;();
-
-            <span class="comment">// remove received signature shares
-            </span>dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKeyOutputPrefix(out_point))
-                .<span class="kw">await</span>;
-
-            <span class="comment">// remove proposed signature share
-            </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey(out_point))
-                .<span class="kw">await</span>;
-
-            <span class="comment">// insert the final blind signatures
-            </span>dbtx.insert_entry(
-                <span class="kw-2">&amp;</span>OutputOutcomeKey(out_point),
-                <span class="kw-2">&amp;</span>MintOutputBlindSignatures(blind_signatures),
-            )
-            .<span class="kw">await</span>;
-
-            <span class="kw">let </span><span class="kw-2">mut </span>redemptions = Amount::from_sats(<span class="number">0</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>issuances = Amount::from_sats(<span class="number">0</span>);
-            <span class="kw">let </span>remove_audit_keys = dbtx
-                .find_by_prefix(<span class="kw-2">&amp;</span>MintAuditItemKeyPrefix)
-                .<span class="kw">await
-                </span>.map(|(key, amount)| {
-                    <span class="kw">match </span>key {
-                        MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; issuances += amount,
-                        MintAuditItemKey::IssuanceTotal =&gt; issuances += amount,
-                        MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; redemptions += amount,
-                        MintAuditItemKey::RedemptionTotal =&gt; redemptions += amount,
-                    }
-                    key
-                })
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                .<span class="kw">await</span>;
-
-            <span class="kw">for </span>key <span class="kw">in </span>remove_audit_keys {
-                dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>;
-            }
-
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::IssuanceTotal, <span class="kw-2">&amp;</span>issuances)
-                .<span class="kw">await</span>;
-            dbtx.insert_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::RedemptionTotal, <span class="kw-2">&amp;</span>redemptions)
-                .<span class="kw">await</span>;
+        <span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point)).<span class="kw">await</span>.is_some() {
+            <span class="comment">// We already obtained a threshold of blind signature shares
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
         }
 
-        <span class="macro">vec!</span>[]
+        <span class="kw">if </span>dbtx
+            .get_value(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKey(out_point, peer_id))
+            .<span class="kw">await
+            </span>.is_some()
+        {
+            <span class="comment">// We already received a valid signature share by this peer
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+        }
+
+        <span class="comment">// check if we are collecting signature shares for this out_point
+        </span><span class="kw">let </span>our_contribution = dbtx
+            .get_value(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey(out_point))
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;Out point for this signature share does not exist&quot;</span>)<span class="question-mark">?</span>;
+
+        <span class="comment">// check if we have received one signature per blinded note
+        </span><span class="kw">if </span>!signatures.<span class="number">0</span>.structural_eq(<span class="kw-2">&amp;</span>our_contribution.<span class="number">0</span>) {
+            <span class="macro">bail!</span>(<span class="string">&quot;Signature share structure is invalid&quot;</span>);
+        }
+
+        <span class="comment">// obtain the correct messages to be signed from our contribution
+        </span><span class="kw">let </span>reference_messages = our_contribution
+            .<span class="number">0
+            </span>.iter_items()
+            .map(|(_amt, (msg, _sig))| msg);
+
+        <span class="comment">// check if the received signatures are valid for the reference_messages
+        </span><span class="kw">if </span>!signatures.<span class="number">0</span>.iter_items().zip(reference_messages).all(
+            <span class="comment">// the key used for the signature is different for every peer and amount
+            </span>|((amount, (.., sig)), ref_msg)| <span class="kw">match </span><span class="self">self</span>.pub_key_shares[<span class="kw-2">&amp;</span>peer_id].tier(<span class="kw-2">&amp;</span>amount) {
+                <span class="prelude-val">Ok</span>(amount_key) =&gt; verify_blind_share(<span class="kw-2">*</span>ref_msg, <span class="kw-2">*</span>sig, <span class="kw-2">*</span>amount_key),
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            },
+        ) {
+            <span class="macro">bail!</span>(<span class="string">&quot;Signature share signature is invalid&quot;</span>);
+        }
+
+        <span class="comment">// we save the first valid signature share by this peer
+        </span>dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>ReceivedPartialSignatureKey(out_point, peer_id),
+            <span class="kw-2">&amp;</span>signatures,
+        )
+        .<span class="kw">await</span>;
+
+        <span class="comment">// retrieve all valid signature shares previously received for this out point
+        </span><span class="kw">let </span>signature_shares = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKeyOutputPrefix(out_point))
+            .<span class="kw">await
+            </span>.map(|(key, partial_sig)| (key.<span class="number">1</span>, partial_sig))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="comment">// check if we have enough signature shares to combine
+        </span><span class="kw">if </span>signature_shares.len() &lt; <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold() {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Accept);
+        }
+
+        <span class="comment">// combine valid signature shares
+        </span><span class="kw">let </span>blind_signatures = TieredMultiZip::new(
+            signature_shares
+                .iter()
+                .map(|(_peer, sig_share)| sig_share.<span class="number">0</span>.iter_items())
+                .collect(),
+        )
+        .map(|(amt, sig_shares)| {
+            <span class="kw">let </span>peer_ids = signature_shares.iter().map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer);
+
+            <span class="kw">let </span>sig = combine_valid_shares(
+                sig_shares
+                    .into_iter()
+                    .zip(peer_ids)
+                    .map(|((.., share), peer)| (peer.to_usize(), <span class="kw-2">*</span>share)),
+                <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold(),
+            );
+
+            (amt, sig)
+        })
+        .collect::&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;();
+
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKeyOutputPrefix(out_point))
+            .<span class="kw">await</span>;
+
+        dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey(out_point))
+            .<span class="kw">await</span>;
+
+        dbtx.insert_entry(
+            <span class="kw-2">&amp;</span>OutputOutcomeKey(out_point),
+            <span class="kw-2">&amp;</span>MintOutputBlindSignatures(blind_signatures),
+        )
+        .<span class="kw">await</span>;
+
+        <span class="comment">// TODO: move the db compaction somewhere more appropriate, possibly in the
+        // audit method?
+        </span><span class="kw">let </span><span class="kw-2">mut </span>redemptions = Amount::from_sats(<span class="number">0</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>issuances = Amount::from_sats(<span class="number">0</span>);
+        <span class="kw">let </span>remove_audit_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>MintAuditItemKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(key, amount)| {
+                <span class="kw">match </span>key {
+                    MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; issuances += amount,
+                    MintAuditItemKey::IssuanceTotal =&gt; issuances += amount,
+                    MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; redemptions += amount,
+                    MintAuditItemKey::RedemptionTotal =&gt; redemptions += amount,
+                }
+                key
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="kw">for </span>key <span class="kw">in </span>remove_audit_keys {
+            dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>;
+        }
+
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::IssuanceTotal, <span class="kw-2">&amp;</span>issuances)
+            .<span class="kw">await</span>;
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::RedemptionTotal, <span class="kw-2">&amp;</span>redemptions)
+            .<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>(ConsensusDecision::Accept)
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintInput&gt; + MaybeSend,
+        _inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintInput&gt; + MaybeSend,
     ) -&gt; <span class="self">Self</span>::VerificationCache {
-        <span class="comment">// We build a lookup table for checking the validity of all notes for certain
-        // amounts. This calculation can happen massively in parallel since
-        // verification is a pure function and thus has no side effects.
-        </span><span class="kw">let </span>iter = inputs.flat_map(|inputs| inputs.<span class="number">0</span>.iter_items());
-
-        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-        </span><span class="kw">let </span>iter = iter.par_bridge();
-
-        <span class="kw">let </span>valid_notes = iter
-            .filter_map(|(amount, note)| {
-                <span class="kw">let </span>amount_key = <span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount)<span class="question-mark">?</span>;
-                <span class="kw">if </span>note.verify(<span class="kw-2">*</span>amount_key) {
-                    <span class="prelude-val">Some</span>((<span class="kw-2">*</span>note, amount))
-                } <span class="kw">else </span>{
-                    <span class="prelude-val">None
-                </span>}
-            })
-            .collect();
-
-        VerifiedNotes { valid_notes }
+        VerificationCache
     }
 
     <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+        _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">for </span>(amount, note) <span class="kw">in </span>input.iter_items() {
-            <span class="kw">let </span>note_valid = verification_cache
-                .valid_notes
-                .get(note) <span class="comment">// We validated the note
-                </span>.map(|notet_amount| <span class="kw-2">*</span>notet_amount == amount) <span class="comment">// It has the right amount tier
-                </span>.unwrap_or(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the note return false
+        <span class="kw">let </span>iter = input.iter_items();
 
-            </span><span class="kw">if </span>!note_valid {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature).into_module_error_other();
-            }
+        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+        </span><span class="kw">let </span>iter = iter.par_bridge();
 
+        <span class="kw">if </span>!iter.all(|(amount, note)| <span class="kw">match </span><span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount) {
+            <span class="prelude-val">Some</span>(amount_key) =&gt; note.verify(<span class="kw-2">*</span>amount_key),
+            <span class="prelude-val">None </span>=&gt; <span class="bool-val">false</span>,
+        }) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature).into_module_error_other();
+        }
+
+        <span class="kw">for </span>(.., note) <span class="kw">in </span>input.iter_items() {
             <span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>NonceKey(note.<span class="number">0</span>)).<span class="kw">await</span>.is_some() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin).into_module_error_other();
             }
@@ -1772,14 +1706,6 @@
         .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(amount)
-    }
-
-    <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        _consensus_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-    ) -&gt; Vec&lt;PeerId&gt; {
-        <span class="macro">vec!</span>[]
     }
 
     <span class="kw">async fn </span>output_status(
@@ -2023,11 +1949,9 @@
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>VerifiedNotes {
-    valid_notes: HashMap&lt;Note, Amount&gt;,
-}
+</span><span class="kw">pub struct </span>VerificationCache;
 
-<span class="kw">impl </span>fedimint_core::server::VerificationCache <span class="kw">for </span>VerifiedNotes {}
+<span class="kw">impl </span>fedimint_core::server::VerificationCache <span class="kw">for </span>VerificationCache {}
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_migration_tests {
