@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::string::ToString;
 
 use anyhow::bail;
@@ -17,7 +17,9 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
+use fedimint_core::{
+    push_db_pair_items, Amount, ConsensusDecision, NumPeers, OutPoint, PeerId, ServerModule,
+};
 use fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
     DummyGenParams,
@@ -275,74 +277,68 @@ impl ServerModule for Dummy {
         ConsensusProposal::new_auto_trigger(consensus_items.collect())
     }
 
-    async fn begin_consensus_epoch<'a, 'b>(
+    async fn process_consensus_item<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, DummyConsensusItem)>,
-        _consensus_peers: &BTreeSet<PeerId>,
-    ) -> Vec<PeerId> {
-        for (peer_id, DummyConsensusItem::Sign(request, share)) in consensus_items {
-            // check if we already have a signature share for this peer
-            if dbtx
-                .get_value(&DummySignatureShareKey(request.clone(), peer_id))
-                .await
-                .is_some()
-            {
-                continue;
-            }
+        consensus_item: DummyConsensusItem,
+        peer_id: PeerId,
+    ) -> anyhow::Result<ConsensusDecision> {
+        let DummyConsensusItem::Sign(request, share) = consensus_item;
 
-            // check if the signature share is valid
-            if !self
-                .cfg
-                .consensus
-                .public_key_set
-                .public_key_share(peer_id.to_usize())
-                .verify(&share.0, request.clone())
-            {
-                continue;
-            }
-
-            // save the valid signature share
-            dbtx.insert_new_entry(&DummySignatureShareKey(request.clone(), peer_id), &share)
-                .await;
-
-            // collect all signature shares for this request
-            let signature_shares = dbtx
-                .find_by_prefix(&DummySignatureShareStringPrefix(request.clone()))
-                .await
-                .collect::<Vec<_>>()
-                .await;
-
-            // check if we have enough signature shares to create a threshold siganture
-            if signature_shares.len() <= self.cfg.consensus.public_key_set.threshold() {
-                continue;
-            }
-
-            // combine the valid signature shares into a threshold signature
-            let threshold_signature = self
-                .cfg
-                .consensus
-                .public_key_set
-                .combine_signatures(
-                    signature_shares
-                        .iter()
-                        .map(|(peer_id, share)| (peer_id.1.to_usize(), &share.0)),
-                )
-                .expect("All signatures are valid");
-
-            // remove the signature shares
-            dbtx.remove_by_prefix(&DummySignatureShareStringPrefix(request.clone()))
-                .await;
-
-            // save the treshold signature
-            dbtx.insert_entry(
-                &DummySignatureKey(request.to_string()),
-                &Some(SerdeSignature(threshold_signature)),
-            )
-            .await;
+        if dbtx
+            .get_value(&DummySignatureShareKey(request.clone(), peer_id))
+            .await
+            .is_some()
+        {
+            // We already received a valid signature share
+            return Ok(ConsensusDecision::Discard);
         }
 
-        vec![]
+        if !self
+            .cfg
+            .consensus
+            .public_key_set
+            .public_key_share(peer_id.to_usize())
+            .verify(&share.0, request.clone())
+        {
+            bail!("Signature share is invalid");
+        }
+
+        dbtx.insert_new_entry(&DummySignatureShareKey(request.clone(), peer_id), &share)
+            .await;
+
+        // Collect all valid signature shares previously received
+        let signature_shares = dbtx
+            .find_by_prefix(&DummySignatureShareStringPrefix(request.clone()))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+
+        if signature_shares.len() <= self.cfg.consensus.public_key_set.threshold() {
+            return Ok(ConsensusDecision::Accept);
+        }
+
+        let threshold_signature = self
+            .cfg
+            .consensus
+            .public_key_set
+            .combine_signatures(
+                signature_shares
+                    .iter()
+                    .map(|(peer_id, share)| (peer_id.1.to_usize(), &share.0)),
+            )
+            .expect("We have verified all signature shares before");
+
+        dbtx.remove_by_prefix(&DummySignatureShareStringPrefix(request.clone()))
+            .await;
+
+        dbtx.insert_entry(
+            &DummySignatureKey(request.to_string()),
+            &Some(SerdeSignature(threshold_signature)),
+        )
+        .await;
+
+        Ok(ConsensusDecision::Accept)
     }
 
     fn build_verification_cache<'a>(
@@ -430,14 +426,6 @@ impl ServerModule for Dummy {
             .await;
 
         Ok(meta)
-    }
-
-    async fn end_consensus_epoch<'a, 'b>(
-        &'a self,
-        _consensus_peers: &BTreeSet<PeerId>,
-        _dbtx: &mut ModuleDatabaseTransaction<'b>,
-    ) -> Vec<PeerId> {
-        vec![]
     }
 
     async fn output_status(

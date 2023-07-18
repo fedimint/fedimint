@@ -1,10 +1,9 @@
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{Infallible, TryInto};
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context};
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -45,8 +44,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeers,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, ConsensusDecision,
+    Feerate, NumPeers, OutPoint, PeerId, ServerModule,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
@@ -342,79 +341,85 @@ impl ServerModule for Wallet {
         ConsensusProposal::new_auto_trigger(items)
     }
 
-    async fn begin_consensus_epoch<'a, 'b>(
+    async fn process_consensus_item<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, WalletConsensusItem)>,
-        _consensus_peers: &BTreeSet<PeerId>,
-    ) -> Vec<PeerId> {
-        trace!(?consensus_items, "Received consensus proposals");
+        consensus_item: WalletConsensusItem,
+        peer_id: PeerId,
+    ) -> anyhow::Result<ConsensusDecision> {
+        trace!(?consensus_item, "Received consensus proposals");
 
-        for (peer_id, item) in consensus_items {
-            match item {
-                WalletConsensusItem::BlockHeight(block_height) => {
-                    let current_vote = dbtx
-                        .get_value(&BlockHeightVoteKey(peer_id))
-                        .await
-                        .unwrap_or(0);
+        match consensus_item {
+            WalletConsensusItem::BlockHeight(block_height) => {
+                let current_vote = dbtx
+                    .get_value(&BlockHeightVoteKey(peer_id))
+                    .await
+                    .unwrap_or(0);
 
-                    // consensus block height can never decrease
-                    match block_height.cmp(&current_vote) {
-                        Ordering::Greater => {
-                            let old_consensus_height = self.consensus_block_height(dbtx).await;
-
-                            dbtx.insert_entry(&BlockHeightVoteKey(peer_id), &block_height)
-                                .await;
-
-                            let new_consensus_height = self.consensus_block_height(dbtx).await;
-
-                            if new_consensus_height > old_consensus_height {
-                                self.sync_up_to_consensus_height(
-                                    dbtx,
-                                    old_consensus_height,
-                                    new_consensus_height,
-                                )
-                                .await;
-                            }
-                        }
-                        Ordering::Less => {
-                            warn!("Peer block height vote decreased");
-                        }
-                        Ordering::Equal => {}
-                    }
+                if block_height < current_vote {
+                    bail!("Block height vote decreased");
                 }
-                WalletConsensusItem::Feerate(feerate) => {
-                    dbtx.insert_entry(&FeeRateVoteKey(peer_id), &feerate).await;
+
+                if block_height == current_vote {
+                    return Ok(ConsensusDecision::Discard);
                 }
-                WalletConsensusItem::PegOutSignature(peg_out_signature) => {
-                    let txid = peg_out_signature.txid;
-                    let unsigned_key = UnsignedTransactionKey(txid);
 
-                    if let Some(mut unsigned) = dbtx.get_value(&unsigned_key).await {
-                        if self
-                            .sign_peg_out_psbt(&mut unsigned.psbt, &peer_id, &peg_out_signature)
-                            .is_ok()
-                        {
-                            dbtx.insert_entry(&unsigned_key, &unsigned).await;
+                let old_consensus_height = self.consensus_block_height(dbtx).await;
 
-                            if let Ok(pending_tx) = self.finalize_peg_out_psbt(unsigned) {
-                                // We were able to finalize the transaction, so we will delete the
-                                // PSBT and instead keep the
-                                // extracted tx for periodic transmission
-                                // and to accept the change into our wallet eventually once
-                                // it confirms.
-                                dbtx.insert_new_entry(&PendingTransactionKey(txid), &pending_tx)
-                                    .await;
-                                dbtx.remove_entry(&PegOutTxSignatureCI(txid)).await;
-                                dbtx.remove_entry(&unsigned_key).await;
-                            }
-                        }
-                    }
+                dbtx.insert_entry(&BlockHeightVoteKey(peer_id), &block_height)
+                    .await;
+
+                let new_consensus_height = self.consensus_block_height(dbtx).await;
+
+                // only sync from the first non-default consensus block height
+                if new_consensus_height > old_consensus_height && old_consensus_height > 0 {
+                    self.sync_up_to_consensus_height(
+                        dbtx,
+                        old_consensus_height,
+                        new_consensus_height,
+                    )
+                    .await;
+                }
+            }
+            WalletConsensusItem::Feerate(feerate) => {
+                if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer_id), &feerate).await {
+                    return Ok(ConsensusDecision::Discard);
+                }
+            }
+            WalletConsensusItem::PegOutSignature(peg_out_signature) => {
+                let txid = peg_out_signature.txid;
+
+                if dbtx.get_value(&PendingTransactionKey(txid)).await.is_some() {
+                    // We already received a threshold of valid signatures
+                    return Ok(ConsensusDecision::Discard);
+                }
+
+                let mut unsigned = dbtx
+                    .get_value(&UnsignedTransactionKey(txid))
+                    .await
+                    .context("Unsigned transaction does not exist")?;
+
+                self.sign_peg_out_psbt(&mut unsigned.psbt, &peer_id, &peg_out_signature)
+                    .context("Peg out signature is invalid")?;
+
+                dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
+                    .await;
+
+                if let Ok(pending_tx) = self.finalize_peg_out_psbt(unsigned) {
+                    // We were able to finalize the transaction, so we will delete the
+                    // PSBT and instead keep the extracted tx for periodic transmission
+                    // as well as to accept the change into our wallet eventually once
+                    // it confirms.
+                    dbtx.insert_new_entry(&PendingTransactionKey(txid), &pending_tx)
+                        .await;
+
+                    dbtx.remove_entry(&PegOutTxSignatureCI(txid)).await;
+                    dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
                 }
             }
         }
 
-        vec![]
+        Ok(ConsensusDecision::Accept)
     }
 
     fn build_verification_cache<'a>(
@@ -554,14 +559,6 @@ impl ServerModule for Wallet {
         )
         .await;
         Ok(amount)
-    }
-
-    async fn end_consensus_epoch<'a, 'b>(
-        &'a self,
-        _consensus_peers: &BTreeSet<PeerId>,
-        _dbtx: &mut ModuleDatabaseTransaction<'b>,
-    ) -> Vec<PeerId> {
-        vec![]
     }
 
     async fn output_status(

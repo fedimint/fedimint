@@ -38,12 +38,10 @@ use crate::backup::ClientBackupSnapshot;
 use crate::config::api::{get_verification_hashes, ApiResult};
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::consensus::{
-    AcceptedTransaction, ApiEvent, FundingVerifier, TransactionSubmissionError,
-};
+use crate::consensus::{ApiEvent, FundingVerifier};
 use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigSignatureKey, EpochHistoryKey,
-    LastEpochKey, RejectedTransactionKey,
+    LastEpochKey,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
@@ -92,10 +90,7 @@ impl ConsensusApi {
         &self.supported_api_versions
     }
 
-    pub async fn submit_transaction(
-        &self,
-        transaction: Transaction,
-    ) -> Result<(), TransactionSubmissionError> {
+    pub async fn submit_transaction(&self, transaction: Transaction) -> anyhow::Result<()> {
         // we already processed the transaction before the request was received
         if self
             .transaction_status(transaction.tx_hash())
@@ -125,8 +120,7 @@ impl ConsensusApi {
                     &cache,
                     input,
                 )
-                .await
-                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
+                .await?;
 
             pub_keys.push(meta.pub_keys);
             funding_verifier.add_input(meta.amount);
@@ -141,8 +135,7 @@ impl ConsensusApi {
                     &mut dbtx.with_module_prefix(output.module_instance_id()),
                     output,
                 )
-                .await
-                .map_err(|e| TransactionSubmissionError::ModuleError(tx_hash, e))?;
+                .await?;
             funding_verifier.add_output(amount);
         }
 
@@ -150,86 +143,57 @@ impl ConsensusApi {
 
         self.api_sender
             .send(ApiEvent::Transaction(transaction))
-            .await
-            .map_err(|_e| TransactionSubmissionError::TxChannelError)?;
+            .await?;
+
         Ok(())
     }
 
-    pub async fn transaction_status(
-        &self,
-        txid: TransactionId,
-    ) -> Option<crate::outcome::TransactionStatus> {
+    pub async fn transaction_status(&self, txid: TransactionId) -> Option<TransactionStatus> {
         let mut dbtx = self.db.begin_transaction().await;
 
-        let accepted: Option<AcceptedTransaction> =
-            dbtx.get_value(&AcceptedTransactionKey(txid)).await;
+        let module_ids = dbtx.get_value(&AcceptedTransactionKey(txid)).await?;
 
-        if let Some(accepted) = accepted {
-            return Some(
-                self.accepted_transaction_status(txid, accepted, &mut dbtx)
-                    .await,
-            );
-        }
-
-        let rejected: Option<String> = self
-            .db
-            .begin_transaction()
-            .await
-            .get_value(&RejectedTransactionKey(txid))
+        let status = self
+            .accepted_transaction_status(txid, module_ids, &mut dbtx)
             .await;
 
-        if let Some(message) = rejected {
-            return Some(TransactionStatus::Rejected(message));
-        }
-
-        None
+        Some(status)
     }
 
-    pub async fn wait_transaction_status(
-        &self,
-        txid: TransactionId,
-    ) -> crate::outcome::TransactionStatus {
-        let accepted_key = AcceptedTransactionKey(txid);
-        let rejected_key = RejectedTransactionKey(txid);
-        tokio::select! {
-            (accepted, mut dbtx) = self.db.wait_key_check(&accepted_key, std::convert::identity) => {
-                self.accepted_transaction_status(txid, accepted, &mut dbtx).await
-            }
-            rejected = self.db.wait_key_exists(&rejected_key) => {
-                TransactionStatus::Rejected(rejected)
-            }
-        }
+    pub async fn wait_transaction_status(&self, txid: TransactionId) -> TransactionStatus {
+        let (outputs, mut dbtx) = self
+            .db
+            .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
+            .await;
+
+        self.accepted_transaction_status(txid, outputs, &mut dbtx)
+            .await
     }
 
     async fn accepted_transaction_status(
         &self,
         txid: TransactionId,
-        accepted: AcceptedTransaction,
+        module_ids: Vec<ModuleInstanceId>,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> TransactionStatus {
         let mut outputs = Vec::new();
-        for (out_idx, output) in accepted.transaction.outputs.iter().enumerate() {
-            let outpoint = OutPoint {
-                txid,
-                out_idx: out_idx as u64,
-            };
+
+        for (module_id, out_idx) in module_ids.into_iter().zip(0u64..) {
             let outcome = self
                 .modules
-                .get_expect(output.module_instance_id())
+                .get_expect(module_id)
                 .output_status(
-                    &mut dbtx.with_module_prefix(output.module_instance_id()),
-                    outpoint,
-                    output.module_instance_id(),
+                    &mut dbtx.with_module_prefix(module_id),
+                    OutPoint { txid, out_idx },
+                    module_id,
                 )
                 .await
-                .expect("the transaction was processed, so must be known");
+                .expect("the transaction was accepted");
+
             outputs.push((&outcome).into())
         }
 
-        TransactionStatus::Accepted {
-            epoch: accepted.epoch,
-            outputs,
-        }
+        TransactionStatus::Accepted { epoch: 0, outputs }
     }
 
     pub async fn download_client_config(
@@ -622,11 +586,11 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
 #[derive(Clone)]
 pub struct ExpiringCache<T> {
     data: Arc<tokio::sync::Mutex<Option<(T, Instant)>>>,
-    duration: std::time::Duration,
+    duration: Duration,
 }
 
 impl<T: Clone> ExpiringCache<T> {
-    pub fn new(duration: std::time::Duration) -> Self {
+    pub fn new(duration: Duration) -> Self {
         Self {
             data: Arc::new(tokio::sync::Mutex::new(None)),
             duration,

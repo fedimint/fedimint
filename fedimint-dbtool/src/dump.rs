@@ -10,6 +10,7 @@ use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::notifications::Notifications;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
+use fedimint_core::epoch::SerdeSignatureShare;
 use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -182,25 +183,6 @@ impl<'a> DatabaseDump<'a> {
                         "Accepted Transactions"
                     );
                 }
-                ConsensusRange::DbKeyPrefix::DropPeer => {
-                    push_db_key_items!(
-                        dbtx,
-                        ConsensusRange::DropPeerKeyPrefix,
-                        ConsensusRange::DropPeerKey,
-                        consensus,
-                        "Dropped Peers"
-                    );
-                }
-                ConsensusRange::DbKeyPrefix::RejectedTransaction => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ConsensusRange::RejectedTransactionKeyPrefix,
-                        ConsensusRange::RejectedTransactionKey,
-                        String,
-                        consensus,
-                        "Rejected Transactions"
-                    );
-                }
                 ConsensusRange::DbKeyPrefix::EpochHistory => {
                     push_db_pair_items_no_serde!(
                         dbtx,
@@ -218,13 +200,23 @@ impl<'a> DatabaseDump<'a> {
                     }
                 }
                 ConsensusRange::DbKeyPrefix::ClientConfigSignature => {
+                    let signature = dbtx
+                        .get_value(&ConsensusRange::ClientConfigSignatureKey)
+                        .await;
+
+                    if let Some(signature) = signature {
+                        consensus
+                            .insert("Client Config Signature".to_string(), Box::new(signature));
+                    }
+                }
+                ConsensusRange::DbKeyPrefix::ClientConfigSignatureShare => {
                     push_db_pair_items!(
                         dbtx,
-                        ConsensusRange::ClientConfigSignatureKeyPrefix,
-                        ConsensusRange::ClientConfigSignatureKey,
-                        fedimint_core::epoch::SerdeSignature,
+                        ConsensusRange::ClientConfigSignatureSharePrefix,
+                        ConsensusRange::ClientConfigSignatureShareKey,
+                        SerdeSignatureShare,
                         consensus,
-                        "Client Config Signature"
+                        "Client Config Download"
                     );
                 }
                 ConsensusRange::DbKeyPrefix::ConsensusUpgrade => {

@@ -2,7 +2,7 @@ pub mod audit;
 pub mod registry;
 pub mod version;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -35,7 +35,7 @@ use crate::server::{DynServerModule, VerificationCache};
 use crate::task::{MaybeSend, TaskGroup};
 use crate::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    OutPoint, PeerId,
+    ConsensusDecision, OutPoint, PeerId,
 };
 
 pub struct InputMeta {
@@ -792,19 +792,18 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
 
-    /// This function is called once before transaction processing starts.
-    ///
-    /// All module consensus items of this round are supplied as
-    /// `consensus_items`. The database transaction will be committed to the
-    /// database after all other modules ran `begin_consensus_epoch`, so the
-    /// results are available when processing transactions. Returns any
-    /// peers that need to be dropped.
-    async fn begin_consensus_epoch<'a, 'b>(
+    /// This function is called once for every consensus item. If the function
+    /// returns Ok(ConsensusDecision::Accept) then the item changed the
+    /// modules state and has to be included in the history of the
+    /// federation, otherwise it may safely be discarded. We return an error
+    /// for actually invalid items while we return
+    /// Ok(ConsensusDecision::Discard) for merely superfluous items.
+    async fn process_consensus_item<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
-        consensus_items: Vec<(PeerId, <Self::Common as ModuleCommon>::ConsensusItem)>,
-        consensus_peers: &BTreeSet<PeerId>,
-    ) -> Vec<PeerId>;
+        consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
+        peer_id: PeerId,
+    ) -> anyhow::Result<ConsensusDecision>;
 
     /// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a
@@ -832,10 +831,6 @@ pub trait ServerModule: Debug + Sized {
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
     /// no effect.
-    ///
-    /// This function may only be called after `begin_consensus_epoch` and
-    /// before `end_consensus_epoch`. Data is only written to the database
-    /// once all transactions have been processed.
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
@@ -862,28 +857,12 @@ pub trait ServerModule: Debug + Sized {
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    ///
-    /// This function may only be called after `begin_consensus_epoch` and
-    /// before `end_consensus_epoch`. Data is only written to the database
-    /// once all transactions have been processed.
     async fn apply_output<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
-
-    /// This function is called once all transactions have been processed and
-    /// changes were written to the database. This allows running
-    /// finalization code before the next epoch.
-    ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and
-    /// returns a list of peers to drop if any are misbehaving.
-    async fn end_consensus_epoch<'a, 'b>(
-        &'a self,
-        consensus_peers: &BTreeSet<PeerId>,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-    ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this
     /// might contain data needed by the client to access funds or give an
