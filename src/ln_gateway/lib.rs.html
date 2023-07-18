@@ -775,26 +775,6 @@
 <a href="#775" id="775">775</a>
 <a href="#776" id="776">776</a>
 <a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -835,14 +815,13 @@
 <span class="kw">use </span>fedimint_ln_client::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
-<span class="kw">use </span>fedimint_ln_common::KIND;
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WithdrawState};
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gatewaylnrpc::intercept_htlc_response::{Action, Cancel};
 <span class="kw">use </span>gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lnrpc_client::{ILnRpcClient, RouteHtlcStream};
-<span class="kw">use </span>ng::{GatewayClientExt, GatewayClientModule};
+<span class="kw">use </span>ng::GatewayClientExt;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::FederationInfo;
@@ -1416,15 +1395,6 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>(gateway, <span class="kw">_</span>) = client.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-
-        <span class="kw">let </span>registration = gateway.to_gateway_registration_info(
-            route_hints.clone(),
-            GW_ANNOUNCEMENT_TTL,
-            <span class="self">self</span>.api.clone(),
-            <span class="self">self</span>.gateway_id,
-        );
-
         <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
 
         <span class="self">self</span>.register_client(client, federation_id, channel_id, route_hints)
@@ -1437,7 +1407,6 @@
 
         <span class="prelude-val">Ok</span>(FederationInfo {
             federation_id,
-            registration,
             balance_msat,
         })
     }
@@ -1448,21 +1417,10 @@
         <span class="kw">let </span>(route_hints, node_pub_key, alias) =
             <span class="self">Self</span>::fetch_lightning_route_info(<span class="self">self</span>.lnrpc.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>federation_clients {
-            <span class="comment">// TODO: We&#39;re reconstructing these registrations, which could have changed in
-            // the meantime, which might break some tests if they&#39;re expecting
-            // the same values as the previous registration
-            </span><span class="kw">let </span>(gateway, <span class="kw">_</span>) = client.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-            <span class="kw">let </span>registration = gateway.to_gateway_registration_info(
-                route_hints.clone(),
-                GW_ANNOUNCEMENT_TTL,
-                <span class="self">self</span>.api.clone(),
-                <span class="self">self</span>.gateway_id,
-            );
             <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
 
             federations.push(FederationInfo {
                 federation_id,
-                registration,
                 balance_msat,
             });
         }
@@ -1473,6 +1431,8 @@
             lightning_pub_key: node_pub_key.to_hex(),
             lightning_alias: alias,
             fees: <span class="self">self</span>.fees,
+            route_hints,
+            gateway_id: <span class="self">self</span>.gateway_id,
         })
     }
 

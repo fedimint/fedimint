@@ -193,7 +193,7 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
-<span class="kw">use </span>fedimint_ln_common::{serde_routing_fees, LightningGateway};
+<span class="kw">use </span>fedimint_ln_common::{route_hints, serde_routing_fees};
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -242,8 +242,6 @@
 </span><span class="kw">pub struct </span>FederationInfo {
     <span class="doccomment">/// Unique identifier of the fed
     </span><span class="kw">pub </span>federation_id: FederationId,
-    <span class="doccomment">/// Information we registered with the fed
-    </span><span class="kw">pub </span>registration: LightningGateway,
     <span class="kw">pub </span>balance_msat: Amount,
 }
 
@@ -255,6 +253,8 @@
     <span class="kw">pub </span>lightning_alias: String,
     <span class="attr">#[serde(with = <span class="string">&quot;serde_routing_fees&quot;</span>)]
     </span><span class="kw">pub </span>fees: RoutingFees,
+    <span class="kw">pub </span>route_hints: Vec&lt;route_hints::RouteHint&gt;,
+    <span class="kw">pub </span>gateway_id: secp256k1::PublicKey,
 }
 
 <span class="attr">#[derive(Debug)]
