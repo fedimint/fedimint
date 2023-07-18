@@ -11,7 +11,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
-use fedimint_ln_common::{serde_routing_fees, LightningGateway};
+use fedimint_ln_common::{route_hints, serde_routing_fees};
 use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -60,8 +60,6 @@ pub struct WithdrawPayload {
 pub struct FederationInfo {
     /// Unique identifier of the fed
     pub federation_id: FederationId,
-    /// Information we registered with the fed
-    pub registration: LightningGateway,
     pub balance_msat: Amount,
 }
 
@@ -73,6 +71,8 @@ pub struct GatewayInfo {
     pub lightning_alias: String,
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
+    pub route_hints: Vec<route_hints::RouteHint>,
+    pub gateway_id: secp256k1::PublicKey,
 }
 
 #[derive(Debug)]
