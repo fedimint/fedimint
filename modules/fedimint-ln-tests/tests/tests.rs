@@ -37,10 +37,12 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
     let mut gateway2 = fixtures.new_gateway(fixtures.cln().await).await;
 
     // Client selects a gateway by default
-    let key1 = gateway1.connect_fed(&fed).await.registration.gateway_id;
+    gateway1.connect_fed(&fed).await;
+    let key1 = gateway1.get_gateway_id();
     assert_eq!(client.select_active_gateway().await?.gateway_id, key1);
 
-    let key2 = gateway2.connect_fed(&fed).await.registration.gateway_id;
+    gateway2.connect_fed(&fed).await;
+    let key2 = gateway1.get_gateway_id();
     let gateways = client.fetch_registered_gateways().await.unwrap();
     assert_eq!(gateways.len(), 2);
 

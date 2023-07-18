@@ -38,14 +38,13 @@ use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_ln_common::KIND;
 use fedimint_wallet_client::{WalletClientExt, WithdrawState};
 use futures::stream::StreamExt;
 use gatewaylnrpc::intercept_htlc_response::{Action, Cancel};
 use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
-use ng::{GatewayClientExt, GatewayClientModule};
+use ng::GatewayClientExt;
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::FederationInfo;
@@ -619,15 +618,6 @@ impl Gateway {
             )
             .await?;
 
-        let (gateway, _) = client.get_first_module::<GatewayClientModule>(&KIND);
-
-        let registration = gateway.to_gateway_registration_info(
-            route_hints.clone(),
-            GW_ANNOUNCEMENT_TTL,
-            self.api.clone(),
-            self.gateway_id,
-        );
-
         let balance_msat = client.get_balance().await;
 
         self.register_client(client, federation_id, channel_id, route_hints)
@@ -640,7 +630,6 @@ impl Gateway {
 
         Ok(FederationInfo {
             federation_id,
-            registration,
             balance_msat,
         })
     }
@@ -651,21 +640,10 @@ impl Gateway {
         let (route_hints, node_pub_key, alias) =
             Self::fetch_lightning_route_info(self.lnrpc.clone()).await?;
         for (federation_id, client) in federation_clients {
-            // TODO: We're reconstructing these registrations, which could have changed in
-            // the meantime, which might break some tests if they're expecting
-            // the same values as the previous registration
-            let (gateway, _) = client.get_first_module::<GatewayClientModule>(&KIND);
-            let registration = gateway.to_gateway_registration_info(
-                route_hints.clone(),
-                GW_ANNOUNCEMENT_TTL,
-                self.api.clone(),
-                self.gateway_id,
-            );
             let balance_msat = client.get_balance().await;
 
             federations.push(FederationInfo {
                 federation_id,
-                registration,
                 balance_msat,
             });
         }
@@ -676,6 +654,8 @@ impl Gateway {
             lightning_pub_key: node_pub_key.to_hex(),
             lightning_alias: alias,
             fees: self.fees,
+            route_hints,
+            gateway_id: self.gateway_id,
         })
     }
 

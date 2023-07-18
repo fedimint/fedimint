@@ -795,7 +795,7 @@ async fn get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -> anyhow::R
             cmd!(GatewayClnCli, "info").out_json().await
         }
     }?;
-    let gateway_id = gateway_json["federations"][0]["registration"]["gateway_id"]
+    let gateway_id = gateway_json["gateway_id"]
         .as_str()
         .context("Missing gateway_id field")?;
 

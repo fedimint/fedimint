@@ -132,7 +132,7 @@ impl Gatewayd {
 
     pub async fn gateway_id(&self) -> Result<String> {
         let info = cmd!(self, "info").out_json().await?;
-        let gateway_id = info["federations"][0]["registration"]["gateway_id"]
+        let gateway_id = info["gateway_id"]
             .as_str()
             .context("gateway_id must be a string")?
             .to_owned();
