@@ -94,9 +94,9 @@ impl ApiRequestErased {
         serde_json::to_value(self).expect("parameter serialization error - this should not happen")
     }
 
-    pub fn with_auth(self, auth: &ApiAuth) -> Self {
+    pub fn with_auth(self, auth: ApiAuth) -> Self {
         Self {
-            auth: Some(auth.clone()),
+            auth: Some(auth),
             params: self.params,
         }
     }

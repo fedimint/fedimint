@@ -22,22 +22,20 @@ use crate::PeerId;
 // TODO: Maybe should have it's own CLI client so it doesn't need to be in core
 pub struct WsAdminClient {
     inner: DynGlobalApi,
-    auth: ApiAuth,
 }
 
 impl WsAdminClient {
-    pub fn new(url: Url, our_id: PeerId, auth: ApiAuth) -> Self {
+    pub fn new(url: Url, our_id: PeerId) -> Self {
         Self {
             inner: WsFederationApi::new(vec![(our_id, url)]).into(),
-            auth,
         }
     }
 
     /// Sets the password used to decrypt the configs and authenticate
     ///
     /// Must be called first before any other calls to the API
-    pub async fn set_password(&self) -> FederationResult<()> {
-        self.request_auth("set_password", ApiRequestErased::default())
+    pub async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_auth("set_password", ApiRequestErased::default().with_auth(auth))
             .await
     }
 
@@ -48,9 +46,13 @@ impl WsAdminClient {
     pub async fn set_config_gen_connections(
         &self,
         info: ConfigGenConnectionsRequest,
+        auth: ApiAuth,
     ) -> FederationResult<()> {
-        self.request_auth("set_config_gen_connections", ApiRequestErased::new(info))
-            .await
+        self.request_auth(
+            "set_config_gen_connections",
+            ApiRequestErased::new(info).with_auth(auth),
+        )
+        .await
     }
 
     /// During config gen, used for an API-to-API call that adds a peer's server
@@ -76,16 +78,23 @@ impl WsAdminClient {
 
     /// Sends a signal to consensus that we are ready to shutdown the federation
     /// and upgrade
-    pub async fn signal_upgrade(&self) -> FederationResult<()> {
-        self.request_auth("upgrade", ApiRequestErased::default())
+    pub async fn signal_upgrade(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_auth("upgrade", ApiRequestErased::default().with_auth(auth))
             .await
     }
 
     /// Sends a signal to consensus that we want to force running an epoch
     /// outcome
-    pub async fn force_process_epoch(&self, outcome: SerdeEpochHistory) -> FederationResult<()> {
-        self.request_auth("process_outcome", ApiRequestErased::new(outcome))
-            .await
+    pub async fn force_process_epoch(
+        &self,
+        outcome: SerdeEpochHistory,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_auth(
+            "process_outcome",
+            ApiRequestErased::new(outcome).with_auth(auth),
+        )
+        .await
     }
 
     /// Delegates to `fetch_epoch_history`
@@ -102,9 +111,15 @@ impl WsAdminClient {
 
     /// Gets the default config gen params which can be configured by the
     /// leader, gives them a template to modify
-    pub async fn get_default_config_gen_params(&self) -> FederationResult<ConfigGenParamsRequest> {
-        self.request_auth("get_default_config_gen_params", ApiRequestErased::default())
-            .await
+    pub async fn get_default_config_gen_params(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<ConfigGenParamsRequest> {
+        self.request_auth(
+            "get_default_config_gen_params",
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     /// Leader sets the consensus params, everyone sets the local params
@@ -113,9 +128,13 @@ impl WsAdminClient {
     pub async fn set_config_gen_params(
         &self,
         requested: ConfigGenParamsRequest,
+        auth: ApiAuth,
     ) -> FederationResult<()> {
-        self.request_auth("set_config_gen_params", ApiRequestErased::new(requested))
-            .await
+        self.request_auth(
+            "set_config_gen_params",
+            ApiRequestErased::new(requested).with_auth(auth),
+        )
+        .await
     }
 
     /// Returns the consensus config gen params, followers will delegate this
@@ -134,16 +153,22 @@ impl WsAdminClient {
     /// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
-    pub async fn run_dkg(&self) -> FederationResult<()> {
-        self.request_auth("run_dkg", ApiRequestErased::default())
+    pub async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_auth("run_dkg", ApiRequestErased::default().with_auth(auth))
             .await
     }
 
     /// After DKG, returns the hash of the consensus config tweaked with our id.
     /// We need to share this with all other peers to complete verification.
-    pub async fn get_verify_config_hash(&self) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
-        self.request_auth("get_verify_config_hash", ApiRequestErased::default())
-            .await
+    pub async fn get_verify_config_hash(
+        &self,
+        auth: ApiAuth,
+    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
+        self.request_auth(
+            "get_verify_config_hash",
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     /// Reads the configs from the disk, starts the consensus server, and shuts
@@ -151,9 +176,12 @@ impl WsAdminClient {
     ///
     /// Clients may receive an error due to forced shutdown, should call the
     /// `server_status` to see if consensus has started.
-    pub async fn start_consensus(&self) -> FederationResult<()> {
-        self.request_auth("start_consensus", ApiRequestErased::default())
-            .await
+    pub async fn start_consensus(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_auth(
+            "start_consensus",
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     /// Returns the status of the server
@@ -171,7 +199,7 @@ impl WsAdminClient {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.inner
-            .request_current_consensus(method.to_owned(), params.with_auth(&self.auth))
+            .request_current_consensus(method.to_owned(), params)
             .await
     }
 

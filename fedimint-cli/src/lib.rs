@@ -260,15 +260,11 @@ impl Opts {
             .ok_or_cli_msg(CliErrorKind::IOError, "`--data-dir=` argument not set.")
     }
 
-    async fn admin_client(&self) -> CliResult<WsAdminClient> {
-        let password = self
-            .password
-            .clone()
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs password set")?;
+    fn admin_client(&self) -> CliResult<WsAdminClient> {
         let our_id = &self
             .our_id
             .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
-        let auth = ApiAuth(password);
+
         let url = self
             .load_config()?
             .api_endpoints
@@ -276,7 +272,15 @@ impl Opts {
             .expect("Endpoint exists")
             .url
             .clone();
-        Ok(WsAdminClient::new(url, *our_id, auth))
+        Ok(WsAdminClient::new(url, *our_id))
+    }
+
+    fn auth(&self) -> CliResult<ApiAuth> {
+        let password = self
+            .password
+            .clone()
+            .ok_or_cli_msg(CliErrorKind::MissingAuth, "CLI needs password set")?;
+        Ok(ApiAuth(password))
     }
 
     fn load_config(&self) -> CliResult<ClientConfig> {
@@ -577,7 +581,7 @@ impl FedimintCli {
                 ))
             }
             Command::Admin(AdminCmd::Status) => {
-                let status = cli.admin_client().await?.status().await?;
+                let status = cli.admin_client()?.status().await?;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
@@ -586,7 +590,7 @@ impl FedimintCli {
             Command::Admin(AdminCmd::LastEpoch) => {
                 let cfg = cli.load_config()?;
                 let decoders = cli.load_decoders(&cfg, &self.module_gens);
-                let client = cli.admin_client().await?;
+                let client = cli.admin_client()?;
                 let last_epoch = client
                     .fetch_last_epoch_history(cfg.epoch_pk, &decoders)
                     .await?;
@@ -602,14 +606,14 @@ impl FedimintCli {
                     &decoders,
                 )
                 .map_err_cli_msg(CliErrorKind::SerializationError, "failed to decode outcome")?;
-                let client = cli.admin_client().await?;
+                let client = cli.admin_client()?;
                 client
-                    .force_process_epoch(SerdeEpochHistory::from(&outcome))
+                    .force_process_epoch(SerdeEpochHistory::from(&outcome), cli.auth()?)
                     .await?;
                 Ok(CliOutput::ForceEpoch)
             }
             Command::Admin(AdminCmd::SignalUpgrade) => {
-                cli.admin_client().await?.signal_upgrade().await?;
+                cli.admin_client()?.signal_upgrade(cli.auth()?).await?;
                 Ok(CliOutput::SignalUpgrade)
             }
             Command::Dev(DevCmd::Api {
