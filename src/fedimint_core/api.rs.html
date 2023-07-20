@@ -1287,6 +1287,8 @@
 <a href="#1287" id="1287">1287</a>
 <a href="#1288" id="1288">1288</a>
 <a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -2316,6 +2318,8 @@
     </span>ConfigGenFailed,
     <span class="doccomment">/// Config is generated, peers should verify the config
     </span>VerifyingConfigs,
+    <span class="doccomment">/// We have verified all our peer configs
+    </span>VerifiedConfigs,
     <span class="doccomment">/// Restarted from a planned upgrade (requires action to start)
     </span>Upgrading,
     <span class="doccomment">/// Consensus is running
