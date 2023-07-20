@@ -1065,6 +1065,16 @@
 <a href="#1065" id="1065">1065</a>
 <a href="#1066" id="1066">1066</a>
 <a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1854,7 +1864,17 @@
             fedimint_core::core::ModuleInstanceId::consensus_decode(reader, decoders)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>decoders.get(module_instance_id) {
             <span class="prelude-val">Some</span>(decoder) =&gt; {
-                DynRawFallback::Decoded(decoder.decode(reader, module_instance_id, decoders)<span class="question-mark">?</span>)
+                <span class="kw">let </span>total_len_u64 = u64::consensus_decode(reader, decoders)<span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>reader = reader.take(total_len_u64);
+                <span class="kw">let </span>v: T = decoder.decode(<span class="kw-2">&amp;mut </span>reader, module_instance_id, decoders)<span class="question-mark">?</span>;
+
+                <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
+                        <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Dyn type did not consume all bytes during decoding&quot;</span>),
+                    ));
+                }
+
+                DynRawFallback::Decoded(v)
             }
             <span class="prelude-val">None </span>=&gt; {
                 <span class="comment">// since the decoder is not available, just read the raw data
