@@ -860,6 +860,85 @@
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -874,13 +953,14 @@
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
-<span class="kw">use </span>std::io::{Error, Read, Write};
+<span class="kw">use </span>std::io::{<span class="self">self</span>, Error, Read, Write};
 <span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 <span class="kw">use </span>std::{cmp, mem};
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin_hashes::hex::{FromHex, ToHex};
 <span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable, UnzipConsensus};
+<span class="kw">use </span>lightning::util::ser::{Readable, Writeable};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
 
@@ -1006,7 +1086,27 @@
     }
 }
 
-<span class="macro">macro_rules! </span>impl_encode_decode_num {
+<span class="kw">pub use </span>lightning::util::ser::BigSize;
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>BigSize {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>writer = CountWrite::from(writer);
+        <span class="self">self</span>.write(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(usize::try_from(writer.count()).expect(<span class="string">&quot;can&#39;t overflow&quot;</span>))
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>BigSize {
+    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
+        r: <span class="kw-2">&amp;mut </span>R,
+        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        BigSize::read(r)
+            .map_err(|e| DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;BigSize decoding error: {e:?}&quot;</span>)))
+    }
+}
+
+<span class="macro">macro_rules! </span>impl_encode_decode_num_as_plain {
     (<span class="macro-nonterminal">$num_type</span>:ty) =&gt; {
         <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
@@ -1029,10 +1129,31 @@
     };
 }
 
-<span class="macro">impl_encode_decode_num!</span>(u64);
-<span class="macro">impl_encode_decode_num!</span>(u32);
-<span class="macro">impl_encode_decode_num!</span>(u16);
-<span class="macro">impl_encode_decode_num!</span>(u8);
+<span class="macro">macro_rules! </span>impl_encode_decode_num_as_bigsize {
+    (<span class="macro-nonterminal">$num_type</span>:ty) =&gt; {
+        <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
+            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+                BigSize(<span class="kw-2">*</span><span class="self">self </span><span class="kw">as </span>u64).consensus_encode(writer)
+            }
+        }
+
+        <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
+            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+                d: <span class="kw-2">&amp;mut </span>D,
+                _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+                <span class="kw">let </span>varint = BigSize::consensus_decode(d, <span class="kw-2">&amp;</span>Default::default())
+                    .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)<span class="question-mark">?</span>;
+                &lt;<span class="macro-nonterminal">$num_type</span>&gt;::try_from(varint.<span class="number">0</span>).map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)
+            }
+        }
+    };
+}
+
+<span class="macro">impl_encode_decode_num_as_bigsize!</span>(u64);
+<span class="macro">impl_encode_decode_num_as_bigsize!</span>(u32);
+<span class="macro">impl_encode_decode_num_as_bigsize!</span>(u16);
+<span class="macro">impl_encode_decode_num_as_plain!</span>(u8);
 
 <span class="macro">macro_rules! </span>impl_encode_decode_tuple {
     ($(<span class="macro-nonterminal">$x</span>:ident),<span class="kw-2">*</span>) =&gt; (
@@ -1473,6 +1594,46 @@
     }
 }
 
+<span class="doccomment">/// A writer counting number of writes written to it
+///
+/// Copy&amp;pasted from &lt;https://github.com/SOF3/count-write&gt; which
+/// uses Apache license (and it&#39;s a trivial amount of code, repeating
+/// on stack overflow).
+</span><span class="kw">pub struct </span>CountWrite&lt;W&gt; {
+    inner: W,
+    count: u64,
+}
+
+<span class="kw">impl</span>&lt;W&gt; CountWrite&lt;W&gt; {
+    <span class="doccomment">/// Returns the number of bytes successfull written so far
+    </span><span class="kw">pub fn </span>count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.count
+    }
+
+    <span class="doccomment">/// Extracts the inner writer, discarding this wrapper
+    </span><span class="kw">pub fn </span>into_inner(<span class="self">self</span>) -&gt; W {
+        <span class="self">self</span>.inner
+    }
+}
+
+<span class="kw">impl</span>&lt;W&gt; From&lt;W&gt; <span class="kw">for </span>CountWrite&lt;W&gt; {
+    <span class="kw">fn </span>from(inner: W) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ inner, count: <span class="number">0 </span>}
+    }
+}
+
+<span class="kw">impl</span>&lt;W: Write&gt; Write <span class="kw">for </span>CountWrite&lt;W&gt; {
+    <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; io::Result&lt;usize&gt; {
+        <span class="kw">let </span>written = <span class="self">self</span>.inner.write(buf)<span class="question-mark">?</span>;
+        <span class="self">self</span>.count += written <span class="kw">as </span>u64;
+        <span class="prelude-val">Ok</span>(written)
+    }
+
+    <span class="kw">fn </span>flush(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;()&gt; {
+        <span class="self">self</span>.inner.flush()
+    }
+}
+
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::fmt::Debug;
@@ -1526,7 +1687,7 @@
             vec: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
             num: <span class="number">42</span>,
         };
-        <span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">42</span>];
+        <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>];
 
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
@@ -1537,7 +1698,7 @@
         </span><span class="kw">struct </span>TestStruct(Vec&lt;u8&gt;, u32);
 
         <span class="kw">let </span>reference = TestStruct(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], <span class="number">42</span>);
-        <span class="kw">let </span>bytes = [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">42</span>];
+        <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>];
 
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
@@ -1551,16 +1712,13 @@
         }
 
         <span class="kw">let </span>test_cases = [
-            (
-                TestEnum::Foo(<span class="prelude-val">Some</span>(<span class="number">42</span>)),
-                <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">42</span>],
-            ),
-            (TestEnum::Foo(<span class="prelude-val">None</span>), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>]),
+            (TestEnum::Foo(<span class="prelude-val">Some</span>(<span class="number">42</span>)), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">1</span>, <span class="number">42</span>]),
+            (TestEnum::Foo(<span class="prelude-val">None</span>), <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>]),
             (
                 TestEnum::Bar {
                     bazz: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
                 },
-                <span class="macro">vec!</span>[<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
+                <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>],
             ),
         ];
 
