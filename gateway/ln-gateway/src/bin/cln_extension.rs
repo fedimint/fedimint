@@ -36,8 +36,8 @@ use tracing::{debug, error, info, trace, warn};
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
-    #[arg(long = "listen", env = "FM_CLN_EXTENSION_LISTEN_ADDRESS")]
-    pub listen: SocketAddr,
+    #[arg(long = "fm-gateway-listen", env = "FM_CLN_EXTENSION_LISTEN_ADDRESS")]
+    pub fm_gateway_listen: SocketAddr,
 }
 
 #[tokio::main]
@@ -134,12 +134,12 @@ impl ClnRpcService {
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
-                "listen",
+                "fm-gateway-listen",
                 // Set an invalid default address in the extension to force the extension plugin
                 // user to supply a valid address via an environment variable or
                 // cln plugin config option.
                 options::Value::String("default-dont-use".into()),
-                "gateway cln extension address",
+                "fedimint gateway CLN extension listen address",
             ))
             .hook(
                 "htlc_accepted",
@@ -174,17 +174,17 @@ impl ClnRpcService {
             let socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
 
             // Parse configurations or read from
-            let listen: SocketAddr = match ClnExtensionOpts::try_parse() {
-                Ok(opts) => opts.listen,
+            let fm_gateway_listen: SocketAddr = match ClnExtensionOpts::try_parse() {
+                Ok(opts) => opts.fm_gateway_listen,
                 // FIXME: cln_plugin doesn't yet support optional parameters
-                Err(_) => match plugin.option("listen") {
+                Err(_) => match plugin.option("fm-gateway-listen") {
                     Some(options::Value::String(listen)) => {
                         if listen == "default-dont-use" {
                             panic!(
-                                "Gateway cln extension is missing a listen address configuration. You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --listen config option to the cln plugin"
+                                "Gateway cln extension is missing a listen address configuration. You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --fm-gateway-listen config option to the cln plugin"
                             )
                         } else {
-                            SocketAddr::from_str(&listen).expect("invalid listen address")
+                            SocketAddr::from_str(&listen).expect("invalid fm-gateway-listen address")
                         }
                     }
                     _ => unreachable!(),
@@ -197,7 +197,7 @@ impl ClnRpcService {
                     interceptor,
                     task_group: TaskGroup::new()
                 },
-                listen,
+                fm_gateway_listen,
                 plugin,
             ))
         } else {
