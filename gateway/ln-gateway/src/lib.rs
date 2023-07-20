@@ -257,28 +257,19 @@ impl Gateway {
                                     scid_to_federation.clone(),
                                     tg.clone(),
                                 )
-                                .await;
+                                .await.expect("Failed to created Gateway");
 
-                                match gateway {
-                                    Ok(gateway) => {
-                                        info!("Successfully created Gateway");
+                                info!("Successfully created Gateway");
 
-                                        let tx = run_webserver(password.clone(), listen, gateway)
-                                            .await
-                                            .expect("Failed to start webserver");
-                                        info!("Successfully started webserver");
+                                let tx = run_webserver(password.clone(), listen, gateway)
+                                    .await
+                                    .expect("Failed to start webserver");
+                                info!("Successfully started webserver");
 
-                                        Self::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
-                                        warn!("HTLC Stream Lightning connection broken. Stopping webserver...");
-                                        if let Err(e) = tx.send(()).await {
-                                            error!("Error shutting down gatewayd webserver: {e:?}");
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to create Gateway. Waiting 5 seconds and trying again");
-                                        debug!("Error: {e:?}");
-                                        sleep(Duration::from_secs(5)).await;
-                                    }
+                                Self::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
+                                warn!("HTLC Stream Lightning connection broken. Stopping webserver...");
+                                if let Err(e) = tx.send(()).await {
+                                    error!("Error shutting down gatewayd webserver: {e:?}");
                                 }
                             }
                             Err(e) => {

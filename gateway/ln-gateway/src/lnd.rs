@@ -101,6 +101,20 @@ impl GatewayLndClient {
             self.macaroon.clone(),
         )
         .await?;
+
+        // Verify that LND is reachable via RPC before attempting to spawn a new thread
+        // that will intercept HTLCs.
+        client
+            .lightning()
+            .get_info(GetInfoRequest {})
+            .await
+            .map_err(|e| {
+                GatewayError::LnRpcError(tonic::Status::new(
+                    tonic::Code::Internal,
+                    format!("LND error: {e:?}"),
+                ))
+            })?;
+
         task_group
             .spawn("LND HTLC Subscription", move |_handle| async move {
                 let mut htlc_stream = match client
