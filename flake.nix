@@ -368,7 +368,7 @@
                     pkgs.nodePackages.bash-language-server
                   ] ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [
                     pkgs.semgrep
-                  ] ++ lib.optionals (!stdenv.isAarch64) [
+                  ] ++ lib.optionals (stdenv.isLinux) [
                     xclip
                     wl-clipboard
                   ];
