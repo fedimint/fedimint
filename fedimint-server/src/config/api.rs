@@ -106,7 +106,7 @@ impl ConfigGenApi {
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
             // Note PeerIds don't really exist at this point, but id doesn't matter because
             // it's not used in the WS client for anything, perhaps it should be removed
-            let client = WsAdminClient::new(url, PeerId::from(0), state.auth()?);
+            let client = WsAdminClient::new(url, PeerId::from(0));
             client
                 .add_config_gen_peer(state.our_peer_info()?)
                 .await
@@ -162,7 +162,7 @@ impl ConfigGenApi {
 
         let consensus = match local.and_then(|local| local.leader_api_url) {
             Some(leader_url) => {
-                let client = WsAdminClient::new(leader_url.clone(), PeerId::from(0), state.auth()?);
+                let client = WsAdminClient::new(leader_url.clone(), PeerId::from(0));
                 let response = client.get_consensus_config_gen_params().await;
                 response
                     .map_err(|_| ApiError::not_found("Cannot get leader params".to_string()))?
@@ -663,6 +663,7 @@ mod tests {
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
         client: WsAdminClient,
+        auth: ApiAuth,
         name: String,
         settings: ConfigGenSettings,
         amount: Amount,
@@ -713,11 +714,12 @@ mod tests {
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = WsAdminClient::new(api_url, PeerId::from(0), auth);
+            let client = WsAdminClient::new(api_url, PeerId::from(0));
 
             (
                 TestConfigApi {
                     client,
+                    auth,
                     name,
                     settings,
                     amount: Amount::from_sats(port as u64),
@@ -729,7 +731,7 @@ mod tests {
 
         /// Helper function to shutdown consensus with an upgrade signal
         async fn retry_signal_upgrade(&self) {
-            while self.client.signal_upgrade().await.is_err() {
+            while self.client.signal_upgrade(self.auth.clone()).await.is_err() {
                 sleep(Duration::from_millis(1000)).await;
                 tracing::info!(
                     target: fedimint_logging::LOG_TEST,
@@ -741,10 +743,13 @@ mod tests {
         /// Helper function using generated urls
         async fn set_connections(&self, leader: &Option<Url>) -> FederationResult<()> {
             self.client
-                .set_config_gen_connections(ConfigGenConnectionsRequest {
-                    our_name: self.name.clone(),
-                    leader_api_url: leader.clone(),
-                })
+                .set_config_gen_connections(
+                    ConfigGenConnectionsRequest {
+                        our_name: self.name.clone(),
+                        leader_api_url: leader.clone(),
+                    },
+                    self.auth.clone(),
+                )
                 .await
         }
 
@@ -801,7 +806,10 @@ mod tests {
                 modules,
             };
 
-            self.client.set_config_gen_params(request).await.unwrap();
+            self.client
+                .set_config_gen_params(request, self.auth.clone())
+                .await
+                .unwrap();
         }
 
         /// reads the dummy module config from the filesystem
@@ -836,8 +844,16 @@ mod tests {
             assert_eq!(leader.status().await.server, ServerStatus::AwaitingPassword);
 
             // Cannot set the password twice
-            leader.client.set_password().await.unwrap();
-            assert!(leader.client.set_password().await.is_err());
+            leader
+                .client
+                .set_password(leader.auth.clone())
+                .await
+                .unwrap();
+            assert!(leader
+                .client
+                .set_password(leader.auth.clone())
+                .await
+                .is_err());
 
             // We can call this twice to change the leader name
             leader.set_connections(&None).await.unwrap();
@@ -845,7 +861,11 @@ mod tests {
             leader.set_connections(&None).await.unwrap();
 
             // Leader sets the config
-            let _ = leader.client.get_default_config_gen_params().await.unwrap();
+            let _ = leader
+                .client
+                .get_default_config_gen_params(leader.auth.clone())
+                .await
+                .unwrap();
             leader.set_config_gen_params().await;
 
             // Setup followers and send connection info
@@ -854,7 +874,11 @@ mod tests {
                     follower.status().await.server,
                     ServerStatus::AwaitingPassword
                 );
-                follower.client.set_password().await.unwrap();
+                follower
+                    .client
+                    .set_password(follower.auth.clone())
+                    .await
+                    .unwrap();
                 let leader_url = Some(leader.settings.api_url.clone());
                 follower.set_connections(&leader_url).await.unwrap();
                 follower.name = format!("{}_", follower.name);
@@ -890,7 +914,11 @@ mod tests {
             followers.push(leader);
             let followers = Arc::new(followers);
             let (results, _) = tokio::join!(
-                join_all(followers.iter().map(|peer| peer.client.run_dkg())),
+                join_all(
+                    followers
+                        .iter()
+                        .map(|peer| peer.client.run_dkg(peer.auth.clone()))
+                ),
                 followers[0].wait_status(ServerStatus::ReadyForConfigGen)
             );
             for result in results {
@@ -901,7 +929,12 @@ mod tests {
             let mut hashes = HashSet::new();
             for peer in followers.iter() {
                 peer.wait_status(ServerStatus::VerifyingConfigs).await;
-                hashes.insert(peer.client.get_verify_config_hash().await.unwrap());
+                hashes.insert(
+                    peer.client
+                        .get_verify_config_hash(peer.auth.clone())
+                        .await
+                        .unwrap(),
+                );
             }
             assert_eq!(hashes.len(), 1);
 
@@ -916,7 +949,7 @@ mod tests {
 
             // start consensus
             for peer in followers.iter() {
-                peer.client.start_consensus().await.ok();
+                peer.client.start_consensus(peer.auth.clone()).await.ok();
                 assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
             }
 
@@ -938,7 +971,7 @@ mod tests {
             // Confirm we are stuck in upgrading after an upgrade
             for peer in followers.iter() {
                 assert_eq!(peer.status().await.server, ServerStatus::Upgrading);
-                peer.client.start_consensus().await.ok();
+                peer.client.start_consensus(peer.auth.clone()).await.ok();
                 assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
             }
 
