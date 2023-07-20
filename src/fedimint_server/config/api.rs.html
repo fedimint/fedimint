@@ -1032,6 +1032,16 @@
 <a href="#1032" id="1032">1032</a>
 <a href="#1033" id="1033">1033</a>
 <a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1295,7 +1305,17 @@
     <span class="doccomment">/// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
     </span><span class="kw">pub fn </span>get_verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
-        <span class="kw">let </span>state = <span class="self">self</span>.require_status(ServerStatus::VerifyingConfigs)<span class="question-mark">?</span>;
+        <span class="kw">let </span>state = <span class="self">self
+            </span>.require_status(ServerStatus::VerifyingConfigs)
+            .or_else(|<span class="kw">_</span>| <span class="self">self</span>.require_status(ServerStatus::VerifiedConfigs))
+            .map_err(|<span class="kw">_</span>| {
+                ApiError::bad_request(<span class="macro">format!</span>(
+                    <span class="string">&quot;Expected to be in {:?} or {:?} state&quot;</span>,
+                    ServerStatus::VerifyingConfigs,
+                    ServerStatus::VerifiedConfigs
+                ))
+            })<span class="question-mark">?</span>;
+
         <span class="kw">let </span>config = state
             .config
             .clone()
