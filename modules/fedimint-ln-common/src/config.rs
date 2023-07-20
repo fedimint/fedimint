@@ -81,6 +81,16 @@ pub struct LightningClientConfig {
     pub network: Network,
 }
 
+impl std::fmt::Display for LightningClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "LightningClientConfig {}",
+            serde_json::to_string(self).map_err(|_e| std::fmt::Error)?
+        )
+    }
+}
+
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     LightningCommonGen,

@@ -26,8 +26,8 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
@@ -182,19 +182,14 @@ impl ServerModuleGen for WalletGen {
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<ClientModuleConfig> {
+    ) -> anyhow::Result<WalletClientConfig> {
         let config = WalletConfigConsensus::from_erased(config)?;
-        Ok(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            &WalletClientConfig {
-                peg_in_descriptor: config.peg_in_descriptor.clone(),
-                network: config.network,
-                fee_consensus: config.fee_consensus.clone(),
-                finality_delay: config.finality_delay,
-            },
-        )
-        .expect("Serialization can't fail"))
+        Ok(WalletClientConfig {
+            peg_in_descriptor: config.peg_in_descriptor.clone(),
+            network: config.network,
+            fee_consensus: config.fee_consensus.clone(),
+            finality_delay: config.finality_delay,
+        })
     }
 
     async fn dump_database(

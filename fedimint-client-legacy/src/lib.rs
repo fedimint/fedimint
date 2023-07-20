@@ -40,7 +40,7 @@ use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleGen, ModuleCommon};
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::task::{self, sleep};
+use fedimint_core::task::{self, sleep, MaybeSend};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
@@ -235,7 +235,7 @@ impl<T> Client<T> {
 
 // TODO: `get_module` is parsing `serde_json::Value` every time, which is not
 // best for performance
-impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
+impl<T: AsRef<ClientConfig> + Clone + MaybeSend> Client<T> {
     pub fn db(&self) -> &Database {
         &self.context.db
     }
@@ -247,7 +247,8 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
                 .as_ref()
                 .get_first_module_by_kind::<LightningClientConfig>("ln")
                 .expect("needs lightning module client config")
-                .1,
+                .1
+                .clone(),
             context: self.context.clone(),
         }
     }
@@ -259,7 +260,8 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
                 .as_ref()
                 .get_first_module_by_kind::<MintClientConfig>("mint")
                 .expect("needs mint module client config")
-                .1,
+                .1
+                .clone(),
             epoch_pk: self.config.as_ref().epoch_pk,
             context: self.context.clone(),
             secret: Self::mint_secret_static(&self.root_secret),
@@ -273,7 +275,8 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
                 .as_ref()
                 .get_first_module_by_kind::<WalletClientConfig>("wallet")
                 .expect("needs wallet module client config")
-                .1,
+                .1
+                .clone(),
 
             context: self.context.clone(),
         }
@@ -281,6 +284,10 @@ impl<T: AsRef<ClientConfig> + Clone + Send> Client<T> {
 
     pub fn config(&self) -> T {
         self.config.clone()
+    }
+
+    pub fn config_ref(&self) -> &T {
+        &self.config
     }
 
     pub async fn new(

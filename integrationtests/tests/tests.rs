@@ -474,6 +474,7 @@ async fn limits_client_config_downloads() -> Result<()> {
 
         fed.run_consensus_epochs(1).await;
         let cfg = api.download_client_config(connect).await.unwrap();
+        let cfg = cfg.redecode_raw(&user.decoders()).unwrap();
         assert_eq!(cfg, user.config());
 
         // cannot download more than once with test settings

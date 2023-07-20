@@ -5,14 +5,14 @@ use std::ops::Mul;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context};
 use bitcoin::secp256k1;
 use bitcoin_hashes::hex::{format_hex, FromHex};
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use fedimint_core::cancellable::Cancelled;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
@@ -25,12 +25,12 @@ use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
 use url::Url;
 
+use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen,
     ModuleConsensusVersion,
 };
-use crate::task::{MaybeSend, MaybeSync};
 use crate::{maybe_add_send_sync, PeerId};
 
 /// [`serde_json::Value`] that must contain `kind: String` field
@@ -124,6 +124,23 @@ pub struct ClientConfig {
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
+impl ClientConfig {
+    /// See [`DynRawFallback::redecode_raw`].
+    pub fn redecode_raw(
+        self,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, crate::encoding::DecodeError> {
+        Ok(Self {
+            modules: self
+                .modules
+                .into_iter()
+                .map(|(k, v)| Ok((k, v.redecode_raw(modules)?)))
+                .collect::<Result<_, _>>()?,
+            ..self
+        })
+    }
+}
+
 /// The API response for client config requests, signed by the Federation
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ClientConfigResponse {
@@ -213,12 +230,9 @@ impl ClientConfig {
         sha256::Hash::from_engine(engine)
     }
 
-    pub fn get_module<T: Decodable>(&self, id: ModuleInstanceId) -> anyhow::Result<T> {
+    pub fn get_module<T: Decodable + 'static>(&self, id: ModuleInstanceId) -> anyhow::Result<&T> {
         if let Some(client_cfg) = self.modules.get(&id) {
-            Ok(Decodable::consensus_decode(
-                &mut &client_cfg.config[..],
-                &Default::default(),
-            )?)
+            client_cfg.cast()
         } else {
             Err(format_err!("Client config for module id {id} not found"))
         }
@@ -240,18 +254,15 @@ impl ClientConfig {
     /// mint, wallet, ln module code in the client, this is useful, but
     /// please write any new code that avoids assumptions about available
     /// modules.
-    pub fn get_first_module_by_kind<T: Decodable>(
+    pub fn get_first_module_by_kind<T: Decodable + 'static>(
         &self,
         kind: impl Into<ModuleKind>,
-    ) -> anyhow::Result<(ModuleInstanceId, T)> {
+    ) -> anyhow::Result<(ModuleInstanceId, &T)> {
         let kind: ModuleKind = kind.into();
         let Some((id, module_cfg)) = self.modules.iter().find(|(_, v)| v.is_kind(&kind)) else {
             anyhow::bail!("Module kind {kind} not found")
         };
-        Ok((
-            *id,
-            T::consensus_decode(&mut &module_cfg.config[..], &Default::default())?,
-        ))
+        Ok((*id, module_cfg.cast()?))
     }
 
     // TODO: rename this and above
@@ -494,20 +505,32 @@ pub struct ServerModuleConsensusConfig {
 pub struct ClientModuleConfig {
     pub kind: ModuleKind,
     pub version: ModuleConsensusVersion,
-    #[serde(with = "::hex::serde")]
-    pub config: Vec<u8>,
+    #[serde(with = "::fedimint_core::encoding::as_hex")]
+    pub config: DynRawFallback<DynClientConfig>,
 }
 
 impl ClientModuleConfig {
-    pub fn from_typed<T: Encodable + Serialize>(
+    pub fn from_typed<T: fedimint_core::core::ClientConfig>(
+        module_instance_id: ModuleInstanceId,
         kind: ModuleKind,
         version: ModuleConsensusVersion,
-        value: &T,
+        value: T,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             kind,
             version,
-            config: value.consensus_encode_to_vec()?,
+            config: fedimint_core::core::DynClientConfig::from_typed(module_instance_id, value)
+                .into(),
+        })
+    }
+
+    pub fn redecode_raw(
+        self,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, crate::encoding::DecodeError> {
+        Ok(Self {
+            config: self.config.redecode_raw(modules)?,
+            ..self
         })
     }
 
@@ -518,18 +541,18 @@ impl ClientModuleConfig {
     pub fn kind(&self) -> &ModuleKind {
         &self.kind
     }
-
-    pub fn value(&self) -> &[u8] {
-        &self.config
-    }
 }
 
 impl ClientModuleConfig {
-    pub fn cast<T: TypedClientModuleConfig>(&self) -> anyhow::Result<T> {
-        Ok(T::consensus_decode(
-            &mut &self.config[..],
-            &Default::default(),
-        )?)
+    pub fn cast<T>(&self) -> anyhow::Result<&T>
+    where
+        T: 'static,
+    {
+        self.config
+            .expect_decoded_ref()
+            .as_any()
+            .downcast_ref::<T>()
+            .context("can't convert client module config to desired type")
     }
 }
 
@@ -628,20 +651,6 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
                 serde_json::to_value(consensus).expect("serialization can't fail"),
             ),
         }
-    }
-}
-
-/// Typed client side module config
-pub trait TypedClientModuleConfig:
-    DeserializeOwned + Serialize + Decodable + Encodable + MaybeSend + MaybeSync
-{
-    fn kind(&self) -> ModuleKind;
-
-    fn version(&self) -> ModuleConsensusVersion;
-
-    fn to_erased(&self) -> ClientModuleConfig {
-        ClientModuleConfig::from_typed(self.kind(), self.version(), self)
-            .expect("serialization can't fail")
     }
 }
 

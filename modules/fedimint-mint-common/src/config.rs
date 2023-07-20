@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId, Tiered};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, PublicKeyShare};
@@ -63,12 +64,22 @@ pub struct MintConfigPrivate {
     pub tbs_sks: Tiered<tbs::SecretKeyShare>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
 pub struct MintClientConfig {
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
     pub max_notes_per_denomination: u16,
+}
+
+impl std::fmt::Display for MintClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "MintClientConfig {}",
+            serde_json::to_string(self).map_err(|_e| std::fmt::Error)?
+        )
+    }
 }
 
 // Wire together the configs for this module

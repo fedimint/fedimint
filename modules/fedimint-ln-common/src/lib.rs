@@ -19,6 +19,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use bitcoin_hashes::sha256;
+use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::{Context, OperationId};
 use fedimint_client::Client;
@@ -223,6 +224,9 @@ pub struct LightningCommonGen;
 impl CommonModuleGen for LightningCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
+
+    type ClientConfig = LightningClientConfig;
+
     fn decoder() -> Decoder {
         LightningModuleTypes::decoder()
     }
@@ -232,6 +236,7 @@ pub struct LightningModuleTypes;
 
 plugin_types_trait_impl_common!(
     LightningModuleTypes,
+    LightningClientConfig,
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,

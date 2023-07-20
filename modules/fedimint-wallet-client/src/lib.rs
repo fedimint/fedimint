@@ -385,7 +385,6 @@ impl ExtendsCommonModuleGen for WalletClientGen {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleGen for WalletClientGen {
     type Module = WalletClientModule;
-    type Config = WalletClientConfig;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -394,7 +393,7 @@ impl ClientModuleGen for WalletClientGen {
 
     async fn init(
         &self,
-        cfg: Self::Config,
+        cfg: WalletClientConfig,
         _db: Database,
         _api_version: ApiVersion,
         _module_root_secret: DerivableSecret,

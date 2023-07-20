@@ -520,7 +520,6 @@ impl ExtendsCommonModuleGen for LightningClientGen {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleGen for LightningClientGen {
     type Module = LightningClientModule;
-    type Config = LightningClientConfig;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -529,7 +528,7 @@ impl ClientModuleGen for LightningClientGen {
 
     async fn init(
         &self,
-        cfg: Self::Config,
+        cfg: LightningClientConfig,
         _db: Database,
         _api_version: ApiVersion,
         module_root_secret: DerivableSecret,

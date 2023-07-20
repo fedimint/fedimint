@@ -4,6 +4,7 @@ use bitcoin::Network;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
@@ -87,6 +88,16 @@ pub struct WalletClientConfig {
     /// Confirmations required for a peg in to be accepted by federation
     pub finality_delay: u32,
     pub fee_consensus: FeeConsensus,
+}
+
+impl std::fmt::Display for WalletClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "WalletClientConfig {}",
+            serde_json::to_string(self).map_err(|_e| std::fmt::Error)?
+        )
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]

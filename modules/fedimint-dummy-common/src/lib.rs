@@ -1,5 +1,6 @@
 use std::fmt;
 
+use config::DummyClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SerdeSignatureShare;
@@ -61,6 +62,7 @@ pub struct DummyModuleTypes;
 // Wire together the types for this module
 plugin_types_trait_impl_common!(
     DummyModuleTypes,
+    DummyClientConfig,
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
@@ -74,11 +76,18 @@ impl CommonModuleGen for DummyCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
+    type ClientConfig = DummyClientConfig;
+
     fn decoder() -> Decoder {
         DummyModuleTypes::decoder_builder().build()
     }
 }
 
+impl fmt::Display for DummyClientConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "DummyClientConfig")
+    }
+}
 impl fmt::Display for DummyInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DummyInput {}", self.amount)

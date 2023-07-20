@@ -195,7 +195,7 @@ impl ServerConfigConsensus {
                     let gen = module_config_gens
                         .get(&v.kind)
                         .ok_or_else(|| format_err!("Module gen kind={} not found", v.kind))?;
-                    Ok((*k, gen.get_client_config(v)?))
+                    Ok((*k, gen.get_client_config(*k, v)?))
                 })
                 .collect::<anyhow::Result<BTreeMap<_, _>>>()?,
             meta: self.meta.clone(),

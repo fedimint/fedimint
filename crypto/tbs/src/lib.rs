@@ -25,6 +25,22 @@ pub mod serde_impl;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PublicKeyShare(#[serde(with = "serde_impl::g2")] pub G2Affine);
 
+#[allow(clippy::derive_hash_xor_eq)]
+impl std::hash::Hash for PublicKeyShare {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // As per <https://rust-lang.github.io/rust-clippy/master/index.html#/derive_hash_xor_eq>
+        // k1 == k2 ⇒ hash(k1) == hash(k2)
+        // must hold, and all infinities are equal, so must hash to the same value.
+        if bool::from(self.0.is_identity()) {
+            0.hash(state)
+        } else {
+            // TODO: This is not ideal, `Hash` impls should be as fast as possible.
+            // Would be better to hash in the `x` and `y`
+            self.0.to_compressed().hash(state)
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SecretKeyShare(#[serde(with = "serde_impl::scalar")] pub Scalar);
 

@@ -4,6 +4,7 @@ pub mod version;
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::io::Read;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,8 +22,8 @@ use crate::config::{
     ServerModuleConsensusConfig,
 };
 use crate::core::{
-    Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
-    OutputOutcome,
+    ClientConfig, Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId,
+    ModuleKind, Output, OutputOutcome,
 };
 use crate::db::{
     Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
@@ -480,6 +481,7 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
 
     fn get_client_config(
         &self,
+        module_instance_id: ModuleInstanceId,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig>;
 
@@ -520,6 +522,8 @@ impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynServerModuleG
 pub trait CommonModuleGen: Debug + Sized {
     const CONSENSUS_VERSION: ModuleConsensusVersion;
     const KIND: ModuleKind;
+
+    type ClientConfig: ClientConfig;
 
     fn decoder() -> Decoder;
 }
@@ -599,7 +603,7 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<ClientModuleConfig>;
+    ) -> anyhow::Result<<<Self as ExtendsCommonModuleGen>::Common as CommonModuleGen>::ClientConfig>;
 
     async fn dump_database(
         &self,
@@ -665,9 +669,15 @@ where
 
     fn get_client_config(
         &self,
+        module_instance_id: ModuleInstanceId,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig> {
-        <Self as ServerModuleGen>::get_client_config(self, config)
+        ClientModuleConfig::from_typed(
+            module_instance_id,
+            <Self as ServerModuleGen>::kind(),
+            config.version,
+            <Self as ServerModuleGen>::get_client_config(self, config)?,
+        )
     }
 
     async fn dump_database(
@@ -742,6 +752,7 @@ impl<CI> ConsensusProposal<CI> {
 
 /// Module associated types required by both client and server
 pub trait ModuleCommon {
+    type ClientConfig: ClientConfig;
     type Input: Input;
     type Output: Output;
     type OutputOutcome: OutputOutcome;
@@ -749,6 +760,7 @@ pub trait ModuleCommon {
 
     fn decoder_builder() -> DecoderBuilder {
         let mut decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::<Self::ClientConfig>();
         decoder_builder.with_decodable_type::<Self::Input>();
         decoder_builder.with_decodable_type::<Self::Output>();
         decoder_builder.with_decodable_type::<Self::OutputOutcome>();
@@ -923,16 +935,25 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
         let module_instance =
             ModuleInstanceId::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
 
-        let _total_len =
-            u32::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())? as usize;
+        let total_len = u64::consensus_decode(&mut reader, &ModuleDecoderRegistry::default())?;
+
+        let mut reader = reader.take(total_len);
 
         // No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
-        decoder.decode(
+        let val = decoder.decode(
             &mut reader,
             module_instance,
             &ModuleDecoderRegistry::default(),
-        )
+        )?;
+
+        if reader.limit() != 0 {
+            return Err(fedimint_core::encoding::DecodeError::new_custom(
+                anyhow::anyhow!("Dyn type did not consume all bytes during decoding"),
+            ));
+        }
+
+        Ok(val)
     }
 }
 

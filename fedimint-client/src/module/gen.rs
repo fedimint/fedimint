@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
-use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry, TypedClientModuleConfig};
+use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::{
@@ -21,7 +21,6 @@ pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
 #[apply(async_trait_maybe_send!)]
 pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     type Module: ClientModule;
-    type Config: TypedClientModuleConfig;
 
     /// Api versions of the corresponding server side module's API
     /// that this client module implementation can use.
@@ -31,7 +30,7 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
-        cfg: Self::Config,
+        cfg: <<Self as ExtendsCommonModuleGen>::Common as CommonModuleGen>::ClientConfig,
         db: Database,
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
@@ -98,10 +97,10 @@ where
         notifier: Notifier<DynGlobalClientContext>,
         api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule> {
-        let typed_cfg = cfg.cast::<T::Config>()?;
+        let typed_cfg: &<<T as fedimint_core::module::ExtendsCommonModuleGen>::Common as CommonModuleGen>::ClientConfig = cfg.cast()?;
         Ok(self
             .init(
-                typed_cfg,
+                typed_cfg.clone(),
                 db,
                 api_version,
                 module_root_secret,

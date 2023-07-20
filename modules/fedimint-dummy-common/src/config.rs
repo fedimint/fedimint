@@ -44,7 +44,7 @@ pub struct DummyConfig {
 }
 
 /// Contains all the configuration for the client
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
 pub struct DummyClientConfig {
     /// Accessible to clients
     pub tx_fee: Amount,
