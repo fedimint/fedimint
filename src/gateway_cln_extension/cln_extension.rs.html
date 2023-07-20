@@ -668,8 +668,8 @@
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">pub struct </span>ClnExtensionOpts {
     <span class="doccomment">/// Gateway CLN extension service listen address
-    </span><span class="attr">#[arg(long = <span class="string">&quot;listen&quot;</span>, env = <span class="string">&quot;FM_CLN_EXTENSION_LISTEN_ADDRESS&quot;</span>)]
-    </span><span class="kw">pub </span>listen: SocketAddr,
+    </span><span class="attr">#[arg(long = <span class="string">&quot;fm-gateway-listen&quot;</span>, env = <span class="string">&quot;FM_CLN_EXTENSION_LISTEN_ADDRESS&quot;</span>)]
+    </span><span class="kw">pub </span>fm_gateway_listen: SocketAddr,
 }
 
 <span class="attr">#[tokio::main]
@@ -766,12 +766,12 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(plugin) = Builder::new(stdin(), stdout())
             .option(options::ConfigOption::new(
-                <span class="string">&quot;listen&quot;</span>,
+                <span class="string">&quot;fm-gateway-listen&quot;</span>,
                 <span class="comment">// Set an invalid default address in the extension to force the extension plugin
                 // user to supply a valid address via an environment variable or
                 // cln plugin config option.
                 </span>options::Value::String(<span class="string">&quot;default-dont-use&quot;</span>.into()),
-                <span class="string">&quot;gateway cln extension address&quot;</span>,
+                <span class="string">&quot;fedimint gateway CLN extension listen address&quot;</span>,
             ))
             .hook(
                 <span class="string">&quot;htlc_accepted&quot;</span>,
@@ -806,17 +806,17 @@
             <span class="kw">let </span>socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
 
             <span class="comment">// Parse configurations or read from
-            </span><span class="kw">let </span>listen: SocketAddr = <span class="kw">match </span>ClnExtensionOpts::try_parse() {
-                <span class="prelude-val">Ok</span>(opts) =&gt; opts.listen,
+            </span><span class="kw">let </span>fm_gateway_listen: SocketAddr = <span class="kw">match </span>ClnExtensionOpts::try_parse() {
+                <span class="prelude-val">Ok</span>(opts) =&gt; opts.fm_gateway_listen,
                 <span class="comment">// FIXME: cln_plugin doesn&#39;t yet support optional parameters
-                </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">match </span>plugin.option(<span class="string">&quot;listen&quot;</span>) {
+                </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">match </span>plugin.option(<span class="string">&quot;fm-gateway-listen&quot;</span>) {
                     <span class="prelude-val">Some</span>(options::Value::String(listen)) =&gt; {
                         <span class="kw">if </span>listen == <span class="string">&quot;default-dont-use&quot; </span>{
                             <span class="macro">panic!</span>(
-                                <span class="string">&quot;Gateway cln extension is missing a listen address configuration. You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --listen config option to the cln plugin&quot;
+                                <span class="string">&quot;Gateway cln extension is missing a listen address configuration. You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --fm-gateway-listen config option to the cln plugin&quot;
                             </span>)
                         } <span class="kw">else </span>{
-                            SocketAddr::from_str(<span class="kw-2">&amp;</span>listen).expect(<span class="string">&quot;invalid listen address&quot;</span>)
+                            SocketAddr::from_str(<span class="kw-2">&amp;</span>listen).expect(<span class="string">&quot;invalid fm-gateway-listen address&quot;</span>)
                         }
                     }
                     <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
@@ -829,7 +829,7 @@
                     interceptor,
                     task_group: TaskGroup::new()
                 },
-                listen,
+                fm_gateway_listen,
                 plugin,
             ))
         } <span class="kw">else </span>{
