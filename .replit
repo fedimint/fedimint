@@ -22,7 +22,7 @@
 # `export LIBCLANG_PATH="$(nix-build '<nixpkgs>' --no-build-output -A llvmPackages_11.libclang.lib)/lib"`
 # The bindgen compiles, but rocksdb doesn't because it tries to link with the hosts's (Ubuntu 20.04) old glibc
 # version. Trying to enforce Nix glibc with `LD_LIBRARY_PATH` leads to problems with compiling C files,
-# which seem to be similiar to describe here: https://hoverbear.org/blog/rust-bindgen-in-nix/
+# which seem to be similar to describe here: https://hoverbear.org/blog/rust-bindgen-in-nix/
 #
 # It might be possible to get it work, but requires every-increasing complexity.
 #
@@ -30,7 +30,7 @@
 #
 # # Problem: `nix develop` too large
 #
-# There's too many depdencies in default shell, so I created a minimal `.#replit` dev shell.
+# There's too many dependencies in default shell, so I created a minimal `.#replit` dev shell.
 #
 # With this `bidgen` works.
 run = "nix --extra-experimental-features nix-command --extra-experimental-features flakes develop .#replit -c cargo check"

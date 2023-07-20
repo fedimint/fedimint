@@ -664,7 +664,7 @@ pub struct CountWrite<W> {
 }
 
 impl<W> CountWrite<W> {
-    /// Returns the number of bytes successfull written so far
+    /// Returns the number of bytes successfully written so far
     pub fn count(&self) -> u64 {
         self.count
     }

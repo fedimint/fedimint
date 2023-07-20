@@ -37,7 +37,7 @@ pub async fn run(
 ) -> anyhow::Result<SignedBlock> {
     const MAX_ROUND: u16 = 5000;
     const ROUND_DELAY: f64 = 250.0;
-    const EXPONETIAL_SLOWDOWN_OFFSET: usize = 3000;
+    const EXPONENTIAL_SLOWDOWN_OFFSET: usize = 3000;
     const BASE: f64 = 1.01;
     const BLOCK_REQUEST_DELAY: Duration = Duration::from_secs(10);
 
@@ -61,7 +61,7 @@ pub async fn run(
         let delay = if round_index == 0 {
             0.0
         } else {
-            ROUND_DELAY * BASE.powf(round_index.saturating_sub(EXPONETIAL_SLOWDOWN_OFFSET) as f64)
+            ROUND_DELAY * BASE.powf(round_index.saturating_sub(EXPONENTIAL_SLOWDOWN_OFFSET) as f64)
         };
 
         Duration::from_millis(delay.round() as u64)
@@ -109,7 +109,7 @@ pub async fn run(
     // this is the minimum number of unit data that will be ordered before we reach
     // the EXPONETIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
     // data
-    let batches_per_block = EXPONETIAL_SLOWDOWN_OFFSET * keychain.peer_count() / 3;
+    let batches_per_block = EXPONENTIAL_SLOWDOWN_OFFSET * keychain.peer_count() / 3;
     let mut pending_items = vec![];
     let mut num_batches = 0;
 

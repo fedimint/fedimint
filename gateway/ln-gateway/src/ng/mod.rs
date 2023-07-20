@@ -311,7 +311,7 @@ impl ClientModuleGen for GatewayClientGen {
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
-            .expect("no version conficts")
+            .expect("no version conflicts")
     }
 
     async fn init(
