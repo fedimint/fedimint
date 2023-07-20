@@ -261,7 +261,17 @@ impl ConfigGenApi {
     /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
     pub fn get_verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
-        let state = self.require_status(ServerStatus::VerifyingConfigs)?;
+        let state = self
+            .require_status(ServerStatus::VerifyingConfigs)
+            .or_else(|_| self.require_status(ServerStatus::VerifiedConfigs))
+            .map_err(|_| {
+                ApiError::bad_request(format!(
+                    "Expected to be in {:?} or {:?} state",
+                    ServerStatus::VerifyingConfigs,
+                    ServerStatus::VerifiedConfigs
+                ))
+            })?;
+
         let config = state
             .config
             .clone()
