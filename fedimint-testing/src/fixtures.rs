@@ -126,7 +126,7 @@ impl Fixtures {
     }
 
     /// Starts a new gateway with a given lightning node
-    pub async fn new_gateway(&self, ln: Arc<dyn LightningTest>) -> GatewayTest {
+    pub async fn new_gateway(&self, ln: Box<dyn LightningTest>) -> GatewayTest {
         // TODO: Make construction easier
         let server_gens = ServerModuleGenRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
@@ -147,21 +147,21 @@ impl Fixtures {
     }
 
     /// Returns the LND lightning node
-    pub async fn lnd(&self) -> Arc<dyn LightningTest> {
+    pub async fn lnd(&self) -> Box<dyn LightningTest> {
         match Fixtures::is_real_test() {
-            true => Arc::new(LndLightningTest::new().await),
-            false => Arc::new(FakeLightningTest::new()),
+            true => Box::new(LndLightningTest::new().await),
+            false => Box::new(FakeLightningTest::new()),
         }
     }
 
     /// Returns the CLN lightning node
-    pub async fn cln(&self) -> Arc<dyn LightningTest> {
+    pub async fn cln(&self) -> Box<dyn LightningTest> {
         match Fixtures::is_real_test() {
             true => {
                 let dir = env::var("FM_TEST_DIR").expect("Real tests require FM_TEST_DIR");
-                Arc::new(ClnLightningTest::new(&dir).await)
+                Box::new(ClnLightningTest::new(&dir).await)
             }
-            false => Arc::new(FakeLightningTest::new()),
+            false => Box::new(FakeLightningTest::new()),
         }
     }
 

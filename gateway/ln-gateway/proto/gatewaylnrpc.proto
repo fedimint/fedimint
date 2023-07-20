@@ -25,10 +25,14 @@ service GatewayLightning {
    * to response with `InterceptHtlcResponse` after the HTLC has been processed with
    * the appropriate action (Settle, Forward, Cancel).
    */
-  rpc RouteHtlcs(stream InterceptHtlcResponse) returns (stream InterceptHtlcRequest) {}
+  rpc RouteHtlcs(EmptyRequest) returns (stream InterceptHtlcRequest) {}
+
+  rpc CompleteHtlc(InterceptHtlcResponse) returns (EmptyResponse) {}
 }
 
 message EmptyRequest {}
+
+message EmptyResponse {}
 
 message GetNodeInfoResponse {
   // The public key of the associated lightning node

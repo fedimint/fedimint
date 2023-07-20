@@ -15,13 +15,12 @@ use lightning_invoice::{
     DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gatewaylnrpc::{
-    self, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    self, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 use ln_gateway::GatewayError;
 use rand::rngs::OsRng;
-use tokio_stream::wrappers::ReceiverStream;
 
 use super::LightningTest;
 
@@ -86,10 +85,6 @@ impl LightningTest for FakeLightningTest {
     fn is_shared(&self) -> bool {
         false
     }
-
-    fn as_rpc(&self) -> Arc<dyn ILnRpcClient> {
-        Arc::new(self.clone())
-    }
 }
 
 #[async_trait]
@@ -128,22 +123,16 @@ impl ILnRpcClient for FakeLightningTest {
     }
 
     async fn route_htlcs<'a>(
-        &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
-        task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        task_group
-            .spawn("FakeRoutingThread", |handle| async move {
-                let mut stream = events.into_inner();
-                while let Some(route_htlc) = stream.recv().await {
-                    if handle.is_shutting_down() {
-                        break;
-                    }
-                    tracing::debug!("FakeLightningTest received HTLC message {:?}", route_htlc);
-                }
-            })
-            .await;
+        self: Box<Self>,
+        _task_group: &mut TaskGroup,
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
+        Ok((Box::pin(stream::iter(vec![])), Arc::new(Self::new())))
+    }
 
-        Ok(Box::pin(stream::iter(vec![])))
+    async fn complete_htlc(
+        &self,
+        _htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, GatewayError> {
+        Ok(EmptyResponse {})
     }
 }

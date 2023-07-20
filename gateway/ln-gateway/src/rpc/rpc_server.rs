@@ -7,7 +7,7 @@ use axum_macros::debug_handler;
 use bitcoin_hashes::hex::ToHex;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use serde_json::json;
-use tokio::sync::oneshot;
+use tokio::sync::mpsc;
 use tower_http::auth::RequireAuthorizationLayer;
 use tower_http::cors::CorsLayer;
 use tracing::{error, instrument};
@@ -22,7 +22,7 @@ pub async fn run_webserver(
     authkey: String,
     bind_addr: SocketAddr,
     mut gateway: Gateway,
-) -> axum::response::Result<oneshot::Receiver<()>> {
+) -> axum::response::Result<mpsc::Sender<()>> {
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
@@ -43,13 +43,13 @@ pub async fn run_webserver(
         .layer(Extension(gateway.clone()))
         .layer(CorsLayer::permissive());
 
-    let (tx, rx) = oneshot::channel::<()>();
+    let (tx, mut rx) = mpsc::channel::<()>(100);
     let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
     gateway
         .task_group
         .spawn("Gateway Webserver", move |_| async move {
             let graceful = server.with_graceful_shutdown(async {
-                rx.await.ok();
+                rx.recv().await;
             });
 
             if let Err(e) = graceful.await {
@@ -59,20 +59,20 @@ pub async fn run_webserver(
         .await;
 
     let handle = gateway.task_group.make_handle();
+    let shutdown_tx = tx.clone();
     handle
         .on_shutdown(Box::new(|| {
             Box::pin(async move {
                 // Send shutdown signal to the webserver
-                let res = tx.send(());
+                let res = shutdown_tx.send(()).await;
                 if res.is_err() {
                     error!("Error shutting down gatewayd webserver: {res:?}");
                 }
             })
         }))
         .await;
-    let shutdown_receiver = handle.make_shutdown_rx().await;
 
-    Ok(shutdown_receiver)
+    Ok(tx)
 }
 
 /// Display high-level information about the Gateway

@@ -1,10 +1,10 @@
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_core::task::{sleep, TaskGroup};
 use futures::stream::BoxStream;
-use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::info;
@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gatewaylnrpc::{
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::{GatewayError, Result};
@@ -33,11 +33,17 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
+    // Consumes the current lightning client because `route_htlcs` should only be
+    // called once per client. A stream of intercepted HTLCs and a `Arc<dyn
+    // ILnRpcClient> are returned to the caller. The caller can use this new
+    // client to interact with the lightning node, but since it is an `Arc` is
+    // cannot call `route_htlcs` again.
     async fn route_htlcs<'a>(
-        &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
+        self: Box<Self>,
         task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>>;
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>)>;
+
+    async fn complete_htlc(&self, htlc: InterceptHtlcResponse) -> Result<EmptyResponse>;
 }
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -77,7 +83,7 @@ impl NetworkLnRpcClient {
                 }
             }
 
-            tracing::warn!("Couldn't connect to CLN extension, retrying in 1 second...");
+            tracing::debug!("Couldn't connect to CLN extension, retrying in 1 second...");
             sleep(Duration::from_secs(1)).await;
         };
 
@@ -109,12 +115,20 @@ impl ILnRpcClient for NetworkLnRpcClient {
     }
 
     async fn route_htlcs<'a>(
-        &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
+        self: Box<Self>,
         _task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>> {
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>)> {
         let mut client = Self::connect(self.connection_url.clone()).await?;
-        let res = client.route_htlcs(events).await?;
-        Ok(Box::pin(res.into_inner()))
+        let res = client.route_htlcs(EmptyRequest {}).await?;
+        Ok((
+            Box::pin(res.into_inner()),
+            Arc::new(Self::new(self.connection_url.clone()).await),
+        ))
+    }
+
+    async fn complete_htlc(&self, htlc: InterceptHtlcResponse) -> Result<EmptyResponse> {
+        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let res = client.complete_htlc(htlc).await?;
+        Ok(res.into_inner())
     }
 }

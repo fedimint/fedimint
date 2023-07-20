@@ -55,7 +55,7 @@ impl<GC> Notifier<GC> {
 
 /// State transition notifier for a specific module instance that can only
 /// subscribe to transitions belonging to that module
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModuleNotifier<GC, S> {
     broadcast: tokio::sync::broadcast::Sender<DynState<GC>>,
     module_instance: ModuleInstanceId,

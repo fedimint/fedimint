@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::process::exit;
 
 use clap::Parser;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
@@ -11,6 +10,7 @@ use fedimint_core::core::{
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::LightningCommonGen;
 use fedimint_ln_common::config::GatewayFee;
 use fedimint_ln_common::LightningModuleTypes;
@@ -18,7 +18,7 @@ use fedimint_logging::TracingSetup;
 use fedimint_mint_client::{MintClientGen, MintCommonGen, MintModuleTypes};
 use fedimint_wallet_client::{WalletClientGen, WalletCommonGen, WalletModuleTypes};
 use ln_gateway::client::StandardGatewayClientBuilder;
-use ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
+use ln_gateway::{Gateway, LightningMode};
 use tracing::info;
 use url::Url;
 
@@ -113,27 +113,25 @@ async fn main() -> Result<(), anyhow::Error> {
         ),
     ]);
 
-    let gatewayd_db = Database::new(
-        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))
-            .map_err(|_| GatewayError::DatabaseError)?,
+    let db = Database::new(
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
         decoders.clone(),
     );
 
-    // Create gateway instance
-    let gateway = Gateway::new(
+    let mut tg = TaskGroup::new();
+    let rx = Gateway::start_gateway(
+        &mut tg,
         mode,
-        client_builder,
-        fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
-        gatewayd_db,
+        fees,
         api_addr,
+        client_builder,
+        listen,
+        password,
+        db,
     )
-    .await
-    .unwrap_or_else(|e| {
-        eprintln!("Failed to start gateway: {e:?}");
-        exit(1)
-    });
+    .await?;
+    rx.await?;
 
-    gateway.spawn_blocking_webserver(listen, password).await;
-
+    info!("Gatewayd exiting...");
     Ok(())
 }

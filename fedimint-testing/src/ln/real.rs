@@ -12,14 +12,13 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use lightning_invoice::Invoice;
 use ln_gateway::gatewaylnrpc::{
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
 use ln_gateway::GatewayError;
-use tokio::sync::{Mutex, RwLock};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::sync::Mutex;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};
 use tonic_lnd::{connect, LndClient};
 use tracing::info;
@@ -27,12 +26,11 @@ use url::Url;
 
 use crate::ln::LightningTest;
 
-#[derive(Clone)]
 pub struct ClnLightningTest {
     rpc_cln: Arc<Mutex<ClnRpc>>,
     initial_balance: Amount,
     pub node_pub_key: secp256k1::PublicKey,
-    lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
+    lnrpc: Box<dyn ILnRpcClient>,
 }
 
 impl fmt::Debug for ClnLightningTest {
@@ -89,36 +87,34 @@ impl LightningTest for ClnLightningTest {
     fn is_shared(&self) -> bool {
         true
     }
-
-    fn as_rpc(&self) -> Arc<dyn ILnRpcClient> {
-        Arc::new(self.clone())
-    }
 }
 
 #[async_trait]
 impl ILnRpcClient for ClnLightningTest {
     async fn info(&self) -> Result<GetNodeInfoResponse, GatewayError> {
-        self.lnrpc.read().await.info().await
+        self.lnrpc.info().await
     }
 
     async fn routehints(&self) -> Result<GetRouteHintsResponse, GatewayError> {
-        self.lnrpc.read().await.routehints().await
+        self.lnrpc.routehints().await
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse, GatewayError> {
-        self.lnrpc.read().await.pay(invoice).await
+        self.lnrpc.pay(invoice).await
     }
 
     async fn route_htlcs<'a>(
-        &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
+        self: Box<Self>,
         task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.lnrpc
-            .write()
-            .await
-            .route_htlcs(events, task_group)
-            .await
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
+        self.lnrpc.route_htlcs(task_group).await
+    }
+
+    async fn complete_htlc(
+        &self,
+        htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, GatewayError> {
+        self.lnrpc.complete_htlc(htlc).await
     }
 }
 
@@ -134,8 +130,7 @@ impl ClnLightningTest {
             .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
             .parse::<Url>()
             .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
-        let lnrpc: Arc<RwLock<dyn ILnRpcClient>> =
-            Arc::new(RwLock::new(NetworkLnRpcClient::new(lnrpc_addr).await));
+        let lnrpc: Box<dyn ILnRpcClient> = Box::new(NetworkLnRpcClient::new(lnrpc_addr).await);
 
         ClnLightningTest {
             rpc_cln,
@@ -185,12 +180,11 @@ impl ClnLightningTest {
     }
 }
 
-#[derive(Clone)]
 pub struct LndLightningTest {
     rpc_lnd: Arc<Mutex<LndClient>>,
     initial_balance: Amount,
     pub node_pub_key: secp256k1::PublicKey,
-    lnrpc: Arc<RwLock<dyn ILnRpcClient>>,
+    lnrpc: Box<dyn ILnRpcClient>,
 }
 
 #[async_trait]
@@ -231,10 +225,6 @@ impl LightningTest for LndLightningTest {
     fn is_shared(&self) -> bool {
         true
     }
-
-    fn as_rpc(&self) -> Arc<dyn ILnRpcClient> {
-        Arc::new(self.clone())
-    }
 }
 
 impl fmt::Debug for LndLightningTest {
@@ -249,27 +239,29 @@ impl fmt::Debug for LndLightningTest {
 #[async_trait]
 impl ILnRpcClient for LndLightningTest {
     async fn info(&self) -> Result<GetNodeInfoResponse, GatewayError> {
-        self.lnrpc.read().await.info().await
+        self.lnrpc.info().await
     }
 
     async fn routehints(&self) -> Result<GetRouteHintsResponse, GatewayError> {
-        self.lnrpc.read().await.routehints().await
+        self.lnrpc.routehints().await
     }
 
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse, GatewayError> {
-        self.lnrpc.read().await.pay(invoice).await
+        self.lnrpc.pay(invoice).await
     }
 
     async fn route_htlcs<'a>(
-        &mut self,
-        events: ReceiverStream<InterceptHtlcResponse>,
+        self: Box<Self>,
         task_group: &mut TaskGroup,
-    ) -> Result<RouteHtlcStream<'a>, GatewayError> {
-        self.lnrpc
-            .write()
-            .await
-            .route_htlcs(events, task_group)
-            .await
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
+        self.lnrpc.route_htlcs(task_group).await
+    }
+
+    async fn complete_htlc(
+        &self,
+        htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, GatewayError> {
+        self.lnrpc.complete_htlc(htlc).await
     }
 }
 
@@ -291,8 +283,8 @@ impl LndLightningTest {
         let node_pub_key = Self::pubkey(rpc_lnd.clone()).await;
 
         let gateway_lnd_client =
-            GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon).await;
-        let lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
+            GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await;
+        let lnrpc = Box::new(gateway_lnd_client);
         LndLightningTest {
             rpc_lnd,
             initial_balance,
