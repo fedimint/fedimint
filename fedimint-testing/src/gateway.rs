@@ -9,11 +9,12 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
+use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::rpc_server::run_webserver;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
-use ln_gateway::{Gateway, DEFAULT_FEES};
+use ln_gateway::Gateway;
 use tempfile::TempDir;
 use tokio::sync::RwLock;
 use url::Url;
@@ -41,7 +42,7 @@ impl GatewayTest {
     }
 
     /// Removes a client from the gateway
-    pub async fn remove_client(&self, fed: &FederationTest) -> Arc<Client> {
+    pub async fn remove_client(&self, fed: &FederationTest) -> Client {
         self.gateway.remove_client(fed.id()).await.unwrap()
     }
 
@@ -73,8 +74,6 @@ impl GatewayTest {
         let client_builder: StandardGatewayClientBuilder =
             StandardGatewayClientBuilder::new(path.clone(), registry, 0);
 
-        let gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
-
         let mut tg = TaskGroup::new();
         // Create the stream to route HTLCs. We cannot create the Gateway until the
         // stream to the lightning node has been setup.
@@ -87,8 +86,12 @@ impl GatewayTest {
         let gateway = Gateway::new(
             ln_client.clone(),
             client_builder.clone(),
-            GatewayFee(DEFAULT_FEES).0,
-            gatewayd_db.clone(),
+            GatewayFee(RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            })
+            .0,
+            Database::new(MemDatabase::new(), decoders.clone()),
             address.clone(),
             clients.clone(),
             scid_to_federation.clone(),

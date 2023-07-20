@@ -46,13 +46,9 @@ impl StandardGatewayClientBuilder {
         node_pub_key: secp256k1::PublicKey,
         lnrpc: Arc<dyn ILnRpcClient>,
         tg: &mut TaskGroup,
+        old_client: Option<fedimint_client::Client>,
     ) -> Result<fedimint_client::Client> {
         let federation_id = config.config.federation_id;
-
-        let db_path = self.work_dir.join(format!("{federation_id}.db"));
-
-        let db =
-            fedimint_rocksdb::RocksDb::open(db_path).map_err(|_| GatewayError::DatabaseError)?;
 
         let mut registry = self.registry.clone();
         registry.attach(GatewayClientGen {
@@ -67,7 +63,15 @@ impl StandardGatewayClientBuilder {
         client_builder.with_module_gens(registry);
         client_builder.with_primary_module(self.primary_module);
         client_builder.with_config(config.config);
-        client_builder.with_database(db);
+        if let Some(old_client) = old_client {
+            client_builder.with_old_client_database(old_client);
+        } else {
+            let db_path = self.work_dir.join(format!("{federation_id}.db"));
+            let db = fedimint_rocksdb::RocksDb::open(db_path).map_err(|e| {
+                GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
+            })?;
+            client_builder.with_database(db);
+        }
 
         client_builder
             // TODO: make this configurable?
@@ -105,7 +109,7 @@ impl StandardGatewayClientBuilder {
             .await;
         dbtx.commit_tx_result()
             .await
-            .map_err(|_| GatewayError::DatabaseError)
+            .map_err(GatewayError::DatabaseError)
     }
 
     pub async fn load_configs(

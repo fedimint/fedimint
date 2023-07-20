@@ -18,7 +18,7 @@ use fedimint_logging::TracingSetup;
 use fedimint_mint_client::{MintClientGen, MintCommonGen, MintModuleTypes};
 use fedimint_wallet_client::{WalletClientGen, WalletCommonGen, WalletModuleTypes};
 use ln_gateway::client::StandardGatewayClientBuilder;
-use ln_gateway::{Gateway, GatewayError, LightningMode};
+use ln_gateway::{Gateway, LightningMode};
 use tracing::info;
 use url::Url;
 
@@ -113,9 +113,8 @@ async fn main() -> Result<(), anyhow::Error> {
         ),
     ]);
 
-    let gatewayd_db = Database::new(
-        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))
-            .map_err(|_| GatewayError::DatabaseError)?,
+    let db = Database::new(
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
         decoders.clone(),
     );
 
@@ -124,11 +123,11 @@ async fn main() -> Result<(), anyhow::Error> {
         &mut tg,
         mode,
         fees,
-        gatewayd_db,
         api_addr,
         client_builder,
         listen,
         password,
+        db,
     )
     .await?;
     rx.await?;

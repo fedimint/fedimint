@@ -19,7 +19,7 @@ use tonic_lnd::routerrpc::{
 };
 use tonic_lnd::tonic::Code;
 use tonic_lnd::{connect, Client as LndClient};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
@@ -79,7 +79,7 @@ impl GatewayLndClient {
             match connect(address.clone(), tls_cert.clone(), macaroon.clone()).await {
                 Ok(client) => break client,
                 Err(e) => {
-                    tracing::warn!("Couldn't connect to LND, retrying in 1 second... {e:?}");
+                    tracing::debug!("Couldn't connect to LND, retrying in 1 second... {e:?}");
                     sleep(Duration::from_secs(1)).await;
                 }
             }
@@ -93,7 +93,7 @@ impl GatewayLndClient {
         task_group: &mut TaskGroup,
         lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
         lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
-        actor_sender: HtlcSubscriptionSender,
+        gateway_sender: HtlcSubscriptionSender,
     ) -> crate::Result<()> {
         let mut client = Self::connect(
             self.address.clone(),
@@ -108,12 +108,14 @@ impl GatewayLndClient {
                     .htlc_interceptor(ReceiverStream::new(lnd_rx))
                     .await
                     .map_err(|e| {
-                        error!("Failed to connect to lnrpc server: {:?}", e);
+                        error!("Failed to connect to lightning node");
+                        debug!("Error: {:?}", e);
                         GatewayError::Other(anyhow!("Failed to subscribe to LND htlc stream"))
                     }) {
                     Ok(stream) => stream.into_inner(),
                     Err(e) => {
-                        error!("Failed to establish htlc stream: {:?}", e);
+                        error!("Failed to establish htlc stream");
+                        debug!("Error: {:?}", e);
                         return;
                     }
                 };
@@ -121,7 +123,7 @@ impl GatewayLndClient {
                 while let Some(htlc) = match htlc_stream.message().await {
                     Ok(htlc) => htlc,
                     Err(e) => {
-                        error!("Error received over HTLC subscription: {:?}", e);
+                        error!("Error received over HTLC stream: {:?}", e);
                         None
                     }
                 } {
@@ -145,7 +147,7 @@ impl GatewayLndClient {
                         htlc_id: incoming_circuit_key.htlc_id,
                     };
 
-                    match actor_sender.send(Ok(intercept)).await {
+                    match gateway_sender.send(Ok(intercept)).await {
                         Ok(_) => {}
                         Err(e) => {
                             error!("Failed to send HTLC to gatewayd for processing: {:?}", e);
@@ -430,15 +432,19 @@ impl ILnRpcClient for GatewayLndClient {
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
         const CHANNEL_SIZE: usize = 100;
 
-        // Channel to send intercepted htlc to actor for processing
-        // actor_sender needs to be saved when the scid is received
-        let (actor_sender, actor_receiver) =
+        // Channel to send intercepted htlc to the gateway for processing
+        let (gateway_sender, gateway_receiver) =
             mpsc::channel::<Result<InterceptHtlcRequest, tonic::Status>>(CHANNEL_SIZE);
 
         let (lnd_sender, lnd_rx) = mpsc::channel::<ForwardHtlcInterceptResponse>(CHANNEL_SIZE);
 
-        self.spawn_interceptor(task_group, lnd_sender.clone(), lnd_rx, actor_sender.clone())
-            .await?;
+        self.spawn_interceptor(
+            task_group,
+            lnd_sender.clone(),
+            lnd_rx,
+            gateway_sender.clone(),
+        )
+        .await?;
         let new_client = Arc::new(
             Self::new(
                 self.address.clone(),
@@ -448,10 +454,7 @@ impl ILnRpcClient for GatewayLndClient {
             )
             .await,
         );
-        if new_client.lnd_sender.is_none() {
-            info!("route_htlcs called, LND_SENDER is not none");
-        }
-        Ok((Box::pin(ReceiverStream::new(actor_receiver)), new_client))
+        Ok((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
 
     async fn complete_htlc(

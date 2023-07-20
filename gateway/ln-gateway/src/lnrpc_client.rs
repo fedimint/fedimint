@@ -34,9 +34,10 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse>;
 
     // Consumes the current lightning client because `route_htlcs` should only be
-    // called once. A stream of intercepted HTLCs and a `Arc<dyn ILnRpcClient>
-    // are returned to the caller. The caller can use this new client to
-    // interact with the lightning node.
+    // called once per client. A stream of intercepted HTLCs and a `Arc<dyn
+    // ILnRpcClient> are returned to the caller. The caller can use this new
+    // client to interact with the lightning node, but since it is an `Arc` is
+    // cannot call `route_htlcs` again.
     async fn route_htlcs<'a>(
         self: Box<Self>,
         task_group: &mut TaskGroup,
@@ -82,7 +83,7 @@ impl NetworkLnRpcClient {
                 }
             }
 
-            tracing::warn!("Couldn't connect to CLN extension, retrying in 1 second...");
+            tracing::debug!("Couldn't connect to CLN extension, retrying in 1 second...");
             sleep(Duration::from_secs(1)).await;
         };
 
