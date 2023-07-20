@@ -286,6 +286,17 @@ impl ConfigGenApi {
         .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
     }
 
+    /// We have verified all our peer configs
+    pub async fn verified_configs(&self) -> ApiResult<()> {
+        {
+            let mut state = self.require_status(ServerStatus::VerifyingConfigs)?;
+            state.status = ServerStatus::VerifiedConfigs;
+        }
+
+        self.update_leader().await?;
+        Ok(())
+    }
+
     /// Attempts to decrypt the config files from disk using the auth string.
     ///
     /// Will force shut down the config gen API so the consensus API can start.
@@ -618,6 +629,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             async |config: &ConfigGenApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 check_auth(context)?;
                 config.get_verify_config_hash()
+            }
+        },
+        api_endpoint! {
+            "verified_configs",
+            async |config: &ConfigGenApi, context, _v: ()| -> () {
+                check_auth(context)?;
+                config.verified_configs().await
             }
         },
         api_endpoint! {
