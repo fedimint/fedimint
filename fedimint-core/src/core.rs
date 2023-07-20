@@ -107,13 +107,7 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 let buf_written = self.inner.consensus_encode_dyn(&mut buf)?;
                 assert_eq!(buf.len(), buf_written);
 
-                let buf_len = u64::try_from(buf.len())
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-
-                written += buf_len.consensus_encode(writer)?;
-
-                writer.write_all(buf.as_slice())?;
-                written += buf.len();
+                written += buf.consensus_encode(writer)?;
 
                 Ok(written)
             }
