@@ -186,8 +186,7 @@ impl WsAdminClient {
 
     /// Returns the status of the server
     pub async fn status(&self) -> FederationResult<StatusResponse> {
-        self.request_auth("status", ApiRequestErased::default())
-            .await
+        self.request("status", ApiRequestErased::default()).await
     }
 
     async fn request_auth<Ret>(
