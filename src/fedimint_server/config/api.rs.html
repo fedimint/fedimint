@@ -988,10 +988,37 @@
 <a href="#988" id="988">988</a>
 <a href="#989" id="989">989</a>
 <a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::{Mutex, MutexGuard};
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
@@ -1011,7 +1038,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
 };
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::write_new;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>itertools::Itertools;
@@ -1175,21 +1202,46 @@
     <span class="doccomment">/// Once configs are generated, starts DKG and await its
     /// completion, calling a second time will return an error
     </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;()&gt; {
-        <span class="comment">// Update our state to running DKG
+        <span class="kw">let </span>leader = {
+            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
+            <span class="comment">// Update our state
+            </span>state.status = ServerStatus::ReadyForConfigGen;
+            <span class="comment">// Create a WSClient for the leader
+            </span>state.local.clone().and_then(|local| {
+                local
+                    .leader_api_url
+                    .map(|url| WsAdminClient::new(url, PeerId::from(<span class="number">0</span>)))
+            })
+        };
+
+        <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// Followers wait for leader to signal readiness for DKG
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {
+            <span class="kw">loop </span>{
+                <span class="kw">let </span>status = client.status().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| {
+                    ApiError::not_found(<span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string())
+                })<span class="question-mark">?</span>;
+                <span class="kw">if </span>status.server == ServerStatus::ReadyForConfigGen {
+                    <span class="kw">break</span>;
+                }
+                sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+            }
+        };
+
+        <span class="comment">// Get params and registry
         </span><span class="kw">let </span>request = <span class="self">self</span>.get_requested_params()<span class="question-mark">?</span>;
         <span class="kw">let </span>response = <span class="self">self</span>.get_consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(params, registry) = {
-            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
-            state.status = ServerStatus::ReadyForConfigGen;
-            (
-                state.get_config_gen_params(<span class="kw-2">&amp;</span>request, response.consensus)<span class="question-mark">?</span>,
-                state.settings.registry.clone(),
-            )
+            <span class="kw">let </span>state: MutexGuard&lt;<span class="lifetime">&#39;_</span>, ConfigGenState&gt; =
+                <span class="self">self</span>.require_status(ServerStatus::ReadyForConfigGen)<span class="question-mark">?</span>;
+            <span class="kw">let </span>params = state.get_config_gen_params(<span class="kw-2">&amp;</span>request, response.consensus)<span class="question-mark">?</span>;
+            <span class="kw">let </span>registry = state.settings.registry.clone();
+            (params, registry)
         };
-        <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Run DKG
-        </span><span class="kw">let </span><span class="kw-2">mut </span>task_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>task_group: TaskGroup = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
         <span class="kw">let </span>config = ServerConfig::distributed_gen(
             <span class="kw-2">&amp;</span>params,
             registry,
