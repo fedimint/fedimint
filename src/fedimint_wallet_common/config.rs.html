@@ -158,12 +158,24 @@
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
@@ -247,6 +259,16 @@
     <span class="doccomment">/// Confirmations required for a peg in to be accepted by federation
     </span><span class="kw">pub </span>finality_delay: u32,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletClientConfig {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(
+            f,
+            <span class="string">&quot;WalletClientConfig {}&quot;</span>,
+            serde_json::to_string(<span class="self">self</span>).map_err(|_e| std::fmt::Error)<span class="question-mark">?
+        </span>)
+    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]

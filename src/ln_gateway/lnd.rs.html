@@ -501,9 +501,9 @@
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
 <a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
@@ -522,13 +522,13 @@
 };
 <span class="kw">use </span>tonic_lnd::tonic::Code;
 <span class="kw">use </span>tonic_lnd::{connect, Client <span class="kw">as </span>LndClient};
-<span class="kw">use </span>tracing::{error, info, trace, warn};
+<span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::{ILnRpcClient, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
 <span class="kw">use </span><span class="kw">crate</span>::GatewayError;
@@ -542,10 +542,16 @@
     </span>address: String,
     tls_cert: String,
     macaroon: String,
+    lnd_sender: <span class="prelude-ty">Option</span>&lt;mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;&gt;,
 }
 
 <span class="kw">impl </span>GatewayLndClient {
-    <span class="kw">pub async fn </span>new(address: String, tls_cert: String, macaroon: String) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub async fn </span>new(
+        address: String,
+        tls_cert: String,
+        macaroon: String,
+        lnd_sender: <span class="prelude-ty">Option</span>&lt;mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;&gt;,
+    ) -&gt; <span class="self">Self </span>{
         <span class="macro">info!</span>(
             <span class="string">&quot;Gateway configured to connect to LND LnRpcClient at \n address: {},\n tls cert path: {},\n macaroon path: {} &quot;</span>,
             address, tls_cert, macaroon
@@ -554,6 +560,7 @@
             address,
             tls_cert,
             macaroon,
+            lnd_sender,
         }
     }
 
@@ -575,7 +582,7 @@
             <span class="kw">match </span>connect(address.clone(), tls_cert.clone(), macaroon.clone()).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(client) =&gt; <span class="kw">break </span>client,
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">tracing::warn!</span>(<span class="string">&quot;Couldn&#39;t connect to LND, retrying in 1 second... {e:?}&quot;</span>);
+                    <span class="macro">tracing::debug!</span>(<span class="string">&quot;Couldn&#39;t connect to LND, retrying in 1 second... {e:?}&quot;</span>);
                     sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
                 }
             }
@@ -589,7 +596,7 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
         lnd_rx: mpsc::Receiver&lt;ForwardHtlcInterceptResponse&gt;,
-        actor_sender: HtlcSubscriptionSender,
+        gateway_sender: HtlcSubscriptionSender,
     ) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
@@ -604,12 +611,14 @@
                     .htlc_interceptor(ReceiverStream::new(lnd_rx))
                     .<span class="kw">await
                     </span>.map_err(|e| {
-                        <span class="macro">error!</span>(<span class="string">&quot;Failed to connect to lnrpc server: {:?}&quot;</span>, e);
+                        <span class="macro">error!</span>(<span class="string">&quot;Failed to connect to lightning node&quot;</span>);
+                        <span class="macro">debug!</span>(<span class="string">&quot;Error: {:?}&quot;</span>, e);
                         GatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Failed to subscribe to LND htlc stream&quot;</span>))
                     }) {
                     <span class="prelude-val">Ok</span>(stream) =&gt; stream.into_inner(),
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;Failed to establish htlc stream: {:?}&quot;</span>, e);
+                        <span class="macro">error!</span>(<span class="string">&quot;Failed to establish htlc stream&quot;</span>);
+                        <span class="macro">debug!</span>(<span class="string">&quot;Error: {:?}&quot;</span>, e);
                         <span class="kw">return</span>;
                     }
                 };
@@ -617,7 +626,7 @@
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(htlc) = <span class="kw">match </span>htlc_stream.message().<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(htlc) =&gt; htlc,
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;Error received over HTLC subscription: {:?}&quot;</span>, e);
+                        <span class="macro">error!</span>(<span class="string">&quot;Error received over HTLC stream: {:?}&quot;</span>, e);
                         <span class="prelude-val">None
                     </span>}
                 } {
@@ -641,7 +650,7 @@
                         htlc_id: incoming_circuit_key.htlc_id,
                     };
 
-                    <span class="kw">match </span>actor_sender.send(<span class="prelude-val">Ok</span>(intercept)).<span class="kw">await </span>{
+                    <span class="kw">match </span>gateway_sender.send(<span class="prelude-val">Ok</span>(intercept)).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">error!</span>(<span class="string">&quot;Failed to send HTLC to gatewayd for processing: {:?}&quot;</span>, e);
@@ -658,35 +667,6 @@
 
         <span class="prelude-val">Ok</span>(())
     }
-
-    <span class="kw">async fn </span>forward_htlc(
-        incoming_circuit_key: CircuitKey,
-        lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
-    ) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
-        <span class="kw">let </span>response = ForwardHtlcInterceptResponse {
-            incoming_circuit_key: <span class="prelude-val">Some</span>(incoming_circuit_key),
-            action: ResolveHoldForwardAction::Resume.into(),
-            preimage: <span class="macro">vec!</span>[],
-            failure_message: <span class="macro">vec!</span>[],
-            failure_code: FailureCode::TemporaryChannelFailure.into(),
-        };
-        <span class="self">Self</span>::send_lnd_response(lnd_sender, response).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>settle_htlc(
-        key: CircuitKey,
-        preimage: Vec&lt;u8&gt;,
-        lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
-    ) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
-        <span class="kw">let </span>response = ForwardHtlcInterceptResponse {
-            incoming_circuit_key: <span class="prelude-val">Some</span>(key),
-            action: ResolveHoldForwardAction::Settle.into(),
-            preimage,
-            failure_message: <span class="macro">vec!</span>[],
-            failure_code: FailureCode::TemporaryChannelFailure.into(),
-        };
-        <span class="self">Self</span>::send_lnd_response(lnd_sender, response).<span class="kw">await
-    </span>}
 
     <span class="kw">async fn </span>cancel_htlc(
         key: CircuitKey,
@@ -950,60 +930,78 @@
     }
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
         <span class="kw">const </span>CHANNEL_SIZE: usize = <span class="number">100</span>;
 
-        <span class="comment">// Channel to send intercepted htlc to actor for processing
-        // actor_sender needs to be saved when the scid is received
-        </span><span class="kw">let </span>(actor_sender, actor_receiver) =
+        <span class="comment">// Channel to send intercepted htlc to the gateway for processing
+        </span><span class="kw">let </span>(gateway_sender, gateway_receiver) =
             mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, tonic::Status&gt;&gt;(CHANNEL_SIZE);
 
         <span class="kw">let </span>(lnd_sender, lnd_rx) = mpsc::channel::&lt;ForwardHtlcInterceptResponse&gt;(CHANNEL_SIZE);
-        <span class="self">self</span>.spawn_interceptor(task_group, lnd_sender.clone(), lnd_rx, actor_sender.clone())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = events.into_inner();
-        task_group.spawn(<span class="string">&quot;LND Route HTLCs&quot;</span>, |_handle| <span class="kw">async move </span>{
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(request) = stream.recv().<span class="kw">await </span>{
-                <span class="kw">let </span>InterceptHtlcResponse {
-                    action,
-                    incoming_chan_id,
+        <span class="self">self</span>.spawn_interceptor(
+            task_group,
+            lnd_sender.clone(),
+            lnd_rx,
+            gateway_sender.clone(),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>new_client = Arc::new(
+            <span class="self">Self</span>::new(
+                <span class="self">self</span>.address.clone(),
+                <span class="self">self</span>.tls_cert.clone(),
+                <span class="self">self</span>.macaroon.clone(),
+                <span class="prelude-val">Some</span>(lnd_sender.clone()),
+            )
+            .<span class="kw">await</span>,
+        );
+        <span class="prelude-val">Ok</span>((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
+    }
+
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        htlc: InterceptHtlcResponse,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(lnd_sender) = <span class="self">self</span>.lnd_sender.clone() {
+            <span class="kw">let </span>InterceptHtlcResponse {
+                action,
+                incoming_chan_id,
+                htlc_id,
+            } = htlc;
+
+            <span class="kw">let </span>(action, preimage) = <span class="kw">match </span>action {
+                <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
+                    (ResolveHoldForwardAction::Settle.into(), preimage)
+                }
+                <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
+                    (ResolveHoldForwardAction::Fail.into(), <span class="macro">vec!</span>[])
+                }
+                <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; {
+                    (ResolveHoldForwardAction::Resume.into(), <span class="macro">vec!</span>[])
+                }
+                <span class="prelude-val">None </span>=&gt; (ResolveHoldForwardAction::Fail.into(), <span class="macro">vec!</span>[]),
+            };
+
+            <span class="kw">let </span>response = ForwardHtlcInterceptResponse {
+                incoming_circuit_key: <span class="prelude-val">Some</span>(CircuitKey {
+                    chan_id: incoming_chan_id,
                     htlc_id,
-                } = request;
+                }),
+                action,
+                preimage,
+                failure_message: <span class="macro">vec!</span>[],
+                failure_code: FailureCode::TemporaryChannelFailure.into(),
+            };
 
-                <span class="kw">match </span>action {
-                    <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
-                        <span class="kw">let _ </span>= <span class="self">Self</span>::settle_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, preimage, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to settle HTLC: {:?}&quot;</span>, e);
-                        });
-                    },
-                    <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
-                        <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
-                        });
-                    },
-                    <span class="prelude-val">Some</span>(Action::Forward(Forward { })) =&gt; {
-                        <span class="kw">let _ </span>= <span class="self">Self</span>::forward_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone())
-                            .<span class="kw">await
-                            </span>.map_err(|e| {
-                                <span class="macro">error!</span>(<span class="string">&quot;Failed to forward HTLC: {:?}&quot;</span>, e);
-                            });
-                    }
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;No action specified for intercepted htlc. This should not happen. ChanId: {} HTLC ID: {}&quot;</span>, incoming_chan_id, htlc_id);
-                        <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(CircuitKey { chan_id: incoming_chan_id, htlc_id }, lnd_sender.clone()).<span class="kw">await</span>.map_err(|e| {
-                            <span class="macro">error!</span>(<span class="string">&quot;Failed to cancel HTLC: {:?}&quot;</span>, e);
-                        });
-                    }
-                };
-            }
-        })
-        .<span class="kw">await</span>;
+            <span class="self">Self</span>::send_lnd_response(lnd_sender, response).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(EmptyResponse {});
+        }
 
-        <span class="prelude-val">Ok</span>(Box::pin(ReceiverStream::new(actor_receiver)))
+        <span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
+            <span class="string">&quot;Gatewayd has not started to route HTLCs&quot;
+        </span>)))
     }
 }
 </code></pre></div>

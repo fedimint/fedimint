@@ -607,7 +607,28 @@
 <a href="#607" id="607">607</a>
 <a href="#608" id="608">608</a>
 <a href="#609" id="609">609</a>
-</pre><pre class="rust"><code><span class="kw">pub mod </span>pay;
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+</pre><pre class="rust"><code><span class="kw">pub mod </span>complete;
+<span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -651,10 +672,12 @@
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="self">self</span>::complete::GatewayCompleteStateMachine;
 <span class="kw">use </span><span class="self">self</span>::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::FederationRegistrationKey;
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcRequest};
+<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::InterceptHtlcRequest;
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
+<span class="kw">use </span><span class="kw">crate</span>::ng::complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 
 <span class="kw">pub const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);
 <span class="kw">pub const </span>INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(<span class="number">15</span>);
@@ -899,7 +922,8 @@
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientGen {
-    <span class="kw">pub </span>lightning_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
+    <span class="kw">pub </span>lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
+    <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>mint_channel_id: u64,
     <span class="kw">pub </span>fees: RoutingFees,
@@ -912,16 +936,15 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModuleGen <span class="kw">for </span>GatewayClientGen {
     <span class="kw">type </span>Module = GatewayClientModule;
-    <span class="kw">type </span>Config = LightningClientConfig;
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>}])
-            .expect(<span class="string">&quot;no version conficts&quot;</span>)
+            .expect(<span class="string">&quot;no version conflicts&quot;</span>)
     }
 
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        cfg: <span class="self">Self</span>::Config,
+        cfg: LightningClientConfig,
         _db: Database,
         _api_version: ApiVersion,
         module_root_secret: DerivableSecret,
@@ -929,17 +952,14 @@
         _api: DynGlobalApi,
         module_api: DynModuleApi,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
-        <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias: <span class="kw">_ </span>} = <span class="self">self</span>.lightning_client.info().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
-            .map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Invalid node pubkey {}&quot;</span>, e))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(GatewayClientModule {
+            lnrpc: <span class="self">self</span>.lnrpc.clone(),
             cfg,
             notifier,
             redeem_key: module_root_secret
                 .child_key(ChildId(<span class="number">0</span>))
                 .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
-            node_pub_key,
-            lightning_client: <span class="self">self</span>.lightning_client.clone(),
+            node_pub_key: <span class="self">self</span>.node_pub_key,
             timelock_delta: <span class="self">self</span>.timelock_delta,
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
             fees: <span class="self">self</span>.fees,
@@ -955,6 +975,7 @@
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
     <span class="kw">pub </span>ln_decoder: Decoder,
+    notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
 }
 
 <span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContext {}
@@ -980,6 +1001,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GatewayClientModule {
+    lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
     cfg: LightningClientConfig,
     <span class="kw">pub </span>notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
     <span class="kw">pub </span>redeem_key: KeyPair,
@@ -987,7 +1009,6 @@
     timelock_delta: u64,
     mint_channel_id: u64,
     fees: RoutingFees,
-    lightning_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
     module_api: DynModuleApi,
 }
 
@@ -998,11 +1019,12 @@
 
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
         <span class="self">Self</span>::ModuleStateMachineContext {
-            lnrpc: <span class="self">self</span>.lightning_client.clone(),
+            lnrpc: <span class="self">self</span>.lnrpc.clone(),
             redeem_key: <span class="self">self</span>.redeem_key,
             timelock_delta: <span class="self">self</span>.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: <span class="self">self</span>.decoder(),
+            notifier: <span class="self">self</span>.notifier.clone(),
         }
     }
 
@@ -1117,13 +1139,23 @@
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachines&gt; {
             output: incoming_output,
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
-                <span class="macro">vec!</span>[GatewayClientStateMachines::Receive(IncomingStateMachine {
-                    common: IncomingSmCommon {
-                        operation_id,
-                        contract_id,
-                    },
-                    state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
-                })]
+                <span class="macro">vec!</span>[
+                    GatewayClientStateMachines::Receive(IncomingStateMachine {
+                        common: IncomingSmCommon {
+                            operation_id,
+                            contract_id,
+                        },
+                        state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                    }),
+                    GatewayClientStateMachines::Complete(GatewayCompleteStateMachine {
+                        common: GatewayCompleteCommon {
+                            operation_id,
+                            incoming_chan_id: htlc.incoming_chan_id,
+                            htlc_id: htlc.htlc_id,
+                        },
+                        state: GatewayCompleteStates::WaitForPreimage(WaitForPreimageState),
+                    }),
+                ]
             }),
         };
         <span class="prelude-val">Ok</span>((operation_id, client_output))
@@ -1135,6 +1167,7 @@
 </span><span class="kw">pub enum </span>GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
     Receive(IncomingStateMachine),
+    Complete(GatewayCompleteStateMachine),
 }
 
 <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>GatewayClientStateMachines {
@@ -1167,6 +1200,12 @@
                     GatewayClientStateMachines::Receive
                 )
             }
+            GatewayClientStateMachines::Complete(complete_state) =&gt; {
+                <span class="macro">sm_enum_variant_translation!</span>(
+                    complete_state.transitions(context, global_context),
+                    GatewayClientStateMachines::Complete
+                )
+            }
         }
     }
 
@@ -1174,6 +1213,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             GatewayClientStateMachines::Pay(pay_state) =&gt; pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) =&gt; receive_state.operation_id(),
+            GatewayClientStateMachines::Complete(complete_state) =&gt; complete_state.operation_id(),
         }
     }
 }

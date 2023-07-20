@@ -974,12 +974,34 @@
 <a href="#974" id="974">974</a>
 <a href="#975" id="975">975</a>
 <a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -997,8 +1019,8 @@
     ServerModuleConsensusConfig,
 };
 <span class="kw">use </span><span class="kw">crate</span>::core::{
-    Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId, ModuleKind, Output,
-    OutputOutcome,
+    ClientConfig, Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId,
+    ModuleKind, Output, OutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
@@ -1070,9 +1092,9 @@
         serde_json::to_value(<span class="self">self</span>).expect(<span class="string">&quot;parameter serialization error - this should not happen&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>with_auth(<span class="self">self</span>, auth: <span class="kw-2">&amp;</span>ApiAuth) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>with_auth(<span class="self">self</span>, auth: ApiAuth) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            auth: <span class="prelude-val">Some</span>(auth.clone()),
+            auth: <span class="prelude-val">Some</span>(auth),
             params: <span class="self">self</span>.params,
         }
     }
@@ -1456,6 +1478,7 @@
 
     <span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_instance_id: ModuleInstanceId,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;
 
@@ -1496,6 +1519,8 @@
 <span class="kw">pub trait </span>CommonModuleGen: Debug + Sized {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion;
     <span class="kw">const </span>KIND: ModuleKind;
+
+    <span class="kw">type </span>ClientConfig: ClientConfig;
 
     <span class="kw">fn </span>decoder() -&gt; Decoder;
 }
@@ -1575,7 +1600,7 @@
     </span><span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
-    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;
+    ) -&gt; anyhow::Result&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleGen&gt;::Common <span class="kw">as </span>CommonModuleGen&gt;::ClientConfig&gt;;
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1641,9 +1666,15 @@
 
     <span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module_instance_id: ModuleInstanceId,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::get_client_config(<span class="self">self</span>, config)
+        ClientModuleConfig::from_typed(
+            module_instance_id,
+            &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::kind(),
+            config.version,
+            &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleGen&gt;::get_client_config(<span class="self">self</span>, config)<span class="question-mark">?</span>,
+        )
     }
 
     <span class="kw">async fn </span>dump_database(
@@ -1718,6 +1749,7 @@
 
 <span class="doccomment">/// Module associated types required by both client and server
 </span><span class="kw">pub trait </span>ModuleCommon {
+    <span class="kw">type </span>ClientConfig: ClientConfig;
     <span class="kw">type </span>Input: Input;
     <span class="kw">type </span>Output: Output;
     <span class="kw">type </span>OutputOutcome: OutputOutcome;
@@ -1725,6 +1757,7 @@
 
     <span class="kw">fn </span>decoder_builder() -&gt; DecoderBuilder {
         <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder();
+        decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::ClientConfig&gt;();
         decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::Input&gt;();
         decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::Output&gt;();
         decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::OutputOutcome&gt;();
@@ -1899,16 +1932,25 @@
         <span class="kw">let </span>module_instance =
             ModuleInstanceId::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>_total_len =
-            u32::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">? </span><span class="kw">as </span>usize;
+        <span class="kw">let </span>total_len = u64::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>reader = reader.take(total_len);
 
         <span class="comment">// No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
-        </span>decoder.decode(
+        </span><span class="kw">let </span>val = decoder.decode(
             <span class="kw-2">&amp;mut </span>reader,
             module_instance,
             <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-        )
+        )<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
+                <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Dyn type did not consume all bytes during decoding&quot;</span>),
+            ));
+        }
+
+        <span class="prelude-val">Ok</span>(val)
     }
 }
 

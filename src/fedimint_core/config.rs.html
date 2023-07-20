@@ -829,6 +829,15 @@
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
 <a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -836,14 +845,14 @@
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 
-<span class="kw">use </span>anyhow::{bail, format_err};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::hex::{format_hex, FromHex};
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin_hashes::{hex, sha256};
 <span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::SerdeSignature;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
@@ -856,12 +865,12 @@
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
 <span class="kw">use </span>url::Url;
 
+<span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
     CoreConsensusVersion, DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen,
     ModuleConsensusVersion,
 };
-<span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, MaybeSync};
 <span class="kw">use crate</span>::{maybe_add_send_sync, PeerId};
 
 <span class="doccomment">/// [`serde_json::Value`] that must contain `kind: String` field
@@ -955,6 +964,23 @@
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ClientModuleConfig&gt;,
 }
 
+<span class="kw">impl </span>ClientConfig {
+    <span class="doccomment">/// See [`DynRawFallback::redecode_raw`].
+    </span><span class="kw">pub fn </span>redecode_raw(
+        <span class="self">self</span>,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            modules: <span class="self">self
+                </span>.modules
+                .into_iter()
+                .map(|(k, v)| <span class="prelude-val">Ok</span>((k, v.redecode_raw(modules)<span class="question-mark">?</span>)))
+                .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>,
+            ..<span class="self">self
+        </span>})
+    }
+}
+
 <span class="doccomment">/// The API response for client config requests, signed by the Federation
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ClientConfigResponse {
@@ -1044,12 +1070,9 @@
         sha256::Hash::from_engine(engine)
     }
 
-    <span class="kw">pub fn </span>get_module&lt;T: Decodable&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; anyhow::Result&lt;T&gt; {
+    <span class="kw">pub fn </span>get_module&lt;T: Decodable + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>T&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(client_cfg) = <span class="self">self</span>.modules.get(<span class="kw-2">&amp;</span>id) {
-            <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
-                <span class="kw-2">&amp;mut &amp;</span>client_cfg.config[..],
-                <span class="kw-2">&amp;</span>Default::default(),
-            )<span class="question-mark">?</span>)
+            client_cfg.cast()
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">&quot;Client config for module id {id} not found&quot;</span>))
         }
@@ -1071,18 +1094,15 @@
     /// mint, wallet, ln module code in the client, this is useful, but
     /// please write any new code that avoids assumptions about available
     /// modules.
-    </span><span class="kw">pub fn </span>get_first_module_by_kind&lt;T: Decodable&gt;(
+    </span><span class="kw">pub fn </span>get_first_module_by_kind&lt;T: Decodable + <span class="lifetime">&#39;static</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         kind: <span class="kw">impl </span>Into&lt;ModuleKind&gt;,
-    ) -&gt; anyhow::Result&lt;(ModuleInstanceId, T)&gt; {
+    ) -&gt; anyhow::Result&lt;(ModuleInstanceId, <span class="kw-2">&amp;</span>T)&gt; {
         <span class="kw">let </span>kind: ModuleKind = kind.into();
         <span class="kw">let </span><span class="prelude-val">Some</span>((id, module_cfg)) = <span class="self">self</span>.modules.iter().find(|(<span class="kw">_</span>, v)| v.is_kind(<span class="kw-2">&amp;</span>kind)) <span class="kw">else </span>{
             <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Module kind {kind} not found&quot;</span>)
         };
-        <span class="prelude-val">Ok</span>((
-            <span class="kw-2">*</span>id,
-            T::consensus_decode(<span class="kw-2">&amp;mut &amp;</span>module_cfg.config[..], <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>,
-        ))
+        <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>id, module_cfg.cast()<span class="question-mark">?</span>))
     }
 
     <span class="comment">// TODO: rename this and above
@@ -1325,21 +1345,33 @@
 </span><span class="kw">pub struct </span>ClientModuleConfig {
     <span class="kw">pub </span>kind: ModuleKind,
     <span class="kw">pub </span>version: ModuleConsensusVersion,
-    <span class="attr">#[serde(with = <span class="string">&quot;::hex::serde&quot;</span>)]
-    </span><span class="kw">pub </span>config: Vec&lt;u8&gt;,
+    <span class="attr">#[serde(with = <span class="string">&quot;::fedimint_core::encoding::as_hex&quot;</span>)]
+    </span><span class="kw">pub </span>config: DynRawFallback&lt;DynClientConfig&gt;,
 }
 
 <span class="kw">impl </span>ClientModuleConfig {
-    <span class="kw">pub fn </span>from_typed&lt;T: Encodable + Serialize&gt;(
+    <span class="kw">pub fn </span>from_typed&lt;T: fedimint_core::core::ClientConfig&gt;(
+        module_instance_id: ModuleInstanceId,
         kind: ModuleKind,
         version: ModuleConsensusVersion,
-        value: <span class="kw-2">&amp;</span>T,
+        value: T,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             kind,
             version,
-            config: value.consensus_encode_to_vec()<span class="question-mark">?</span>,
+            config: fedimint_core::core::DynClientConfig::from_typed(module_instance_id, value)
+                .into(),
         })
+    }
+
+    <span class="kw">pub fn </span>redecode_raw(
+        <span class="self">self</span>,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            config: <span class="self">self</span>.config.redecode_raw(modules)<span class="question-mark">?</span>,
+            ..<span class="self">self
+        </span>})
     }
 
     <span class="kw">pub fn </span>is_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, kind: <span class="kw-2">&amp;</span>ModuleKind) -&gt; bool {
@@ -1349,18 +1381,18 @@
     <span class="kw">pub fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleKind {
         <span class="kw-2">&amp;</span><span class="self">self</span>.kind
     }
-
-    <span class="kw">pub fn </span>value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.config
-    }
 }
 
 <span class="kw">impl </span>ClientModuleConfig {
-    <span class="kw">pub fn </span>cast&lt;T: TypedClientModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
-        <span class="prelude-val">Ok</span>(T::consensus_decode(
-            <span class="kw-2">&amp;mut &amp;</span><span class="self">self</span>.config[..],
-            <span class="kw-2">&amp;</span>Default::default(),
-        )<span class="question-mark">?</span>)
+    <span class="kw">pub fn </span>cast&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>T&gt;
+    <span class="kw">where
+        </span>T: <span class="lifetime">&#39;static</span>,
+    {
+        <span class="self">self</span>.config
+            .expect_decoded_ref()
+            .as_any()
+            .downcast_ref::&lt;T&gt;()
+            .context(<span class="string">&quot;can&#39;t convert client module config to desired type&quot;</span>)
     }
 }
 
@@ -1459,20 +1491,6 @@
                 serde_json::to_value(consensus).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>),
             ),
         }
-    }
-}
-
-<span class="doccomment">/// Typed client side module config
-</span><span class="kw">pub trait </span>TypedClientModuleConfig:
-    DeserializeOwned + Serialize + Decodable + Encodable + MaybeSend + MaybeSync
-{
-    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
-
-    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion;
-
-    <span class="kw">fn </span>to_erased(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleConfig {
-        ClientModuleConfig::from_typed(<span class="self">self</span>.kind(), <span class="self">self</span>.version(), <span class="self">self</span>)
-            .expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>)
     }
 }
 

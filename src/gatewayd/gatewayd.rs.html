@@ -135,11 +135,8 @@
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::process::exit;
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
@@ -150,6 +147,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::LightningCommonGen;
 <span class="kw">use </span>fedimint_ln_common::config::GatewayFee;
 <span class="kw">use </span>fedimint_ln_common::LightningModuleTypes;
@@ -157,7 +155,7 @@
 <span class="kw">use </span>fedimint_mint_client::{MintClientGen, MintCommonGen, MintModuleTypes};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientGen, WalletCommonGen, WalletModuleTypes};
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
-<span class="kw">use </span>ln_gateway::{Gateway, GatewayError, LightningMode, DEFAULT_FEES};
+<span class="kw">use </span>ln_gateway::{Gateway, LightningMode};
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
 
@@ -252,28 +250,26 @@
         ),
     ]);
 
-    <span class="kw">let </span>gatewayd_db = Database::new(
-        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))
-            .map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)<span class="question-mark">?</span>,
+    <span class="kw">let </span>db = Database::new(
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))<span class="question-mark">?</span>,
         decoders.clone(),
     );
 
-    <span class="comment">// Create gateway instance
-    </span><span class="kw">let </span>gateway = Gateway::new(
+    <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+    <span class="kw">let </span>rx = Gateway::start_gateway(
+        <span class="kw-2">&amp;mut </span>tg,
         mode,
-        client_builder,
-        fees.unwrap_or(GatewayFee(DEFAULT_FEES)).<span class="number">0</span>,
-        gatewayd_db,
+        fees,
         api_addr,
+        client_builder,
+        listen,
+        password,
+        db,
     )
-    .<span class="kw">await
-    </span>.unwrap_or_else(|e| {
-        <span class="macro">eprintln!</span>(<span class="string">&quot;Failed to start gateway: {e:?}&quot;</span>);
-        exit(<span class="number">1</span>)
-    });
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    rx.<span class="kw">await</span><span class="question-mark">?</span>;
 
-    gateway.spawn_blocking_webserver(listen, password).<span class="kw">await</span>;
-
+    <span class="macro">info!</span>(<span class="string">&quot;Gatewayd exiting...&quot;</span>);
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>

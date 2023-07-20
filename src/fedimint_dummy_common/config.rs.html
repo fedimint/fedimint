@@ -131,7 +131,7 @@
 }
 
 <span class="doccomment">/// Contains all the configuration for the client
-</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
 </span><span class="kw">pub struct </span>DummyClientConfig {
     <span class="doccomment">/// Accessible to clients
     </span><span class="kw">pub </span>tx_fee: Amount,

@@ -630,20 +630,6 @@
 <a href="#630" id="630">630</a>
 <a href="#631" id="631">631</a>
 <a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -660,14 +646,13 @@
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::Amount;
-<span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -882,79 +867,6 @@
             })
             .map_err(ClnExtensionError::RpcError)<span class="question-mark">?
     </span>}
-
-    <span class="kw">async fn </span>complete_htlc(
-        complete_request: InterceptHtlcResponse,
-        interceptors: Arc&lt;ClnHtlcInterceptor&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Status&gt; {
-        <span class="kw">let </span>InterceptHtlcResponse {
-            action,
-            incoming_chan_id,
-            htlc_id,
-            ..
-        } = complete_request;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(outcome) = interceptors
-            .outcomes
-            .lock()
-            .<span class="kw">await
-            </span>.remove(<span class="kw-2">&amp;</span>(incoming_chan_id, htlc_id))
-        {
-            <span class="comment">// Translate action request into a cln rpc response for
-            // `htlc_accepted` event
-            </span><span class="kw">let </span>htlca_res = <span class="kw">match </span>action {
-                <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
-                    <span class="kw">let </span>assert_pk: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], TryFromSliceError&gt; =
-                        preimage.as_slice().try_into();
-                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(pk) = assert_pk {
-                        <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>, <span class="string">&quot;payment_key&quot;</span>: pk.to_hex() })
-                    } <span class="kw">else </span>{
-                        htlc_processing_failure()
-                    }
-                }
-                <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
-                    <span class="comment">// TODO: Translate the reason into a BOLT 4 failure message
-                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                    </span>htlc_processing_failure()
-                }
-                <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; {
-                    <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>})
-                }
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="macro">error!</span>(
-                        <span class="question-mark">?</span>incoming_chan_id,
-                        <span class="question-mark">?</span>htlc_id,
-                        <span class="string">&quot;No action specified for intercepted htlc&quot;
-                    </span>);
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
-                        <span class="string">&quot;No action specified on this intercepted htlc&quot;</span>,
-                    ));
-                }
-            };
-
-            <span class="comment">// Send translated response to the HTLC interceptor for submission
-            // to the cln rpc
-            </span><span class="kw">match </span>outcome.send(htlca_res) {
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(
-                        <span class="string">&quot;Failed to send htlc_accepted response to interceptor: {:?}&quot;</span>,
-                        e
-                    );
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
-                        <span class="string">&quot;Failed to send htlc_accepted response to interceptor&quot;</span>,
-                    ));
-                }
-            };
-        } <span class="kw">else </span>{
-            <span class="macro">error!</span>(
-                <span class="question-mark">?</span>incoming_chan_id,
-                <span class="question-mark">?</span>htlc_id,
-                <span class="string">&quot;No interceptor reference found for this processed htlc&quot;</span>,
-            );
-            <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(<span class="string">&quot;No interceptor reference found for htlc&quot;</span>));
-        }
-        <span class="prelude-val">Ok</span>(())
-    }
 }
 
 <span class="attr">#[tonic::async_trait]
@@ -1123,32 +1035,92 @@
 
     <span class="kw">async fn </span>route_htlcs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: tonic::Request&lt;tonic::Streaming&lt;InterceptHtlcResponse&gt;&gt;,
+        <span class="kw">_</span>: tonic::Request&lt;EmptyRequest&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;<span class="self">Self</span>::RouteHtlcsStream&gt;, Status&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = request.into_inner();
-
         <span class="comment">// First create new channel that we will use to send responses back to gatewayd
         </span><span class="kw">let </span>(gatewayd_sender, gatewayd_receiver) =
             mpsc::channel::&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;(<span class="number">100</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>sender = <span class="self">self</span>.interceptor.sender.lock().<span class="kw">await</span>;
         <span class="kw-2">*</span>sender = <span class="prelude-val">Some</span>(gatewayd_sender.clone());
-
-        <span class="comment">// Spawn new thread that listens for events from the input stream
-        </span><span class="kw">let </span>interceptors = <span class="self">self</span>.interceptor.clone();
-        tokio::spawn(<span class="kw">async move </span>{
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(res) = stream.next().<span class="kw">await </span>{
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(complete_request) = res {
-                    <span class="kw">let _ </span>= <span class="self">Self</span>::complete_htlc(complete_request, interceptors.clone())
-                        .<span class="kw">await
-                        </span>.map_err(|e| {
-                            <span class="macro">error!</span>(<span class="string">&quot;CLN extension failed to complete HTLC: {:?}&quot;</span>, e);
-                        });
-                }
-            }
-        });
+        <span class="macro">debug!</span>(<span class="string">&quot;Gateway channel sender replaced&quot;</span>);
 
         <span class="prelude-val">Ok</span>(tonic::Response::new(ReceiverStream::new(gatewayd_receiver)))
+    }
+
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        intercept_response: tonic::Request&lt;InterceptHtlcResponse&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;EmptyResponse&gt;, Status&gt; {
+        <span class="kw">let </span>InterceptHtlcResponse {
+            action,
+            incoming_chan_id,
+            htlc_id,
+            ..
+        } = intercept_response.into_inner();
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(outcome) = <span class="self">self
+            </span>.interceptor
+            .outcomes
+            .lock()
+            .<span class="kw">await
+            </span>.remove(<span class="kw-2">&amp;</span>(incoming_chan_id, htlc_id))
+        {
+            <span class="comment">// Translate action request into a cln rpc response for
+            // `htlc_accepted` event
+            </span><span class="kw">let </span>htlca_res = <span class="kw">match </span>action {
+                <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
+                    <span class="kw">let </span>assert_pk: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], TryFromSliceError&gt; =
+                        preimage.as_slice().try_into();
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(pk) = assert_pk {
+                        <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>, <span class="string">&quot;payment_key&quot;</span>: pk.to_hex() })
+                    } <span class="kw">else </span>{
+                        htlc_processing_failure()
+                    }
+                }
+                <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
+                    <span class="comment">// TODO: Translate the reason into a BOLT 4 failure message
+                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
+                    </span>htlc_processing_failure()
+                }
+                <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; {
+                    <span class="macro">serde_json::json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot; </span>})
+                }
+                <span class="prelude-val">None </span>=&gt; {
+                    <span class="macro">error!</span>(
+                        <span class="question-mark">?</span>incoming_chan_id,
+                        <span class="question-mark">?</span>htlc_id,
+                        <span class="string">&quot;No action specified for intercepted htlc&quot;
+                    </span>);
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
+                        <span class="string">&quot;No action specified on this intercepted htlc&quot;</span>,
+                    ));
+                }
+            };
+
+            <span class="comment">// Send translated response to the HTLC interceptor for submission
+            // to the cln rpc
+            </span><span class="kw">match </span>outcome.send(htlca_res) {
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">error!</span>(
+                        <span class="string">&quot;Failed to send htlc_accepted response to interceptor: {:?}&quot;</span>,
+                        e
+                    );
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(
+                        <span class="string">&quot;Failed to send htlc_accepted response to interceptor&quot;</span>,
+                    ));
+                }
+            };
+        } <span class="kw">else </span>{
+            <span class="macro">error!</span>(
+                <span class="question-mark">?</span>incoming_chan_id,
+                <span class="question-mark">?</span>htlc_id,
+                <span class="string">&quot;No interceptor reference found for this processed htlc&quot;</span>,
+            );
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Status::internal(<span class="string">&quot;No interceptor reference found for htlc&quot;</span>));
+        }
+        <span class="prelude-val">Ok</span>(tonic::Response::new(EmptyResponse {}))
     }
 }
 

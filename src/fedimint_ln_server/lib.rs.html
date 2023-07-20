@@ -1274,11 +1274,6 @@
 <a href="#1274" id="1274">1274</a>
 <a href="#1275" id="1275">1275</a>
 <a href="#1276" id="1276">1276</a>
-<a href="#1277" id="1277">1277</a>
-<a href="#1278" id="1278">1278</a>
-<a href="#1279" id="1279">1279</a>
-<a href="#1280" id="1280">1280</a>
-<a href="#1281" id="1281">1281</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1286,8 +1281,8 @@
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1495,18 +1490,13 @@
     <span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
-    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;LightningClientConfig&gt; {
         <span class="kw">let </span>config = LightningConfigConsensus::from_erased(config)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            <span class="kw-2">&amp;</span>LightningClientConfig {
-                threshold_pub_key: config.threshold_pub_keys.public_key(),
-                fee_consensus: config.fee_consensus,
-                network: config.network,
-            },
-        )
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>))
+        <span class="prelude-val">Ok</span>(LightningClientConfig {
+            threshold_pub_key: config.threshold_pub_keys.public_key(),
+            fee_consensus: config.fee_consensus,
+            network: config.network,
+        })
     }
 
     <span class="kw">async fn </span>dump_database(

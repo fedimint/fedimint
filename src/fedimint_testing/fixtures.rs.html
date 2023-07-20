@@ -334,7 +334,7 @@
     </span>}
 
     <span class="doccomment">/// Starts a new gateway with a given lightning node
-    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, ln: Arc&lt;<span class="kw">dyn </span>LightningTest&gt;) -&gt; GatewayTest {
+    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, ln: Box&lt;<span class="kw">dyn </span>LightningTest&gt;) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier
         </span><span class="kw">let </span>server_gens = ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone());
         <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
@@ -355,21 +355,21 @@
     </span>}
 
     <span class="doccomment">/// Returns the LND lightning node
-    </span><span class="kw">pub async fn </span>lnd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>LightningTest&gt; {
+    </span><span class="kw">pub async fn </span>lnd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>LightningTest&gt; {
         <span class="kw">match </span>Fixtures::is_real_test() {
-            <span class="bool-val">true </span>=&gt; Arc::new(LndLightningTest::new().<span class="kw">await</span>),
-            <span class="bool-val">false </span>=&gt; Arc::new(FakeLightningTest::new()),
+            <span class="bool-val">true </span>=&gt; Box::new(LndLightningTest::new().<span class="kw">await</span>),
+            <span class="bool-val">false </span>=&gt; Box::new(FakeLightningTest::new()),
         }
     }
 
     <span class="doccomment">/// Returns the CLN lightning node
-    </span><span class="kw">pub async fn </span>cln(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>LightningTest&gt; {
+    </span><span class="kw">pub async fn </span>cln(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>LightningTest&gt; {
         <span class="kw">match </span>Fixtures::is_real_test() {
             <span class="bool-val">true </span>=&gt; {
                 <span class="kw">let </span>dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>).expect(<span class="string">&quot;Real tests require FM_TEST_DIR&quot;</span>);
-                Arc::new(ClnLightningTest::new(<span class="kw-2">&amp;</span>dir).<span class="kw">await</span>)
+                Box::new(ClnLightningTest::new(<span class="kw-2">&amp;</span>dir).<span class="kw">await</span>)
             }
-            <span class="bool-val">false </span>=&gt; Arc::new(FakeLightningTest::new()),
+            <span class="bool-val">false </span>=&gt; Box::new(FakeLightningTest::new()),
         }
     }
 

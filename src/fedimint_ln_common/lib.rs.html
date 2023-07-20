@@ -430,6 +430,11 @@
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
 <a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -451,6 +456,7 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>config::LightningClientConfig;
 <span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
 <span class="kw">use </span>fedimint_client::sm::{Context, OperationId};
 <span class="kw">use </span>fedimint_client::Client;
@@ -655,6 +661,9 @@
 <span class="kw">impl </span>CommonModuleGen <span class="kw">for </span>LightningCommonGen {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
+
+    <span class="kw">type </span>ClientConfig = LightningClientConfig;
+
     <span class="kw">fn </span>decoder() -&gt; Decoder {
         LightningModuleTypes::decoder()
     }
@@ -664,6 +673,7 @@
 
 <span class="macro">plugin_types_trait_impl_common!</span>(
     LightningModuleTypes,
+    LightningClientConfig,
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,

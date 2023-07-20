@@ -57,11 +57,7 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+</pre><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::sha256;
@@ -119,8 +115,6 @@
 
     <span class="doccomment">/// Is this a LN instance shared with other tests
     </span><span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
-
-    <span class="kw">fn </span>as_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;;
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

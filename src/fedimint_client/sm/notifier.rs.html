@@ -234,7 +234,7 @@
 
 <span class="doccomment">/// State transition notifier for a specific module instance that can only
 /// subscribe to transitions belonging to that module
-</span><span class="attr">#[derive(Debug)]
+</span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ModuleNotifier&lt;GC, S&gt; {
     broadcast: tokio::sync::broadcast::Sender&lt;DynState&lt;GC&gt;&gt;,
     module_instance: ModuleInstanceId,

@@ -281,6 +281,7 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
@@ -325,8 +326,9 @@
 
         <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>cfg_path = workdir.join(<span class="string">&quot;client.json&quot;</span>);
-        <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path)<span class="question-mark">?</span>;
         <span class="kw">let </span>decoders = module_decode_stubs();
+        cfg.<span class="number">0 </span>= cfg.<span class="number">0</span>.redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), module_decode_stubs());
         <span class="kw">let </span>module_gens = ClientModuleGenRegistry::from(<span class="macro">vec!</span>[
             DynClientModuleGen::from(WalletClientGen::default()),
@@ -410,9 +412,9 @@
     }
 
     <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>wallet_cfg: WalletClientConfig = <span class="self">self
+        <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = <span class="self">self
             </span>.client
-            .config()
+            .config_ref()
             .<span class="number">0
             </span>.get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)<span class="question-mark">?</span>;
         <span class="kw">let </span>finality_delay = wallet_cfg.finality_delay;

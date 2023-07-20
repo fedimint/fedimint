@@ -118,13 +118,27 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>futures::stream::BoxStream;
-<span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic::transport::{Channel, Endpoint};
 <span class="kw">use </span>tonic::Request;
 <span class="kw">use </span>tracing::info;
@@ -132,7 +146,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{
-    EmptyRequest, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
@@ -153,11 +167,17 @@
     <span class="doccomment">/// Attempt to pay an invoice using the lightning node
     </span><span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse&gt;;
 
-    <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+    <span class="comment">// Consumes the current lightning client because `route_htlcs` should only be
+    // called once per client. A stream of intercepted HTLCs and a `Arc&lt;dyn
+    // ILnRpcClient&gt; are returned to the caller. The caller can use this new
+    // client to interact with the lightning node, but since it is an `Arc` is
+    // cannot call `route_htlcs` again.
+    </span><span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;)&gt;;
+
+    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptHtlcResponse) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse&gt;;
 }
 
 <span class="doccomment">/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -197,7 +217,7 @@
                 }
             }
 
-            <span class="macro">tracing::warn!</span>(<span class="string">&quot;Couldn&#39;t connect to CLN extension, retrying in 1 second...&quot;</span>);
+            <span class="macro">tracing::debug!</span>(<span class="string">&quot;Couldn&#39;t connect to CLN extension, retrying in 1 second...&quot;</span>);
             sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         };
 
@@ -229,13 +249,21 @@
     }
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;)&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.route_htlcs(events).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(Box::pin(res.into_inner()))
+        <span class="kw">let </span>res = client.route_htlcs(EmptyRequest {}).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>((
+            Box::pin(res.into_inner()),
+            Arc::new(<span class="self">Self</span>::new(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span>),
+        ))
+    }
+
+    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptHtlcResponse) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = client.complete_htlc(htlc).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(res.into_inner())
     }
 }
 </code></pre></div>

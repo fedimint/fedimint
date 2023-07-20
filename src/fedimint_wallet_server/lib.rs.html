@@ -1887,11 +1887,6 @@
 <a href="#1887" id="1887">1887</a>
 <a href="#1888" id="1888">1888</a>
 <a href="#1889" id="1889">1889</a>
-<a href="#1890" id="1890">1890</a>
-<a href="#1891" id="1891">1891</a>
-<a href="#1892" id="1892">1892</a>
-<a href="#1893" id="1893">1893</a>
-<a href="#1894" id="1894">1894</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1920,8 +1915,8 @@
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
@@ -2076,19 +2071,14 @@
     <span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
-    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;WalletClientConfig&gt; {
         <span class="kw">let </span>config = WalletConfigConsensus::from_erased(config)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            <span class="kw-2">&amp;</span>WalletClientConfig {
-                peg_in_descriptor: config.peg_in_descriptor.clone(),
-                network: config.network,
-                fee_consensus: config.fee_consensus.clone(),
-                finality_delay: config.finality_delay,
-            },
-        )
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>))
+        <span class="prelude-val">Ok</span>(WalletClientConfig {
+            peg_in_descriptor: config.peg_in_descriptor.clone(),
+            network: config.network,
+            fee_consensus: config.fee_consensus.clone(),
+            finality_delay: config.finality_delay,
+        })
     }
 
     <span class="kw">async fn </span>dump_database(

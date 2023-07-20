@@ -307,6 +307,22 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Threshold Blind Signatures
 //!
 //! This library implements an ad-hoc threshold blind signature scheme based on
@@ -333,6 +349,22 @@
 
 <span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PublicKeyShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::g2&quot;</span>)] </span><span class="kw">pub </span>G2Affine);
+
+<span class="attr">#[allow(clippy::derive_hash_xor_eq)]
+</span><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>PublicKeyShare {
+    <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        <span class="comment">// As per &lt;https://rust-lang.github.io/rust-clippy/master/index.html#/derive_hash_xor_eq&gt;
+        // k1 == k2 ⇒ hash(k1) == hash(k2)
+        // must hold, and all infinities are equal, so must hash to the same value.
+        </span><span class="kw">if </span>bool::from(<span class="self">self</span>.<span class="number">0</span>.is_identity()) {
+            <span class="number">0</span>.hash(state)
+        } <span class="kw">else </span>{
+            <span class="comment">// TODO: This is not ideal, `Hash` impls should be as fast as possible.
+            // Would be better to hash in the `x` and `y`
+            </span><span class="self">self</span>.<span class="number">0</span>.to_compressed().hash(state)
+        }
+    }
+}
 
 <span class="attr">#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>SecretKeyShare(<span class="attr">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span><span class="kw">pub </span>Scalar);

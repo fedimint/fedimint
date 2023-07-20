@@ -136,6 +136,16 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -217,6 +227,16 @@
     <span class="kw">pub </span>threshold_pub_key: threshold_crypto::PublicKey,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>network: Network,
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningClientConfig {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(
+            f,
+            <span class="string">&quot;LightningClientConfig {}&quot;</span>,
+            serde_json::to_string(<span class="self">self</span>).map_err(|_e| std::fmt::Error)<span class="question-mark">?
+        </span>)
+    }
 }
 
 <span class="comment">// Wire together the configs for this module

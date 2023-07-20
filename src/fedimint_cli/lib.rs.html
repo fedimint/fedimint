@@ -826,6 +826,10 @@
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -1088,15 +1092,11 @@
             .ok_or_cli_msg(CliErrorKind::IOError, <span class="string">&quot;`--data-dir=` argument not set.&quot;</span>)
     }
 
-    <span class="kw">async fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;WsAdminClient&gt; {
-        <span class="kw">let </span>password = <span class="self">self
-            </span>.password
-            .clone()
-            .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">&quot;Admin client needs password set&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;WsAdminClient&gt; {
         <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span><span class="self">self
             </span>.our_id
             .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">&quot;Admin client needs our-id set&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>auth = ApiAuth(password);
+
         <span class="kw">let </span>url = <span class="self">self
             </span>.load_config()<span class="question-mark">?
             </span>.api_endpoints
@@ -1104,7 +1104,15 @@
             .expect(<span class="string">&quot;Endpoint exists&quot;</span>)
             .url
             .clone();
-        <span class="prelude-val">Ok</span>(WsAdminClient::new(url, <span class="kw-2">*</span>our_id, auth))
+        <span class="prelude-val">Ok</span>(WsAdminClient::new(url, <span class="kw-2">*</span>our_id))
+    }
+
+    <span class="kw">fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;ApiAuth&gt; {
+        <span class="kw">let </span>password = <span class="self">self
+            </span>.password
+            .clone()
+            .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">&quot;CLI needs password set&quot;</span>)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ApiAuth(password))
     }
 
     <span class="kw">fn </span>load_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;ClientConfig&gt; {
@@ -1405,7 +1413,7 @@
                 ))
             }
             Command::Admin(AdminCmd::Status) =&gt; {
-                <span class="kw">let </span>status = cli.admin_client().<span class="kw">await</span><span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>status = cli.admin_client()<span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invalid response&quot;</span>)<span class="question-mark">?</span>,
@@ -1414,7 +1422,7 @@
             Command::Admin(AdminCmd::LastEpoch) =&gt; {
                 <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
                 <span class="kw">let </span>decoders = cli.load_decoders(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens);
-                <span class="kw">let </span>client = cli.admin_client().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>client = cli.admin_client()<span class="question-mark">?</span>;
                 <span class="kw">let </span>last_epoch = client
                     .fetch_last_epoch_history(cfg.epoch_pk, <span class="kw-2">&amp;</span>decoders)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1430,14 +1438,14 @@
                     <span class="kw-2">&amp;</span>decoders,
                 )
                 .map_err_cli_msg(CliErrorKind::SerializationError, <span class="string">&quot;failed to decode outcome&quot;</span>)<span class="question-mark">?</span>;
-                <span class="kw">let </span>client = cli.admin_client().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>client = cli.admin_client()<span class="question-mark">?</span>;
                 client
-                    .force_process_epoch(SerdeEpochHistory::from(<span class="kw-2">&amp;</span>outcome))
+                    .force_process_epoch(SerdeEpochHistory::from(<span class="kw-2">&amp;</span>outcome), cli.auth()<span class="question-mark">?</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::ForceEpoch)
             }
             Command::Admin(AdminCmd::SignalUpgrade) =&gt; {
-                cli.admin_client().<span class="kw">await</span><span class="question-mark">?</span>.signal_upgrade().<span class="kw">await</span><span class="question-mark">?</span>;
+                cli.admin_client()<span class="question-mark">?</span>.signal_upgrade(cli.auth()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::SignalUpgrade)
             }
             Command::Dev(DevCmd::Api {

@@ -367,12 +367,14 @@
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::client::ClientModule;
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::task::MaybeSend;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>secp256k1::Secp256k1;
@@ -631,13 +633,13 @@
 
     <span class="kw">pub fn </span>change_required&lt;C&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>Client&lt;C&gt;) -&gt; Amount
     <span class="kw">where
-        </span>C: AsRef&lt;ClientConfig&gt; + Clone + Send,
+        </span>C: AsRef&lt;ClientConfig&gt; + Clone + MaybeSend,
     {
         <span class="self">self</span>.input_amount(client) - <span class="self">self</span>.output_amount(client) - <span class="self">self</span>.fee_amount(client)
     }
 
     <span class="doccomment">/// Builds and signs the final transaction with correct change
-    </span><span class="kw">pub async fn </span>build&lt;C: AsRef&lt;ClientConfig&gt; + Clone + Send, R: RngCore + CryptoRng&gt;(
+    </span><span class="kw">pub async fn </span>build&lt;C: AsRef&lt;ClientConfig&gt; + Clone + MaybeSend, R: RngCore + CryptoRng&gt;(
         <span class="self">self</span>,
         client: <span class="kw-2">&amp;</span>Client&lt;C&gt;,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -685,7 +687,7 @@
         client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Client&lt;C&gt;,
     ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = TransactionItemAmount&gt; + <span class="lifetime">&#39;a
     </span><span class="kw">where
-        </span>C: AsRef&lt;ClientConfig&gt; + Clone + Send,
+        </span>C: AsRef&lt;ClientConfig&gt; + Clone + MaybeSend,
     {
         <span class="self">self</span>.tx.inputs.iter().map(|i| <span class="kw">match </span>i {
             Input::Mint(input) =&gt; client.mint_client().input_amount(input),
@@ -699,7 +701,7 @@
         client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Client&lt;C&gt;,
     ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = TransactionItemAmount&gt; + <span class="lifetime">&#39;a
     </span><span class="kw">where
-        </span>C: AsRef&lt;ClientConfig&gt; + Clone + Send + <span class="lifetime">&#39;a</span>,
+        </span>C: AsRef&lt;ClientConfig&gt; + Clone + MaybeSend + <span class="lifetime">&#39;a</span>,
     {
         <span class="self">self</span>.tx.outputs.iter().map(|o| <span class="kw">match </span>o {
             Output::Mint(output) =&gt; client.mint_client().output_amount(output),
@@ -710,7 +712,7 @@
 
     <span class="kw">fn </span>input_amount&lt;C&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>Client&lt;C&gt;) -&gt; Amount
     <span class="kw">where
-        </span>C: AsRef&lt;ClientConfig&gt; + Send + Clone,
+        </span>C: AsRef&lt;ClientConfig&gt; + MaybeSend + Clone,
     {
         <span class="self">self</span>.input_amount_iter(client)
             .map(|amount_info| amount_info.amount)
@@ -719,7 +721,7 @@
 
     <span class="kw">fn </span>output_amount&lt;C&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>Client&lt;C&gt;) -&gt; Amount
     <span class="kw">where
-        </span>C: AsRef&lt;ClientConfig&gt; + Send + Clone,
+        </span>C: AsRef&lt;ClientConfig&gt; + MaybeSend + Clone,
     {
         <span class="self">self</span>.output_amount_iter(client)
             .map(|amount_info| amount_info.amount)
@@ -728,7 +730,7 @@
 
     <span class="kw">fn </span>fee_amount&lt;C&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>Client&lt;C&gt;) -&gt; Amount
     <span class="kw">where
-        </span>C: AsRef&lt;ClientConfig&gt; + Send + Clone,
+        </span>C: AsRef&lt;ClientConfig&gt; + MaybeSend + Clone,
     {
         <span class="self">self</span>.input_amount_iter(client)
             .chain(<span class="self">self</span>.output_amount_iter(client))

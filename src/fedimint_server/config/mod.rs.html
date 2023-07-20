@@ -997,7 +997,7 @@
                     <span class="kw">let </span>gen = module_config_gens
                         .get(<span class="kw-2">&amp;</span>v.kind)
                         .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Module gen kind={} not found&quot;</span>, v.kind))<span class="question-mark">?</span>;
-                    <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>k, gen.get_client_config(v)<span class="question-mark">?</span>))
+                    <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>k, gen.get_client_config(<span class="kw-2">*</span>k, v)<span class="question-mark">?</span>))
                 })
                 .collect::&lt;anyhow::Result&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
             meta: <span class="self">self</span>.meta.clone(),

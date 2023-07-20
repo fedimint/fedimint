@@ -96,14 +96,40 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client::Client;
+<span class="kw">use </span>fedimint_client_legacy::modules::ln::config::GatewayFee;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -111,6 +137,7 @@
 <span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tempfile::TempDir;
+<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
@@ -136,7 +163,7 @@
     }
 
     <span class="doccomment">/// Removes a client from the gateway
-    </span><span class="kw">pub async fn </span>remove_client(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; Arc&lt;Client&gt; {
+    </span><span class="kw">pub async fn </span>remove_client(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; Client {
         <span class="self">self</span>.gateway.remove_client(fed.id()).<span class="kw">await</span>.unwrap()
     }
 
@@ -156,7 +183,7 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
         base_port: u16,
         password: String,
-        lightning: Arc&lt;<span class="kw">dyn </span>LightningTest&gt;,
+        lightning: Box&lt;<span class="kw">dyn </span>LightningTest&gt;,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleGenRegistry,
     ) -&gt; <span class="self">Self </span>{
@@ -168,16 +195,28 @@
         </span><span class="kw">let </span>client_builder: StandardGatewayClientBuilder =
             StandardGatewayClientBuilder::new(path.clone(), registry, <span class="number">0</span>);
 
-        <span class="kw">let </span>gatewayd_db = Database::new(MemDatabase::new(), decoders.clone());
-        <span class="kw">let </span>gateway = Gateway::new_with_lightning_connection(
-            lightning.as_rpc(),
+        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+        <span class="comment">// Create the stream to route HTLCs. We cannot create the Gateway until the
+        // stream to the lightning node has been setup.
+        </span><span class="kw">let </span>(stream, ln_client) = lightning.route_htlcs(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>.unwrap();
+
+        <span class="kw">let </span>clients = Arc::new(RwLock::new(BTreeMap::new()));
+        <span class="kw">let </span>scid_to_federation = Arc::new(RwLock::new(BTreeMap::new()));
+
+        <span class="comment">// Create gateway with the client created from `route_htlcs`
+        </span><span class="kw">let </span>gateway = Gateway::new(
+            ln_client.clone(),
             client_builder.clone(),
-            RoutingFees {
+            GatewayFee(RoutingFees {
                 base_msat: <span class="number">0</span>,
                 proportional_millionths: <span class="number">0</span>,
-            },
-            gatewayd_db,
+            })
+            .<span class="number">0</span>,
+            Database::new(MemDatabase::new(), decoders.clone()),
             address.clone(),
+            clients.clone(),
+            scid_to_federation.clone(),
+            tg.clone(),
         )
         .<span class="kw">await
         </span>.unwrap();
@@ -185,6 +224,13 @@
         run_webserver(password.clone(), listen, gateway.clone())
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to start webserver&quot;</span>);
+
+        <span class="comment">// Spawn new thread to listen for HTLCs
+        </span>tg.spawn(<span class="string">&quot;Subscribe to intercepted HTLCs&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+            Gateway::handle_htlc_stream(stream, ln_client, handle, scid_to_federation, clients)
+                .<span class="kw">await</span>;
+        })
+        .<span class="kw">await</span>;
 
         <span class="self">Self </span>{
             password,

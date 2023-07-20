@@ -329,14 +329,6 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -351,14 +343,13 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lnd::GatewayLndClient;
 <span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
 <span class="kw">use </span>ln_gateway::GatewayError;
-<span class="kw">use </span>tokio::sync::{Mutex, RwLock};
-<span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
+<span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tonic_lnd::lnrpc::{GetInfoRequest, Invoice <span class="kw">as </span>LndInvoice, ListChannelsRequest};
 <span class="kw">use </span>tonic_lnd::{connect, LndClient};
 <span class="kw">use </span>tracing::info;
@@ -366,12 +357,11 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
-<span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>ClnLightningTest {
+<span class="kw">pub struct </span>ClnLightningTest {
     rpc_cln: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
     initial_balance: Amount,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
-    lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
+    lnrpc: Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
 }
 
 <span class="kw">impl </span>fmt::Debug <span class="kw">for </span>ClnLightningTest {
@@ -428,36 +418,34 @@
     <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="bool-val">true
     </span>}
-
-    <span class="kw">fn </span>as_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
-        Arc::new(<span class="self">self</span>.clone())
-    }
 }
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>ClnLightningTest {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.info().<span class="kw">await
+        <span class="self">self</span>.lnrpc.info().<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.routehints().<span class="kw">await
+        <span class="self">self</span>.lnrpc.routehints().<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.pay(invoice).<span class="kw">await
+        <span class="self">self</span>.lnrpc.pay(invoice).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc
-            .write()
-            .<span class="kw">await
-            </span>.route_htlcs(events, task_group)
-            .<span class="kw">await
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.route_htlcs(task_group).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        htlc: InterceptHtlcResponse,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.complete_htlc(htlc).<span class="kw">await
     </span>}
 }
 
@@ -473,8 +461,7 @@
             .expect(<span class="string">&quot;FM_GATEWAY_LIGHTNING_ADDR not set&quot;</span>)
             .parse::&lt;Url&gt;()
             .expect(<span class="string">&quot;Invalid FM_GATEWAY_LIGHTNING_ADDR&quot;</span>);
-        <span class="kw">let </span>lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt; =
-            Arc::new(RwLock::new(NetworkLnRpcClient::new(lnrpc_addr).<span class="kw">await</span>));
+        <span class="kw">let </span>lnrpc: Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = Box::new(NetworkLnRpcClient::new(lnrpc_addr).<span class="kw">await</span>);
 
         ClnLightningTest {
             rpc_cln,
@@ -524,12 +511,11 @@
     }
 }
 
-<span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>LndLightningTest {
+<span class="kw">pub struct </span>LndLightningTest {
     rpc_lnd: Arc&lt;Mutex&lt;LndClient&gt;&gt;,
     initial_balance: Amount,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
-    lnrpc: Arc&lt;RwLock&lt;<span class="kw">dyn </span>ILnRpcClient&gt;&gt;,
+    lnrpc: Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
 }
 
 <span class="attr">#[async_trait]
@@ -570,10 +556,6 @@
     <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="bool-val">true
     </span>}
-
-    <span class="kw">fn </span>as_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
-        Arc::new(<span class="self">self</span>.clone())
-    }
 }
 
 <span class="kw">impl </span>fmt::Debug <span class="kw">for </span>LndLightningTest {
@@ -588,27 +570,29 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>LndLightningTest {
     <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.info().<span class="kw">await
+        <span class="self">self</span>.lnrpc.info().<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.routehints().<span class="kw">await
+        <span class="self">self</span>.lnrpc.routehints().<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc.read().<span class="kw">await</span>.pay(invoice).<span class="kw">await
+        <span class="self">self</span>.lnrpc.pay(invoice).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
+        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
-        <span class="self">self</span>.lnrpc
-            .write()
-            .<span class="kw">await
-            </span>.route_htlcs(events, task_group)
-            .<span class="kw">await
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.route_htlcs(task_group).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        htlc: InterceptHtlcResponse,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+        <span class="self">self</span>.lnrpc.complete_htlc(htlc).<span class="kw">await
     </span>}
 }
 
@@ -630,8 +614,8 @@
         <span class="kw">let </span>node_pub_key = <span class="self">Self</span>::pubkey(rpc_lnd.clone()).<span class="kw">await</span>;
 
         <span class="kw">let </span>gateway_lnd_client =
-            GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon).<span class="kw">await</span>;
-        <span class="kw">let </span>lnrpc = Arc::new(RwLock::new(gateway_lnd_client));
+            GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, <span class="prelude-val">None</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>lnrpc = Box::new(gateway_lnd_client);
         LndLightningTest {
             rpc_lnd,
             initial_balance,

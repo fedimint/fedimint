@@ -120,6 +120,12 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -165,19 +171,17 @@
     <span class="kw">pub async fn </span>build(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,
+        node_pub_key: secp256k1::PublicKey,
         lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
         tg: <span class="kw-2">&amp;mut </span>TaskGroup,
+        old_client: <span class="prelude-ty">Option</span>&lt;fedimint_client::Client&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::Client&gt; {
         <span class="kw">let </span>federation_id = config.config.federation_id;
 
-        <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
-
-        <span class="kw">let </span>db =
-            fedimint_rocksdb::RocksDb::open(db_path).map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)<span class="question-mark">?</span>;
-
         <span class="kw">let </span><span class="kw-2">mut </span>registry = <span class="self">self</span>.registry.clone();
         registry.attach(GatewayClientGen {
-            lightning_client: lnrpc,
+            lnrpc,
+            node_pub_key,
             fees: config.fees,
             timelock_delta: config.timelock_delta,
             mint_channel_id: config.mint_channel_id,
@@ -187,7 +191,15 @@
         client_builder.with_module_gens(registry);
         client_builder.with_primary_module(<span class="self">self</span>.primary_module);
         client_builder.with_config(config.config);
-        client_builder.with_database(db);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(old_client) = old_client {
+            client_builder.with_old_client_database(old_client);
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
+            <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path).map_err(|e| {
+                GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
+            })<span class="question-mark">?</span>;
+            client_builder.with_database(db);
+        }
 
         client_builder
             <span class="comment">// TODO: make this configurable?
@@ -225,7 +237,7 @@
             .<span class="kw">await</span>;
         dbtx.commit_tx_result()
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| GatewayError::DatabaseError)
+            </span>.map_err(GatewayError::DatabaseError)
     }
 
     <span class="kw">pub async fn </span>load_configs(

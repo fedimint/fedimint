@@ -594,6 +594,37 @@
 <a href="#594" id="594">594</a>
 <a href="#595" id="595">595</a>
 <a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -703,10 +734,10 @@
                 <span class="kw">let </span>buf_written = <span class="self">self</span>.inner.consensus_encode_dyn(<span class="kw-2">&amp;mut </span>buf)<span class="question-mark">?</span>;
                 <span class="macro">assert_eq!</span>(buf.len(), buf_written);
 
-                <span class="kw">let </span>buf_len_u32 = u32::try_from(buf.len())
+                <span class="kw">let </span>buf_len = u64::try_from(buf.len())
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))<span class="question-mark">?</span>;
 
-                written += buf_len_u32.consensus_encode(writer)<span class="question-mark">?</span>;
+                written += buf_len.consensus_encode(writer)<span class="question-mark">?</span>;
 
                 writer.write_all(buf.as_slice())<span class="question-mark">?</span>;
                 written += buf.len();
@@ -722,21 +753,24 @@
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, fedimint_core::encoding::DecodeError&gt; {
                 <span class="kw">let </span>module_instance_id =
                     fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-                <span class="kw">let </span>total_len = u32::consensus_decode(reader, modules)<span class="question-mark">? </span><span class="kw">as </span>usize;
-                <span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::with_capacity(<span class="number">512</span>);
-                <span class="kw">while </span>buf.len() &lt; total_len {
-                    <span class="kw">let </span>prev_len = buf.len();
-                    <span class="kw">let </span>new_len = std::cmp::min(total_len, prev_len.saturating_add(<span class="number">512</span>));
-                    buf.resize(new_len, <span class="number">0u8</span>);
-                    reader
-                        .read_exact(<span class="kw-2">&amp;mut </span>buf[prev_len..])
-                        .map_err(|e| fedimint_core::encoding::DecodeError::new_custom(e.into()))<span class="question-mark">?</span>;
+                <span class="kw">let </span>total_len_u64 = u64::consensus_decode(reader, modules)<span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>reader = reader.take(total_len_u64);
+                <span class="kw">let </span>val = modules
+                    .get(module_instance_id)
+                    .ok_or_else(|| {
+                        fedimint_core::encoding::DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(
+                            <span class="string">&quot;Module decoder not available: {module_instance_id}&quot;
+                        </span>))
+                    })<span class="question-mark">?
+                    </span>.decode(<span class="kw-2">&amp;mut </span>reader, module_instance_id, modules)<span class="question-mark">?</span>;
+
+                <span class="kw">if </span>reader.limit() != <span class="number">0 </span>{
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(fedimint_core::encoding::DecodeError::new_custom(
+                        <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Dyn type did not consume all bytes during decoding&quot;</span>),
+                    ));
                 }
-                modules.get_expect(module_instance_id).decode(
-                    <span class="kw-2">&amp;mut &amp;</span>buf[..],
-                    module_instance_id,
-                    modules,
-                )
+
+                <span class="prelude-val">Ok</span>(val)
             }
         }
     };
@@ -850,16 +884,6 @@
                 )
             }
         }
-
-        <span class="kw">impl </span>fedimint_core::config::TypedClientModuleConfig <span class="kw">for </span><span class="macro-nonterminal">$cfg_client </span>{
-            <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::core::ModuleKind {
-                &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleGen&gt;::KIND
-            }
-
-            <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
-                &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleGen&gt;::CONSENSUS_VERSION
-            }
-        }
     };
 }
 
@@ -867,12 +891,23 @@
 /// `FederationServer` module.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>plugin_types_trait_impl_common {
-    (<span class="macro-nonterminal">$types</span>:ty, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty) =&gt; {
+    (<span class="macro-nonterminal">$types</span>:ty, <span class="macro-nonterminal">$client_config</span>:ty, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty) =&gt; {
         <span class="kw">impl </span>fedimint_core::module::ModuleCommon <span class="kw">for </span><span class="macro-nonterminal">$types </span>{
+            <span class="kw">type </span>ClientConfig = <span class="macro-nonterminal">$client_config</span>;
             <span class="kw">type </span>Input = <span class="macro-nonterminal">$input</span>;
             <span class="kw">type </span>Output = <span class="macro-nonterminal">$output</span>;
             <span class="kw">type </span>OutputOutcome = <span class="macro-nonterminal">$outcome</span>;
             <span class="kw">type </span>ConsensusItem = <span class="macro-nonterminal">$ci</span>;
+        }
+
+        <span class="kw">impl </span>fedimint_core::core::ClientConfig <span class="kw">for </span><span class="macro-nonterminal">$client_config </span>{}
+
+        <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$client_config </span>{
+            <span class="kw">type </span>DynType = fedimint_core::core::DynClientConfig;
+
+            <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+                fedimint_core::core::DynClientConfig::from_typed(instance_id, <span class="self">self</span>)
+            }
         }
 
         <span class="kw">impl </span>fedimint_core::core::Input <span class="kw">for </span><span class="macro-nonterminal">$input </span>{}
@@ -1073,6 +1108,33 @@
         <span class="macro">write!</span>(f, <span class="string">&quot;Decoder(registered_types = {})&quot;</span>, <span class="self">self</span>.decode_fns.len())
     }
 }
+
+<span class="kw">pub trait </span>IClientConfig: Debug + Display + DynEncodable {
+    <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; DynClientConfig;
+    <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
+    <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynClientConfig) -&gt; bool;
+}
+
+<span class="macro">module_plugin_trait_define! </span>{
+    DynClientConfig, ClientConfig, IClientConfig,
+    { }
+    {
+        <span class="macro">erased_eq_no_instance_id!</span>(DynClientConfig);
+    }
+}
+
+<span class="macro">dyn_newtype_define_with_instance_id! </span>{
+    <span class="doccomment">/// An owned, immutable input to a [`Transaction`](fedimint_core::transaction::Transaction)
+    </span><span class="kw">pub </span>DynClientConfig(Box&lt;IClientConfig&gt;)
+}
+<span class="macro">module_dyn_newtype_impl_encode_decode!</span>(DynClientConfig);
+
+<span class="macro">dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!</span>(DynClientConfig);
+
+<span class="macro">newtype_impl_eq_passthrough_with_instance_id!</span>(DynClientConfig);
+
+<span class="macro">newtype_impl_display_passthrough_with_instance_id!</span>(DynClientConfig);
 
 <span class="doccomment">/// Something that can be an [`DynInput`] in a
 /// [`Transaction`](fedimint_core::transaction::Transaction)

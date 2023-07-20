@@ -955,6 +955,39 @@
 <a href="#955" id="955">955</a>
 <a href="#956" id="956">956</a>
 <a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1063,7 +1096,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = local.and_then(|local| local.leader_api_url) {
             <span class="comment">// Note PeerIds don&#39;t really exist at this point, but id doesn&#39;t matter because
             // it&#39;s not used in the WS client for anything, perhaps it should be removed
-            </span><span class="kw">let </span>client = WsAdminClient::new(url, PeerId::from(<span class="number">0</span>), state.auth()<span class="question-mark">?</span>);
+            </span><span class="kw">let </span>client = WsAdminClient::new(url, PeerId::from(<span class="number">0</span>));
             client
                 .add_config_gen_peer(state.our_peer_info()<span class="question-mark">?</span>)
                 .<span class="kw">await
@@ -1119,7 +1152,7 @@
 
         <span class="kw">let </span>consensus = <span class="kw">match </span>local.and_then(|local| local.leader_api_url) {
             <span class="prelude-val">Some</span>(leader_url) =&gt; {
-                <span class="kw">let </span>client = WsAdminClient::new(leader_url.clone(), PeerId::from(<span class="number">0</span>), state.auth()<span class="question-mark">?</span>);
+                <span class="kw">let </span>client = WsAdminClient::new(leader_url.clone(), PeerId::from(<span class="number">0</span>));
                 <span class="kw">let </span>response = client.get_consensus_config_gen_params().<span class="kw">await</span>;
                 response
                     .map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Cannot get leader params&quot;</span>.to_string()))<span class="question-mark">?
@@ -1620,6 +1653,7 @@
     <span class="doccomment">/// Helper in config API tests for simulating a guardian&#39;s client and server
     </span><span class="kw">struct </span>TestConfigApi {
         client: WsAdminClient,
+        auth: ApiAuth,
         name: String,
         settings: ConfigGenSettings,
         amount: Amount,
@@ -1670,11 +1704,12 @@
 
             <span class="comment">// our id doesn&#39;t really exist at this point
             </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">&quot;password-{port}&quot;</span>));
-            <span class="kw">let </span>client = WsAdminClient::new(api_url, PeerId::from(<span class="number">0</span>), auth);
+            <span class="kw">let </span>client = WsAdminClient::new(api_url, PeerId::from(<span class="number">0</span>));
 
             (
                 TestConfigApi {
                     client,
+                    auth,
                     name,
                     settings,
                     amount: Amount::from_sats(port <span class="kw">as </span>u64),
@@ -1686,7 +1721,7 @@
 
         <span class="doccomment">/// Helper function to shutdown consensus with an upgrade signal
         </span><span class="kw">async fn </span>retry_signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-            <span class="kw">while </span><span class="self">self</span>.client.signal_upgrade().<span class="kw">await</span>.is_err() {
+            <span class="kw">while </span><span class="self">self</span>.client.signal_upgrade(<span class="self">self</span>.auth.clone()).<span class="kw">await</span>.is_err() {
                 sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
                 <span class="macro">tracing::info!</span>(
                     target: fedimint_logging::LOG_TEST,
@@ -1698,10 +1733,13 @@
         <span class="doccomment">/// Helper function using generated urls
         </span><span class="kw">async fn </span>set_connections(<span class="kw-2">&amp;</span><span class="self">self</span>, leader: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Url&gt;) -&gt; FederationResult&lt;()&gt; {
             <span class="self">self</span>.client
-                .set_config_gen_connections(ConfigGenConnectionsRequest {
-                    our_name: <span class="self">self</span>.name.clone(),
-                    leader_api_url: leader.clone(),
-                })
+                .set_config_gen_connections(
+                    ConfigGenConnectionsRequest {
+                        our_name: <span class="self">self</span>.name.clone(),
+                        leader_api_url: leader.clone(),
+                    },
+                    <span class="self">self</span>.auth.clone(),
+                )
                 .<span class="kw">await
         </span>}
 
@@ -1758,7 +1796,10 @@
                 modules,
             };
 
-            <span class="self">self</span>.client.set_config_gen_params(request).<span class="kw">await</span>.unwrap();
+            <span class="self">self</span>.client
+                .set_config_gen_params(request, <span class="self">self</span>.auth.clone())
+                .<span class="kw">await
+                </span>.unwrap();
         }
 
         <span class="doccomment">/// reads the dummy module config from the filesystem
@@ -1793,8 +1834,16 @@
             <span class="macro">assert_eq!</span>(leader.status().<span class="kw">await</span>.server, ServerStatus::AwaitingPassword);
 
             <span class="comment">// Cannot set the password twice
-            </span>leader.client.set_password().<span class="kw">await</span>.unwrap();
-            <span class="macro">assert!</span>(leader.client.set_password().<span class="kw">await</span>.is_err());
+            </span>leader
+                .client
+                .set_password(leader.auth.clone())
+                .<span class="kw">await
+                </span>.unwrap();
+            <span class="macro">assert!</span>(leader
+                .client
+                .set_password(leader.auth.clone())
+                .<span class="kw">await
+                </span>.is_err());
 
             <span class="comment">// We can call this twice to change the leader name
             </span>leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
@@ -1802,7 +1851,11 @@
             leader.set_connections(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
 
             <span class="comment">// Leader sets the config
-            </span><span class="kw">let _ </span>= leader.client.get_default_config_gen_params().<span class="kw">await</span>.unwrap();
+            </span><span class="kw">let _ </span>= leader
+                .client
+                .get_default_config_gen_params(leader.auth.clone())
+                .<span class="kw">await
+                </span>.unwrap();
             leader.set_config_gen_params().<span class="kw">await</span>;
 
             <span class="comment">// Setup followers and send connection info
@@ -1811,7 +1864,11 @@
                     follower.status().<span class="kw">await</span>.server,
                     ServerStatus::AwaitingPassword
                 );
-                follower.client.set_password().<span class="kw">await</span>.unwrap();
+                follower
+                    .client
+                    .set_password(follower.auth.clone())
+                    .<span class="kw">await
+                    </span>.unwrap();
                 <span class="kw">let </span>leader_url = <span class="prelude-val">Some</span>(leader.settings.api_url.clone());
                 follower.set_connections(<span class="kw-2">&amp;</span>leader_url).<span class="kw">await</span>.unwrap();
                 follower.name = <span class="macro">format!</span>(<span class="string">&quot;{}_&quot;</span>, follower.name);
@@ -1847,7 +1904,11 @@
             followers.push(leader);
             <span class="kw">let </span>followers = Arc::new(followers);
             <span class="kw">let </span>(results, <span class="kw">_</span>) = <span class="macro">tokio::join!</span>(
-                join_all(followers.iter().map(|peer| peer.client.run_dkg())),
+                join_all(
+                    followers
+                        .iter()
+                        .map(|peer| peer.client.run_dkg(peer.auth.clone()))
+                ),
                 followers[<span class="number">0</span>].wait_status(ServerStatus::ReadyForConfigGen)
             );
             <span class="kw">for </span>result <span class="kw">in </span>results {
@@ -1858,7 +1919,12 @@
             </span><span class="kw">let </span><span class="kw-2">mut </span>hashes = HashSet::new();
             <span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
                 peer.wait_status(ServerStatus::VerifyingConfigs).<span class="kw">await</span>;
-                hashes.insert(peer.client.get_verify_config_hash().<span class="kw">await</span>.unwrap());
+                hashes.insert(
+                    peer.client
+                        .get_verify_config_hash(peer.auth.clone())
+                        .<span class="kw">await
+                        </span>.unwrap(),
+                );
             }
             <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
 
@@ -1873,7 +1939,7 @@
 
             <span class="comment">// start consensus
             </span><span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
-                peer.client.start_consensus().<span class="kw">await</span>.ok();
+                peer.client.start_consensus(peer.auth.clone()).<span class="kw">await</span>.ok();
                 <span class="macro">assert_eq!</span>(peer.status().<span class="kw">await</span>.server, ServerStatus::ConsensusRunning);
             }
 
@@ -1895,7 +1961,7 @@
             <span class="comment">// Confirm we are stuck in upgrading after an upgrade
             </span><span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
                 <span class="macro">assert_eq!</span>(peer.status().<span class="kw">await</span>.server, ServerStatus::Upgrading);
-                peer.client.start_consensus().<span class="kw">await</span>.ok();
+                peer.client.start_consensus(peer.auth.clone()).<span class="kw">await</span>.ok();
                 <span class="macro">assert_eq!</span>(peer.status().<span class="kw">await</span>.server, ServerStatus::ConsensusRunning);
             }
 

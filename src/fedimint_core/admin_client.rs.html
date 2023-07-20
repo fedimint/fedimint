@@ -267,6 +267,33 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -291,22 +318,20 @@
 </span><span class="comment">// TODO: Maybe should have it&#39;s own CLI client so it doesn&#39;t need to be in core
 </span><span class="kw">pub struct </span>WsAdminClient {
     inner: DynGlobalApi,
-    auth: ApiAuth,
 }
 
 <span class="kw">impl </span>WsAdminClient {
-    <span class="kw">pub fn </span>new(url: Url, our_id: PeerId, auth: ApiAuth) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(url: Url, our_id: PeerId) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             inner: WsFederationApi::new(<span class="macro">vec!</span>[(our_id, url)]).into(),
-            auth,
         }
     }
 
     <span class="doccomment">/// Sets the password used to decrypt the configs and authenticate
     ///
     /// Must be called first before any other calls to the API
-    </span><span class="kw">pub async fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;set_password&quot;</span>, ApiRequestErased::default())
+    </span><span class="kw">pub async fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_auth(<span class="string">&quot;set_password&quot;</span>, ApiRequestErased::default().with_auth(auth))
             .<span class="kw">await
     </span>}
 
@@ -317,9 +342,13 @@
     </span><span class="kw">pub async fn </span>set_config_gen_connections(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         info: ConfigGenConnectionsRequest,
+        auth: ApiAuth,
     ) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;set_config_gen_connections&quot;</span>, ApiRequestErased::new(info))
-            .<span class="kw">await
+        <span class="self">self</span>.request_auth(
+            <span class="string">&quot;set_config_gen_connections&quot;</span>,
+            ApiRequestErased::new(info).with_auth(auth),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// During config gen, used for an API-to-API call that adds a peer&#39;s server
@@ -345,16 +374,23 @@
 
     <span class="doccomment">/// Sends a signal to consensus that we are ready to shutdown the federation
     /// and upgrade
-    </span><span class="kw">pub async fn </span>signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;upgrade&quot;</span>, ApiRequestErased::default())
+    </span><span class="kw">pub async fn </span>signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_auth(<span class="string">&quot;upgrade&quot;</span>, ApiRequestErased::default().with_auth(auth))
             .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Sends a signal to consensus that we want to force running an epoch
     /// outcome
-    </span><span class="kw">pub async fn </span>force_process_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>, outcome: SerdeEpochHistory) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;process_outcome&quot;</span>, ApiRequestErased::new(outcome))
-            .<span class="kw">await
+    </span><span class="kw">pub async fn </span>force_process_epoch(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        outcome: SerdeEpochHistory,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_auth(
+            <span class="string">&quot;process_outcome&quot;</span>,
+            ApiRequestErased::new(outcome).with_auth(auth),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Delegates to `fetch_epoch_history`
@@ -371,9 +407,15 @@
 
     <span class="doccomment">/// Gets the default config gen params which can be configured by the
     /// leader, gives them a template to modify
-    </span><span class="kw">pub async fn </span>get_default_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ConfigGenParamsRequest&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;get_default_config_gen_params&quot;</span>, ApiRequestErased::default())
-            .<span class="kw">await
+    </span><span class="kw">pub async fn </span>get_default_config_gen_params(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;ConfigGenParamsRequest&gt; {
+        <span class="self">self</span>.request_auth(
+            <span class="string">&quot;get_default_config_gen_params&quot;</span>,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Leader sets the consensus params, everyone sets the local params
@@ -382,9 +424,13 @@
     </span><span class="kw">pub async fn </span>set_config_gen_params(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         requested: ConfigGenParamsRequest,
+        auth: ApiAuth,
     ) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;set_config_gen_params&quot;</span>, ApiRequestErased::new(requested))
-            .<span class="kw">await
+        <span class="self">self</span>.request_auth(
+            <span class="string">&quot;set_config_gen_params&quot;</span>,
+            ApiRequestErased::new(requested).with_auth(auth),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Returns the consensus config gen params, followers will delegate this
@@ -403,16 +449,22 @@
     <span class="doccomment">/// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
-    </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;run_dkg&quot;</span>, ApiRequestErased::default())
+    </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_auth(<span class="string">&quot;run_dkg&quot;</span>, ApiRequestErased::default().with_auth(auth))
             .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// After DKG, returns the hash of the consensus config tweaked with our id.
     /// We need to share this with all other peers to complete verification.
-    </span><span class="kw">pub async fn </span>get_verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;get_verify_config_hash&quot;</span>, ApiRequestErased::default())
-            .<span class="kw">await
+    </span><span class="kw">pub async fn </span>get_verify_config_hash(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
+        <span class="self">self</span>.request_auth(
+            <span class="string">&quot;get_verify_config_hash&quot;</span>,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Reads the configs from the disk, starts the consensus server, and shuts
@@ -420,15 +472,17 @@
     ///
     /// Clients may receive an error due to forced shutdown, should call the
     /// `server_status` to see if consensus has started.
-    </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;start_consensus&quot;</span>, ApiRequestErased::default())
-            .<span class="kw">await
+    </span><span class="kw">pub async fn </span>start_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_auth(
+            <span class="string">&quot;start_consensus&quot;</span>,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Returns the status of the server
     </span><span class="kw">pub async fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;StatusResponse&gt; {
-        <span class="self">self</span>.request_auth(<span class="string">&quot;status&quot;</span>, ApiRequestErased::default())
-            .<span class="kw">await
+        <span class="self">self</span>.request(<span class="string">&quot;status&quot;</span>, ApiRequestErased::default()).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>request_auth&lt;Ret&gt;(
@@ -440,7 +494,7 @@
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.inner
-            .request_current_consensus(method.to_owned(), params.with_auth(<span class="kw-2">&amp;</span><span class="self">self</span>.auth))
+            .request_current_consensus(method.to_owned(), params)
             .<span class="kw">await
     </span>}
 

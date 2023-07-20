@@ -136,17 +136,6 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -164,13 +153,12 @@
     DEFAULT_EXPIRY_TIME,
 };
 <span class="kw">use </span>ln_gateway::gatewaylnrpc::{
-    <span class="self">self</span>, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    <span class="self">self</span>, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
 <span class="kw">use </span>ln_gateway::GatewayError;
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 
 <span class="kw">use </span><span class="kw">super</span>::LightningTest;
 
@@ -235,10 +223,6 @@
     <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="bool-val">false
     </span>}
-
-    <span class="kw">fn </span>as_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
-        Arc::new(<span class="self">self</span>.clone())
-    }
 }
 
 <span class="attr">#[async_trait]
@@ -277,23 +261,17 @@
     }
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        events: ReceiverStream&lt;InterceptHtlcResponse&gt;,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, GatewayError&gt; {
-        task_group
-            .spawn(<span class="string">&quot;FakeRoutingThread&quot;</span>, |handle| <span class="kw">async move </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>stream = events.into_inner();
-                <span class="kw">while let </span><span class="prelude-val">Some</span>(route_htlc) = stream.recv().<span class="kw">await </span>{
-                    <span class="kw">if </span>handle.is_shutting_down() {
-                        <span class="kw">break</span>;
-                    }
-                    <span class="macro">tracing::debug!</span>(<span class="string">&quot;FakeLightningTest received HTLC message {:?}&quot;</span>, route_htlc);
-                }
-            })
-            .<span class="kw">await</span>;
+        <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
+        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
+        <span class="prelude-val">Ok</span>((Box::pin(stream::iter(<span class="macro">vec!</span>[])), Arc::new(<span class="self">Self</span>::new())))
+    }
 
-        <span class="prelude-val">Ok</span>(Box::pin(stream::iter(<span class="macro">vec!</span>[])))
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _htlc: InterceptHtlcResponse,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+        <span class="prelude-val">Ok</span>(EmptyResponse {})
     }
 }
 </code></pre></div>

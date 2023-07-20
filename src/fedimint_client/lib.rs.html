@@ -1494,6 +1494,8 @@
 <a href="#1494" id="1494">1494</a>
 <a href="#1495" id="1495">1495</a>
 <a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2760,6 +2762,8 @@
             ModuleKind::from_static_str(<span class="string">&quot;tx_submission&quot;</span>),
             tx_submission_sm_decoder(),
         );
+
+        <span class="kw">let </span>config = config.redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>db = <span class="kw">match </span><span class="self">self</span>.db.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database was provided&quot;</span>))<span class="question-mark">? </span>{
             DatabaseSource::Fresh(db) =&gt; Database::new_from_box(db, decoders.clone()),

@@ -1091,13 +1091,14 @@
 <a href="#1091" id="1091">1091</a>
 <a href="#1092" id="1092">1092</a>
 <a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
 <span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -1311,7 +1312,7 @@
     <span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
-    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;MintClientConfig&gt; {
         <span class="kw">let </span>config = MintConfigConsensus::from_erased(config)<span class="question-mark">?</span>;
         <span class="kw">let </span>pub_keys = TieredMultiZip::new(
             config
@@ -1330,17 +1331,12 @@
             (amt, agg_key)
         });
 
-        <span class="prelude-val">Ok</span>(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            <span class="kw-2">&amp;</span>MintClientConfig {
-                tbs_pks: Tiered::from_iter(pub_keys),
-                fee_consensus: config.fee_consensus.clone(),
-                peer_tbs_pks: config.peer_tbs_pks.clone(),
-                max_notes_per_denomination: config.max_notes_per_denomination,
-            },
-        )
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>))
+        <span class="prelude-val">Ok</span>(MintClientConfig {
+            tbs_pks: Tiered::from_iter(pub_keys),
+            fee_consensus: config.fee_consensus.clone(),
+            peer_tbs_pks: config.peer_tbs_pks.clone(),
+            max_notes_per_denomination: config.max_notes_per_denomination,
+        })
     }
 
     <span class="kw">async fn </span>dump_database(
@@ -1889,7 +1885,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
-    <span class="kw">use </span>fedimint_core::module::ServerModuleGen;
+    <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleGen};
     <span class="kw">use </span>fedimint_core::{Amount, PeerId};
     <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
 
@@ -1913,9 +1909,15 @@
             })
             .unwrap(),
         );
-        <span class="kw">let </span>client_cfg = MintGen
-            .get_client_config(<span class="kw-2">&amp;</span>mint_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].consensus)
-            .unwrap();
+        <span class="kw">let </span>client_cfg = ClientModuleConfig::from_typed(
+            <span class="number">0</span>,
+            MintGen::kind(),
+            ModuleConsensusVersion(<span class="number">0</span>),
+            MintGen
+                .get_client_config(<span class="kw-2">&amp;</span>mint_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].consensus)
+                .unwrap(),
+        )
+        .unwrap();
 
         (mint_cfg.into_values().collect(), client_cfg)
     }

@@ -326,12 +326,18 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin::util::psbt::raw::ProprietaryKey;
 <span class="kw">use </span>bitcoin::util::psbt::PartiallySignedTransaction;
 <span class="kw">use </span>bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
+<span class="kw">use </span>config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
@@ -507,6 +513,9 @@
 <span class="kw">impl </span>CommonModuleGen <span class="kw">for </span>WalletCommonGen {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
+
+    <span class="kw">type </span>ClientConfig = WalletClientConfig;
+
     <span class="kw">fn </span>decoder() -&gt; Decoder {
         WalletModuleTypes::decoder()
     }
@@ -590,6 +599,7 @@
 
 <span class="macro">plugin_types_trait_impl_common!</span>(
     WalletModuleTypes,
+    WalletClientConfig,
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,

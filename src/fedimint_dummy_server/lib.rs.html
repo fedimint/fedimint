@@ -485,19 +485,14 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::string::ToString;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgResult, ServerModuleConfig,
-    ServerModuleConsensusConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
+    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
@@ -638,17 +633,12 @@
     </span><span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
-    ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
+    ) -&gt; anyhow::Result&lt;DummyClientConfig&gt; {
         <span class="kw">let </span>config = DummyConfigConsensus::from_erased(config)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ClientModuleConfig::from_typed(
-            config.kind(),
-            config.version(),
-            <span class="kw-2">&amp;</span>(DummyClientConfig {
-                tx_fee: config.tx_fee,
-                fed_public_key: config.public_key_set.public_key(),
-            }),
-        )
-        .expect(<span class="string">&quot;Serialization can&#39;t fail&quot;</span>))
+        <span class="prelude-val">Ok</span>(DummyClientConfig {
+            tx_fee: config.tx_fee,
+            fed_public_key: config.public_key_set.public_key(),
+        })
     }
 
     <span class="doccomment">/// Validates the private/public key of configs
