@@ -37,7 +37,6 @@ use miniscript::ToPublicKey;
 use rand::{thread_rng, Rng};
 use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use crate::api::WalletFederationApi;
 use crate::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
@@ -401,34 +400,13 @@ impl ClientModuleGen for WalletClientGen {
         _api: DynGlobalApi,
         module_api: DynModuleApi,
     ) -> anyhow::Result<Self::Module> {
-        let rpc_config = self
-            .0
-            .clone()
-            .unwrap_or(default_esplora_server(cfg.network));
+        let rpc_config = self.0.clone().unwrap_or(cfg.default_bitcoin_rpc.clone());
         Ok(WalletClientModule {
             cfg,
             module_api,
             notifier,
             rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
         })
-    }
-}
-
-pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
-    let url = match network {
-        Network::Bitcoin => Url::parse("https://blockstream.info/api/")
-            .expect("Failed to parse default esplora server"),
-        Network::Testnet => Url::parse("https://blockstream.info/testnet/api/")
-            .expect("Failed to parse default esplora server"),
-        Network::Regtest => {
-            Url::parse("http://127.0.0.1:50002/").expect("Failed to parse default esplora server")
-        }
-        Network::Signet => Url::parse("https://mutinynet.com/api/")
-            .expect("Failed to parse default esplora server"),
-    };
-    BitcoinRpcConfig {
-        kind: "esplora".to_string(),
-        url,
     }
 }
 

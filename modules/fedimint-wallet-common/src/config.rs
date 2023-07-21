@@ -9,6 +9,7 @@ use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonGen};
@@ -26,6 +27,11 @@ impl WalletGenParams {
             consensus: WalletGenParamsConsensus {
                 network: Network::Regtest,
                 finality_delay: 10,
+                client_default_bitcoin_rpc: BitcoinRpcConfig {
+                    kind: "esplora".to_string(),
+                    url: Url::parse("http://127.0.0.1:50002/")
+                        .expect("Failed to parse default esplora server"),
+                },
             },
         }
     }
@@ -40,6 +46,8 @@ pub struct WalletGenParamsLocal {
 pub struct WalletGenParamsConsensus {
     pub network: Network,
     pub finality_delay: u32,
+    /// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
+    pub client_default_bitcoin_rpc: BitcoinRpcConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -77,6 +85,14 @@ pub struct WalletConfigConsensus {
     pub default_fee: Feerate,
     /// Fees for bitcoin transactions
     pub fee_consensus: FeeConsensus,
+    /// Points to a Bitcoin API that the client can use to interact with the
+    /// Bitcoin blockchain (mostly for deposits). *Eventually the backend should
+    /// become configurable locally and this should merely be a suggested
+    /// default by the federation.*
+    ///
+    /// **This is only used by the client, the RPC used by the server is defined
+    /// in [`WalletConfigLocal`].**
+    pub client_default_bitcoin_rpc: BitcoinRpcConfig,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -88,6 +104,11 @@ pub struct WalletClientConfig {
     /// Confirmations required for a peg in to be accepted by federation
     pub finality_delay: u32,
     pub fee_consensus: FeeConsensus,
+    /// Points to a Bitcoin API that the client can use to interact with the
+    /// Bitcoin blockchain (mostly for deposits). *Eventually the backend should
+    /// become configurable locally and this should merely be a suggested
+    /// default by the federation.*
+    pub default_bitcoin_rpc: BitcoinRpcConfig,
 }
 
 impl std::fmt::Display for WalletClientConfig {
@@ -123,6 +144,7 @@ impl WalletConfig {
         network: Network,
         finality_delay: u32,
         bitcoin_rpc: BitcoinRpcConfig,
+        client_default_bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
@@ -138,6 +160,7 @@ impl WalletConfig {
                 finality_delay,
                 default_fee: Feerate { sats_per_kvb: 1000 },
                 fee_consensus: Default::default(),
+                client_default_bitcoin_rpc,
             },
         }
     }
@@ -148,12 +171,14 @@ impl WalletClientConfig {
         peg_in_descriptor: PegInDescriptor,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
+        default_bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {
         Self {
             peg_in_descriptor,
             network,
             finality_delay,
             fee_consensus: Default::default(),
+            default_bitcoin_rpc,
         }
     }
 }
