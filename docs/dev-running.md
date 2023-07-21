@@ -174,7 +174,7 @@ Commands:
   list-gateways    List registered gateways
   switch-gateway   Switch active gateway
   deposit-address  Generate a new deposit address, funds sent to it can later be claimed
-  await-deposit    Wait for desposit on previously generated address
+  await-deposit    Wait for deposit on previously generated address
   withdraw         Withdraw funds from the federation
   backup           Upload the (encrypted) snapshot of mint notes to federation
   restore          Restore the previously created backup of mint notes (with `backup` command)
