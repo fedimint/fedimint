@@ -425,7 +425,9 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     gateway.receive_money(refund_outpoint).await?;
                     assert_eq!(initial_gateway_balance, gateway.get_balance().await);
                 }
-                _ => panic!("Gateway receive state machine entered unexpected state"),
+                unexpected_state => panic!(
+                    "Gateway receive state machine entered unexpected state: {unexpected_state:?}"
+                ),
             }
 
             Ok(())
