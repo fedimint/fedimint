@@ -58,7 +58,10 @@ impl Bitcoind {
 
         // mine blocks
         let address = client.get_new_address(None, None)?;
-        client.generate_to_address(101, &address)?;
+        poll("bitcoind", || async {
+            Ok(client.generate_to_address(101, &address).is_ok())
+        })
+        .await;
 
         // wait bitciond is ready
         poll("bitcoind", || async {
