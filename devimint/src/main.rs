@@ -20,7 +20,7 @@ use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::fs;
 use tokio::net::TcpStream;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     #[allow(unused_variables)]
@@ -877,8 +877,15 @@ async fn do_try_create_and_pay_invoice(
     // Verify that after the lightning node has restarted, the gateway
     // automatically reconnects and can query the lightning node
     // info again.
-    let mut info_cmd = cmd!(gw, "info");
-    assert!(info_cmd.run().await.is_ok());
+    poll("Waiting for info to succeed after restart", || async {
+        let mut info_cmd = cmd!(gw, "info");
+        Ok(info_cmd
+            .run()
+            .await
+            .map_err(|e| warn!("Info command not ready yet, retrying: {e}"))
+            .is_ok())
+    })
+    .await?;
 
     fed.use_gateway(gw).await?;
     tracing::info!("Creating invoice....");
