@@ -123,6 +123,7 @@ impl ServerModuleGen for WalletGen {
                     params.consensus.network,
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
+                    params.consensus.client_default_bitcoin_rpc.clone(),
                 );
                 (*id, cfg)
             })
@@ -157,6 +158,7 @@ impl ServerModuleGen for WalletGen {
             params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
+            params.consensus.client_default_bitcoin_rpc.clone(),
         );
 
         Ok(wallet_cfg.to_erased())
@@ -185,10 +187,11 @@ impl ServerModuleGen for WalletGen {
     ) -> anyhow::Result<WalletClientConfig> {
         let config = WalletConfigConsensus::from_erased(config)?;
         Ok(WalletClientConfig {
-            peg_in_descriptor: config.peg_in_descriptor.clone(),
+            peg_in_descriptor: config.peg_in_descriptor,
             network: config.network,
-            fee_consensus: config.fee_consensus.clone(),
+            fee_consensus: config.fee_consensus,
             finality_delay: config.finality_delay,
+            default_bitcoin_rpc: config.client_default_bitcoin_rpc,
         })
     }
 

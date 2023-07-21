@@ -12,7 +12,7 @@ pub const FM_BITCOIN_RPC_KIND: &str = "FM_BITCOIN_RPC_KIND";
 pub const FM_BITCOIN_RPC_URL: &str = "FM_BITCOIN_RPC_URL";
 
 /// Configuration for the bitcoin RPC
-#[derive(Debug, Clone, Serialize, Deserialize, Decodable, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BitcoinRpcConfig {
     pub kind: String,
     pub url: Url,

@@ -17,6 +17,7 @@ use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
 use fedimint_wallet_server::WalletGen;
+use url::Url;
 
 /// Module for creating `fedimintd` binary with custom modules
 pub mod fedimintd;
@@ -42,6 +43,7 @@ pub fn attach_default_module_gen_params(
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next
                     // commit anyway
                     finality_delay,
+                    client_default_bitcoin_rpc: default_esplora_server(network),
                 },
             },
         )
@@ -66,4 +68,22 @@ pub fn attach_default_module_gen_params(
                 consensus: LightningGenParamsConsensus { network },
             },
         );
+}
+
+pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
+    let url = match network {
+        Network::Bitcoin => Url::parse("https://blockstream.info/api/")
+            .expect("Failed to parse default esplora server"),
+        Network::Testnet => Url::parse("https://blockstream.info/testnet/api/")
+            .expect("Failed to parse default esplora server"),
+        Network::Regtest => {
+            Url::parse("http://127.0.0.1:50002/").expect("Failed to parse default esplora server")
+        }
+        Network::Signet => Url::parse("https://mutinynet.com/api/")
+            .expect("Failed to parse default esplora server"),
+    };
+    BitcoinRpcConfig {
+        kind: "esplora".to_string(),
+        url,
+    }
 }
