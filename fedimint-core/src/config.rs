@@ -322,8 +322,7 @@ impl ConfigGenModuleParams {
         json: Option<serde_json::Value>,
     ) -> anyhow::Result<P> {
         let json = json.ok_or(format_err!("{name} config gen params missing"))?;
-        serde_json::from_value(json)
-            .map_err(|e| anyhow::Error::new(e).context("Invalid module params"))
+        serde_json::from_value(json).context("Invalid module params")
     }
 
     pub fn from_typed<P: ModuleGenParams>(p: P) -> anyhow::Result<Self> {
