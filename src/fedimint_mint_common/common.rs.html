@@ -49,6 +49,7 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
@@ -83,7 +84,8 @@
 </span><span class="kw">pub struct </span>SignedBackupRequest {
     <span class="attr">#[serde(flatten)]
     </span>request: BackupRequest,
-    <span class="kw">pub </span>signature: secp256k1::schnorr::Signature,
+    <span class="attr">#[serde(with = <span class="string">&quot;::fedimint_core::encoding::as_hex&quot;</span>)]
+    </span><span class="kw">pub </span>signature: secp256k1::schnorr::Signature,
 }
 
 <span class="kw">impl </span>SignedBackupRequest {
