@@ -32,6 +32,7 @@ impl BackupRequest {
 pub struct SignedBackupRequest {
     #[serde(flatten)]
     request: BackupRequest,
+    #[serde(with = "::fedimint_core::encoding::as_hex")]
     pub signature: secp256k1::schnorr::Signature,
 }
 
