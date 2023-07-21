@@ -59,8 +59,6 @@ if [[ ${fedimintd_install[*]} =~ ^[Yy]?$ ]]; then
   echo "Running 'docker-compose -f $FEDIMINTD_DIR/docker-compose.yaml up -d' to start fedimintd"
   docker-compose -f $FEDIMINTD_DIR/docker-compose.yaml up -d
   echo "Optionally run 'docker-compose -f $FEDIMINTD_DIR/docker-compose.yaml logs -f' to see the logs"
-  echo "You can access the fedimintd dashboard at http://$external_ip:3000"
-  echo "Note: by default you should open ports 8173 and 8174 for external access on your router/firewall, plus the ports mentioned above"
   echo
 fi
 
@@ -68,8 +66,16 @@ if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
   echo "Running 'docker-compose -f $GATEWAY_DIR/docker-compose.yaml up -d' to start the LN gateway"
   docker-compose -f $GATEWAY_DIR/docker-compose.yaml up -d
   echo "Optionally run 'docker-compose -f $GATEWAY_DIR/docker-compose.yaml logs -f' to see the logs"
+  echo
+fi
+
+if [[ ${fedimintd_install[*]} =~ ^[Yy]?$ ]]; then
+  echo "You can access the fedimintd dashboard at http://$external_ip:3000"
+  echo "Note: by default you should open ports 8173 and 8174 for external access on your router/firewall, plus the ports mentioned above"
+fi
+
+if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
   echo "You can access the LN gateway at http://$external_ip:3001"
   echo "And the node management interface RTL at http://$external_ip:3003"
   echo "Note: by default you should open port 9735 for external access on your router/firewall, plus the ports mentioned above"
-  echo
 fi
