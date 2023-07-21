@@ -105,7 +105,7 @@ services:
       - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
 
   gateway-ui:
-    image: fedimintui/gateway-ui:latest
+    image: fedimintui/gateway-ui:master
     environment:
       - PORT=80
       - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
