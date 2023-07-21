@@ -1891,6 +1891,9 @@
 <a href="#1891" id="1891">1891</a>
 <a href="#1892" id="1892">1892</a>
 <a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
+<a href="#1895" id="1895">1895</a>
+<a href="#1896" id="1896">1896</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2016,6 +2019,7 @@
                     params.consensus.network,
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
+                    params.consensus.client_default_bitcoin_rpc.clone(),
                 );
                 (<span class="kw-2">*</span>id, cfg)
             })
@@ -2050,6 +2054,7 @@
             params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
+            params.consensus.client_default_bitcoin_rpc.clone(),
         );
 
         <span class="prelude-val">Ok</span>(wallet_cfg.to_erased())
@@ -2078,10 +2083,11 @@
     ) -&gt; anyhow::Result&lt;WalletClientConfig&gt; {
         <span class="kw">let </span>config = WalletConfigConsensus::from_erased(config)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(WalletClientConfig {
-            peg_in_descriptor: config.peg_in_descriptor.clone(),
+            peg_in_descriptor: config.peg_in_descriptor,
             network: config.network,
-            fee_consensus: config.fee_consensus.clone(),
+            fee_consensus: config.fee_consensus,
             finality_delay: config.finality_delay,
+            default_bitcoin_rpc: config.client_default_bitcoin_rpc,
         })
     }
 

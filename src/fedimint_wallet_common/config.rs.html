@@ -169,6 +169,31 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -180,6 +205,7 @@
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{PegInDescriptor, WalletCommonGen};
@@ -197,6 +223,11 @@
             consensus: WalletGenParamsConsensus {
                 network: Network::Regtest,
                 finality_delay: <span class="number">10</span>,
+                client_default_bitcoin_rpc: BitcoinRpcConfig {
+                    kind: <span class="string">&quot;esplora&quot;</span>.to_string(),
+                    url: Url::parse(<span class="string">&quot;http://127.0.0.1:50002/&quot;</span>)
+                        .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
+                },
             },
         }
     }
@@ -211,6 +242,8 @@
 </span><span class="kw">pub struct </span>WalletGenParamsConsensus {
     <span class="kw">pub </span>network: Network,
     <span class="kw">pub </span>finality_delay: u32,
+    <span class="doccomment">/// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
+    </span><span class="kw">pub </span>client_default_bitcoin_rpc: BitcoinRpcConfig,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
@@ -248,6 +281,14 @@
     </span><span class="kw">pub </span>default_fee: Feerate,
     <span class="doccomment">/// Fees for bitcoin transactions
     </span><span class="kw">pub </span>fee_consensus: FeeConsensus,
+    <span class="doccomment">/// Points to a Bitcoin API that the client can use to interact with the
+    /// Bitcoin blockchain (mostly for deposits). *Eventually the backend should
+    /// become configurable locally and this should merely be a suggested
+    /// default by the federation.*
+    ///
+    /// **This is only used by the client, the RPC used by the server is defined
+    /// in [`WalletConfigLocal`].**
+    </span><span class="kw">pub </span>client_default_bitcoin_rpc: BitcoinRpcConfig,
 }
 
 <span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -259,6 +300,11 @@
     <span class="doccomment">/// Confirmations required for a peg in to be accepted by federation
     </span><span class="kw">pub </span>finality_delay: u32,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
+    <span class="doccomment">/// Points to a Bitcoin API that the client can use to interact with the
+    /// Bitcoin blockchain (mostly for deposits). *Eventually the backend should
+    /// become configurable locally and this should merely be a suggested
+    /// default by the federation.*
+    </span><span class="kw">pub </span>default_bitcoin_rpc: BitcoinRpcConfig,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletClientConfig {
@@ -294,6 +340,7 @@
         network: Network,
         finality_delay: u32,
         bitcoin_rpc: BitcoinRpcConfig,
+        client_default_bitcoin_rpc: BitcoinRpcConfig,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
@@ -309,6 +356,7 @@
                 finality_delay,
                 default_fee: Feerate { sats_per_kvb: <span class="number">1000 </span>},
                 fee_consensus: Default::default(),
+                client_default_bitcoin_rpc,
             },
         }
     }
@@ -319,12 +367,14 @@
         peg_in_descriptor: PegInDescriptor,
         network: bitcoin::network::constants::Network,
         finality_delay: u32,
+        default_bitcoin_rpc: BitcoinRpcConfig,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             peg_in_descriptor,
             network,
             finality_delay,
             fee_consensus: Default::default(),
+            default_bitcoin_rpc,
         }
     }
 }
