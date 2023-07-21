@@ -6,18 +6,20 @@ use std::path::PathBuf;
 
 use anyhow::anyhow;
 use bitcoin::hashes::hex::FromHex;
+use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash;
 use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::{
-    DynModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::Database;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleGen;
-use fedimint_core::ServerModule;
+use fedimint_core::{BitcoinHash, ServerModule};
 use fedimint_ln_server::common::LightningCommonGen;
 use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
@@ -40,6 +42,7 @@ use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
 use serde::Serialize;
+use tracing::info;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
@@ -186,11 +189,11 @@ async fn main() -> anyhow::Result<()> {
             let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
             let mut dbtx = db.begin_transaction().await;
 
+            let mut change_tweak_idx: u64 = 0;
             let tweaks = dbtx.find_by_prefix(&EpochHistoryKeyPrefix).await.flat_map(
                 |(_, SignedEpochOutcome { outcome, .. })| {
                     let UnzipConsensusItem {
                         transaction: transaction_cis,
-                        module: module_cis,
                         ..
                     } = outcome
                         .items
@@ -200,12 +203,16 @@ async fn main() -> anyhow::Result<()> {
 
                     // Get all user-submitted tweaks and if we did a peg-out tx also return the
                     // consensus round's tweak used for change
-                    let epoch_tweak = round_tweak(module_cis.into_iter().map(|(_, ci)| ci));
                     let (mut peg_in_tweaks, peg_out_present) =
                         input_tweaks_output_present(transaction_cis.into_iter().map(|(_, ci)| ci));
 
                     if peg_out_present {
-                        peg_in_tweaks.insert(epoch_tweak);
+                        info!("Found change output, adding tweak {change_tweak_idx} to list");
+                        let change_tweak = change_tweak_idx
+                            .consensus_hash::<sha256::Hash>()
+                            .into_inner();
+                        peg_in_tweaks.insert(change_tweak);
+                        change_tweak_idx += 1;
                     }
 
                     futures::stream::iter(peg_in_tweaks.into_iter())
@@ -260,10 +267,6 @@ fn input_tweaks_output_present(
             .collect::<BTreeSet<_>>();
 
     (tweaks, contains_peg_out)
-}
-
-fn round_tweak(_module_cis: impl Iterator<Item = DynModuleConsensusItem>) -> [u8; 32] {
-    unimplemented!()
 }
 
 fn tweak_descriptor(

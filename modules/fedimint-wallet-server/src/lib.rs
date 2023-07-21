@@ -478,9 +478,11 @@ impl ServerModule for Wallet {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         output: &WalletOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
+        let dummy_tweak = [0; 32];
+
         let fee_rate = self.consensus_fee_rate(dbtx).await;
         let tx = self
-            .create_peg_out_tx(dbtx, output)
+            .create_peg_out_tx(dbtx, output, &dummy_tweak)
             .await
             .into_module_error_other()?;
 
@@ -501,9 +503,10 @@ impl ServerModule for Wallet {
         out_point: fedimint_core::OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let amount = self.validate_output(dbtx, output).await?;
+        let change_tweak = self.consensus_nonce(dbtx).await;
 
         let mut tx = self
-            .create_peg_out_tx(dbtx, output)
+            .create_peg_out_tx(dbtx, output, &change_tweak)
             .await
             .expect("Should have been validated");
         self.offline_wallet().sign_psbt(&mut tx.psbt);
@@ -595,7 +598,9 @@ impl ServerModule for Wallet {
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
                     let feerate = module.consensus_fee_rate(&mut context.dbtx()).await;
-                    let nonce = module.consensus_nonce(&mut context.dbtx()).await;
+
+                    // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
+                    let dummy_tweak = [0; 32];
 
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
@@ -603,7 +608,7 @@ impl ServerModule for Wallet {
                         vec![],
                         module.available_utxos(&mut context.dbtx()).await,
                         feerate,
-                        &nonce,
+                        &dummy_tweak,
                         None
                     );
 
@@ -986,9 +991,8 @@ impl Wallet {
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         output: &WalletOutput,
+        change_tweak: &[u8; 32],
     ) -> Result<UnsignedTransaction, WalletError> {
-        let change_tweak = self.consensus_nonce(dbtx).await;
-
         match output {
             WalletOutput::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
@@ -996,7 +1000,7 @@ impl Wallet {
                 vec![],
                 self.available_utxos(dbtx).await,
                 peg_out.fees.fee_rate,
-                &change_tweak,
+                change_tweak,
                 None,
             ),
             WalletOutput::Rbf(rbf) => {
@@ -1011,7 +1015,7 @@ impl Wallet {
                     tx.selected_utxos,
                     self.available_utxos(dbtx).await,
                     tx.fees.fee_rate,
-                    &change_tweak,
+                    change_tweak,
                     Some(rbf.clone()),
                 )
             }
