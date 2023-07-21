@@ -458,6 +458,9 @@
 <a href="#458" id="458">458</a>
 <a href="#459" id="459">459</a>
 <a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
@@ -466,18 +469,20 @@
 
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>bitcoin::hashes::hex::FromHex;
+<span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::hashes::sha256::Hash;
 <span class="kw">use </span>bitcoin::network::constants::Network;
 <span class="kw">use </span>bitcoin::OutPoint;
 <span class="kw">use </span>clap::{ArgGroup, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::core::{
-    DynModuleConsensusItem, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleGen;
-<span class="kw">use </span>fedimint_core::ServerModule;
+<span class="kw">use </span>fedimint_core::{BitcoinHash, ServerModule};
 <span class="kw">use </span>fedimint_ln_server::common::LightningCommonGen;
 <span class="kw">use </span>fedimint_ln_server::Lightning;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
@@ -500,6 +505,7 @@
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>tracing::info;
 
 <span class="doccomment">/// Tool to recover the on-chain wallet of a Fedimint federation
 </span><span class="attr">#[derive(Debug, Parser)]
@@ -646,11 +652,11 @@
             <span class="kw">let </span>db = Database::new(RocksDb::open(db).expect(<span class="string">&quot;Error opening DB&quot;</span>), decoders);
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
+            <span class="kw">let </span><span class="kw-2">mut </span>change_tweak_idx: u64 = <span class="number">0</span>;
             <span class="kw">let </span>tweaks = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>EpochHistoryKeyPrefix).<span class="kw">await</span>.flat_map(
                 |(<span class="kw">_</span>, SignedEpochOutcome { outcome, .. })| {
                     <span class="kw">let </span>UnzipConsensusItem {
                         transaction: transaction_cis,
-                        module: module_cis,
                         ..
                     } = outcome
                         .items
@@ -660,12 +666,16 @@
 
                     <span class="comment">// Get all user-submitted tweaks and if we did a peg-out tx also return the
                     // consensus round&#39;s tweak used for change
-                    </span><span class="kw">let </span>epoch_tweak = round_tweak(module_cis.into_iter().map(|(<span class="kw">_</span>, ci)| ci));
-                    <span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_present) =
+                    </span><span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_present) =
                         input_tweaks_output_present(transaction_cis.into_iter().map(|(<span class="kw">_</span>, ci)| ci));
 
                     <span class="kw">if </span>peg_out_present {
-                        peg_in_tweaks.insert(epoch_tweak);
+                        <span class="macro">info!</span>(<span class="string">&quot;Found change output, adding tweak {change_tweak_idx} to list&quot;</span>);
+                        <span class="kw">let </span>change_tweak = change_tweak_idx
+                            .consensus_hash::&lt;sha256::Hash&gt;()
+                            .into_inner();
+                        peg_in_tweaks.insert(change_tweak);
+                        change_tweak_idx += <span class="number">1</span>;
                     }
 
                     futures::stream::iter(peg_in_tweaks.into_iter())
@@ -720,10 +730,6 @@
             .collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;();
 
     (tweaks, contains_peg_out)
-}
-
-<span class="kw">fn </span>round_tweak(_module_cis: <span class="kw">impl </span>Iterator&lt;Item = DynModuleConsensusItem&gt;) -&gt; [u8; <span class="number">32</span>] {
-    <span class="macro">unimplemented!</span>()
 }
 
 <span class="kw">fn </span>tweak_descriptor(

@@ -1887,6 +1887,10 @@
 <a href="#1887" id="1887">1887</a>
 <a href="#1888" id="1888">1888</a>
 <a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2367,9 +2371,11 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>WalletOutput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
+        <span class="kw">let </span>dummy_tweak = [<span class="number">0</span>; <span class="number">32</span>];
+
         <span class="kw">let </span>fee_rate = <span class="self">self</span>.consensus_fee_rate(dbtx).<span class="kw">await</span>;
         <span class="kw">let </span>tx = <span class="self">self
-            </span>.create_peg_out_tx(dbtx, output)
+            </span>.create_peg_out_tx(dbtx, output, <span class="kw-2">&amp;</span>dummy_tweak)
             .<span class="kw">await
             </span>.into_module_error_other()<span class="question-mark">?</span>;
 
@@ -2390,9 +2396,10 @@
         out_point: fedimint_core::OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>change_tweak = <span class="self">self</span>.consensus_nonce(dbtx).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self
-            </span>.create_peg_out_tx(dbtx, output)
+            </span>.create_peg_out_tx(dbtx, output, <span class="kw-2">&amp;</span>change_tweak)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Should have been validated&quot;</span>);
         <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
@@ -2484,7 +2491,9 @@
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (Address, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
                     <span class="kw">let </span>(address, sats) = params;
                     <span class="kw">let </span>feerate = module.consensus_fee_rate(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>;
-                    <span class="kw">let </span>nonce = module.consensus_nonce(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>;
+
+                    <span class="comment">// Since we are only calculating the tx size we can use an arbitrary dummy nonce.
+                    </span><span class="kw">let </span>dummy_tweak = [<span class="number">0</span>; <span class="number">32</span>];
 
                     <span class="kw">let </span>tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
@@ -2492,7 +2501,7 @@
                         <span class="macro">vec!</span>[],
                         module.available_utxos(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>,
                         feerate,
-                        <span class="kw-2">&amp;</span>nonce,
+                        <span class="kw-2">&amp;</span>dummy_tweak,
                         <span class="prelude-val">None
                     </span>);
 
@@ -2875,9 +2884,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>WalletOutput,
+        change_tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
     ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletError&gt; {
-        <span class="kw">let </span>change_tweak = <span class="self">self</span>.consensus_nonce(dbtx).<span class="kw">await</span>;
-
         <span class="kw">match </span>output {
             WalletOutput::PegOut(peg_out) =&gt; <span class="self">self</span>.offline_wallet().create_tx(
                 peg_out.amount,
@@ -2885,7 +2893,7 @@
                 <span class="macro">vec!</span>[],
                 <span class="self">self</span>.available_utxos(dbtx).<span class="kw">await</span>,
                 peg_out.fees.fee_rate,
-                <span class="kw-2">&amp;</span>change_tweak,
+                change_tweak,
                 <span class="prelude-val">None</span>,
             ),
             WalletOutput::Rbf(rbf) =&gt; {
@@ -2900,7 +2908,7 @@
                     tx.selected_utxos,
                     <span class="self">self</span>.available_utxos(dbtx).<span class="kw">await</span>,
                     tx.fees.fee_rate,
-                    <span class="kw-2">&amp;</span>change_tweak,
+                    change_tweak,
                     <span class="prelude-val">Some</span>(rbf.clone()),
                 )
             }
