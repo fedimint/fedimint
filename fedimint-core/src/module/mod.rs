@@ -136,7 +136,7 @@ impl ApiError {
     }
 
     pub fn unauthorized() -> Self {
-        Self::new(401, "Request missing required authorization".to_string())
+        Self::new(401, "Invalid authorization".to_string())
     }
 
     pub fn server_error(message: String) -> Self {
