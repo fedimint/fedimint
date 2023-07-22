@@ -189,6 +189,12 @@ impl WsAdminClient {
         self.request("status", ApiRequestErased::default()).await
     }
 
+    /// Check auth credentials
+    pub async fn auth(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_auth("auth", ApiRequestErased::default().with_auth(auth))
+            .await
+    }
+
     async fn request_auth<Ret>(
         &self,
         method: &str,
