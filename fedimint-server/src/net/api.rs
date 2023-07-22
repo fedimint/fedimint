@@ -578,6 +578,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     .handle_recover_request(&mut context.dbtx(), id).await)
             }
         },
+        api_endpoint! {
+            "auth",
+            async |_config: &ConsensusApi, context, _v: ()| -> () {
+                check_auth(context)?;
+                Ok(())
+            }
+        },
     ]
 }
 
