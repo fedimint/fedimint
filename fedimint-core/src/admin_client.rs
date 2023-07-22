@@ -25,9 +25,12 @@ pub struct WsAdminClient {
 }
 
 impl WsAdminClient {
-    pub fn new(url: Url, our_id: PeerId) -> Self {
+    pub fn new(url: Url) -> Self {
+        // The peer ids given to the federation API are only useful when connected to
+        // multiple peers so errors can be attributed. The admin client has no use for
+        // them.
         Self {
-            inner: WsFederationApi::new(vec![(our_id, url)]).into(),
+            inner: WsFederationApi::new(vec![(PeerId(0), url)]).into(),
         }
     }
 
