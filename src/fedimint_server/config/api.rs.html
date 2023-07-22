@@ -1042,13 +1042,6 @@
 <a href="#1042" id="1042">1042</a>
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
-<a href="#1045" id="1045">1045</a>
-<a href="#1046" id="1046">1046</a>
-<a href="#1047" id="1047">1047</a>
-<a href="#1048" id="1048">1048</a>
-<a href="#1049" id="1049">1049</a>
-<a href="#1050" id="1050">1050</a>
-<a href="#1051" id="1051">1051</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1718,13 +1711,6 @@
                     server,
                     consensus: <span class="prelude-val">None
                 </span>})
-            }
-        },
-        <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;auth&quot;</span>,
-            <span class="kw">async </span>|_config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
-                check_auth(context)<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>(())
             }
         },
     ]
