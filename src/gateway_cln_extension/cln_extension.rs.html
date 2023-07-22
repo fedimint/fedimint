@@ -628,8 +628,6 @@
 <a href="#628" id="628">628</a>
 <a href="#629" id="629">629</a>
 <a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -770,7 +768,7 @@
                 <span class="comment">// Set an invalid default address in the extension to force the extension plugin
                 // user to supply a valid address via an environment variable or
                 // cln plugin config option.
-                </span>options::Value::String(<span class="string">&quot;default-dont-use&quot;</span>.into()),
+                </span>options::Value::OptString,
                 <span class="string">&quot;fedimint gateway CLN extension listen address&quot;</span>,
             ))
             .hook(
@@ -808,19 +806,17 @@
             <span class="comment">// Parse configurations or read from
             </span><span class="kw">let </span>fm_gateway_listen: SocketAddr = <span class="kw">match </span>ClnExtensionOpts::try_parse() {
                 <span class="prelude-val">Ok</span>(opts) =&gt; opts.fm_gateway_listen,
-                <span class="comment">// FIXME: cln_plugin doesn&#39;t yet support optional parameters
-                </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">match </span>plugin.option(<span class="string">&quot;fm-gateway-listen&quot;</span>) {
-                    <span class="prelude-val">Some</span>(options::Value::String(listen)) =&gt; {
-                        <span class="kw">if </span>listen == <span class="string">&quot;default-dont-use&quot; </span>{
-                            <span class="macro">panic!</span>(
-                                <span class="string">&quot;Gateway cln extension is missing a listen address configuration. You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding a --fm-gateway-listen config option to the cln plugin&quot;
-                            </span>)
-                        } <span class="kw">else </span>{
-                            SocketAddr::from_str(<span class="kw-2">&amp;</span>listen).expect(<span class="string">&quot;invalid fm-gateway-listen address&quot;</span>)
-                        }
-                    }
-                    <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
-                },
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+
+                    <span class="kw">let </span>listen_val = plugin.option(<span class="string">&quot;fm-gateway-listen&quot;</span>)
+                        .expect(<span class="string">&quot;Gateway CLN extension is missing a listen address configuration. 
+                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding 
+                        a --fm-gateway-listen config option to the CLN plugin.&quot;</span>);
+                    <span class="kw">let </span>listen = listen_val.as_str()
+                        .expect(<span class="string">&quot;fm-gateway-listen isn&#39;t a string&quot;</span>);
+
+                    SocketAddr::from_str(listen).expect(<span class="string">&quot;invalid fm-gateway-listen address&quot;</span>)
+                }
             };
 
             <span class="prelude-val">Ok</span>((
