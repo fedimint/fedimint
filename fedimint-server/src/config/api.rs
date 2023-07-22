@@ -659,6 +659,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                 })
             }
         },
+        api_endpoint! {
+            "auth",
+            async |_config: &ConfigGenApi, context, _v: ()| -> () {
+                check_auth(context)?;
+                Ok(())
+            }
+        },
     ]
 }
 
