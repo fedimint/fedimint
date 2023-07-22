@@ -837,7 +837,6 @@
 <a href="#837" id="837">837</a>
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
-<a href="#840" id="840">840</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1162,8 +1161,7 @@
         json: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
     ) -&gt; anyhow::Result&lt;P&gt; {
         <span class="kw">let </span>json = json.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;{name} config gen params missing&quot;</span>))<span class="question-mark">?</span>;
-        serde_json::from_value(json)
-            .map_err(|e| anyhow::Error::new(e).context(<span class="string">&quot;Invalid module params&quot;</span>))
+        serde_json::from_value(json).context(<span class="string">&quot;Invalid module params&quot;</span>)
     }
 
     <span class="kw">pub fn </span>from_typed&lt;P: ModuleGenParams&gt;(p: P) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {

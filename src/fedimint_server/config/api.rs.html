@@ -1555,7 +1555,7 @@
             </span><span class="kw">let </span>module = <span class="self">self</span>.settings.registry.get(kind).expect(<span class="string">&quot;Module exists&quot;</span>);
             module
                 .validate_params(<span class="kw-2">&amp;</span>combined)
-                .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Module params invalid {e}&quot;</span>)))<span class="question-mark">?</span>;
+                .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Module params invalid {e:?}&quot;</span>)))<span class="question-mark">?</span>;
             combined_params.push((id, kind.clone(), combined));
         }
         consensus.modules = ServerModuleGenParamsRegistry::from_iter(combined_params.into_iter());
