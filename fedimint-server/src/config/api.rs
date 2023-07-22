@@ -511,7 +511,7 @@ impl ConfigGenState {
             let module = self.settings.registry.get(kind).expect("Module exists");
             module
                 .validate_params(&combined)
-                .map_err(|e| ApiError::bad_request(format!("Module params invalid {e}")))?;
+                .map_err(|e| ApiError::bad_request(format!("Module params invalid {e:?}")))?;
             combined_params.push((id, kind.clone(), combined));
         }
         consensus.modules = ServerModuleGenParamsRegistry::from_iter(combined_params.into_iter());
