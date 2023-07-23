@@ -22,7 +22,7 @@ To end the whole tmuxinator session and terminate all the services which were st
 
 Note as you run commands the mint nodes will output logging information which you can adjust by setting the [RUST_LOG](https://docs.rs/env_logger/latest/env_logger/) env variable.
 
-The previous step has already set up an e-cash client with a funded wallet for you. If you are interested in the details take a look at [`scripts/pegin.sh`](../scripts/pegin.sh).
+The previous step has already set up an e-cash client with a funded wallet for you.
 
 You can view your client's holdings using the `info` command:
 
