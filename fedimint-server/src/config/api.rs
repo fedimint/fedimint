@@ -35,9 +35,7 @@ use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSW
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::db::ConsensusUpgradeKey;
 use crate::net::peers::DelayCalculator;
-use crate::HasApiContext;
-
-pub type ApiResult<T> = std::result::Result<T, ApiError>;
+use crate::{check_auth, ApiResult, HasApiContext};
 
 /// Serves the config gen API endpoints
 pub struct ConfigGenApi {
@@ -677,14 +675,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
     ]
-}
-
-fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
-    if !context.has_auth() {
-        Err(ApiError::unauthorized())
-    } else {
-        Ok(())
-    }
 }
 
 #[cfg(test)]

@@ -35,7 +35,7 @@ use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
 use crate::backup::ClientBackupSnapshot;
-use crate::config::api::{get_verification_hashes, ApiResult};
+use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::{ApiEvent, FundingVerifier};
@@ -45,7 +45,7 @@ use crate::db::{
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
-use crate::HasApiContext;
+use crate::{check_auth, ApiResult, HasApiContext};
 
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
@@ -519,24 +519,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             "upgrade",
             async |fedimint: &ConsensusApi, context, _v: ()| -> () {
-                if context.has_auth() {
-                    fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
-                    Ok(())
-                } else {
-                    Err(ApiError::unauthorized())
-                }
+               check_auth(context)?;
+               fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
+               Ok(())
             }
         },
         api_endpoint! {
             "process_outcome",
             async |fedimint: &ConsensusApi, context, outcome: SerdeEpochHistory| -> () {
-                if context.has_auth() {
-                    fedimint.force_process_outcome(outcome).await
-                      .map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
-                    Ok(())
-                } else {
-                    Err(ApiError::unauthorized())
-                }
+                check_auth(context)?;
+                fedimint.force_process_outcome(outcome).await
+                  .map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
+                Ok(())
             }
         },
         api_endpoint! {
@@ -555,11 +549,8 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             "get_verify_config_hash",
             async |fedimint: &ConsensusApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
-                if context.has_auth() {
-                    Ok(get_verification_hashes(&fedimint.cfg))
-                } else {
-                    Err(ApiError::unauthorized())
-                }
+                check_auth(context)?;
+                Ok(get_verification_hashes(&fedimint.cfg))
             }
         },
         api_endpoint! {
@@ -576,6 +567,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
                     .handle_recover_request(&mut context.dbtx(), id).await)
+            }
+        },
+        api_endpoint! {
+            "auth",
+            async |_config: &ConsensusApi, context, _v: ()| -> () {
+                check_auth(context)?;
+                Ok(())
             }
         },
     ]
