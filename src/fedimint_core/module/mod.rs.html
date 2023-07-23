@@ -1136,7 +1136,7 @@
     }
 
     <span class="kw">pub fn </span>unauthorized() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new(<span class="number">401</span>, <span class="string">&quot;Request missing required authorization&quot;</span>.to_string())
+        <span class="self">Self</span>::new(<span class="number">401</span>, <span class="string">&quot;Invalid authorization&quot;</span>.to_string())
     }
 
     <span class="kw">pub fn </span>server_error(message: String) -&gt; <span class="self">Self </span>{

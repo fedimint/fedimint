@@ -1039,9 +1039,6 @@
 <a href="#1039" id="1039">1039</a>
 <a href="#1040" id="1040">1040</a>
 <a href="#1041" id="1041">1041</a>
-<a href="#1042" id="1042">1042</a>
-<a href="#1043" id="1043">1043</a>
-<a href="#1044" id="1044">1044</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1079,9 +1076,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::db::ConsensusUpgradeKey;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
-<span class="kw">use </span><span class="kw">crate</span>::HasApiContext;
-
-<span class="kw">pub type </span>ApiResult&lt;T&gt; = std::result::Result&lt;T, ApiError&gt;;
+<span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
 
 <span class="doccomment">/// Serves the config gen API endpoints
 </span><span class="kw">pub struct </span>ConfigGenApi {
@@ -1713,15 +1708,14 @@
                 </span>})
             }
         },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;auth&quot;</span>,
+            <span class="kw">async </span>|_config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
+                check_auth(context)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(())
+            }
+        },
     ]
-}
-
-<span class="kw">fn </span>check_auth(context: <span class="kw-2">&amp;mut </span>ApiEndpointContext) -&gt; ApiResult&lt;()&gt; {
-    <span class="kw">if </span>!context.has_auth() {
-        <span class="prelude-val">Err</span>(ApiError::unauthorized())
-    } <span class="kw">else </span>{
-        <span class="prelude-val">Ok</span>(())
-    }
 }
 
 <span class="attr">#[cfg(test)]
