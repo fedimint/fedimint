@@ -300,6 +300,9 @@
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -327,9 +330,12 @@
 }
 
 <span class="kw">impl </span>WsAdminClient {
-    <span class="kw">pub fn </span>new(url: Url, our_id: PeerId) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            inner: WsFederationApi::new(<span class="macro">vec!</span>[(our_id, url)]).into(),
+    <span class="kw">pub fn </span>new(url: Url) -&gt; <span class="self">Self </span>{
+        <span class="comment">// The peer ids given to the federation API are only useful when connected to
+        // multiple peers so errors can be attributed. The admin client has no use for
+        // them.
+        </span><span class="self">Self </span>{
+            inner: WsFederationApi::new(<span class="macro">vec!</span>[(PeerId(<span class="number">0</span>), url)]).into(),
         }
     }
 

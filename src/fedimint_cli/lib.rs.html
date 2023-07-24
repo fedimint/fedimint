@@ -1104,7 +1104,7 @@
             .expect(<span class="string">&quot;Endpoint exists&quot;</span>)
             .url
             .clone();
-        <span class="prelude-val">Ok</span>(WsAdminClient::new(url, <span class="kw-2">*</span>our_id))
+        <span class="prelude-val">Ok</span>(WsAdminClient::new(url))
     }
 
     <span class="kw">fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;ApiAuth&gt; {

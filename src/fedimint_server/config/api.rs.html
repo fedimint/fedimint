@@ -1038,7 +1038,6 @@
 <a href="#1038" id="1038">1038</a>
 <a href="#1039" id="1039">1039</a>
 <a href="#1040" id="1040">1040</a>
-<a href="#1041" id="1041">1041</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1146,7 +1145,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = local.and_then(|local| local.leader_api_url) {
             <span class="comment">// Note PeerIds don&#39;t really exist at this point, but id doesn&#39;t matter because
             // it&#39;s not used in the WS client for anything, perhaps it should be removed
-            </span><span class="kw">let </span>client = WsAdminClient::new(url, PeerId::from(<span class="number">0</span>));
+            </span><span class="kw">let </span>client = WsAdminClient::new(url);
             client
                 .add_config_gen_peer(state.our_peer_info()<span class="question-mark">?</span>)
                 .<span class="kw">await
@@ -1202,7 +1201,7 @@
 
         <span class="kw">let </span>consensus = <span class="kw">match </span>local.and_then(|local| local.leader_api_url) {
             <span class="prelude-val">Some</span>(leader_url) =&gt; {
-                <span class="kw">let </span>client = WsAdminClient::new(leader_url.clone(), PeerId::from(<span class="number">0</span>));
+                <span class="kw">let </span>client = WsAdminClient::new(leader_url.clone());
                 <span class="kw">let </span>response = client.get_consensus_config_gen_params().<span class="kw">await</span>;
                 response
                     .map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Cannot get leader params&quot;</span>.to_string()))<span class="question-mark">?
@@ -1230,11 +1229,10 @@
             <span class="comment">// Update our state
             </span>state.status = ServerStatus::ReadyForConfigGen;
             <span class="comment">// Create a WSClient for the leader
-            </span>state.local.clone().and_then(|local| {
-                local
-                    .leader_api_url
-                    .map(|url| WsAdminClient::new(url, PeerId::from(<span class="number">0</span>)))
-            })
+            </span>state
+                .local
+                .clone()
+                .and_then(|local| local.leader_api_url.map(WsAdminClient::new))
         };
 
         <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1735,7 +1733,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiAuth;
     <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
-    <span class="kw">use </span>fedimint_core::{Amount, PeerId};
+    <span class="kw">use </span>fedimint_core::Amount;
     <span class="kw">use </span>fedimint_dummy_common::config::{
         DummyConfig, DummyGenParams, DummyGenParamsConsensus, DummyGenParamsLocal,
     };
@@ -1806,7 +1804,7 @@
 
             <span class="comment">// our id doesn&#39;t really exist at this point
             </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">&quot;password-{port}&quot;</span>));
-            <span class="kw">let </span>client = WsAdminClient::new(api_url, PeerId::from(<span class="number">0</span>));
+            <span class="kw">let </span>client = WsAdminClient::new(api_url);
 
             (
                 TestConfigApi {
