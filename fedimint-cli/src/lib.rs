@@ -272,7 +272,7 @@ impl Opts {
             .expect("Endpoint exists")
             .url
             .clone();
-        Ok(WsAdminClient::new(url, *our_id))
+        Ok(WsAdminClient::new(url))
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
