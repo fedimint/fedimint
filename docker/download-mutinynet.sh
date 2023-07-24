@@ -3,15 +3,37 @@
 # This file downloads the mutinynet docker-compose files for the LN gateway and fedimintd
 # You can download and run it with: curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
 
+if ! [ -x "$(command -v docker-compose)" ]; then
+  # check if we are running as root
+  if [ "$EUID" -ne 0 ]; then
+    echo 'Error: docker-compose is not installed and we can not install it for you.' >&2
+    exit 1
+  fi
+  if [ -x "$(command -v apt)" ]; then
+    apt install -y docker-compose
+  elif [ -x "$(command -v yum)" ]; then
+    yum install -y docker-compose
+  elif [ -x "$(command -v dnf)" ]; then
+    dnf install -y docker-compose
+  elif [ -x "$(command -v pacman)" ]; then
+    pacman -S --noconfirm docker-compose
+  elif [ -x "$(command -v apk)" ]; then
+    apk add docker-compose
+  else
+    echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
+    exit 1
+  fi
+  if ! [ -x "$(command -v docker-compose)" ]; then
+    echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
+    exit 1
+  fi
+fi
+
 if ! [ -x "$(command -v curl)" ]; then
   echo 'Error: curl is not installed.' >&2
   exit 1
 fi
 
-if ! [ -x "$(command -v docker-compose)" ]; then
-  echo 'Error: docker-compose is not installed.' >&2
-  exit 1
-fi
 
 download() {
   local url=$1

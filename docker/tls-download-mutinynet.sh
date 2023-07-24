@@ -6,14 +6,6 @@
 
 DOCKER_COMPOSE_FILE=https://raw.githubusercontent.com/fedimint/fedimint/master/docker/full-tls-mutinynet/docker-compose.yaml
 
-COMMANDS="awk curl sed tr wc jq"
-for command in $COMMANDS; do
-  if ! [ -x "$(command -v $command)" ]; then
-    echo "Error: $command is not installed. Please try to install it" >&2
-    exit 1
-  fi
-done
-
 if ! [ -x "$(command -v docker-compose)" ]; then
   # check if we are running as root
   if [ "$EUID" -ne 0 ]; then
@@ -40,10 +32,20 @@ if ! [ -x "$(command -v docker-compose)" ]; then
   fi
 fi
 
+COMMANDS="awk curl sed tr wc jq"
+for command in $COMMANDS; do
+  if ! [ -x "$(command -v $command)" ]; then
+    echo "Error: $command is not installed. Please try to install it" >&2
+    exit 1
+  fi
+done
+
 if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 2000000 ]; then
   echo 'Error: Your machine must have at least 2GB of RAM' >&2
   exit 1
 fi
+
+
 
 resolve_host() {
   local host=$1
