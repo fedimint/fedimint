@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
@@ -110,6 +111,8 @@ pub enum OutgoingContractError {
     TimeoutTooClose,
     #[error("Gateway could not retrieve metadata about the contract.")]
     MissingContractData,
+    #[error("The invoice is expired. Expiry duration: {0:?}")]
+    InvoiceExpired(Duration),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -317,6 +320,10 @@ impl GatewayPayInvoice {
             .and_then(|delta| delta.checked_sub(timelock_delta));
         if max_delay.is_none() {
             return Err(OutgoingContractError::TimeoutTooClose);
+        }
+
+        if invoice.is_expired() {
+            return Err(OutgoingContractError::InvoiceExpired(invoice.expiry_time()));
         }
 
         Ok(PaymentParameters {

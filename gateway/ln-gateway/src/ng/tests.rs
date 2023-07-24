@@ -8,6 +8,7 @@ use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::Client;
 use fedimint_core::core::IntoDynInstance;
+use fedimint_core::task::sleep;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
@@ -478,14 +479,53 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_set_lightning_invoice_expiry() -> anyhow::Result<()> {
-    gateway_test(|_, other_lightning_client, _, _| async move {
-        let invoice = other_lightning_client
-            .invoice(sats(1000), 600.into())
-            .await
-            .unwrap();
-        assert_eq!(invoice.expiry_time(), Duration::from_secs(600));
-        Ok(())
-    })
+async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
+    gateway_test(
+        |gateway, other_lightning_client, fed, user_client| async move {
+            let gateway = gateway.remove_client(&fed).await;
+            let invoice = other_lightning_client
+                .invoice(sats(1000), 1.into())
+                .await
+                .unwrap();
+            assert_eq!(invoice.expiry_time(), Duration::from_secs(1));
+
+            sleep(Duration::from_secs(1)).await;
+
+            // Print money for user_client
+            let (_, outpoint) = user_client.print_money(sats(2000)).await?;
+            user_client.receive_money(outpoint).await?;
+            assert_eq!(user_client.get_balance().await, sats(2000));
+
+            // User client pays test invoice
+            let (pay_type, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+            match pay_type {
+                PayType::Lightning(pay_op) => {
+                    let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
+                    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+                    let funded = pay_sub.ok().await?;
+                    assert_matches!(funded, LnPayState::Funded);
+
+                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
+                    let mut gw_pay_sub = gateway
+                        .gateway_subscribe_ln_pay(gw_pay_op)
+                        .await?
+                        .into_stream();
+                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled);
+
+                    assert_matches!(pay_sub.ok().await?, LnPayState::WaitingForRefund { .. });
+                    // Gateway should immediately refund the client
+                    assert_matches!(pay_sub.ok().await?, LnPayState::Refunded { .. });
+                }
+                _ => panic!("Expected Lightning payment!"),
+            }
+
+            // Balance should be unchanged
+            assert_eq!(user_client.get_balance().await, sats(2000));
+            assert_eq!(gateway.get_balance().await, sats(0));
+
+            Ok(())
+        },
+    )
     .await
 }
