@@ -33,6 +33,9 @@
 <a href="#33" id="33">33</a>
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
@@ -45,6 +48,9 @@
 </span><span class="kw">pub const </span>FM_BITCOIN_RPC_KIND: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BITCOIN_RPC_KIND&quot;</span>;
 <span class="doccomment">/// Env var for bitcoin URL
 </span><span class="kw">pub const </span>FM_BITCOIN_RPC_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BITCOIN_RPC_URL&quot;</span>;
+<span class="doccomment">/// Env var that can be set to point at the bitcoind&#39;s cookie file to use for
+/// auth
+</span><span class="kw">pub const </span>FM_BITCOIND_COOKIE_FILE_VAR_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BITCOIND_COOKIE_FILE&quot;</span>;
 
 <span class="doccomment">/// Configuration for the bitcoin RPC
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]

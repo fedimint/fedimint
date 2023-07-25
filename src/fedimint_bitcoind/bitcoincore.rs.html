@@ -136,12 +136,24 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::env;
+<span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>std::path::PathBuf;
 
-<span class="kw">use </span>anyhow::anyhow <span class="kw">as </span>format_err;
+<span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, bail};
 <span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <span class="kw">use </span>bitcoincore_rpc::{Auth, RpcApi};
+<span class="kw">use </span>fedimint_core::bitcoinrpc::FM_BITCOIND_COOKIE_FILE_VAR_NAME;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskHandle};
@@ -262,15 +274,21 @@
                 url.host_str().unwrap_or(<span class="string">&quot;127.0.0.1&quot;</span>)
             )
         }),
-        <span class="kw">if </span>url.username().is_empty() {
-            Auth::None
-        } <span class="kw">else </span>{
-            Auth::UserPass(
+        <span class="kw">match </span>(
+            !url.username().is_empty(),
+            env::var(FM_BITCOIND_COOKIE_FILE_VAR_NAME),
+        ) {
+            (<span class="bool-val">true</span>, <span class="prelude-val">Ok</span>(<span class="kw">_</span>)) =&gt; <span class="macro">bail!</span>(
+                <span class="string">&quot;When {FM_BITCOIND_COOKIE_FILE_VAR_NAME} is set, the url auth part must be empty.&quot;
+            </span>),
+            (<span class="bool-val">true</span>, <span class="prelude-val">Err</span>(<span class="kw">_</span>)) =&gt; Auth::UserPass(
                 url.username().to_owned(),
                 url.password()
                     .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Password missing for {}&quot;</span>, url.username()))<span class="question-mark">?
                     </span>.to_owned(),
-            )
+            ),
+            (<span class="bool-val">false</span>, <span class="prelude-val">Ok</span>(path)) =&gt; Auth::CookieFile(PathBuf::from(path)),
+            (<span class="bool-val">false</span>, <span class="prelude-val">Err</span>(<span class="kw">_</span>)) =&gt; Auth::None,
         },
     ))
 }
