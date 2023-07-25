@@ -71,6 +71,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use async_stream::stream;
@@ -104,7 +105,8 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
-use tracing::{debug, info, warn};
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
 use crate::db::ClientSecretKey;
@@ -126,6 +128,8 @@ use crate::transaction::{
     TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
+
+const TG_SHUTDOWN_JOIN_TIMEOUT: Duration = Duration::from_millis(200);
 
 /// Client backup
 pub mod backup;
@@ -467,11 +471,13 @@ impl Client {
         ClientBuilder::default()
     }
 
-    pub async fn start_executor(&self, tg: &mut TaskGroup) {
+    pub async fn start_executor(&self, mut tg: TaskGroup) {
         self.inner
             .executor
-            .start_executor(tg, self.inner.context_gen())
-            .await
+            .start_executor(&mut tg, self.inner.context_gen())
+            .await;
+
+        *self.inner.tg.lock().await = Some(tg);
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -860,6 +866,7 @@ struct ClientInner {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
+    tg: Mutex<Option<TaskGroup>>,
 }
 
 impl ClientInner {
@@ -1077,6 +1084,20 @@ impl ClientInner {
     }
 }
 
+impl Drop for ClientInner {
+    fn drop(&mut self) {
+        futures::executor::block_on(async {
+            let Some(tg) = self.tg.lock().await.take() else {
+                return;
+            };
+
+            if let Err(e) = tg.shutdown_join_all(Some(TG_SHUTDOWN_JOIN_TIMEOUT)).await {
+                error!("Error shutting down client task group: {e}");
+            }
+        })
+    }
+}
+
 /// See [`Client::transaction_updates`]
 pub struct TransactionUpdates {
     update_stream: BoxStream<'static, OperationState<TxSubmissionStates>>,
@@ -1191,7 +1212,7 @@ impl ClientBuilder {
 
     pub async fn build_restoring_from_backup<S>(
         self,
-        tg: &mut TaskGroup,
+        tg: TaskGroup,
         secret: ClientSecret<S>,
     ) -> anyhow::Result<(Client, Metadata)>
     where
@@ -1233,7 +1254,7 @@ impl ClientBuilder {
     }
 
     /// Build a [`Client`] and start its executor
-    pub async fn build<S>(self, tg: &mut TaskGroup) -> anyhow::Result<Client>
+    pub async fn build<S>(self, tg: TaskGroup) -> anyhow::Result<Client>
     where
         S: RootSecretStrategy,
     {
@@ -1357,6 +1378,7 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
+            tg: Mutex::new(None),
         });
 
         Ok(Client {

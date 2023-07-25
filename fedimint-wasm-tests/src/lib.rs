@@ -71,8 +71,8 @@ mod tests {
     #[wasm_bindgen_test]
     async fn receive() -> Result<()> {
         let client = client(&faucet::connect_string().await?.parse()?).await?;
-        let mut tg = TaskGroup::new();
-        client.start_executor(&mut tg).await;
+        let tg = TaskGroup::new();
+        client.start_executor(tg).await;
         let gws = client.fetch_registered_gateways().await?;
         let lnd_gw = gws
             .into_iter()
@@ -101,8 +101,8 @@ mod tests {
     #[wasm_bindgen_test]
     async fn receive_and_pay() -> Result<()> {
         let client = client(&faucet::connect_string().await?.parse()?).await?;
-        let mut tg = TaskGroup::new();
-        client.start_executor(&mut tg).await;
+        let tg = TaskGroup::new();
+        client.start_executor(tg).await;
         let gws = client.fetch_registered_gateways().await?;
         let lnd_gw = gws
             .into_iter()

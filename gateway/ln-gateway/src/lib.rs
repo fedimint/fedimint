@@ -429,7 +429,7 @@ impl Gateway {
                         config.clone(),
                         node_pub_key,
                         self.lnrpc.clone(),
-                        &mut self.task_group,
+                        self.task_group.make_subgroup().await,
                         old_client,
                     )
                     .await?;
@@ -558,7 +558,7 @@ impl Gateway {
                 gw_client_cfg.clone(),
                 node_pub_key,
                 self.lnrpc.clone(),
-                &mut self.task_group,
+                self.task_group.make_subgroup().await,
                 old_client,
             )
             .await?;
