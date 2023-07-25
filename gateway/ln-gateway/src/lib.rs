@@ -15,6 +15,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -25,12 +26,18 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
-use clap::Subcommand;
+use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
 use db::{FederationRegistrationKey, GatewayPublicKey};
+use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
 use fedimint_core::api::{FederationError, WsClientConnectInfo};
 use fedimint_core::config::FederationId;
+use fedimint_core::core::{
+    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
 use fedimint_core::db::Database;
+use fedimint_core::module::CommonModuleGen;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::time::now;
 use fedimint_core::Amount;
@@ -38,7 +45,9 @@ use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::GatewayFee;
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_wallet_client::{WalletClientExt, WithdrawState};
+use fedimint_logging::TracingSetup;
+use fedimint_mint_client::{MintClientGen, MintCommonGen};
+use fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
 use futures::stream::StreamExt;
 use gatewaylnrpc::intercept_htlc_response::Action;
 use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
@@ -83,6 +92,222 @@ pub const DEFAULT_FEES: RoutingFees = RoutingFees {
 };
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
+
+const DB_FILE: &str = "gatewayd.db";
+
+const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
+    (LEGACY_HARDCODED_INSTANCE_ID_MINT, &MintCommonGen::KIND),
+    (LEGACY_HARDCODED_INSTANCE_ID_WALLET, &WalletCommonGen::KIND),
+];
+
+#[derive(Parser)]
+pub struct GatewayOpts {
+    #[clap(subcommand)]
+    mode: LightningMode,
+
+    /// Path to folder containing gateway config and data files
+    #[arg(long = "data-dir", env = "FM_GATEWAY_DATA_DIR")]
+    pub data_dir: PathBuf,
+
+    /// Gateway webserver listen address
+    #[arg(long = "listen", env = "FM_GATEWAY_LISTEN_ADDR")]
+    pub listen: SocketAddr,
+
+    /// Public URL from which the webserver API is reachable
+    #[arg(long = "api-addr", env = "FM_GATEWAY_API_ADDR")]
+    pub api_addr: Url,
+
+    /// Gateway webserver authentication password
+    #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
+    pub password: String,
+
+    /// Configured gateway routing fees
+    /// Format: <base_msat>,<proportional_millionths>
+    #[arg(long = "fees", env = "FM_GATEWAY_FEES")]
+    pub fees: Option<GatewayFee>,
+}
+
+pub struct Gatewayd {
+    registry: ClientModuleGenRegistry,
+    lightning_mode: LightningMode,
+    data_dir: PathBuf,
+    listen: SocketAddr,
+    api_addr: Url,
+    password: String,
+    fees: Option<GatewayFee>,
+}
+
+impl Gatewayd {
+    pub fn new() -> anyhow::Result<Gatewayd> {
+        let mut args = std::env::args();
+
+        if let Some(ref arg) = args.nth(1) {
+            if arg.as_str() == "version-hash" {
+                println!("{}", env!("FEDIMINT_BUILD_CODE_VERSION"));
+                std::process::exit(0);
+            }
+        }
+
+        // Read configurations
+        let GatewayOpts {
+            mode,
+            data_dir,
+            listen,
+            api_addr,
+            password,
+            fees,
+        } = GatewayOpts::parse();
+
+        info!(
+            "Starting gatewayd (version: {})",
+            env!("FEDIMINT_BUILD_CODE_VERSION")
+        );
+
+        Ok(Self {
+            registry: ClientModuleGenRegistry::new(),
+            lightning_mode: mode,
+            data_dir,
+            listen,
+            api_addr,
+            password,
+            fees,
+        })
+    }
+
+    pub fn with_module<T>(mut self, gen: T) -> Self
+    where
+        T: ClientModuleGen + 'static + Send + Sync,
+    {
+        self.registry.attach(gen);
+        self
+    }
+
+    pub fn with_default_modules(self) -> Self {
+        // Gateway module will be attached when the federation clients are created
+        // because the LN RPC will be injected with `GatewayClientGen`.
+        self.with_module(MintClientGen)
+            .with_module(WalletClientGen::default())
+    }
+
+    pub async fn run(self) -> anyhow::Result<()> {
+        TracingSetup::default().init()?;
+
+        let decoders = self
+            .registry
+            .decoders(DEFAULT_MODULE_KINDS.iter().cloned())?;
+
+        let client_builder = StandardGatewayClientBuilder::new(
+            self.data_dir.clone(),
+            self.registry.clone(),
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+        );
+
+        let db = Database::new(
+            fedimint_rocksdb::RocksDb::open(self.data_dir.join(DB_FILE))?,
+            decoders.clone(),
+        );
+
+        let mut tg = TaskGroup::new();
+        let rx = self.start_gateway(&mut tg, client_builder, db).await?;
+        rx.await?;
+        info!("Gatewayd exiting...");
+        Ok(())
+    }
+
+    async fn start_gateway(
+        self,
+        task_group: &mut TaskGroup,
+        client_builder: StandardGatewayClientBuilder,
+        database: Database,
+    ) -> Result<oneshot::Receiver<()>> {
+        let mut tg = task_group.make_subgroup().await;
+        task_group
+            .spawn(
+                "Subscribe to intercepted HTLCs in stream",
+                move |handle| async move {
+                    let clients =  Arc::new(RwLock::new(BTreeMap::new()));
+                    let scid_to_federation = Arc::new(RwLock::new(BTreeMap::new()));
+
+                    loop {
+                        if handle.is_shutting_down() {
+                            break;
+                        }
+
+                        let lnrpc_route = Self::create_boxed_lightning_client(self.lightning_mode.clone()).await;
+
+                        // Re-create the HTLC stream if the connection breaks
+                        match lnrpc_route
+                            .route_htlcs(&mut tg)
+                            .await
+                        {
+                            Ok((stream, ln_client)) => {
+                                // Blocks until the connection to the lightning node breaks
+                                info!("Established HTLC stream");
+
+                                // Re-create gateway
+                                let gateway = Gateway::new(
+                                    ln_client.clone(),
+                                    client_builder.clone(),
+                                    self.fees.clone().unwrap_or(GatewayFee(DEFAULT_FEES)).0,
+                                    database.clone(),
+                                    self.api_addr.clone(),
+                                    clients.clone(),
+                                    scid_to_federation.clone(),
+                                    tg.clone(),
+                                )
+                                .await.expect("Failed to created Gateway");
+
+                                info!("Successfully created Gateway");
+
+                                let tx = run_webserver(self.password.clone(), self.listen, gateway)
+                                    .await
+                                    .expect("Failed to start webserver");
+                                info!("Successfully started webserver");
+
+                                Gateway::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
+                                warn!("HTLC Stream Lightning connection broken. Stopping webserver...");
+                                if let Err(e) = tx.send(()).await {
+                                    error!("Error shutting down gatewayd webserver: {e:?}");
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to open HTLC stream. Waiting 5 seconds and trying again");
+                                debug!("Error: {e:?}");
+                                sleep(Duration::from_secs(5)).await;
+                            }
+                        }
+                    }
+                },
+            )
+            .await;
+
+        let handle = task_group.make_handle();
+        handle
+            .on_shutdown(Box::new(|| {
+                Box::pin(async move {
+                    info!("Gatewayd received exit signal");
+                })
+            }))
+            .await;
+        let shutdown_receiver = handle.make_shutdown_rx().await;
+        Ok(shutdown_receiver)
+    }
+
+    async fn create_boxed_lightning_client(mode: LightningMode) -> Box<dyn ILnRpcClient> {
+        match mode {
+            LightningMode::Cln { cln_extension_addr } => {
+                Box::new(NetworkLnRpcClient::new(cln_extension_addr).await)
+            }
+            LightningMode::Lnd {
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+            } => Box::new(
+                GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
+            ),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
 pub enum LightningMode {
@@ -194,105 +419,6 @@ impl Gateway {
             dbtx.commit_tx().await;
             public
         }
-    }
-
-    async fn create_boxed_lightning_client(mode: LightningMode) -> Box<dyn ILnRpcClient> {
-        match mode {
-            LightningMode::Cln { cln_extension_addr } => {
-                Box::new(NetworkLnRpcClient::new(cln_extension_addr).await)
-            }
-            LightningMode::Lnd {
-                lnd_rpc_addr,
-                lnd_tls_cert,
-                lnd_macaroon,
-            } => Box::new(
-                GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
-            ),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub async fn start_gateway(
-        task_group: &mut TaskGroup,
-        ln_mode: LightningMode,
-        fees: Option<GatewayFee>,
-        api_addr: Url,
-        client_builder: StandardGatewayClientBuilder,
-        listen: SocketAddr,
-        password: String,
-        database: Database,
-    ) -> Result<oneshot::Receiver<()>> {
-        let mut tg = task_group.make_subgroup().await;
-        task_group
-            .spawn(
-                "Subscribe to intercepted HTLCs in stream",
-                move |handle| async move {
-                    let clients =  Arc::new(RwLock::new(BTreeMap::new()));
-                    let scid_to_federation = Arc::new(RwLock::new(BTreeMap::new()));
-
-                    loop {
-                        if handle.is_shutting_down() {
-                            break;
-                        }
-
-                        let lnrpc_route = Self::create_boxed_lightning_client(ln_mode.clone()).await;
-
-                        // Re-create the HTLC stream if the connection breaks
-                        match lnrpc_route
-                            .route_htlcs(&mut tg)
-                            .await
-                        {
-                            Ok((stream, ln_client)) => {
-                                // Blocks until the connection to the lightning node breaks
-                                info!("Established HTLC stream");
-
-                                // Re-create gateway
-                                let gateway = Gateway::new(
-                                    ln_client.clone(),
-                                    client_builder.clone(),
-                                    fees.clone().unwrap_or(GatewayFee(DEFAULT_FEES)).0,
-                                    database.clone(),
-                                    api_addr.clone(),
-                                    clients.clone(),
-                                    scid_to_federation.clone(),
-                                    tg.clone(),
-                                )
-                                .await.expect("Failed to created Gateway");
-
-                                info!("Successfully created Gateway");
-
-                                let tx = run_webserver(password.clone(), listen, gateway)
-                                    .await
-                                    .expect("Failed to start webserver");
-                                info!("Successfully started webserver");
-
-                                Self::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
-                                warn!("HTLC Stream Lightning connection broken. Stopping webserver...");
-                                if let Err(e) = tx.send(()).await {
-                                    error!("Error shutting down gatewayd webserver: {e:?}");
-                                }
-                            }
-                            Err(e) => {
-                                error!("Failed to open HTLC stream. Waiting 5 seconds and trying again");
-                                debug!("Error: {e:?}");
-                                sleep(Duration::from_secs(5)).await;
-                            }
-                        }
-                    }
-                },
-            )
-            .await;
-
-        let handle = task_group.make_handle();
-        handle
-            .on_shutdown(Box::new(|| {
-                Box::pin(async move {
-                    info!("Gatewayd received exit signal");
-                })
-            }))
-            .await;
-        let shutdown_receiver = handle.make_shutdown_rx().await;
-        Ok(shutdown_receiver)
     }
 
     pub async fn handle_htlc_stream(
