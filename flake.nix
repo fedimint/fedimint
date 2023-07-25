@@ -454,8 +454,9 @@
                   toolchain.fenixToolchainCrossWasm
                   pkgs.wasm-pack
                   pkgs.wasm-bindgen-cli
-                  pkgs.firefox
                   pkgs.geckodriver
+                ] ++ lib.optionals (stdenv.isLinux) [
+                  pkgs.firefox
                 ];
 
                 shellHook = shellCommonCross.shellHook + toolchain.wasm32CrossEnvVars;
