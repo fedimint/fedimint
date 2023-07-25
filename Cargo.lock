@@ -1289,6 +1289,7 @@ dependencies = [
  "futures",
  "itertools",
  "rand",
+ "ring",
  "secp256k1-zkp",
  "serde",
  "serde_json",
