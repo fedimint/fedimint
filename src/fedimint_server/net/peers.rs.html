@@ -865,6 +865,17 @@
 <a href="#865" id="865">865</a>
 <a href="#866" id="866">866</a>
 <a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1039,7 +1050,8 @@
     resend_queue: MessageQueue&lt;M&gt;,
     incoming: Sender&lt;M&gt;,
     outgoing: Receiver&lt;M&gt;,
-    peer: PeerId,
+    our_id: PeerId,
+    peer_id: PeerId,
     peer_address: Url,
     delay_calculator: DelayCalculator,
     connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
@@ -1089,6 +1101,7 @@
                 tokio::sync::mpsc::channel::&lt;PeerStatusQuery&gt;(<span class="number">1</span>); <span class="comment">// better block the sender than flood the receiver
 
             </span><span class="kw">let </span>connection = PeerConnection::new(
+                cfg.identity,
                 <span class="kw-2">*</span>peer,
                 peer_address.clone(),
                 delay_calculator,
@@ -1220,7 +1233,7 @@
     </span>M: Debug + Clone,
 {
     <span class="kw">async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: <span class="kw-2">&amp;</span>TaskHandle) {
-        <span class="kw">let </span>peer = <span class="self">self</span>.common.peer;
+        <span class="kw">let </span>peer = <span class="self">self</span>.common.peer_id;
 
         <span class="comment">// Note: `state_transition` internally uses channel operations (`send` and
         // `recv`) which will disconnect when other tasks are shutting down
@@ -1285,7 +1298,7 @@
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
                 <span class="kw">match </span>new_connection_res {
                     <span class="prelude-val">Some</span>(new_connection) =&gt; {
-                        <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">&quot;Replacing existing connection&quot;</span>);
+                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Replacing existing connection&quot;</span>);
                         <span class="self">self</span>.connect(new_connection, <span class="number">0</span>).<span class="kw">await
                     </span>},
                     <span class="prelude-val">None </span>=&gt; {
@@ -1298,7 +1311,7 @@
             },
             <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
                 <span class="kw">if </span>status_query.response_sender.send(PeerConnectionStatus::Connected).is_err() {
-                    <span class="kw">let </span>peer_id = <span class="self">self</span>.peer;
+                    <span class="kw">let </span>peer_id = <span class="self">self</span>.peer_id;
                     <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">&quot;Could not send peer status response: receiver dropped&quot;</span>);
                 }
                 PeerConnectionState::Connected(connected)
@@ -1317,8 +1330,8 @@
         <span class="kw-2">mut </span>new_connection: AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;,
         disconnect_count: u64,
     ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">debug!</span>(target: LOG_NET_PEER,
-            peer = <span class="question-mark">?</span><span class="self">self</span>.peer, %disconnect_count,
+        <span class="macro">info!</span>(target: LOG_NET_PEER,
+            peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %disconnect_count,
             resend_queue_len = <span class="self">self</span>.resend_queue.queue.len(),
             <span class="string">&quot;Received incoming connection&quot;</span>);
         <span class="kw">match </span><span class="self">self</span>.resend_buffer_contents(<span class="kw-2">&amp;mut </span>new_connection).<span class="kw">await </span>{
@@ -1354,7 +1367,7 @@
             <span class="macro">debug!</span>(
                 target: LOG_NET_PEER,
                 %disconnect_count,
-                peer = <span class="question-mark">?</span><span class="self">self</span>.peer,
+                peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id,
                 delay_secs,
                 <span class="string">&quot;Scheduling reopening of connection&quot;
             </span>);
@@ -1369,7 +1382,7 @@
 
     <span class="kw">fn </span>disconnect_err(<span class="kw-2">&amp;</span><span class="self">self</span>, err: anyhow::Error, disconnect_count: u64) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="macro">debug!</span>(target: LOG_NET_PEER,
-            peer = <span class="question-mark">?</span><span class="self">self</span>.peer, %err, %disconnect_count, <span class="string">&quot;Peer disconnected&quot;</span>);
+            peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %err, %disconnect_count, <span class="string">&quot;Peer disconnected&quot;</span>);
         <span class="self">self</span>.disconnect(disconnect_count)
     }
 
@@ -1379,7 +1392,7 @@
         msg: M,
     ) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="kw">let </span>umsg = <span class="self">self</span>.resend_queue.push(msg);
-        <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer, id = <span class="question-mark">?</span>umsg.id, <span class="string">&quot;Sending outgoing message&quot;</span>);
+        <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>umsg.id, <span class="string">&quot;Sending outgoing message&quot;</span>);
 
         <span class="kw">match </span>connected
             .connection
@@ -1413,7 +1426,7 @@
         msg_res: <span class="prelude-ty">Result</span>&lt;PeerMessage&lt;M&gt;, anyhow::Error&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="kw">let </span>PeerMessage { msg, ack } = msg_res<span class="question-mark">?</span>;
-        <span class="macro">trace!</span>(target: LOG_NET_PEER,peer = <span class="question-mark">?</span><span class="self">self</span>.peer, id = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received incoming message&quot;</span>);
+        <span class="macro">trace!</span>(target: LOG_NET_PEER,peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received incoming message&quot;</span>);
 
         <span class="kw">let </span>expected = <span class="self">self
             </span>.last_received
@@ -1478,13 +1491,14 @@
             },
             <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
                 <span class="kw">if </span>status_query.response_sender.send(PeerConnectionStatus::Disconnected).is_err() {
-                    <span class="kw">let </span>peer_id = <span class="self">self</span>.peer;
+                    <span class="kw">let </span>peer_id = <span class="self">self</span>.peer_id;
                     <span class="macro">debug!</span>(target: LOG_NET_PEER, %peer_id, <span class="string">&quot;Could not send peer status response: receiver dropped&quot;</span>);
                 }
                 PeerConnectionState::Disconnected(disconnected)
             },
-            () = tokio::time::sleep_until(disconnected.reconnect_at) =&gt; {
-                <span class="self">self</span>.reconnect(disconnected).<span class="kw">await
+            () = tokio::time::sleep_until(disconnected.reconnect_at), <span class="kw">if </span><span class="self">self</span>.our_id &lt; <span class="self">self</span>.peer_id =&gt; {
+                <span class="comment">// to prevent &quot;reconnection ping-pongs&quot;, only the side with lower PeerId is responsible for reconnecting
+                </span><span class="self">self</span>.reconnect(disconnected).<span class="kw">await
             </span>},
             <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">None</span>;
@@ -1527,9 +1541,9 @@
     <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
         <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Trying to reconnect&quot;</span>);
         <span class="kw">let </span>addr = <span class="self">self</span>.peer_address.clone();
-        <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr, <span class="self">self</span>.peer).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr, <span class="self">self</span>.peer_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if </span>connected_peer == <span class="self">self</span>.peer {
+        <span class="kw">if </span>connected_peer == <span class="self">self</span>.peer_id {
             <span class="prelude-val">Ok</span>(conn)
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
@@ -1544,8 +1558,10 @@
 <span class="kw">where
     </span>M: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>new(
-        id: PeerId,
+    <span class="attr">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">async fn </span>new(
+        our_id: PeerId,
+        peer_id: PeerId,
         peer_address: Url,
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
@@ -1557,20 +1573,24 @@
         <span class="kw">let </span>(incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
 
         task_group
-            .spawn(<span class="macro">format!</span>(<span class="string">&quot;io-thread-peer-{id}&quot;</span>), <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-                <span class="self">Self</span>::run_io_thread(
-                    incoming_sender,
-                    outgoing_receiver,
-                    id,
-                    peer_address,
-                    delay_calculator,
-                    connect,
-                    incoming_connections,
-                    status_query_receiver,
-                    <span class="kw-2">&amp;</span>handle,
-                )
-                .<span class="kw">await
-            </span>})
+            .spawn(
+                <span class="macro">format!</span>(<span class="string">&quot;io-thread-peer-{peer_id}&quot;</span>),
+                <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+                    <span class="self">Self</span>::run_io_thread(
+                        incoming_sender,
+                        outgoing_receiver,
+                        our_id,
+                        peer_id,
+                        peer_address,
+                        delay_calculator,
+                        connect,
+                        incoming_connections,
+                        status_query_receiver,
+                        <span class="kw-2">&amp;</span>handle,
+                    )
+                    .<span class="kw">await
+                </span>},
+            )
             .<span class="kw">await</span>;
 
         PeerConnection {
@@ -1592,7 +1612,8 @@
     </span><span class="kw">async fn </span>run_io_thread(
         incoming: Sender&lt;M&gt;,
         outgoing: Receiver&lt;M&gt;,
-        peer: PeerId,
+        our_id: PeerId,
+        peer_id: PeerId,
         peer_address: Url,
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
@@ -1604,7 +1625,8 @@
             resend_queue: Default::default(),
             incoming,
             outgoing,
-            peer,
+            our_id,
+            peer_id,
             peer_address,
             delay_calculator,
             connect,
