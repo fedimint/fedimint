@@ -183,7 +183,11 @@ impl MintRestoreInProgressState {
                 let global_context = global_context_2.clone();
                 Box::pin(async move {
                     if new_state.is_done() {
-                        debug!(target: LOG_CLIENT_RECOVERY_MINT, "Finalizing restore");
+                        debug!(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            ?new_state,
+                            "Finalizing restore"
+                        );
                         let finalized = new_state.finalize();
 
                         {
@@ -677,29 +681,18 @@ impl MintRestoreInProgressState {
         trace!(
             target: LOG_CLIENT_RECOVERY_MINT,
             ?item,
-            "handling consensus item"
+            "found consensus item"
         );
         // assert_eq!(epoch, self.next_epoch);
         match item {
             ConsensusItem::Transaction(tx) => {
                 let txid = tx.tx_hash();
 
-                debug!(
+                trace!(
                     target: LOG_CLIENT_RECOVERY_MINT,
                     tx_hash = %tx.tx_hash(),
-                    "handling transaction"
+                    "found transaction"
                 );
-
-                if !processed_txs.insert(txid) {
-                    // Just like server side consensus, do not attempt to process the same
-                    // transaction twice.
-                    debug!(
-                        target: LOG_CLIENT_RECOVERY_MINT,
-                        tx_hash = %tx.tx_hash(),
-                        "transaction was already processed"
-                    );
-                    return;
-                }
 
                 if rejected_txs.contains(&txid) {
                     debug!(
@@ -715,7 +708,33 @@ impl MintRestoreInProgressState {
                     return;
                 }
 
-                for input in &tx.inputs {
+                if !processed_txs.insert(txid) {
+                    // Just like server side consensus, do not attempt to process the same
+                    // transaction twice.
+                    debug!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        "transaction was already processed"
+                    );
+                    return;
+                }
+
+                debug!(
+                    target: LOG_CLIENT_RECOVERY_MINT,
+                    tx_hash = %tx.tx_hash(),
+                    input_num = tx.inputs.len(),
+                    output_num = tx.outputs.len(),
+                    "processing transaction"
+                );
+
+                for (idx, input) in tx.inputs.iter().enumerate() {
+                    debug!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        idx,
+                        module_id = input.module_instance_id(),
+                        "found transaction input"
+                    );
                     if input.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         let input = input
                             .as_any()
@@ -727,6 +746,13 @@ impl MintRestoreInProgressState {
                 }
 
                 for (out_idx, output) in tx.outputs.iter().enumerate() {
+                    debug!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        idx = out_idx,
+                        module_id = output.module_instance_id(),
+                        "found transaction output"
+                    );
                     if output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         let output = output
                             .as_any()
@@ -745,6 +771,11 @@ impl MintRestoreInProgressState {
                 }
             }
             ConsensusItem::Module(module_item) => {
+                debug!(
+                    target: LOG_CLIENT_RECOVERY_MINT,
+                    module_id = module_item.module_instance_id(),
+                    "found module consensus item"
+                );
                 if module_item.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                     let mint_item = module_item
                         .as_any()
@@ -753,8 +784,9 @@ impl MintRestoreInProgressState {
 
                     debug!(
                         target: LOG_CLIENT_RECOVERY_MINT,
+                        module_id = module_item.module_instance_id(),
                         out_point = %mint_item.out_point,
-                        "handlng mint consensus item"
+                        "processing mint consensus item"
                     );
                     self.handle_output_confirmation(peer_id, mint_item);
                 }
