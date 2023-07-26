@@ -223,8 +223,8 @@
     <span class="attr">#[wasm_bindgen_test]
     </span><span class="kw">async fn </span>receive() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::connect_string().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-        client.start_executor(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>;
+        <span class="kw">let </span>tg = TaskGroup::new();
+        client.start_executor(tg).<span class="kw">await</span>;
         <span class="kw">let </span>gws = client.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_gw = gws
             .into_iter()
@@ -253,8 +253,8 @@
     <span class="attr">#[wasm_bindgen_test]
     </span><span class="kw">async fn </span>receive_and_pay() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::connect_string().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-        client.start_executor(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>;
+        <span class="kw">let </span>tg = TaskGroup::new();
+        client.start_executor(tg).<span class="kw">await</span>;
         <span class="kw">let </span>gws = client.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_gw = gws
             .into_iter()

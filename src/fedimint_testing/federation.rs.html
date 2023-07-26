@@ -253,7 +253,7 @@
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
         client_builder
-            .build::&lt;PlainRootSecretStrategy&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>.task.make_subgroup().<span class="kw">await</span>)
+            .build::&lt;PlainRootSecretStrategy&gt;(<span class="self">self</span>.task.make_subgroup().<span class="kw">await</span>)
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to build client&quot;</span>)
     }

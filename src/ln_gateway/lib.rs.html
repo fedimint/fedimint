@@ -1390,7 +1390,7 @@
                         config.clone(),
                         node_pub_key,
                         <span class="self">self</span>.lnrpc.clone(),
-                        <span class="kw-2">&amp;mut </span><span class="self">self</span>.task_group,
+                        <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>,
                         old_client,
                     )
                     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1519,7 +1519,7 @@
                 gw_client_cfg.clone(),
                 node_pub_key,
                 <span class="self">self</span>.lnrpc.clone(),
-                <span class="kw-2">&amp;mut </span><span class="self">self</span>.task_group,
+                <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>,
                 old_client,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;

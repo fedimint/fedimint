@@ -468,7 +468,7 @@
 
 <span class="kw">pub async fn </span>build_client(
     cfg: <span class="kw-2">&amp;</span>ClientConfig,
-    tg: <span class="kw-2">&amp;mut </span>TaskGroup,
+    tg: TaskGroup,
     rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
 ) -&gt; anyhow::Result&lt;Client&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();

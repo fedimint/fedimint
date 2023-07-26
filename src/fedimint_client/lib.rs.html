@@ -1496,6 +1496,62 @@
 <a href="#1496" id="1496">1496</a>
 <a href="#1497" id="1497">1497</a>
 <a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
+<a href="#1500" id="1500">1500</a>
+<a href="#1501" id="1501">1501</a>
+<a href="#1502" id="1502">1502</a>
+<a href="#1503" id="1503">1503</a>
+<a href="#1504" id="1504">1504</a>
+<a href="#1505" id="1505">1505</a>
+<a href="#1506" id="1506">1506</a>
+<a href="#1507" id="1507">1507</a>
+<a href="#1508" id="1508">1508</a>
+<a href="#1509" id="1509">1509</a>
+<a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a>
+<a href="#1550" id="1550">1550</a>
+<a href="#1551" id="1551">1551</a>
+<a href="#1552" id="1552">1552</a>
+<a href="#1553" id="1553">1553</a>
+<a href="#1554" id="1554">1554</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1568,7 +1624,9 @@
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
+<span class="kw">use </span>std::sync::atomic::AtomicUsize;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_stream::stream;
@@ -1602,7 +1660,8 @@
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>tracing::{debug, info, warn};
+<span class="kw">use </span>tokio::sync::Mutex;
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
 <span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
@@ -1624,6 +1683,8 @@
     TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
+
+<span class="kw">const </span>TG_SHUTDOWN_JOIN_TIMEOUT: Duration = Duration::from_millis(<span class="number">200</span>);
 
 <span class="doccomment">/// Client backup
 </span><span class="kw">pub mod </span>backup;
@@ -1945,9 +2006,45 @@
     })
 }
 
-<span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>Client {
+<span class="kw">pub struct </span>Client {
     inner: Arc&lt;ClientInner&gt;,
+}
+
+<span class="kw">impl </span>Clone <span class="kw">for </span>Client {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner
+            .client_count
+            .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+        Client {
+            inner: <span class="self">self</span>.inner.clone(),
+        }
+    }
+}
+
+<span class="kw">impl </span>Drop <span class="kw">for </span>Client {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="comment">// Not sure if Ordering::SeqCst is strictly needed here, but better safe than
+        // sorry.
+        </span><span class="kw">let </span>client_count = <span class="self">self
+            </span>.inner
+            .client_count
+            .fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::SeqCst);
+
+        <span class="comment">// `fetch_sub` returns previous value, so if it is 1, it means this is the last
+        // client reference
+        </span><span class="kw">if </span>client_count == <span class="number">1 </span>{
+            <span class="macro">info!</span>(<span class="string">&quot;Last client reference dropped, shutting down client task group&quot;</span>);
+            futures::executor::block_on(<span class="kw">async </span>{
+                <span class="kw">let </span><span class="prelude-val">Some</span>(tg) = <span class="self">self</span>.inner.tg.lock().<span class="kw">await</span>.take() <span class="kw">else </span>{
+                    <span class="kw">return</span>;
+                };
+
+                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tg.shutdown_join_all(<span class="prelude-val">Some</span>(TG_SHUTDOWN_JOIN_TIMEOUT)).<span class="kw">await </span>{
+                    <span class="macro">error!</span>(<span class="string">&quot;Error shutting down client task group: {e}&quot;</span>);
+                }
+            });
+        }
+    }
 }
 
 <span class="doccomment">/// List of core api versions supported by the implementation.
@@ -1965,12 +2062,14 @@
         ClientBuilder::default()
     }
 
-    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) {
+    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>tg: TaskGroup) {
         <span class="self">self</span>.inner
             .executor
-            .start_executor(tg, <span class="self">self</span>.inner.context_gen())
-            .<span class="kw">await
-    </span>}
+            .start_executor(<span class="kw-2">&amp;mut </span>tg, <span class="self">self</span>.inner.context_gen())
+            .<span class="kw">await</span>;
+
+        <span class="kw-2">*</span><span class="self">self</span>.inner.tg.lock().<span class="kw">await </span>= <span class="prelude-val">Some</span>(tg);
+    }
 
     <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
         <span class="self">self</span>.inner.api.as_ref()
@@ -2358,6 +2457,17 @@
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
+    <span class="doccomment">/// Task group used by this client and shut down when the client is dropped.
+    /// If a subgroup is used, dropping the parent task group stops the client&#39;s
+    /// background tasks.
+    </span>tg: Mutex&lt;<span class="prelude-ty">Option</span>&lt;TaskGroup&gt;&gt;,
+    <span class="doccomment">/// Number of [`Client`] instances using this `ClientInner`.
+    ///
+    /// The `ClientInner` struct is both used for the client itself as well as
+    /// for the global context used in the state machine executor. This means we
+    /// cannot rely on the reference count of the `Arc&lt;ClientInner&gt;` to
+    /// determine if the client should shut down.
+    </span>client_count: AtomicUsize,
 }
 
 <span class="kw">impl </span>ClientInner {
@@ -2689,7 +2799,7 @@
 
     <span class="kw">pub async fn </span>build_restoring_from_backup&lt;S&gt;(
         <span class="self">self</span>,
-        tg: <span class="kw-2">&amp;mut </span>TaskGroup,
+        tg: TaskGroup,
         secret: ClientSecret&lt;S&gt;,
     ) -&gt; anyhow::Result&lt;(Client, Metadata)&gt;
     <span class="kw">where
@@ -2731,7 +2841,7 @@
     }
 
     <span class="doccomment">/// Build a [`Client`] and start its executor
-    </span><span class="kw">pub async fn </span>build&lt;S&gt;(<span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;Client&gt;
+    </span><span class="kw">pub async fn </span>build&lt;S&gt;(<span class="self">self</span>, tg: TaskGroup) -&gt; anyhow::Result&lt;Client&gt;
     <span class="kw">where
         </span>S: RootSecretStrategy,
     {
@@ -2855,6 +2965,8 @@
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
+            tg: Mutex::new(<span class="prelude-val">None</span>),
+            client_count: AtomicUsize::new(<span class="number">1</span>),
         });
 
         <span class="prelude-val">Ok</span>(Client {

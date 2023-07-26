@@ -173,7 +173,7 @@
         config: FederationConfig,
         node_pub_key: secp256k1::PublicKey,
         lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
-        tg: <span class="kw-2">&amp;mut </span>TaskGroup,
+        tg: TaskGroup,
         old_client: <span class="prelude-ty">Option</span>&lt;fedimint_client::Client&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::Client&gt; {
         <span class="kw">let </span>federation_id = config.config.federation_id;
