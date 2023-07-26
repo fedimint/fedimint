@@ -183,12 +183,12 @@ done
 download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
 replace_host "${host_name[*]}" ./docker-compose.yaml
 # ask the user for the gateway password
-DEFAUT_GATEWAY_PASSWORD=thereisnosecondbest
-read -p "Enter the password for the gateway and RTL interface [$DEFAUT_GATEWAY_PASSWORD]: " -a gateway_password < /dev/tty
+DEFAULT_GATEWAY_PASSWORD=thereisnosecondbest
+read -p "Enter the password for the gateway and RTL interface [$DEFAULT_GATEWAY_PASSWORD]: " -a gateway_password < /dev/tty
 if [[ -z ${gateway_password[*]} ]]; then
-  gateway_password=$DEFAUT_GATEWAY_PASSWORD
+  gateway_password=$DEFAULT_GATEWAY_PASSWORD
 fi
-sed -i "s/$DEFAUT_GATEWAY_PASSWORD/$gateway_password/g" ./docker-compose.yaml
+sed -i "s/$DEFAULT_GATEWAY_PASSWORD/$gateway_password/g" ./docker-compose.yaml
 
 echo
 echo "Running 'docker-compose up -d' to start the services"

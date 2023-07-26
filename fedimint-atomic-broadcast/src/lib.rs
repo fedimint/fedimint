@@ -90,7 +90,7 @@
 //! item if it changes the machines state and should discard it otherwise. Let
 //! us consider the case of an ecash note being double spend by the items
 //! A and B while one peer is offline. First, item A is ordered and all correct
-//! peers include the note as spent in their state. Therfore they also accept
+//! peers include the note as spent in their state. Therefore they also accept
 //! the item A. Then, item B is ordered and all correct nodes notice the double
 //! spend and make no changes to their state. Now they can safely discard the
 //! item B as it did not cause a state transition. When the session completes
@@ -98,7 +98,7 @@
 //! back online it downloads the block. Therefore the recovering peer will only
 //! see Item A but arrives at the same state as its peers at the end of the
 //! session regardless. However, it did so by processing one less ordered item
-//! and without realizing that a double spend had occured.
+//! and without realizing that a double spend had occurred.
 //!
 //! Since a state machine may process only a subsequence of a sessions items we
 //! can not simply rely on the last processed items index when recovering from a
@@ -143,7 +143,7 @@ pub use keychain::Keychain;
 /// [Recipient] in order for the broadcast to make progress. However, the
 /// broadcast does not assume a reliable network layer and implements all
 /// necessary retry logic. Therefore, the caller can discard a message
-/// immediatly if its intended recipient is offline.
+/// immediately if its intended recipient is offline.
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub enum Message {
     NetworkData(Vec<u8>),
@@ -151,14 +151,14 @@ pub enum Message {
     Block(SignedBlock),
 }
 
-/// This enum defines the intented destination of a [Message].
+/// This enum defines the intended destination of a [Message].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Recipient {
     Everyone,
     Peer(PeerId),
 }
 
-/// This enum specifies wether an [OrderedItem] has been accepted or discarded
+/// This enum specifies whether an [OrderedItem] has been accepted or discarded
 /// by Fedimint Consensus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Decision {
@@ -222,7 +222,7 @@ pub struct SignedBlock {
 /// shutdown sender passed to [run]. This can be used for a coordinated shutdown
 /// of a federation in order to upgrade. A mid session shutdown is triggered if
 /// the receiver for the [OrderedItem]s is dropped. This mechanism can be used
-/// if one wants to shut down a single guardian immediatly.
+/// if one wants to shut down a single guardian immediately.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Shutdown {
     Clean(u64),

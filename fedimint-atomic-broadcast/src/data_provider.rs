@@ -78,7 +78,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
             }
         }
 
-        // if the channel is empty we want to return the batch immediatly in order to
+        // if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         while let Ok(item) = self.mempool_item_receiver.try_recv() {
             let n_bytes = items.iter().map(Vec::len).sum::<usize>();
