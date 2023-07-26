@@ -64,9 +64,9 @@ The dump command also takes optional parameters <MODULE> and <PREFIX> to dump on
 For more information on the modules and prefixes available to dump, see https://github.com/fedimint/fedimint/blob/master/docs/database.md. Table headers are modules and the Name column are prefixes.
 
 Examples:
-First, start a tmux so that there is a running federation
+First, run a local federation in mprocs:
 ```shell
-./scripts/tmuxinator.sh
+just mprocs
 ```
 
 Dump the entire database of server-0

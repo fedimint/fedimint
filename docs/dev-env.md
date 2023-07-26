@@ -81,23 +81,6 @@ To use a different shell for `nix develop`, try `nix develop -c zsh`. You can al
 don't want to remember about it. That's the recommended way to use a different shell
 for `nix develop`.
 
-### _Preclude nix shell + tmux problems_
-
-Some of the scripts and examples in this repository make use of the `tmux` terminal multiplexer.
-However, by default a tmux instance launches a _login shell_, which can lead to unintended problems
-on certain operating systems (e.g. Debian)[^1]. Especially, when `tmux` is launched within a _nix shell_,
-as needed for [Running Fedimint for dev testing](./dev-running.md).
-
-You can preclude these problems by forcing `tmux` to always use non-login shells. Create (or edit) a `.tmux.conf`
-in your home directory with the following line:
-
-```
-set -g default-command "${SHELL}"
-```
-
-Tmuxinator tests run 2 lightning nodes. One node, [Core Lightning](https://github.com/ElementsProject/lightning), runs as a gateway to the federation, and the other node, [LND](https://github.com/lightningnetwork/lnd), represents the rest of the Lightning network. These tests are conducted to simulate the process of sending and receiving transactions via Lightning network to and from Fedimint.
-
-
 ## Setting up `direnv` or `lorri`
 
 One of the biggest QoL improvements you can do when working with flake-enabled projects
@@ -110,8 +93,6 @@ The projects will set up your system's shell so that when you `cd` inside a give
 project they will automatically set up the environment for you, without starting any
 new shells. This way you can preserve your shell, and your settings while using
 `nix develop`-like shell automatically.
-
-[^1]: [issues/506](https://github.com/fedimint/fedimint/issues/506): scripts/tmuxinator.sh prerequisites and issues
 
 ## Cross-compilation
 
