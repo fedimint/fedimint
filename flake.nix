@@ -357,6 +357,7 @@
                     }))
                     docker-compose
                     pkgs.tokio-console
+                    pkgs.git
                     moreutils-ts
 
                     # Nix
