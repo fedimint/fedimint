@@ -30,7 +30,7 @@ $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 $ git clone https://github.com/fedimint/fedimint
 $ cd fedimint
 $ nix develop
-$ ./scripts/tmuxinator.sh
+$ just mprocs
 # you should now have a fully setup federation with all the backing bitcoin infrastructure running locally
 ```
 

@@ -12,10 +12,6 @@ It can handle both federations running locally or remotely.
 The easiest way is to test locally in the standard `nix develop` environment.
 
 Then run:
-```
-just tmuxinator
-```
-or
 
 ```
 just mprocs

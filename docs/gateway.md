@@ -84,7 +84,7 @@ A simple and delightful dashboard for administrative access and control of your 
 
 ## Developing the Gateway
 
-As described in [Running Fedimint for dev testing](./dev-running.md#using-the-gateway), running `./scripts/tmuxinator.sh` starts a local development Federation instance with a running Gateway instance attached. You can interact with this Gateway via `gateway-cli`.
+As described in [Running Fedimint for dev testing](./dev-running.md#using-the-gateway), running `just mprocs` starts a local development Federation instance with a running Gateway instance attached. You can interact with this Gateway via `gateway-cli`.
 
 ### Developing gateway-lnrpc-extension
 
