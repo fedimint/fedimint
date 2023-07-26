@@ -473,6 +473,7 @@
                   git
                   parallel
                   semgrep
+                  typos
                   moreutils-ts
                   nix
                 ];
