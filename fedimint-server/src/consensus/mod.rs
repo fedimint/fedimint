@@ -137,6 +137,7 @@ impl FedimintConsensus {
 
                     Box::pin(async move {
                         let mut rejected_txs = BTreeSet::new();
+                        let mut accepted_txes = BTreeSet::new();
 
                         let items = consensus_outcome.clone()
                             .contributions
@@ -148,13 +149,25 @@ impl FedimintConsensus {
                                 .await
                                 .expect("Setting transaction savepoint failed");
 
+                            if let  ConsensusItem::Transaction(ref transaction) = consensus_item {
+                                if accepted_txes.contains(&transaction.tx_hash()) {
+                                    continue;
+                                }
+                            }
+
                             let decision = match self.process_consensus_item(dbtx, consensus_item.clone(), peer_id).await {
-                                Ok(decision) => decision,
+                                Ok(decision) => {
+                                    if let  ConsensusItem::Transaction(ref transaction) = consensus_item {
+                                        accepted_txes.insert(transaction.tx_hash());
+                                    }
+                                    decision
+                                },
                                 Err(error) => {
                                     warn!(target: "consensus", "Invalid consensus item from {peer_id}: {error}");
                                     ConsensusDecision::Discard
                                 }
                             };
+
 
                             if decision == ConsensusDecision::Discard {
                                 dbtx.rollback_tx_to_savepoint()
