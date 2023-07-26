@@ -70,6 +70,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -451,9 +452,45 @@ fn states_add_instance(
     })
 }
 
-#[derive(Clone)]
 pub struct Client {
     inner: Arc<ClientInner>,
+}
+
+impl Clone for Client {
+    fn clone(&self) -> Self {
+        self.inner
+            .client_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Client {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
+        // sorry.
+        let client_count = self
+            .inner
+            .client_count
+            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+
+        // `fetch_sub` returns previous value, so if it is 1, it means this is the last
+        // client reference
+        if client_count == 1 {
+            info!("Last client reference dropped, shutting down client task group");
+            futures::executor::block_on(async {
+                let Some(tg) = self.inner.tg.lock().await.take() else {
+                    return;
+                };
+
+                if let Err(e) = tg.shutdown_join_all(Some(TG_SHUTDOWN_JOIN_TIMEOUT)).await {
+                    error!("Error shutting down client task group: {e}");
+                }
+            });
+        }
+    }
 }
 
 /// List of core api versions supported by the implementation.
@@ -866,7 +903,17 @@ struct ClientInner {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
+    /// Task group used by this client and shut down when the client is dropped.
+    /// If a subgroup is used, dropping the parent task group stops the client's
+    /// background tasks.
     tg: Mutex<Option<TaskGroup>>,
+    /// Number of [`Client`] instances using this `ClientInner`.
+    ///
+    /// The `ClientInner` struct is both used for the client itself as well as
+    /// for the global context used in the state machine executor. This means we
+    /// cannot rely on the reference count of the `Arc<ClientInner>` to
+    /// determine if the client should shut down.
+    client_count: AtomicUsize,
 }
 
 impl ClientInner {
@@ -1081,20 +1128,6 @@ impl ClientInner {
         self.primary_module()
             .await_primary_module_output(operation_id, out_point)
             .await
-    }
-}
-
-impl Drop for ClientInner {
-    fn drop(&mut self) {
-        futures::executor::block_on(async {
-            let Some(tg) = self.tg.lock().await.take() else {
-                return;
-            };
-
-            if let Err(e) = tg.shutdown_join_all(Some(TG_SHUTDOWN_JOIN_TIMEOUT)).await {
-                error!("Error shutting down client task group: {e}");
-            }
-        })
     }
 }
 
@@ -1379,6 +1412,7 @@ impl ClientBuilder {
             root_secret,
             operation_log: OperationLog::new(db),
             tg: Mutex::new(None),
+            client_count: AtomicUsize::new(1),
         });
 
         Ok(Client {
