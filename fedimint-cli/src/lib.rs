@@ -319,10 +319,10 @@ impl Opts {
         &self,
         module_gens: &ClientModuleGenRegistry,
     ) -> CliResult<fedimint_client::Client> {
-        let mut tg = TaskGroup::new();
+        let tg = TaskGroup::new();
         let client_builder = self.build_client_ng_builder(module_gens).await?;
         client_builder
-            .build::<PlainRootSecretStrategy>(&mut tg)
+            .build::<PlainRootSecretStrategy>(tg)
             .await
             .map_err_cli_general()
     }
@@ -547,13 +547,13 @@ impl FedimintCli {
                 hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             }),
             Command::Client(ClientCmd::Restore { secret }) => {
-                let mut tg = TaskGroup::new();
+                let tg = TaskGroup::new();
                 let (client, metadata) = cli
                     .build_client_ng_builder(&self.module_gens)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
                     .build_restoring_from_backup(
-                        &mut tg,
+                        tg,
                         ClientSecret::<PlainRootSecretStrategy>::new(secret),
                     )
                     .await

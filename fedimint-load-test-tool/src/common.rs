@@ -124,7 +124,7 @@ pub async fn await_spend_notes_finish(
 
 pub async fn build_client(
     cfg: &ClientConfig,
-    tg: &mut TaskGroup,
+    tg: TaskGroup,
     rocksdb: Option<&PathBuf>,
 ) -> anyhow::Result<Client> {
     let mut client_builder = ClientBuilder::default();

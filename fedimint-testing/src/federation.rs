@@ -56,7 +56,7 @@ impl FederationTest {
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
         client_builder
-            .build::<PlainRootSecretStrategy>(&mut self.task.make_subgroup().await)
+            .build::<PlainRootSecretStrategy>(self.task.make_subgroup().await)
             .await
             .expect("Failed to build client")
     }

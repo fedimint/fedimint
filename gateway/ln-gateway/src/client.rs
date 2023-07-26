@@ -45,7 +45,7 @@ impl StandardGatewayClientBuilder {
         config: FederationConfig,
         node_pub_key: secp256k1::PublicKey,
         lnrpc: Arc<dyn ILnRpcClient>,
-        tg: &mut TaskGroup,
+        tg: TaskGroup,
         old_client: Option<fedimint_client::Client>,
     ) -> Result<fedimint_client::Client> {
         let federation_id = config.config.federation_id;

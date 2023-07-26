@@ -70,7 +70,9 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use async_stream::stream;
@@ -104,7 +106,8 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
-use tracing::{debug, info, warn};
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
 use crate::db::ClientSecretKey;
@@ -126,6 +129,8 @@ use crate::transaction::{
     TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
+
+const TG_SHUTDOWN_JOIN_TIMEOUT: Duration = Duration::from_millis(200);
 
 /// Client backup
 pub mod backup;
@@ -447,9 +452,45 @@ fn states_add_instance(
     })
 }
 
-#[derive(Clone)]
 pub struct Client {
     inner: Arc<ClientInner>,
+}
+
+impl Clone for Client {
+    fn clone(&self) -> Self {
+        self.inner
+            .client_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Client {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
+        // sorry.
+        let client_count = self
+            .inner
+            .client_count
+            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+
+        // `fetch_sub` returns previous value, so if it is 1, it means this is the last
+        // client reference
+        if client_count == 1 {
+            info!("Last client reference dropped, shutting down client task group");
+            futures::executor::block_on(async {
+                let Some(tg) = self.inner.tg.lock().await.take() else {
+                    return;
+                };
+
+                if let Err(e) = tg.shutdown_join_all(Some(TG_SHUTDOWN_JOIN_TIMEOUT)).await {
+                    error!("Error shutting down client task group: {e}");
+                }
+            });
+        }
+    }
 }
 
 /// List of core api versions supported by the implementation.
@@ -467,11 +508,13 @@ impl Client {
         ClientBuilder::default()
     }
 
-    pub async fn start_executor(&self, tg: &mut TaskGroup) {
+    pub async fn start_executor(&self, mut tg: TaskGroup) {
         self.inner
             .executor
-            .start_executor(tg, self.inner.context_gen())
-            .await
+            .start_executor(&mut tg, self.inner.context_gen())
+            .await;
+
+        *self.inner.tg.lock().await = Some(tg);
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -860,6 +903,17 @@ struct ClientInner {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
+    /// Task group used by this client and shut down when the client is dropped.
+    /// If a subgroup is used, dropping the parent task group stops the client's
+    /// background tasks.
+    tg: Mutex<Option<TaskGroup>>,
+    /// Number of [`Client`] instances using this `ClientInner`.
+    ///
+    /// The `ClientInner` struct is both used for the client itself as well as
+    /// for the global context used in the state machine executor. This means we
+    /// cannot rely on the reference count of the `Arc<ClientInner>` to
+    /// determine if the client should shut down.
+    client_count: AtomicUsize,
 }
 
 impl ClientInner {
@@ -1191,7 +1245,7 @@ impl ClientBuilder {
 
     pub async fn build_restoring_from_backup<S>(
         self,
-        tg: &mut TaskGroup,
+        tg: TaskGroup,
         secret: ClientSecret<S>,
     ) -> anyhow::Result<(Client, Metadata)>
     where
@@ -1233,7 +1287,7 @@ impl ClientBuilder {
     }
 
     /// Build a [`Client`] and start its executor
-    pub async fn build<S>(self, tg: &mut TaskGroup) -> anyhow::Result<Client>
+    pub async fn build<S>(self, tg: TaskGroup) -> anyhow::Result<Client>
     where
         S: RootSecretStrategy,
     {
@@ -1357,6 +1411,8 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
+            tg: Mutex::new(None),
+            client_count: AtomicUsize::new(1),
         });
 
         Ok(Client {
