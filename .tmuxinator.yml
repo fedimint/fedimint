@@ -35,8 +35,12 @@ windows:
       panes:
         - bitcoind:
           - tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
+  - faucet:
+      panes:
+        - log:
+          - tail -n +0 -F $FM_LOGS_DIR/faucet.log
   - devimint:
       panes:
         - log:
-          - tail -n +0 -F $FM_LOGS_DIR/devimint.log
+          - tail -n +0 -F $FM_LOGS_DIR/devimint-outer.log
 

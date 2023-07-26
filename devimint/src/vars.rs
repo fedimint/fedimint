@@ -72,7 +72,7 @@ async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
-use fedimint_server::config::ServerConfig;
+use fedimint_server::config::ConfigGenParams;
 use format as f;
 
 pub fn utf8(path: &Path) -> &str {
@@ -162,12 +162,12 @@ impl Global {
 //
 // * `id` - ID of the server. Used to calculate port numbers.
 declare_vars! {
-    Fedimintd = (globals: &Global, cfg: &ServerConfig, bind_metrics_api: String) => {
-        FM_BIND_P2P: String = cfg.local.fed_bind.to_string();
-        FM_P2P_URL: String = cfg.local.p2p_endpoints[&cfg.local.identity].url.to_string();
-        FM_BIND_API: String = cfg.local.api_bind.to_string();
-        FM_BIND_METRICS_API: String = bind_metrics_api;
-        FM_API_URL: String = cfg.consensus.api_endpoints[&cfg.local.identity].url.to_string();
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{}", cfg.local.identity.to_usize()))).await?;
+    Fedimintd = (globals: &Global, params: ConfigGenParams) => {
+        FM_BIND_P2P: String = params.local.p2p_bind.to_string();
+        FM_BIND_API: String = params.local.api_bind.to_string();
+        FM_P2P_URL: String = params.consensus.peers[&params.local.our_id].p2p_url.to_string();
+        FM_API_URL: String = params.consensus.peers[&params.local.our_id].api_url.to_string();
+        FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", 3510 + params.local.our_id.to_usize());
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{}", params.local.our_id.to_usize()))).await?;
     }
 }

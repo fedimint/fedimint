@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 use threshold_crypto::{PublicKey, PK_SIZE};
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
 use crate::backup::ClientBackupSnapshot;
@@ -939,7 +939,8 @@ impl<C: JsonRpcClient> FederationMember<C> {
                             .await?
                     }
                     Err(err) => {
-                        error!(
+                        // Warn instead of Error because we will probably retry connecting later
+                        warn!(
                             target: LOG_NET_API,
                             %err, "unable to connect to server");
                         return Err(err)?;

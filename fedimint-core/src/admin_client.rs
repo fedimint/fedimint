@@ -22,6 +22,7 @@ use crate::PeerId;
 // TODO: Maybe should have it's own CLI client so it doesn't need to be in core
 pub struct WsAdminClient {
     inner: DynGlobalApi,
+    pub url: Url,
 }
 
 impl WsAdminClient {
@@ -30,7 +31,8 @@ impl WsAdminClient {
         // multiple peers so errors can be attributed. The admin client has no use for
         // them.
         Self {
-            inner: WsFederationApi::new(vec![(PeerId(0), url)]).into(),
+            inner: WsFederationApi::new(vec![(PeerId(0), url.clone())]).into(),
+            url,
         }
     }
 
