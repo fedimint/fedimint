@@ -12,7 +12,7 @@ The following command will setup a local environment for you to play around with
 just mprocs
 ```
 
-This uses a tool called [mprocs](https://github.com/pvolok/mprocs) to spawn working local federation, displays logs for all daemons involved, as well as a shell with some convenient aliases and environment variables already setup so you can start tinkering. Click the tabs on the left nav to inspect the diffrent processes. You can see available keyboard commands on the bottom -- for example, when you select text you'll see a `c` command that can be used to copy the text. To quit, type `ctrl-a` then `q` then `y`. If you're a tmux user, you can also use `just tmuxinator` to setup a tmux session with a running federation. But this is a little less user-friendly.
+This uses a tool called [mprocs](https://github.com/pvolok/mprocs) to spawn working local federation, displays logs for all daemons involved, as well as a shell with some convenient aliases and environment variables already setup so you can start tinkering. Click the tabs on the left nav to inspect the different processes. You can see available keyboard commands on the bottom -- for example, when you select text you'll see a `c` command that can be used to copy the text. To quit, type `ctrl-a` then `q` then `y`. If you're a tmux user, you can also use `just tmuxinator` to setup a tmux session with a running federation. But this is a little less user-friendly.
 
 ![screenshot of the federation running in mprocs](mprocs.png)
 
