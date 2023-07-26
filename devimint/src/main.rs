@@ -745,28 +745,7 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
     // once (at the very beginning) and we used a fixed operation id for it.
     // Testing restore in different setups would require multiple clients,
     // which is a larger refactor.
-    // {
-    //     let _ = cmd!(fed_cli, "wipe", "--force",).out_json().await?;
-
-    //     assert_eq!(
-    //         0,
-    //         cmd!(fed_cli, "info").out_json().await?["total_msat"]
-    //             .as_u64()
-    //             .unwrap()
-    //     );
-    //     let _ = cmd!(fed_cli, "restore", &secret,).out_json().await?;
-
-    //     let post_notes = cmd!(fed_cli, "info").out_json().await?;
-    //     let post_balance = post_notes["total_msat"].as_u64().unwrap();
-
-    //     debug!(%post_notes, post_balance, "State after backup");
-    //     assert_eq!(pre_balance, post_balance);
-    // }
-
-    // with a backup
     {
-        let _ = cmd!(fed_cli, "backup",).out_json().await?;
-
         let _ = cmd!(fed_cli, "wipe", "--force",).out_json().await?;
 
         assert_eq!(
@@ -783,6 +762,27 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
         debug!(%post_notes, post_balance, "State after backup");
         assert_eq!(pre_balance, post_balance);
     }
+
+    // with a backup
+    // {
+    //     let _ = cmd!(fed_cli, "backup",).out_json().await?;
+
+    //     let _ = cmd!(fed_cli, "wipe", "--force",).out_json().await?;
+
+    //     assert_eq!(
+    //         0,
+    //         cmd!(fed_cli, "info").out_json().await?["total_msat"]
+    //             .as_u64()
+    //             .unwrap()
+    //     );
+    //     let _ = cmd!(fed_cli, "restore", &secret,).out_json().await?;
+
+    //     let post_notes = cmd!(fed_cli, "info").out_json().await?;
+    //     let post_balance = post_notes["total_msat"].as_u64().unwrap();
+
+    //     debug!(%post_notes, post_balance, "State after backup");
+    //     assert_eq!(pre_balance, post_balance);
+    // }
 
     Ok(())
 }
