@@ -16,8 +16,9 @@ use ln_gateway::gatewaylnrpc::{
     PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lnd::GatewayLndClient;
-use ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
-use ln_gateway::GatewayError;
+use ln_gateway::lnrpc_client::{
+    ILnRpcClient, LightningRpcError, NetworkLnRpcClient, RouteHtlcStream,
+};
 use tokio::sync::Mutex;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};
 use tonic_lnd::{connect, LndClient};
@@ -91,29 +92,32 @@ impl LightningTest for ClnLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for ClnLightningTest {
-    async fn info(&self) -> Result<GetNodeInfoResponse, GatewayError> {
+    async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         self.lnrpc.info().await
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, GatewayError> {
+    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
         self.lnrpc.routehints().await
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse, GatewayError> {
+    async fn pay(
+        &self,
+        invoice: PayInvoiceRequest,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
         self.lnrpc.pay(invoice).await
     }
 
     async fn route_htlcs<'a>(
         self: Box<Self>,
         task_group: &mut TaskGroup,
-    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         self.lnrpc.route_htlcs(task_group).await
     }
 
     async fn complete_htlc(
         &self,
         htlc: InterceptHtlcResponse,
-    ) -> Result<EmptyResponse, GatewayError> {
+    ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
     }
 }
@@ -238,29 +242,32 @@ impl fmt::Debug for LndLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for LndLightningTest {
-    async fn info(&self) -> Result<GetNodeInfoResponse, GatewayError> {
+    async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         self.lnrpc.info().await
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, GatewayError> {
+    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
         self.lnrpc.routehints().await
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> Result<PayInvoiceResponse, GatewayError> {
+    async fn pay(
+        &self,
+        invoice: PayInvoiceRequest,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
         self.lnrpc.pay(invoice).await
     }
 
     async fn route_htlcs<'a>(
         self: Box<Self>,
         task_group: &mut TaskGroup,
-    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         self.lnrpc.route_htlcs(task_group).await
     }
 
     async fn complete_htlc(
         &self,
         htlc: InterceptHtlcResponse,
-    ) -> Result<EmptyResponse, GatewayError> {
+    ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.complete_htlc(htlc).await
     }
 }

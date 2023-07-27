@@ -21,7 +21,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Txid};
@@ -52,7 +51,8 @@ use futures::stream::StreamExt;
 use gatewaylnrpc::intercept_htlc_response::Action;
 use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
-use lnrpc_client::{ILnRpcClient, RouteHtlcStream};
+use lnrpc_client::{ILnRpcClient, LightningRpcError, RouteHtlcStream};
+use ng::pay::OutgoingPaymentError;
 use ng::GatewayClientExt;
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -67,7 +67,7 @@ use url::Url;
 use crate::gatewaylnrpc::intercept_htlc_response::Forward;
 use crate::lnd::GatewayLndClient;
 use crate::lnrpc_client::NetworkLnRpcClient;
-use crate::ng::{GatewayExtPayStates, Htlc};
+use crate::ng::GatewayExtPayStates;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
@@ -334,31 +334,40 @@ pub enum LightningMode {
 
 #[derive(Debug, Error)]
 pub enum GatewayError {
-    #[error("Lightning rpc operation error: {0:?}")]
-    LnRpcError(#[from] tonic::Status),
     #[error("Federation error: {0:?}")]
     FederationError(#[from] FederationError),
     #[error("Other: {0:?}")]
-    Other(#[from] anyhow::Error),
-    #[error("Failed to fetch route hints")]
-    FailedToFetchRouteHints,
+    ClientStateMachineError(#[from] anyhow::Error),
     #[error("Failed to open the database: {0:?}")]
     DatabaseError(anyhow::Error),
     #[error("Federation client error")]
-    ClientNgError,
-}
-
-impl GatewayError {
-    pub fn other(msg: String) -> Self {
-        error!(msg);
-        GatewayError::Other(anyhow!(msg))
-    }
+    LightningRpcError(#[from] LightningRpcError),
+    #[error("Outgoing Payment Error {0:?}")]
+    OutgoingPaymentError(#[from] Box<OutgoingPaymentError>),
+    #[error("Invalid Metadata: {0}")]
+    InvalidMetadata(String),
+    #[error("Unexpected state: {0}")]
+    UnexpectedState(String),
 }
 
 impl IntoResponse for GatewayError {
     fn into_response(self) -> Response {
-        let mut err = Cow::<'static, str>::Owned(format!("{self:?}")).into_response();
-        *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        // For privacy reasons, we do not return too many details about the failure of
+        // the request back to the client to prevent malicious clients from
+        // deducing state about the gateway/lightning node.
+        let (error_message, status_code) = match self {
+            GatewayError::OutgoingPaymentError(_) => (
+                "Error while paying lightning invoice. Outgoing contract will be refunded."
+                    .to_string(),
+                StatusCode::BAD_REQUEST,
+            ),
+            _ => (
+                "An internal gateway error occurred".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
+        };
+        let mut err = Cow::<'static, str>::Owned(error_message).into_response();
+        *err.status_mut() = status_code;
         err
     }
 }
@@ -443,10 +452,7 @@ impl Gateway {
                 // Just forward the HTLC if we do not have a client that
                 // corresponds to the federation id
                 if let Some(client) = client {
-                    let htlc: Result<Htlc> = htlc_request
-                        .clone()
-                        .try_into()
-                        .map_err(|_| GatewayError::ClientNgError);
+                    let htlc = htlc_request.clone().try_into();
                     if let Ok(htlc) = htlc {
                         if client.gateway_handle_intercepted_htlc(htlc).await.is_ok() {
                             continue;
@@ -480,7 +486,7 @@ impl Gateway {
 
             let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
             let node_pub_key = PublicKey::from_slice(&pub_key)
-                .map_err(|e| GatewayError::Other(anyhow!("Invalid node pubkey {}", e)))?;
+                .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
 
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
                 break (route_hints, node_pub_key, alias);
@@ -606,15 +612,9 @@ impl Gateway {
         &self,
         federation_id: FederationId,
     ) -> Result<fedimint_client::Client> {
-        let client =
-            self.clients
-                .write()
-                .await
-                .remove(&federation_id)
-                .ok_or(GatewayError::Other(anyhow::anyhow!(
-                    "No federation with id {}",
-                    federation_id.to_string()
-                )))?;
+        let client = self.clients.write().await.remove(&federation_id).ok_or(
+            GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
+        )?;
         let mut dbtx = self.gatewayd_db.begin_transaction().await;
         dbtx.remove_entry(&FederationRegistrationKey { id: federation_id })
             .await;
@@ -631,9 +631,8 @@ impl Gateway {
             .await
             .get(&federation_id)
             .cloned()
-            .ok_or(GatewayError::Other(anyhow::anyhow!(
-                "No federation with id {}",
-                federation_id.to_string()
+            .ok_or(GatewayError::InvalidMetadata(format!(
+                "No federation with id {federation_id}"
             )))
     }
 
@@ -642,7 +641,7 @@ impl Gateway {
         payload: ConnectFedPayload,
     ) -> Result<FederationInfo> {
         let connect = WsClientConnectInfo::from_str(&payload.connect).map_err(|e| {
-            GatewayError::Other(anyhow::anyhow!("Invalid federation member string {}", e))
+            GatewayError::InvalidMetadata(format!("Invalid federation member string {e}"))
         })?;
 
         // The gateway deterministically assigns a channel id (u64) to each federation
@@ -749,19 +748,23 @@ impl Gateway {
                     preimage,
                     outpoint: _,
                 } => return Ok(preimage),
-                GatewayExtPayStates::Fail => {
-                    return Err(GatewayError::Other(anyhow!("Payment failed")))
+                GatewayExtPayStates::Fail {
+                    error,
+                    error_message,
+                } => {
+                    error!(error_message);
+                    return Err(GatewayError::OutgoingPaymentError(Box::new(error)));
                 }
-                GatewayExtPayStates::Canceled => {
-                    return Err(GatewayError::Other(anyhow!("Outgoing contract canceled")))
+                GatewayExtPayStates::Canceled { error } => {
+                    return Err(GatewayError::OutgoingPaymentError(Box::new(error)));
                 }
                 _ => {}
             };
         }
 
-        return Err(GatewayError::Other(anyhow!(
-            "Unexpected error occurred while paying the invoice"
-        )));
+        Err(GatewayError::UnexpectedState(
+            "Ran out of state updates while paying invoice".to_string(),
+        ))
     }
 
     pub async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
@@ -808,15 +811,15 @@ impl Gateway {
                     return Ok(txid);
                 }
                 WithdrawState::Failed(e) => {
-                    return Err(GatewayError::Other(anyhow!(e)));
+                    return Err(GatewayError::UnexpectedState(e));
                 }
                 _ => {}
             }
         }
 
-        return Err(GatewayError::Other(anyhow!(
-            "Unexpected error occurred while withdrawing"
-        )));
+        Err(GatewayError::UnexpectedState(
+            "Ran out of state updates while withdrawing".to_string(),
+        ))
     }
 
     pub async fn handle_backup_msg(

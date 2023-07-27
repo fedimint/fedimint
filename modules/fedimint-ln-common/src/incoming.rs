@@ -10,13 +10,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId};
+use lightning_invoice::Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -46,8 +48,13 @@ pub enum IncomingSmStates {
     FundingOffer(FundingOfferState),
     DecryptingPreimage(DecryptingPreimageState),
     Preimage(Preimage),
-    RefundSubmitted(TransactionId),
-    FundingFailed(String),
+    RefundSubmitted {
+        txid: TransactionId,
+        error: IncomingSmError,
+    },
+    FundingFailed {
+        error: IncomingSmError,
+    },
     Failure(String),
 }
 
@@ -90,24 +97,31 @@ impl State for IncomingStateMachine {
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 pub enum IncomingSmError {
-    #[error("Violated fee policy")]
-    ViolatedFeePolicy,
-    #[error("Invalid offer")]
-    InvalidOffer,
-    #[error("Timeout")]
-    Timeout,
-    #[error("Fetch contract error")]
-    FetchContractError,
-    #[error("Incoming contract error")]
-    IncomingContractError,
-    #[error("Invalid preimage")]
-    InvalidPreimage(Box<IncomingContractAccount>),
-    #[error("Output outcome error")]
-    OutputOutcomeError,
-    #[error("Incoming contract not found")]
-    IncomingContractNotFound,
-    #[error("Amount error")]
-    AmountError,
+    #[error("Violated fee policy. Offer amount {offer_amount} Payment amount: {payment_amount}")]
+    ViolatedFeePolicy {
+        offer_amount: Amount,
+        payment_amount: Amount,
+    },
+    #[error("Invalid offer. Offer hash: {offer_hash} Payment hash: {payment_hash}")]
+    InvalidOffer {
+        offer_hash: sha256::Hash,
+        payment_hash: sha256::Hash,
+    },
+    #[error("Timed out fetching the offer")]
+    TimeoutFetchingOffer { payment_hash: sha256::Hash },
+    #[error("Error fetching the contract {payment_hash}. Error: {error_message}")]
+    FetchContractError {
+        payment_hash: sha256::Hash,
+        error_message: String,
+    },
+    #[error("Invalid preimage. Contract: {contract:?}")]
+    InvalidPreimage {
+        contract: Box<IncomingContractAccount>,
+    },
+    #[error("There was a failure when funding the contract: {error_message}")]
+    FailedToFundContract { error_message: String },
+    #[error("Failed to parse the amount from the invoice: {invoice}")]
+    AmountError { invoice: Invoice },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -147,7 +161,9 @@ impl FundingOfferState {
                 &context.ln_decoder,
             )
             .await
-            .map_err(|_| IncomingSmError::OutputOutcomeError)?;
+            .map_err(|e| IncomingSmError::FailedToFundContract {
+                error_message: e.to_string(),
+            })?;
         Ok(())
     }
 
@@ -165,9 +181,9 @@ impl FundingOfferState {
                 common: old_state.common,
                 state: IncomingSmStates::DecryptingPreimage(DecryptingPreimageState { txid }),
             },
-            Err(e) => IncomingStateMachine {
+            Err(error) => IncomingStateMachine {
                 common: old_state.common,
-                state: IncomingSmStates::FundingFailed(e.to_string()),
+                state: IncomingSmStates::FundingFailed { error },
             },
         }
     }
@@ -220,7 +236,9 @@ impl DecryptingPreimageState {
                     DecryptedPreimage::Pending => {}
                     DecryptedPreimage::Some(preimage) => break preimage,
                     DecryptedPreimage::Invalid => {
-                        return Err(IncomingSmError::InvalidPreimage(Box::new(contract)));
+                        return Err(IncomingSmError::InvalidPreimage {
+                            contract: Box::new(contract),
+                        });
                     }
                 },
                 Err(e) => {
@@ -251,7 +269,7 @@ impl DecryptingPreimageState {
                 common: old_state.common,
                 state: IncomingSmStates::Preimage(preimage),
             },
-            Err(IncomingSmError::InvalidPreimage(contract)) => {
+            Err(IncomingSmError::InvalidPreimage { contract }) => {
                 Self::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
                     .await
             }
@@ -282,7 +300,10 @@ impl DecryptingPreimageState {
 
         IncomingStateMachine {
             common: old_state.common,
-            state: IncomingSmStates::RefundSubmitted(refund_txid),
+            state: IncomingSmStates::RefundSubmitted {
+                txid: refund_txid,
+                error: IncomingSmError::InvalidPreimage { contract },
+            },
         }
     }
 }

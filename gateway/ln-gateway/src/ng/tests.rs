@@ -217,7 +217,7 @@ async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
                         .await?
                         .into_stream();
                     assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
-                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled);
+                    assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled { .. });
 
                     // Assert that the user receives a refund
                     assert_matches!(pay_sub.ok().await?, LnPayState::WaitingForRefund { .. });
@@ -303,7 +303,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
             Ok(_) => panic!(
                 "Expected incoming offer validation to fail because the offer does not exist"
             ),
-            Err(e) => assert_eq!(e.to_string(), "Timeout".to_string()),
+            Err(e) => assert_eq!(e.to_string(), "Timed out fetching the offer".to_string()),
         }
 
         Ok(())
@@ -421,7 +421,10 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             assert_matches!(intercept_sub.ok().await?, GatewayExtReceiveStates::Funding);
 
             match intercept_sub.ok().await? {
-                GatewayExtReceiveStates::RefundSuccess(refund_outpoint) => {
+                GatewayExtReceiveStates::RefundSuccess {
+                    outpoint: refund_outpoint,
+                    error: _,
+                } => {
                     // Assert that the gateway got it's refund
                     gateway.receive_money(refund_outpoint).await?;
                     assert_eq!(initial_gateway_balance, gateway.get_balance().await);
@@ -511,7 +514,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                         .await?
                         .into_stream();
                     assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
-                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled);
+                    assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled { .. });
 
                     assert_matches!(pay_sub.ok().await?, LnPayState::WaitingForRefund { .. });
                     // Gateway should immediately refund the client

@@ -77,10 +77,7 @@ impl StandardGatewayClientBuilder {
             // TODO: make this configurable?
             .build::<PlainRootSecretStrategy>(tg)
             .await
-            .map_err(|error| {
-                tracing::warn!("Error building client: {:?}", error);
-                GatewayError::ClientNgError
-            })
+            .map_err(GatewayError::ClientStateMachineError)
     }
 
     pub async fn create_config(
