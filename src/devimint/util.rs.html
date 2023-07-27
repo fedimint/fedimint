@@ -554,8 +554,8 @@
         }
         <span class="comment">// report every 20 seconds
         </span><span class="kw">let </span>now = fedimint_core::time::now();
-        <span class="kw">if </span>now.duration_since(last_time)<span class="question-mark">? </span>&gt; Duration::from_secs(<span class="number">20</span>) {
-            <span class="kw">let </span>total_duration = now.duration_since(start)<span class="question-mark">?</span>;
+        <span class="kw">if </span>now.duration_since(last_time).unwrap_or_default() &gt; Duration::from_secs(<span class="number">20</span>) {
+            <span class="kw">let </span>total_duration = now.duration_since(start).unwrap_or_default();
             <span class="macro">warn!</span>(
                 LOG_DEVIMINT,
                 <span class="string">&quot;waiting {name} for over {} seconds&quot;</span>,
