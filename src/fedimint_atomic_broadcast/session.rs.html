@@ -366,7 +366,7 @@
     });
 
     <span class="comment">// this is the minimum number of unit data that will be ordered before we reach
-    // the EXPONETIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
+    // the EXPONENTIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
     // data
     </span><span class="kw">let </span>batches_per_block = EXPONENTIAL_SLOWDOWN_OFFSET * keychain.peer_count() / <span class="number">3</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>pending_items = <span class="macro">vec!</span>[];
@@ -448,7 +448,7 @@
                 }
             }
 
-            <span class="kw">_ </span>= ordered_item_sender.closed() =&gt; <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Ordered Item Receiver has been droppped&quot;</span>)
+            <span class="kw">_ </span>= ordered_item_sender.closed() =&gt; <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Ordered Item Receiver has been dropped&quot;</span>)
         }
     }
 

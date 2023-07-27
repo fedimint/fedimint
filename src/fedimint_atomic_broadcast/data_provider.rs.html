@@ -184,7 +184,7 @@
             }
         }
 
-        <span class="comment">// if the channel is empty we want to return the batch immediatly in order to
+        <span class="comment">// if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(item) = <span class="self">self</span>.mempool_item_receiver.try_recv() {
             <span class="kw">let </span>n_bytes = items.iter().map(Vec::len).sum::&lt;usize&gt;();

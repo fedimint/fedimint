@@ -81,7 +81,7 @@ Consensus on top of the broadcast. Such a state machine has to accept an
 item if it changes the machines state and should discard it otherwise. Let
 us consider the case of an ecash note being double spend by the items
 A and B while one peer is offline. First, item A is ordered and all correct
-peers include the note as spent in their state. Therfore they also accept
+peers include the note as spent in their state. Therefore they also accept
 the item A. Then, item B is ordered and all correct nodes notice the double
 spend and make no changes to their state. Now they can safely discard the
 item B as it did not cause a state transition. When the session completes
@@ -89,7 +89,7 @@ only item A is part of the corresponding block. When the offline peer comes
 back online it downloads the block. Therefore the recovering peer will only
 see Item A but arrives at the same state as its peers at the end of the
 session regardless. However, it did so by processing one less ordered item
-and without realizing that a double spend had occured.</p>
+and without realizing that a double spend had occurred.</p>
 <p>Since a state machine may process only a subsequence of a sessions items we
 can not simply rely on the last processed items index when recovering from a
 crash mid session in order to know how many items from the session have
@@ -118,14 +118,14 @@ only guaranteed to be seen by all correct nodes if a correct node decides to
 accept it.</div></div><div class="item-row"><div class="item-left"><a class="struct" href="struct.SignedBlock.html" title="struct fedimint_atomic_broadcast::SignedBlock">SignedBlock</a></div><div class="item-right docblock-short">A signed block combines a block with the naive threshold secp schnorr
 signature for its header created by the federation. The signed blocks allow
 clients and recovering guardians to verify the federations consensus
-history. After a signed block has been created it is stored in the database.</div></div></div><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="enum" href="enum.Decision.html" title="enum fedimint_atomic_broadcast::Decision">Decision</a></div><div class="item-right docblock-short">This enum specifies wether an <a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a> has been accepted or discarded
+history. After a signed block has been created it is stored in the database.</div></div></div><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="enum" href="enum.Decision.html" title="enum fedimint_atomic_broadcast::Decision">Decision</a></div><div class="item-right docblock-short">This enum specifies whether an <a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a> has been accepted or discarded
 by Fedimint Consensus.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Message.html" title="enum fedimint_atomic_broadcast::Message">Message</a></div><div class="item-right docblock-short">The majority of these messages need to be delivered to the intended
 <a href="enum.Recipient.html" title="Recipient">Recipient</a> in order for the broadcast to make progress. However, the
 broadcast does not assume a reliable network layer and implements all
 necessary retry logic. Therefore, the caller can discard a message
-immediatly if its intended recipient is offline.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Recipient.html" title="enum fedimint_atomic_broadcast::Recipient">Recipient</a></div><div class="item-right docblock-short">This enum defines the intented destination of a <a href="enum.Message.html" title="Message">Message</a>.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Shutdown.html" title="enum fedimint_atomic_broadcast::Shutdown">Shutdown</a></div><div class="item-right docblock-short">A clean shutdown can be initiated at the end of every session via the
+immediately if its intended recipient is offline.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Recipient.html" title="enum fedimint_atomic_broadcast::Recipient">Recipient</a></div><div class="item-right docblock-short">This enum defines the intended destination of a <a href="enum.Message.html" title="Message">Message</a>.</div></div><div class="item-row"><div class="item-left"><a class="enum" href="enum.Shutdown.html" title="enum fedimint_atomic_broadcast::Shutdown">Shutdown</a></div><div class="item-right docblock-short">A clean shutdown can be initiated at the end of every session via the
 shutdown sender passed to <a href="broadcast/fn.run.html" title="run">run</a>. This can be used for a coordinated shutdown
 of a federation in order to upgrade. A mid session shutdown is triggered if
 the receiver for the <a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a>s is dropped. This mechanism can be used
-if one wants to shut down a single guardian immediatly.</div></div></div><h2 id="functions" class="small-section-header"><a href="#functions">Functions</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="fn" href="fn.consensus_hash_sha256.html" title="fn fedimint_atomic_broadcast::consensus_hash_sha256">consensus_hash_sha256</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="fn" href="fn.run.html" title="fn fedimint_atomic_broadcast::run">run</a></div><div class="item-right docblock-short">This function runs the broadcast until a shutdown is intiated either via the
+if one wants to shut down a single guardian immediately.</div></div></div><h2 id="functions" class="small-section-header"><a href="#functions">Functions</a></h2><div class="item-table"><div class="item-row"><div class="item-left"><a class="fn" href="fn.consensus_hash_sha256.html" title="fn fedimint_atomic_broadcast::consensus_hash_sha256">consensus_hash_sha256</a><span title="Restricted Visibility">&nbsp;🔒</span> </div></div><div class="item-row"><div class="item-left"><a class="fn" href="fn.run.html" title="fn fedimint_atomic_broadcast::run">run</a></div><div class="item-right docblock-short">This function runs the broadcast until a shutdown is intiated either via the
 shutdown sender or the <a href="struct.OrderedItem.html" title="OrderedItem">OrderedItem</a> receiver is dropped.</div></div></div></section></div></main><div id="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="fedimint_atomic_broadcast" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
