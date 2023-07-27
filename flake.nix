@@ -455,12 +455,18 @@
                   toolchain.fenixToolchainCrossWasm
                   pkgs.wasm-pack
                   pkgs.wasm-bindgen-cli
+                ];
+
+                shellHook = shellCommonCross.shellHook + toolchain.wasm32CrossEnvVars;
+              });
+
+              # Like `crossWasm` but only with geckodriver + firefox for running automated tests
+              crossWasmTests = devShells.crossWasm.overrideAttrs (prev: {
+                nativeBuildInputs = prev.nativeBuildInputs ++ [
                   pkgs.geckodriver
                 ] ++ lib.optionals (stdenv.isLinux) [
                   pkgs.firefox
                 ];
-
-                shellHook = shellCommonCross.shellHook + toolchain.wasm32CrossEnvVars;
               });
 
               # this shell is used only in CI, so it should contain minimum amount
