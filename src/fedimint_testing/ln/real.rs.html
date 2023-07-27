@@ -329,6 +329,13 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -347,8 +354,9 @@
     PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lnd::GatewayLndClient;
-<span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, NetworkLnRpcClient, RouteHtlcStream};
-<span class="kw">use </span>ln_gateway::GatewayError;
+<span class="kw">use </span>ln_gateway::lnrpc_client::{
+    ILnRpcClient, LightningRpcError, NetworkLnRpcClient, RouteHtlcStream,
+};
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tonic_lnd::lnrpc::{GetInfoRequest, Invoice <span class="kw">as </span>LndInvoice, ListChannelsRequest};
 <span class="kw">use </span>tonic_lnd::{connect, LndClient};
@@ -422,29 +430,32 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>ClnLightningTest {
-    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, GatewayError&gt; {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.info().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, GatewayError&gt; {
+    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.routehints().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, GatewayError&gt; {
+    <span class="kw">async fn </span>pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: PayInvoiceRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.pay(invoice).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.route_htlcs(task_group).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>complete_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.complete_htlc(htlc).<span class="kw">await
     </span>}
 }
@@ -569,29 +580,32 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>LndLightningTest {
-    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, GatewayError&gt; {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.info().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, GatewayError&gt; {
+    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.routehints().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, GatewayError&gt; {
+    <span class="kw">async fn </span>pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: PayInvoiceRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.pay(invoice).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.route_htlcs(task_group).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>complete_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.complete_htlc(htlc).<span class="kw">await
     </span>}
 }

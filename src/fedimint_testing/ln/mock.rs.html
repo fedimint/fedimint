@@ -136,6 +136,8 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -156,8 +158,7 @@
     <span class="self">self</span>, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
-<span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
-<span class="kw">use </span>ln_gateway::GatewayError;
+<span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, LightningRpcError, RouteHtlcStream};
 <span class="kw">use </span>rand::rngs::OsRng;
 
 <span class="kw">use </span><span class="kw">super</span>::LightningTest;
@@ -227,20 +228,23 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>FakeLightningTest {
-    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;GetNodeInfoResponse&gt; {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: <span class="self">self</span>.gateway_node_pub_key.serialize().to_vec(),
             alias: <span class="string">&quot;FakeLightningNode&quot;</span>.to_string(),
         })
     }
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ln_gateway::Result&lt;GetRouteHintsResponse&gt; {
+    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse {
             route_hints: <span class="macro">vec!</span>[gatewaylnrpc::get_route_hints_response::RouteHint { hops: <span class="macro">vec!</span>[] }],
         })
     }
 
-    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; ln_gateway::Result&lt;PayInvoiceResponse&gt; {
+    <span class="kw">async fn </span>pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: PayInvoiceRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
         <span class="kw">let </span>signed = invoice.invoice.parse::&lt;SignedRawInvoice&gt;().unwrap();
         <span class="kw">let </span>invoice = Invoice::from_signed(signed).unwrap();
         <span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
@@ -250,9 +254,9 @@
                 <span class="kw-2">&amp;</span>Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
             )
         {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Failed to pay invoice&quot;
-            </span>)));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+                failure_reason: <span class="string">&quot;Description was invalid&quot;</span>.to_string(),
+            });
         }
 
         <span class="prelude-val">Ok</span>(PayInvoiceResponse {
@@ -263,14 +267,14 @@
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>((Box::pin(stream::iter(<span class="macro">vec!</span>[])), Arc::new(<span class="self">Self</span>::new())))
     }
 
     <span class="kw">async fn </span>complete_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(EmptyResponse {})
     }
 }

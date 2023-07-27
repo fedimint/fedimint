@@ -132,13 +132,68 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>futures::stream::BoxStream;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tonic::transport::{Channel, Endpoint};
 <span class="kw">use </span>tonic::Request;
 <span class="kw">use </span>tracing::info;
@@ -149,23 +204,40 @@
     EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
-<span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
-
 <span class="kw">pub type </span>RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt; =
     BoxStream&lt;<span class="lifetime">&#39;a</span>, std::result::Result&lt;InterceptHtlcRequest, tonic::Status&gt;&gt;;
 
 <span class="kw">pub const </span>MAX_LIGHTNING_RETRIES: u32 = <span class="number">10</span>;
 
+<span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>LightningRpcError {
+    <span class="attr">#[error(<span class="string">&quot;Failed to connect to Lightning node&quot;</span>)]
+    </span>FailedToConnect,
+    <span class="attr">#[error(<span class="string">&quot;Failed to retrieve node info: {failure_reason}&quot;</span>)]
+    </span>FailedToGetNodeInfo { failure_reason: String },
+    <span class="attr">#[error(<span class="string">&quot;Failed to retrieve route hints: {failure_reason}&quot;</span>)]
+    </span>FailedToGetRouteHints { failure_reason: String },
+    <span class="attr">#[error(<span class="string">&quot;Payment failed: {failure_reason}&quot;</span>)]
+    </span>FailedPayment { failure_reason: String },
+    <span class="attr">#[error(<span class="string">&quot;Failed to route HTLCs: {failure_reason}&quot;</span>)]
+    </span>FailedToRouteHtlcs { failure_reason: String },
+    <span class="attr">#[error(<span class="string">&quot;Failed to complete HTLC: {failure_reason}&quot;</span>)]
+    </span>FailedToCompleteHtlc { failure_reason: String },
+}
+
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>ILnRpcClient: Debug + Send + Sync {
     <span class="doccomment">/// Get the public key and alias of the lightning node
-    </span><span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse&gt;;
+    </span><span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Get route hints to the lightning node
-    </span><span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse&gt;;
+    </span><span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt;;
 
     <span class="doccomment">/// Attempt to pay an invoice using the lightning node
-    </span><span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse&gt;;
+    </span><span class="kw">async fn </span>pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: PayInvoiceRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt;;
 
     <span class="comment">// Consumes the current lightning client because `route_htlcs` should only be
     // called once per client. A stream of intercepted HTLCs and a `Arc&lt;dyn
@@ -175,9 +247,12 @@
     </span><span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;)&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt;;
 
-    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptHtlcResponse) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse&gt;;
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        htlc: InterceptHtlcResponse,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
 }
 
 <span class="doccomment">/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
@@ -200,13 +275,13 @@
         }
     }
 
-    <span class="kw">async fn </span>connect(connection_url: Url) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayLightningClient&lt;Channel&gt;&gt; {
+    <span class="kw">async fn </span>connect(
+        connection_url: Url,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayLightningClient&lt;Channel&gt;, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
         <span class="kw">let </span>client = <span class="kw">loop </span>{
             <span class="kw">if </span>retries &gt;= MAX_LIGHTNING_RETRIES {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
-                    <span class="string">&quot;Failed to connect to CLN&quot;
-                </span>)));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedToConnect);
             }
 
             retries += <span class="number">1</span>;
@@ -227,42 +302,71 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>NetworkLnRpcClient {
-    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse&gt; {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="kw">let </span>req = Request::new(EmptyRequest {});
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.get_node_info(req).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = client.get_node_info(req).<span class="kw">await</span>.map_err(|status| {
+            LightningRpcError::FailedToGetNodeInfo {
+                failure_reason: status.message().to_string(),
+            }
+        })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse&gt; {
+    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="kw">let </span>req = Request::new(EmptyRequest {});
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.get_route_hints(req).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = client.get_route_hints(req).<span class="kw">await</span>.map_err(|status| {
+            LightningRpcError::FailedToGetRouteHints {
+                failure_reason: status.message().to_string(),
+            }
+        })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
-    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: PayInvoiceRequest) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse&gt; {
+    <span class="kw">async fn </span>pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: PayInvoiceRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
         <span class="kw">let </span>req = Request::new(invoice);
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.pay_invoice(req).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res =
+            client
+                .pay_invoice(req)
+                .<span class="kw">await
+                </span>.map_err(|status| LightningRpcError::FailedPayment {
+                    failure_reason: status.message().to_string(),
+                })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;)&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.route_htlcs(EmptyRequest {}).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = client
+            .route_htlcs(EmptyRequest {})
+            .<span class="kw">await
+            </span>.map_err(|status| LightningRpcError::FailedToRouteHtlcs {
+                failure_reason: status.message().to_string(),
+            })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((
             Box::pin(res.into_inner()),
             Arc::new(<span class="self">Self</span>::new(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span>),
         ))
     }
 
-    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptHtlcResponse) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse&gt; {
+    <span class="kw">async fn </span>complete_htlc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        htlc: InterceptHtlcResponse,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>res = client.complete_htlc(htlc).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>res = client.complete_htlc(htlc).<span class="kw">await</span>.map_err(|status| {
+            LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: status.message().to_string(),
+            }
+        })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 }

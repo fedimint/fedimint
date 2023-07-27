@@ -317,10 +317,10 @@
                     IncomingSmStates::Preimage(preimage) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
                     }
-                    IncomingSmStates::RefundSubmitted(<span class="kw">_</span>) =&gt; {
+                    IncomingSmStates::RefundSubmitted { txid: <span class="kw">_</span>, error: <span class="kw">_ </span>} =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
                     }
-                    IncomingSmStates::FundingFailed(<span class="kw">_</span>) =&gt; {
+                    IncomingSmStates::FundingFailed { error: <span class="kw">_ </span>} =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
                     }
                     <span class="kw">_ </span>=&gt; {}

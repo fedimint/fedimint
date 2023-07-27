@@ -1015,6 +1015,18 @@
 <a href="#1015" id="1015">1015</a>
 <a href="#1016" id="1016">1016</a>
 <a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1136,10 +1148,18 @@
 </span><span class="kw">pub enum </span>InternalPayState {
     Funding,
     Preimage(Preimage),
-    RefundSuccess(OutPoint),
-    RefundError(String),
-    FundingFailed(String),
-    Error(String),
+    RefundSuccess {
+        outpoint: OutPoint,
+        error: IncomingSmError,
+    },
+    RefundError {
+        error_message: String,
+        error: IncomingSmError,
+    },
+    FundingFailed {
+        error: IncomingSmError,
+    },
+    UnexpectedError(String),
 }
 
 <span class="doccomment">/// The high-level state of a pay operation over lightning,
@@ -1160,7 +1180,9 @@
     Refunded {
         gateway_error: GatewayPayError,
     },
-    Failed,
+    UnexpectedError {
+        error_message: String,
+    },
 }
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
@@ -1450,7 +1472,7 @@
                             <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, change).<span class="kw">await </span>{
                                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                    <span class="kw">yield </span>LnPayState::Failed;
+                                    <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">&quot;Error occurred while waiting for the primary module&#39;s output&quot;</span>.to_string() };
                                     <span class="kw">return</span>;
                                 }
                             }
@@ -1473,7 +1495,7 @@
                     <span class="kw">_ </span>=&gt; {}
                 }
 
-                <span class="kw">yield </span>LnPayState::Failed;
+                <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">&quot;Error occurred trying to get refund. Refund was not successful&quot;</span>.to_string() };
             }
         }))
     }
@@ -1494,18 +1516,18 @@
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(LightningClientStateMachines::InternalPay(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt; <span class="kw">break </span>InternalPayState::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted(txid) =&gt; {
+                            IncomingSmStates::RefundSubmitted{ txid, error } =&gt; {
                                 <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0</span>};
                                 <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>InternalPayState::RefundSuccess(out_point),
-                                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>InternalPayState::RefundError(e.to_string()),
+                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>InternalPayState::RefundSuccess { outpoint: out_point, error },
+                                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>InternalPayState::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
-                            IncomingSmStates::FundingFailed(e) =&gt; <span class="kw">break </span>InternalPayState::FundingFailed(e),
+                            IncomingSmStates::FundingFailed { error } =&gt; <span class="kw">break </span>InternalPayState::FundingFailed{ error },
                             <span class="kw">_ </span>=&gt; {}
                         }
                     } <span class="kw">else </span>{
-                        <span class="kw">break </span>InternalPayState::Error(<span class="string">&quot;Unexpected State! Expected an InternalPay state&quot;</span>.to_string())
+                        <span class="kw">break </span>InternalPayState::UnexpectedError(<span class="string">&quot;Unexpected State! Expected an InternalPay state&quot;</span>.to_string())
                     }
                 };
                 <span class="kw">yield </span>state;
@@ -1739,7 +1761,9 @@
         <span class="kw">let </span>invoice_amount = Amount {
             msats: invoice
                 .amount_milli_satoshis()
-                .ok_or(IncomingSmError::AmountError)<span class="question-mark">?</span>,
+                .ok_or(IncomingSmError::AmountError {
+                    invoice: invoice.clone(),
+                })<span class="question-mark">?</span>,
         };
 
         <span class="kw">let </span>(incoming_output, contract_id) = create_incoming_contract_output(

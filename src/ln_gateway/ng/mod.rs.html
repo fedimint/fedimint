@@ -609,24 +609,6 @@
 <a href="#609" id="609">609</a>
 <a href="#610" id="610">610</a>
 <a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -673,7 +655,10 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="self">self</span>::complete::GatewayCompleteStateMachine;
-<span class="kw">use </span><span class="self">self</span>::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
+<span class="kw">use </span><span class="self">self</span>::pay::{
+    GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
+    OutgoingPaymentError,
+};
 <span class="kw">use </span><span class="kw">crate</span>::db::FederationRegistrationKey;
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::InterceptHtlcRequest;
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
@@ -694,8 +679,13 @@
         preimage: Preimage,
         outpoint: OutPoint,
     },
-    Canceled,
-    Fail,
+    Canceled {
+        error: OutgoingPaymentError,
+    },
+    Fail {
+        error: OutgoingPaymentError,
+        error_message: String,
+    },
     OfferDoesNotExist {
         contract_id: ContractId,
     },
@@ -707,9 +697,17 @@
 </span><span class="kw">pub enum </span>GatewayExtReceiveStates {
     Funding,
     Preimage(Preimage),
-    RefundSuccess(OutPoint),
-    RefundError(String),
-    FundingFailed(String),
+    RefundSuccess {
+        outpoint: OutPoint,
+        error: IncomingSmError,
+    },
+    RefundError {
+        error_message: String,
+        error: IncomingSmError,
+    },
+    FundingFailed {
+        error: IncomingSmError,
+    },
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -814,33 +812,33 @@
             <span class="macro">stream! </span>{
                 <span class="kw">yield </span>GatewayExtPayStates::Created;
 
-                <span class="kw">match </span>gateway.await_paid_invoice(operation_id).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>((outpoint, preimage)) =&gt; {
-                        <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
+                <span class="kw">let </span><span class="kw-2">mut </span>stream = gateway.notifier.subscribe(operation_id).<span class="kw">await</span>;
+                <span class="kw">loop </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
+                        <span class="kw">match </span>state.state {
+                            GatewayPayStates::Preimage(outpoint, preimage) =&gt; {
+                                <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
-                        <span class="kw">if </span><span class="self">self</span>.await_primary_module_output(operation_id, outpoint).<span class="kw">await</span>.is_ok() {
-                            <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
-                            <span class="kw">return</span>;
-                        }
-
-                        <span class="kw">yield </span>GatewayExtPayStates::Fail;
-                    }
-                    <span class="prelude-val">Err</span>(error) =&gt; {
-                        <span class="kw">match </span>error {
-                            GatewayError::Canceled(cancel_txid) =&gt; {
-                                <span class="kw">if </span><span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(cancel_txid).<span class="kw">await</span>.is_ok() {
-                                    <span class="kw">yield </span>GatewayExtPayStates::Canceled;
+                                <span class="kw">if </span><span class="self">self</span>.await_primary_module_output(operation_id, outpoint).<span class="kw">await</span>.is_ok() {
+                                    <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
+                                    <span class="kw">return</span>;
+                                }
+                            }
+                            GatewayPayStates::Canceled { txid, contract_id: <span class="kw">_</span>, error } =&gt; {
+                                <span class="kw">if </span><span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await</span>.is_ok() {
+                                    <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
                                     <span class="kw">return</span>;
                                 }
 
-                                <span class="kw">yield </span>GatewayExtPayStates::Fail;
+                                <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="string">&quot;Refund transaction was not accepted by the federation&quot;</span>.to_string() };
                             }
-                            GatewayError::OfferDoesNotExist(contract_id) =&gt; {
+                            GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
                                 <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
                             }
-                            <span class="kw">_ </span>=&gt; {
-                                <span class="kw">yield </span>GatewayExtPayStates::Fail;
-                            }
+                            GatewayPayStates::Failed{ error, error_message } =&gt; {
+                                <span class="kw">yield </span>GatewayExtPayStates::Fail{ error, error_message };
+                            },
+                            <span class="kw">_ </span>=&gt; {}
                         }
                     }
                 }
@@ -902,14 +900,14 @@
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted(txid) =&gt; {
+                            IncomingSmStates::RefundSubmitted{ txid, error } =&gt; {
                                 <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0</span>};
                                 <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess(out_point),
-                                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundError(e.to_string()),
+                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess{ outpoint: out_point, error },
+                                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
-                            IncomingSmStates::FundingFailed(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed(e),
+                            IncomingSmStates::FundingFailed{ error } =&gt; <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed{ error },
                             <span class="kw">_ </span>=&gt; {}
                         }
                     }
@@ -987,16 +985,6 @@
             redeem_key: ctx.redeem_key,
         }
     }
-}
-
-<span class="attr">#[derive(Error, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>GatewayError {
-    <span class="attr">#[error(<span class="string">&quot;Gateway canceled the contract&quot;</span>)]
-    </span>Canceled(TransactionId),
-    <span class="attr">#[error(<span class="string">&quot;Offer does not exist&quot;</span>)]
-    </span>OfferDoesNotExist(ContractId),
-    <span class="attr">#[error(<span class="string">&quot;Unrecoverable error occurred in the gateway&quot;</span>)]
-    </span>Failed,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1091,30 +1079,6 @@
             registration.gateway_id, id
         );
         <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="kw">async fn </span>await_paid_invoice(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutPoint, Preimage), GatewayError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
-        <span class="kw">loop </span>{
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
-                <span class="kw">match </span>state.state {
-                    GatewayPayStates::Preimage(outpoint, preimage) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>((outpoint, preimage))
-                    }
-                    GatewayPayStates::Canceled(cancel_outpoint, <span class="kw">_</span>) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Canceled(cancel_outpoint))
-                    }
-                    GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::OfferDoesNotExist(contract_id))
-                    }
-                    GatewayPayStates::Failed =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Failed),
-                    <span class="kw">_ </span>=&gt; {}
-                }
-            }
-        }
     }
 
     <span class="kw">async fn </span>create_funding_incoming_contract_output(

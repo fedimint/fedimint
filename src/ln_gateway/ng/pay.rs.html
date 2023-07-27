@@ -454,6 +454,34 @@
 <a href="#454" id="454">454</a>
 <a href="#455" id="455">455</a>
 <a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -473,6 +501,7 @@
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines};
 <span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse};
+<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::LightningRpcError;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that executes the Lightning payment on behalf of
@@ -496,9 +525,16 @@
     CancelContract(Box&lt;GatewayPayCancelContract&gt;),
     Preimage(OutPoint, Preimage),
     OfferDoesNotExist(ContractId),
-    Canceled(TransactionId, ContractId),
+    Canceled {
+        txid: TransactionId,
+        contract_id: ContractId,
+        error: OutgoingPaymentError,
+    },
     ClaimOutgoingContract(Box&lt;GatewayPayClaimOutgoingContract&gt;),
-    Failed,
+    Failed {
+        error: OutgoingPaymentError,
+        error_message: String,
+    },
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -576,7 +612,10 @@
     <span class="attr">#[error(<span class="string">&quot;OutgoingContract does not exist {contract_id}&quot;</span>)]
     </span>OutgoingContractDoesNotExist { contract_id: ContractId },
     <span class="attr">#[error(<span class="string">&quot;An error occurred while paying the lightning invoice.&quot;</span>)]
-    </span>LightningPayError { contract: OutgoingContractAccount },
+    </span>LightningPayError {
+        contract: OutgoingContractAccount,
+        lightning_error: LightningRpcError,
+    },
     <span class="attr">#[error(<span class="string">&quot;An invalid contract was specified.&quot;</span>)]
     </span>InvalidOutgoingContract {
         error: OutgoingContractError,
@@ -681,8 +720,10 @@
                 <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = preimage.try_into().expect(<span class="string">&quot;Failed to parse preimage&quot;</span>);
                 <span class="prelude-val">Ok</span>(Preimage(slice))
             }
-            <span class="comment">// TODO: Get status code from failed RPC request
-            </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(OutgoingPaymentError::LightningPayError { contract }),
+            <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(OutgoingPaymentError::LightningPayError {
+                contract,
+                lightning_error: error,
+            }),
         }
     }
 
@@ -724,7 +765,10 @@
                         )),
                     }
                 }
-                OutgoingPaymentError::LightningPayError { contract } =&gt; GatewayPayStateMachine {
+                OutgoingPaymentError::LightningPayError {
+                    contract,
+                    lightning_error: <span class="kw">_</span>,
+                } =&gt; GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
                         contract,
@@ -864,6 +908,7 @@
         common: GatewayPayCommon,
     ) -&gt; Vec&lt;StateTransition&lt;GatewayPayStateMachine&gt;&gt; {
         <span class="kw">let </span>contract = <span class="self">self</span>.contract.clone();
+        <span class="kw">let </span>error = <span class="self">self</span>.error.clone();
         <span class="macro">vec!</span>[StateTransition::new(
             future::ready(()),
             <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
@@ -873,6 +918,7 @@
                     global_context.clone(),
                     context.clone(),
                     common.clone(),
+                    error.clone(),
                 ))
             },
         )]
@@ -884,6 +930,7 @@
         global_context: DynGlobalClientContext,
         context: GatewayClientContext,
         common: GatewayPayCommon,
+        error: OutgoingPaymentError,
     ) -&gt; GatewayPayStateMachine {
         <span class="kw">let </span>cancel_signature = context.secp.sign_schnorr(
             <span class="kw-2">&amp;</span>contract.contract.cancellation_message().into(),
@@ -901,11 +948,20 @@
         <span class="kw">match </span>global_context.fund_output(dbtx, client_output).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>((txid, <span class="kw">_</span>)) =&gt; GatewayPayStateMachine {
                 common,
-                state: GatewayPayStates::Canceled(txid, contract.contract.contract_id()),
+                state: GatewayPayStates::Canceled {
+                    txid,
+                    contract_id: contract.contract.contract_id(),
+                    error,
+                },
             },
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; GatewayPayStateMachine {
+            <span class="prelude-val">Err</span>(e) =&gt; GatewayPayStateMachine {
                 common,
-                state: GatewayPayStates::Failed,
+                state: GatewayPayStates::Failed {
+                    error,
+                    error_message: <span class="macro">format!</span>(
+                        <span class="string">&quot;Failed to submit refund transaction to federation {e:?}&quot;
+                    </span>),
+                },
             },
         }
     }

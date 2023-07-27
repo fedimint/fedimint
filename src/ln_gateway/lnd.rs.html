@@ -515,12 +515,13 @@
 <a href="#515" id="515">515</a>
 <a href="#516" id="516">516</a>
 <a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, Context};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -544,8 +545,9 @@
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
-<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::{ILnRpcClient, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
-<span class="kw">use </span><span class="kw">crate</span>::GatewayError;
+<span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::{
+    ILnRpcClient, LightningRpcError, RouteHtlcStream, MAX_LIGHTNING_RETRIES,
+};
 
 <span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
 
@@ -582,13 +584,11 @@
         address: String,
         tls_cert: String,
         macaroon: String,
-    ) -&gt; <span class="kw">crate</span>::Result&lt;LndClient&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;LndClient, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
         <span class="kw">let </span>client = <span class="kw">loop </span>{
             <span class="kw">if </span>retries &gt;= MAX_LIGHTNING_RETRIES {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
-                    <span class="string">&quot;Failed to connect to LND&quot;
-                </span>)));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedToConnect);
             }
 
             retries += <span class="number">1</span>;
@@ -611,7 +611,7 @@
         lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
         lnd_rx: mpsc::Receiver&lt;ForwardHtlcInterceptResponse&gt;,
         gateway_sender: HtlcSubscriptionSender,
-    ) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
@@ -625,11 +625,8 @@
             .lightning()
             .get_info(GetInfoRequest {})
             .<span class="kw">await
-            </span>.map_err(|e| {
-                GatewayError::LnRpcError(tonic::Status::new(
-                    tonic::Code::Internal,
-                    <span class="macro">format!</span>(<span class="string">&quot;LND error: {e:?}&quot;</span>),
-                ))
+            </span>.map_err(|status| LightningRpcError::FailedToGetNodeInfo {
+                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get node info {status:?}&quot;</span>),
             })<span class="question-mark">?</span>;
 
         task_group
@@ -638,10 +635,8 @@
                     .router()
                     .htlc_interceptor(ReceiverStream::new(lnd_rx))
                     .<span class="kw">await
-                    </span>.map_err(|e| {
-                        <span class="macro">error!</span>(<span class="string">&quot;Failed to connect to lightning node&quot;</span>);
-                        <span class="macro">debug!</span>(<span class="string">&quot;Error: {:?}&quot;</span>, e);
-                        GatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Failed to subscribe to LND htlc stream&quot;</span>))
+                    </span>.map_err(|e| LightningRpcError::FailedToGetRouteHints {
+                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to subscribe to LND htlc stream {e:?}&quot;</span>),
                     }) {
                     <span class="prelude-val">Ok</span>(stream) =&gt; stream.into_inner(),
                     <span class="prelude-val">Err</span>(e) =&gt; {
@@ -699,7 +694,7 @@
     <span class="kw">async fn </span>cancel_htlc(
         key: CircuitKey,
         lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
-    ) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="comment">// TODO: Specify a failure code and message
         </span><span class="kw">let </span>response = ForwardHtlcInterceptResponse {
             incoming_circuit_key: <span class="prelude-val">Some</span>(key),
@@ -714,12 +709,14 @@
     <span class="kw">async fn </span>send_lnd_response(
         lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
         response: ForwardHtlcInterceptResponse,
-    ) -&gt; <span class="kw">crate</span>::Result&lt;()&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
         <span class="comment">// TODO: Consider retrying this if the send fails
-        </span>lnd_sender.send(response).<span class="kw">await</span>.map_err(|<span class="kw">_</span>| {
-            GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">&quot;Failed to send ForwardHtlcInterceptResponse to LND&quot;
-            </span>))
+        </span>lnd_sender.send(response).<span class="kw">await</span>.map_err(|send_error| {
+            LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: <span class="macro">format!</span>(
+                    <span class="string">&quot;Failed to send ForwardHtlcInterceptResponse to LND {send_error:?}&quot;
+                </span>),
+            }
         })
     }
 
@@ -727,7 +724,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Vec&lt;u8&gt;,
         client: <span class="kw-2">&amp;mut </span>LndClient,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;String&gt;, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;String&gt;, LightningRpcError&gt; {
         <span class="comment">// Loop until we successfully get the status of the payment, or determine that
         // the payment has not been made yet.
         </span><span class="kw">loop </span>{
@@ -742,20 +739,21 @@
             <span class="kw">match </span>payments {
                 <span class="prelude-val">Ok</span>(payments) =&gt; {
                     <span class="comment">// Block until LND returns the completed payment
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(payment) = payments
-                        .into_inner()
-                        .message()
-                        .<span class="kw">await
-                        </span>.map_err(|<span class="kw">_</span>| GatewayError::ClientNgError)<span class="question-mark">?
+                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(payment) =
+                        payments.into_inner().message().<span class="kw">await</span>.map_err(|status| {
+                            LightningRpcError::FailedPayment {
+                                failure_reason: status.message().to_string(),
+                            }
+                        })<span class="question-mark">?
                     </span>{
                         <span class="kw">if </span>payment.status() == PaymentStatus::Succeeded {
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment.payment_preimage));
                         }
 
                         <span class="kw">let </span>failure_reason = payment.failure_reason();
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow!</span>(
-                            <span class="string">&quot;LND payment failed. Failure Reason: {failure_reason:?}&quot;
-                        </span>)));
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+                            failure_reason: <span class="macro">format!</span>(<span class="string">&quot;{failure_reason:?}&quot;</span>),
+                        });
                     }
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
@@ -781,7 +779,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>GatewayLndClient {
-    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;GetNodeInfoResponse&gt; {
+    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
@@ -792,20 +790,17 @@
             .lightning()
             .get_info(GetInfoRequest {})
             .<span class="kw">await
-            </span>.map_err(|e| {
-                GatewayError::LnRpcError(tonic::Status::new(
-                    tonic::Code::Internal,
-                    <span class="macro">format!</span>(<span class="string">&quot;LND error: {e:?}&quot;</span>),
-                ))
+            </span>.map_err(|status| LightningRpcError::FailedToGetNodeInfo {
+                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get node info {status:?}&quot;</span>),
             })<span class="question-mark">?
             </span>.into_inner();
 
-        <span class="kw">let </span>pub_key: PublicKey = info.identity_pubkey.parse().map_err(|e| {
-            GatewayError::LnRpcError(tonic::Status::new(
-                tonic::Code::Internal,
-                <span class="macro">format!</span>(<span class="string">&quot;LND error: {e:?}&quot;</span>),
-            ))
-        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>pub_key: PublicKey =
+            info.identity_pubkey
+                .parse()
+                .map_err(|e| LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to parse public key {e:?}&quot;</span>),
+                })<span class="question-mark">?</span>;
 
         <span class="kw">return </span><span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: pub_key.serialize().to_vec(),
@@ -813,7 +808,7 @@
         });
     }
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">crate</span>::Result&lt;GetRouteHintsResponse&gt; {
+    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
@@ -830,11 +825,8 @@
                 peer: <span class="macro">vec!</span>[],
             })
             .<span class="kw">await
-            </span>.map_err(|e| {
-                GatewayError::LnRpcError(tonic::Status::new(
-                    tonic::Code::Internal,
-                    <span class="macro">format!</span>(<span class="string">&quot;LND error: {e:?}&quot;</span>),
-                ))
+            </span>.map_err(|status| LightningRpcError::FailedToGetRouteHints {
+                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to list channels {status:?}&quot;</span>),
             })<span class="question-mark">?
             </span>.into_inner();
 
@@ -846,11 +838,8 @@
                     chan_id: chan.chan_id,
                 })
                 .<span class="kw">await
-                </span>.map_err(|e| {
-                    GatewayError::LnRpcError(tonic::Status::new(
-                        tonic::Code::Internal,
-                        <span class="macro">format!</span>(<span class="string">&quot;LND error: {e:?}&quot;</span>),
-                    ))
+                </span>.map_err(|status| LightningRpcError::FailedToGetRouteHints {
+                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get channel info {status:?}&quot;</span>),
                 })<span class="question-mark">?
                 </span>.into_inner();
 
@@ -886,7 +875,10 @@
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse { route_hints })
     }
 
-    <span class="kw">async fn </span>pay(<span class="kw-2">&amp;</span><span class="self">self</span>, request: PayInvoiceRequest) -&gt; <span class="kw">crate</span>::Result&lt;PayInvoiceResponse&gt; {
+    <span class="kw">async fn </span>pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: PayInvoiceRequest,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
         <span class="kw">let </span>PayInvoiceRequest {
             invoice,
             max_fee_msat,
@@ -906,15 +898,23 @@
             </span>.lookup_payment(payment_hash.clone(), <span class="kw-2">&amp;mut </span>client)
             .<span class="kw">await</span><span class="question-mark">?
         </span>{
-            bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str())
-                .map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Failed to convert preimage&quot;</span>))<span class="question-mark">?
+            bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
+                LightningRpcError::FailedPayment {
+                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
+                }
+            })<span class="question-mark">?
         </span>} <span class="kw">else </span>{
             <span class="comment">// LND API allows fee limits in the `i64` range, but we use `u64` for
             // max_fee_msat. This means we can only set an enforceable fee limit
             // between 0 and i64::MAX
-            </span><span class="kw">let </span>fee_limit_msat: i64 = max_fee_msat
-                .try_into()
-                .map_err(|<span class="kw">_</span>| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;max_fee_msat exceeds valid LND fee limit ranges&quot;</span>))<span class="question-mark">?</span>;
+            </span><span class="kw">let </span>fee_limit_msat: i64 =
+                max_fee_msat
+                    .try_into()
+                    .map_err(|error| LightningRpcError::FailedPayment {
+                        failure_reason: <span class="macro">format!</span>(
+                            <span class="string">&quot;max_fee_msat exceeds valid LND fee limit ranges {error:?}&quot;
+                        </span>),
+                    })<span class="question-mark">?</span>;
 
             <span class="kw">let </span>payments = client
                 .router()
@@ -927,29 +927,33 @@
                     ..Default::default()
                 })
                 .<span class="kw">await
-                </span>.map_err(|e| {
-                    GatewayError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Failed to make outgoing payment: {e:?}&quot;</span>))
+                </span>.map_err(|status| LightningRpcError::FailedPayment {
+                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to make outgoing payment {status:?}&quot;</span>),
                 })<span class="question-mark">?</span>;
 
-            <span class="kw">match </span>payments
-                .into_inner()
-                .message()
-                .<span class="kw">await
-                </span>.context(<span class="string">&quot;Failed to get payment status&quot;</span>)<span class="question-mark">?
-            </span>{
+            <span class="kw">match </span>payments.into_inner().message().<span class="kw">await</span>.map_err(|error| {
+                LightningRpcError::FailedPayment {
+                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get payment status {error:?}&quot;</span>),
+                }
+            })<span class="question-mark">? </span>{
                 <span class="prelude-val">Some</span>(payment) <span class="kw">if </span>payment.status() == PaymentStatus::Succeeded =&gt; {
                     bitcoin_hashes::hex::FromHex::from_hex(payment.payment_preimage.as_str())
-                        .context(<span class="string">&quot;Failed to convert preimage&quot;</span>)<span class="question-mark">?
+                        .map_err(|error| LightningRpcError::FailedPayment {
+                            failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
+                        })<span class="question-mark">?
                 </span>}
                 <span class="prelude-val">Some</span>(payment) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow!</span>(
-                        <span class="string">&quot;LND failed to complete payment: {payment:?}&quot;
-                    </span>)));
+                    <span class="kw">let </span>failure_reason = payment.failure_reason();
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;{failure_reason:?}&quot;</span>),
+                    });
                 }
                 <span class="prelude-val">None </span>=&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow!</span>(
-                        <span class="string">&quot;Failed to get payment status for payment_hash {payment_hash:?}&quot;
-                    </span>)));
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+                        failure_reason: <span class="macro">format!</span>(
+                            <span class="string">&quot;Failed to get payment status for payment hash {payment_hash:?}&quot;
+                        </span>),
+                    });
                 }
             }
         };
@@ -960,7 +964,7 @@
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">&#39;a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="kw">const </span>CHANNEL_SIZE: usize = <span class="number">100</span>;
 
         <span class="comment">// Channel to send intercepted htlc to the gateway for processing
@@ -991,7 +995,7 @@
     <span class="kw">async fn </span>complete_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         htlc: InterceptHtlcResponse,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(lnd_sender) = <span class="self">self</span>.lnd_sender.clone() {
             <span class="kw">let </span>InterceptHtlcResponse {
                 action,
@@ -1027,9 +1031,9 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(EmptyResponse {});
         }
 
-        <span class="prelude-val">Err</span>(GatewayError::Other(<span class="macro">anyhow::anyhow!</span>(
-            <span class="string">&quot;Gatewayd has not started to route HTLCs&quot;
-        </span>)))
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToCompleteHtlc {
+            failure_reason: <span class="string">&quot;Gatewayd has not started to route HTLCs&quot;</span>.to_string(),
+        })
     }
 }
 </code></pre></div>

@@ -488,6 +488,9 @@
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
 <a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -749,7 +752,10 @@
         <span class="kw">if </span>!response.status().is_success() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::GatewayInternalError {
                 error_code: <span class="prelude-val">Some</span>(response.status().as_u16()),
-                error_message: response.status().to_string(),
+                error_message: response
+                    .text()
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;Could not retrieve text from response&quot;</span>),
             });
         }
 

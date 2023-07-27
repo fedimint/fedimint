@@ -301,6 +301,27 @@
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
 //!
 //! This shared state machine is used by clients
@@ -313,13 +334,15 @@
 </span><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
@@ -349,8 +372,13 @@
     FundingOffer(FundingOfferState),
     DecryptingPreimage(DecryptingPreimageState),
     Preimage(Preimage),
-    RefundSubmitted(TransactionId),
-    FundingFailed(String),
+    RefundSubmitted {
+        txid: TransactionId,
+        error: IncomingSmError,
+    },
+    FundingFailed {
+        error: IncomingSmError,
+    },
     Failure(String),
 }
 
@@ -393,24 +421,31 @@
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>IncomingSmError {
-    <span class="attr">#[error(<span class="string">&quot;Violated fee policy&quot;</span>)]
-    </span>ViolatedFeePolicy,
-    <span class="attr">#[error(<span class="string">&quot;Invalid offer&quot;</span>)]
-    </span>InvalidOffer,
-    <span class="attr">#[error(<span class="string">&quot;Timeout&quot;</span>)]
-    </span>Timeout,
-    <span class="attr">#[error(<span class="string">&quot;Fetch contract error&quot;</span>)]
-    </span>FetchContractError,
-    <span class="attr">#[error(<span class="string">&quot;Incoming contract error&quot;</span>)]
-    </span>IncomingContractError,
-    <span class="attr">#[error(<span class="string">&quot;Invalid preimage&quot;</span>)]
-    </span>InvalidPreimage(Box&lt;IncomingContractAccount&gt;),
-    <span class="attr">#[error(<span class="string">&quot;Output outcome error&quot;</span>)]
-    </span>OutputOutcomeError,
-    <span class="attr">#[error(<span class="string">&quot;Incoming contract not found&quot;</span>)]
-    </span>IncomingContractNotFound,
-    <span class="attr">#[error(<span class="string">&quot;Amount error&quot;</span>)]
-    </span>AmountError,
+    <span class="attr">#[error(<span class="string">&quot;Violated fee policy. Offer amount {offer_amount} Payment amount: {payment_amount}&quot;</span>)]
+    </span>ViolatedFeePolicy {
+        offer_amount: Amount,
+        payment_amount: Amount,
+    },
+    <span class="attr">#[error(<span class="string">&quot;Invalid offer. Offer hash: {offer_hash} Payment hash: {payment_hash}&quot;</span>)]
+    </span>InvalidOffer {
+        offer_hash: sha256::Hash,
+        payment_hash: sha256::Hash,
+    },
+    <span class="attr">#[error(<span class="string">&quot;Timed out fetching the offer&quot;</span>)]
+    </span>TimeoutFetchingOffer { payment_hash: sha256::Hash },
+    <span class="attr">#[error(<span class="string">&quot;Error fetching the contract {payment_hash}. Error: {error_message}&quot;</span>)]
+    </span>FetchContractError {
+        payment_hash: sha256::Hash,
+        error_message: String,
+    },
+    <span class="attr">#[error(<span class="string">&quot;Invalid preimage. Contract: {contract:?}&quot;</span>)]
+    </span>InvalidPreimage {
+        contract: Box&lt;IncomingContractAccount&gt;,
+    },
+    <span class="attr">#[error(<span class="string">&quot;There was a failure when funding the contract: {error_message}&quot;</span>)]
+    </span>FailedToFundContract { error_message: String },
+    <span class="attr">#[error(<span class="string">&quot;Failed to parse the amount from the invoice: {invoice}&quot;</span>)]
+    </span>AmountError { invoice: Invoice },
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -450,7 +485,9 @@
                 <span class="kw-2">&amp;</span>context.ln_decoder,
             )
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| IncomingSmError::OutputOutcomeError)<span class="question-mark">?</span>;
+            </span>.map_err(|e| IncomingSmError::FailedToFundContract {
+                error_message: e.to_string(),
+            })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -468,9 +505,9 @@
                 common: old_state.common,
                 state: IncomingSmStates::DecryptingPreimage(DecryptingPreimageState { txid }),
             },
-            <span class="prelude-val">Err</span>(e) =&gt; IncomingStateMachine {
+            <span class="prelude-val">Err</span>(error) =&gt; IncomingStateMachine {
                 common: old_state.common,
-                state: IncomingSmStates::FundingFailed(e.to_string()),
+                state: IncomingSmStates::FundingFailed { error },
             },
         }
     }
@@ -523,7 +560,9 @@
                     DecryptedPreimage::Pending =&gt; {}
                     DecryptedPreimage::Some(preimage) =&gt; <span class="kw">break </span>preimage,
                     DecryptedPreimage::Invalid =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage(Box::new(contract)));
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage {
+                            contract: Box::new(contract),
+                        });
                     }
                 },
                 <span class="prelude-val">Err</span>(e) =&gt; {
@@ -554,7 +593,7 @@
                 common: old_state.common,
                 state: IncomingSmStates::Preimage(preimage),
             },
-            <span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage(contract)) =&gt; {
+            <span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage { contract }) =&gt; {
                 <span class="self">Self</span>::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
                     .<span class="kw">await
             </span>}
@@ -585,7 +624,10 @@
 
         IncomingStateMachine {
             common: old_state.common,
-            state: IncomingSmStates::RefundSubmitted(refund_txid),
+            state: IncomingSmStates::RefundSubmitted {
+                txid: refund_txid,
+                error: IncomingSmError::InvalidPreimage { contract },
+            },
         }
     }
 }
