@@ -93,9 +93,10 @@ The client is not currently modularized, so nothing is prepended to the below pr
 | NotesPerDenomination   |     `0x2b`    | determines how many notes to issue | `u16`                        |
 
 ### WalletClient
-| Name                    | Entity Prefix | Key        | Value                        |
-|-------------------------|---------------|------------|------------------------------|
-| PegIn                   |     `0x22`    | `Script`   | `[u8; 32]`                   |
+| Name                        | Entity Prefix | Key      | Value      |
+|-----------------------------|---------------|----------|------------|
+| PegIn                       | `0x22`        | `Script` | `[u8; 32]` |
+| Next tweak derivation index | `0x2c`        | `()`      | `u64`     |
 
 ## State Machine Client DB Layout
 ### Executor
