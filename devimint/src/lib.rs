@@ -103,8 +103,8 @@ impl Gatewayd {
 
     pub async fn stop_lightning_node(&mut self) -> Result<()> {
         match self.ln.take() {
-            Some(LightningNode::Lnd(lnd)) => lnd.kill().await,
-            Some(LightningNode::Cln(cln)) => cln.kill().await,
+            Some(LightningNode::Lnd(lnd)) => lnd.terminate().await,
+            Some(LightningNode::Cln(cln)) => cln.terminate().await,
             None => Err(anyhow::anyhow!(
                 "Cannot stop an already stopped Lightning Node"
             )),

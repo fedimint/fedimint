@@ -79,27 +79,27 @@ jobs:
 
       - name: Build workspace
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        run: nix build -L .#ci.workspaceBuild
+        run: df -h && nix build -L .#ci.workspaceBuild
 
       - name: Clippy workspace
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        run: nix build -L .#ci.workspaceClippy
+        run: df -h && nix build -L .#ci.workspaceClippy
 
       - name: Run cargo doc
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        run: nix build -L .#ci.workspaceDoc
+        run: df -h && nix build -L .#ci.workspaceDoc
 
       - name: Test docs
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
-        run: nix build -L .#ci.workspaceTestDoc
+        run: df -h && nix build -L .#ci.workspaceTestDoc
 
       - name: Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
-        run: nix build -L .#ci.cli-test.all
+        run: df -h && nix build -L .#ci.cli-test.all
 
       - name: Wasm Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
-        run: nix build -L .#ci.wasm-tests
+        run: df -h && nix build -L .#ci.wasm-tests
 
   audit:
     name: "Audit"

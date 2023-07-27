@@ -128,6 +128,14 @@ function cli_test_always_success() {
 }
 export -f cli_test_always_success
 
+function monitor_disk_usage() {
+  for _ in {1..600}; do
+    df -h
+    sleep 1
+  done
+}
+export -f monitor_disk_usage
+
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
 joblog="$tmpdir/joblog"
@@ -147,7 +155,9 @@ if parallel \
   --delay 5 \
   --jobs '+0' \
   --memfree 1G \
+  --line-buffer \
   --nice 15 ::: \
+  monitor_disk_usage \
   cli_test_always_success \
   cli_test_rust_tests_bitcoind \
   cli_test_rust_tests_electrs \

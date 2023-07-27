@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 
-use anyhow::{anyhow, Context};
+use anyhow::{bail, Context};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 use fedimint_core::api::ServerStatus;
@@ -147,7 +147,7 @@ impl Federation {
 
     pub async fn start_server(&mut self, process_mgr: &ProcessManager, peer: usize) -> Result<()> {
         if self.members.contains_key(&peer) {
-            return Err(anyhow!("fedimintd-{} already running", peer));
+            bail!("fedimintd-{peer} already running");
         }
         self.members.insert(
             peer,
@@ -156,11 +156,11 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn kill_server(&mut self, peer_id: usize) -> Result<()> {
+    pub async fn terminate_server(&mut self, peer_id: usize) -> Result<()> {
         let Some((_, fedimintd)) = self.members.remove_entry(&peer_id) else {
-            return Err(anyhow!("fedimintd-{} does not exist", peer_id));
+            bail!("fedimintd-{peer_id} does not exist");
         };
-        fedimintd.kill().await?;
+        fedimintd.terminate().await?;
         Ok(())
     }
 
@@ -311,9 +311,8 @@ impl Fedimintd {
         })
     }
 
-    pub async fn kill(self) -> Result<()> {
-        self.process.kill().await?;
-        Ok(())
+    pub async fn terminate(self) -> Result<()> {
+        self.process.terminate().await
     }
 }
 
