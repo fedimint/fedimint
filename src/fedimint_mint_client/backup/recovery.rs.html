@@ -851,6 +851,38 @@
 <a href="#851" id="851">851</a>
 <a href="#852" id="852">852</a>
 <a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::cmp::{<span class="self">self</span>, max};
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt;
@@ -1036,7 +1068,11 @@
                 <span class="kw">let </span>global_context = global_context_2.clone();
                 Box::pin(<span class="kw">async move </span>{
                     <span class="kw">if </span>new_state.is_done() {
-                        <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY_MINT, <span class="string">&quot;Finalizing restore&quot;</span>);
+                        <span class="macro">debug!</span>(
+                            target: LOG_CLIENT_RECOVERY_MINT,
+                            <span class="question-mark">?</span>new_state,
+                            <span class="string">&quot;Finalizing restore&quot;
+                        </span>);
                         <span class="kw">let </span>finalized = new_state.finalize();
 
                         {
@@ -1530,29 +1566,18 @@
         <span class="macro">trace!</span>(
             target: LOG_CLIENT_RECOVERY_MINT,
             <span class="question-mark">?</span>item,
-            <span class="string">&quot;handling consensus item&quot;
+            <span class="string">&quot;found consensus item&quot;
         </span>);
         <span class="comment">// assert_eq!(epoch, self.next_epoch);
         </span><span class="kw">match </span>item {
             ConsensusItem::Transaction(tx) =&gt; {
                 <span class="kw">let </span>txid = tx.tx_hash();
 
-                <span class="macro">debug!</span>(
+                <span class="macro">trace!</span>(
                     target: LOG_CLIENT_RECOVERY_MINT,
                     tx_hash = %tx.tx_hash(),
-                    <span class="string">&quot;handling transaction&quot;
+                    <span class="string">&quot;found transaction&quot;
                 </span>);
-
-                <span class="kw">if </span>!processed_txs.insert(txid) {
-                    <span class="comment">// Just like server side consensus, do not attempt to process the same
-                    // transaction twice.
-                    </span><span class="macro">debug!</span>(
-                        target: LOG_CLIENT_RECOVERY_MINT,
-                        tx_hash = %tx.tx_hash(),
-                        <span class="string">&quot;transaction was already processed&quot;
-                    </span>);
-                    <span class="kw">return</span>;
-                }
 
                 <span class="kw">if </span>rejected_txs.contains(<span class="kw-2">&amp;</span>txid) {
                     <span class="macro">debug!</span>(
@@ -1568,7 +1593,33 @@
                     </span><span class="kw">return</span>;
                 }
 
-                <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.inputs {
+                <span class="kw">if </span>!processed_txs.insert(txid) {
+                    <span class="comment">// Just like server side consensus, do not attempt to process the same
+                    // transaction twice.
+                    </span><span class="macro">debug!</span>(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        <span class="string">&quot;transaction was already processed&quot;
+                    </span>);
+                    <span class="kw">return</span>;
+                }
+
+                <span class="macro">debug!</span>(
+                    target: LOG_CLIENT_RECOVERY_MINT,
+                    tx_hash = %tx.tx_hash(),
+                    input_num = tx.inputs.len(),
+                    output_num = tx.outputs.len(),
+                    <span class="string">&quot;processing transaction&quot;
+                </span>);
+
+                <span class="kw">for </span>(idx, input) <span class="kw">in </span>tx.inputs.iter().enumerate() {
+                    <span class="macro">debug!</span>(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        idx,
+                        module_id = input.module_instance_id(),
+                        <span class="string">&quot;found transaction input&quot;
+                    </span>);
                     <span class="kw">if </span>input.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         <span class="kw">let </span>input = input
                             .as_any()
@@ -1580,6 +1631,13 @@
                 }
 
                 <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>tx.outputs.iter().enumerate() {
+                    <span class="macro">debug!</span>(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        tx_hash = %tx.tx_hash(),
+                        idx = out_idx,
+                        module_id = output.module_instance_id(),
+                        <span class="string">&quot;found transaction output&quot;
+                    </span>);
                     <span class="kw">if </span>output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                         <span class="kw">let </span>output = output
                             .as_any()
@@ -1598,6 +1656,11 @@
                 }
             }
             ConsensusItem::Module(module_item) =&gt; {
+                <span class="macro">debug!</span>(
+                    target: LOG_CLIENT_RECOVERY_MINT,
+                    module_id = module_item.module_instance_id(),
+                    <span class="string">&quot;found module consensus item&quot;
+                </span>);
                 <span class="kw">if </span>module_item.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_MINT {
                     <span class="kw">let </span>mint_item = module_item
                         .as_any()
@@ -1606,8 +1669,9 @@
 
                     <span class="macro">debug!</span>(
                         target: LOG_CLIENT_RECOVERY_MINT,
+                        module_id = module_item.module_instance_id(),
                         out_point = %mint_item.out_point,
-                        <span class="string">&quot;handlng mint consensus item&quot;
+                        <span class="string">&quot;processing mint consensus item&quot;
                     </span>);
                     <span class="self">self</span>.handle_output_confirmation(peer_id, mint_item);
                 }
