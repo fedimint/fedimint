@@ -183,8 +183,8 @@ impl Lightningd {
             .to_string())
     }
 
-    pub async fn kill(self) -> Result<()> {
-        self.process.kill().await
+    pub async fn terminate(self) -> Result<()> {
+        self.process.terminate().await
     }
 }
 
@@ -272,8 +272,8 @@ impl Lnd {
         Ok(())
     }
 
-    pub async fn kill(self) -> Result<()> {
-        self.process.kill().await
+    pub async fn terminate(self) -> Result<()> {
+        self.process.terminate().await
     }
 }
 
