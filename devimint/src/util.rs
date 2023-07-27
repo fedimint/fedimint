@@ -1,10 +1,12 @@
 use std::ffi::OsStr;
+use std::sync::Weak;
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use fedimint_core::task;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
+use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
 use super::*;
@@ -21,20 +23,39 @@ fn kill(child: &Child) {
 /// NOTE: drop order is significant make sure fields in struct are declared in
 /// correct order it is generallly clients, process handle, deps
 #[derive(Debug, Clone)]
-pub struct ProcessHandle(Arc<ProcessHandleInner>);
+pub struct ProcessHandle(Arc<Mutex<ProcessHandleInner>>);
 
 impl ProcessHandle {
-    pub async fn kill(self) -> Result<()> {
-        let arc_process_handle_inner = self.0;
-        let mut process_handle_inner = match Arc::try_unwrap(arc_process_handle_inner) {
-            Ok(process_handler_inner) => process_handler_inner,
-            Err(_) => return Err(anyhow!("Cannot kill process because of clones")),
-        };
-        let mut child = std::mem::take(&mut process_handle_inner.child).unwrap();
-        info!(LOG_DEVIMINT, "killing {}", process_handle_inner.name);
-        kill(&child);
-        child.wait().await?;
+    pub fn as_weak(&self) -> WeakProcessHandle {
+        WeakProcessHandle(Arc::downgrade(&self.0))
+    }
+
+    pub async fn kill(&self) -> Result<()> {
+        let mut inner = self.0.lock().await;
+        if let Some(mut child) = inner.child.take() {
+            info!(LOG_DEVIMINT, "killing {}", inner.name);
+            kill(&child);
+            child.wait().await?;
+        }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WeakProcessHandle(Weak<Mutex<ProcessHandleInner>>);
+
+impl WeakProcessHandle {
+    pub fn upgrade(&self) -> Option<ProcessHandle> {
+        self.0.upgrade().map(ProcessHandle)
+    }
+
+    pub async fn kill(&self) -> Result<()> {
+        if let Some(handle) = self.upgrade() {
+            handle.kill().await
+        } else {
+            // Process must have already been killed
+            Ok(())
+        }
     }
 }
 
@@ -52,13 +73,18 @@ impl Drop for ProcessHandleInner {
     }
 }
 
+#[derive(Clone)]
 pub struct ProcessManager {
-    pub globals: vars::Global,
+    pub globals: Arc<vars::Global>,
+    handles: Arc<Mutex<Vec<WeakProcessHandle>>>,
 }
 
 impl ProcessManager {
     pub fn new(globals: vars::Global) -> Self {
-        Self { globals }
+        Self {
+            globals: Arc::new(globals),
+            handles: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     /// Logs to $FM_LOGS_DIR/{name}.{out,err}
@@ -79,10 +105,22 @@ impl ProcessManager {
             .cmd
             .spawn()
             .with_context(|| format!("Could not spawn: {name}"))?;
-        Ok(ProcessHandle(Arc::new(ProcessHandleInner {
+        let handle = ProcessHandle(Arc::new(Mutex::new(ProcessHandleInner {
             name: name.to_owned(),
             child: Some(child),
-        })))
+        })));
+        self.handles.lock().await.push(handle.as_weak());
+        Ok(handle)
+    }
+
+    pub async fn kill_all_children(&self) {
+        let handles = self.handles.lock().await;
+        let killing_jobs = handles.iter().map(|handle| handle.kill());
+        for result in futures::future::join_all(killing_jobs).await {
+            if let Err(e) = result {
+                warn!(LOG_DEVIMINT, "failed to kill child: {e:?}");
+            }
+        }
     }
 }
 

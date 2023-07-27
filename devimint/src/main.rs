@@ -1091,7 +1091,7 @@ use std::str::FromStr;
 
 use fedimint_core::encoding::Decodable;
 
-async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
+async fn setup(arg: CommonArgs) -> Result<ProcessManager> {
     let globals = vars::Global::new(&arg.test_dir, arg.fed_size).await?;
     let log_file = fs::OpenOptions::new()
         .write(true)
@@ -1114,58 +1114,107 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     write_overwrite_async(globals.FM_TEST_DIR.join("env"), env_string).await?;
     info!("Test setup in {:?}", globals.FM_DATA_DIR);
     let process_mgr = ProcessManager::new(globals);
-    let task_group = TaskGroup::new();
-    task_group.install_kill_handler();
-    Ok((process_mgr, task_group))
+    Ok(process_mgr)
+}
+
+async fn cleanup_on_exit<T>(
+    main_process: impl futures::Future<Output = Result<T>>,
+    task_group: TaskGroup,
+    process_mgr: ProcessManager,
+) -> anyhow::Result<()> {
+    // This select makes it possible to exit earlier if a signal is received before
+    // the main process is finished
+    tokio::select! {
+        _ = task_group.make_handle().make_shutdown_rx().await => {
+            info!("Received shutdown signal before finishing setup");
+            process_mgr.kill_all_children().await;
+            Ok(())
+        }
+        result = main_process => {
+            match result {
+                Ok(v) => {
+                    info!("Setup finished successfully, will wait for shutdown signal");
+                    task_group.make_handle().make_shutdown_rx().await.await?;
+                    info!("Received shutdown signal, shutting down");
+                    drop(v); // may execute destructors
+                    process_mgr.kill_all_children().await;
+                    Ok(())
+                },
+                Err(e) => {
+                    warn!("Setup failed with {e:?}, will shutdown");
+                    process_mgr.kill_all_children().await;
+                    Err(e)
+                }
+            }
+        }
+    }
 }
 
 async fn handle_command() -> Result<()> {
     let args = Args::parse();
     match args.command {
         Cmd::ExternalDaemons => {
-            let (process_mgr, task_group) = setup(args.common).await?;
+            let process_mgr = setup(args.common).await?;
+            let task_group = TaskGroup::new();
+            task_group.install_kill_handler();
             let _daemons =
                 write_ready_file(&process_mgr.globals, external_daemons(&process_mgr).await)
                     .await?;
             task_group.make_handle().make_shutdown_rx().await.await?;
         }
         Cmd::DevFed => {
-            let (process_mgr, task_group) = setup(args.common).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
-            dev_fed.fed.pegin(10_000).await?;
-            dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln).await?;
-            dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd).await?;
-            let _daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
-            task_group.make_handle().make_shutdown_rx().await.await?;
+            let process_mgr = setup(args.common).await?;
+            let task_group = TaskGroup::new();
+            task_group.install_kill_handler();
+            let main = {
+                let process_mgr = process_mgr.clone();
+                async move {
+                    let dev_fed = dev_fed(&process_mgr).await?;
+                    dev_fed.fed.pegin(10_000).await?;
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln).await?;
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd).await?;
+                    let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+                    Ok::<_, anyhow::Error>(daemons)
+                }
+            };
+            cleanup_on_exit(main, task_group, process_mgr).await?;
         }
         Cmd::RunUi => {
-            let (process_mgr, task_group) = setup(args.common).await?;
-            let fedimintds = run_ui(&process_mgr).await?;
-            let _daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
-            task_group.make_handle().make_shutdown_rx().await.await?;
+            let process_mgr = setup(args.common).await?;
+            let task_group = TaskGroup::new();
+            task_group.install_kill_handler();
+            let main = {
+                let process_mgr = process_mgr.clone();
+                async move {
+                    let fedimintds = run_ui(&process_mgr).await?;
+                    let daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
+                    Ok::<_, anyhow::Error>(daemons)
+                }
+            };
+            cleanup_on_exit(main, task_group, process_mgr).await?;
         }
         Cmd::LatencyTests => {
-            let (process_mgr, _) = setup(args.common).await?;
+            let process_mgr = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             latency_tests(dev_fed).await?;
         }
         Cmd::ReconnectTest => {
-            let (process_mgr, _) = setup(args.common).await?;
+            let process_mgr = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
         }
         Cmd::CliTests => {
-            let (process_mgr, _) = setup(args.common).await?;
+            let process_mgr = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_tests(dev_fed).await?;
         }
         Cmd::LoadTestToolTest => {
-            let (process_mgr, _) = setup(args.common).await?;
+            let process_mgr = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_load_test_tool_test(dev_fed).await?;
         }
         Cmd::LightningReconnectTest => {
-            let (process_mgr, _) = setup(args.common).await?;
+            let process_mgr = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
         }
