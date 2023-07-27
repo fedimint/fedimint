@@ -18,8 +18,7 @@ use ln_gateway::gatewaylnrpc::{
     self, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
-use ln_gateway::lnrpc_client::{ILnRpcClient, RouteHtlcStream};
-use ln_gateway::GatewayError;
+use ln_gateway::lnrpc_client::{ILnRpcClient, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
 
 use super::LightningTest;
@@ -89,20 +88,23 @@ impl LightningTest for FakeLightningTest {
 
 #[async_trait]
 impl ILnRpcClient for FakeLightningTest {
-    async fn info(&self) -> ln_gateway::Result<GetNodeInfoResponse> {
+    async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
         Ok(GetNodeInfoResponse {
             pub_key: self.gateway_node_pub_key.serialize().to_vec(),
             alias: "FakeLightningNode".to_string(),
         })
     }
 
-    async fn routehints(&self) -> ln_gateway::Result<GetRouteHintsResponse> {
+    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
         Ok(GetRouteHintsResponse {
             route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
         })
     }
 
-    async fn pay(&self, invoice: PayInvoiceRequest) -> ln_gateway::Result<PayInvoiceResponse> {
+    async fn pay(
+        &self,
+        invoice: PayInvoiceRequest,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
         let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
         let invoice = Invoice::from_signed(signed).unwrap();
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
@@ -112,9 +114,9 @@ impl ILnRpcClient for FakeLightningTest {
                 &Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
             )
         {
-            return Err(GatewayError::Other(anyhow::anyhow!(
-                "Failed to pay invoice"
-            )));
+            return Err(LightningRpcError::FailedPayment {
+                failure_reason: "Description was invalid".to_string(),
+            });
         }
 
         Ok(PayInvoiceResponse {
@@ -125,14 +127,14 @@ impl ILnRpcClient for FakeLightningTest {
     async fn route_htlcs<'a>(
         self: Box<Self>,
         _task_group: &mut TaskGroup,
-    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), GatewayError> {
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         Ok((Box::pin(stream::iter(vec![])), Arc::new(Self::new())))
     }
 
     async fn complete_htlc(
         &self,
         _htlc: InterceptHtlcResponse,
-    ) -> Result<EmptyResponse, GatewayError> {
+    ) -> Result<EmptyResponse, LightningRpcError> {
         Ok(EmptyResponse {})
     }
 }

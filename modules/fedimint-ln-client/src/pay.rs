@@ -259,7 +259,10 @@ impl LightningPayFunded {
         if !response.status().is_success() {
             return Err(GatewayPayError::GatewayInternalError {
                 error_code: Some(response.status().as_u16()),
-                error_message: response.status().to_string(),
+                error_message: response
+                    .text()
+                    .await
+                    .expect("Could not retrieve text from response"),
             });
         }
 

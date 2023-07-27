@@ -202,7 +202,9 @@ pub async fn handle_ng_command(
                 info!("Update: {:?}", update);
             }
 
-            return Err(anyhow::anyhow!("Lightning receive failed"));
+            return Err(anyhow::anyhow!(
+                "Unexpected end of update stream. Lightning receive failed"
+            ));
         }
         ClientCmd::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
@@ -226,13 +228,13 @@ pub async fn handle_ng_command(
                                 })
                                 .unwrap());
                             }
-                            InternalPayState::RefundSuccess(outpoint) => {
+                            InternalPayState::RefundSuccess { outpoint, error } => {
                                 let e = format!(
-                                    "Internal payment failed. A refund was issued to {outpoint}"
+                                    "Internal payment failed. A refund was issued to {outpoint} Error: {error}"
                                 );
                                 return Err(anyhow!(e));
                             }
-                            InternalPayState::Error(e) => {
+                            InternalPayState::UnexpectedError(e) => {
                                 return Err(anyhow!(e));
                             }
                             _ => {}

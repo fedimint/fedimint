@@ -119,10 +119,18 @@ pub enum PayType {
 pub enum InternalPayState {
     Funding,
     Preimage(Preimage),
-    RefundSuccess(OutPoint),
-    RefundError(String),
-    FundingFailed(String),
-    Error(String),
+    RefundSuccess {
+        outpoint: OutPoint,
+        error: IncomingSmError,
+    },
+    RefundError {
+        error_message: String,
+        error: IncomingSmError,
+    },
+    FundingFailed {
+        error: IncomingSmError,
+    },
+    UnexpectedError(String),
 }
 
 /// The high-level state of a pay operation over lightning,
@@ -143,7 +151,9 @@ pub enum LnPayState {
     Refunded {
         gateway_error: GatewayPayError,
     },
-    Failed,
+    UnexpectedError {
+        error_message: String,
+    },
 }
 
 /// The high-level state of a reissue operation started with
@@ -433,7 +443,7 @@ impl LightningClientExt for Client {
                             match self.await_primary_module_output(operation_id, change).await {
                                 Ok(_) => {}
                                 Err(_) => {
-                                    yield LnPayState::Failed;
+                                    yield LnPayState::UnexpectedError { error_message: "Error occurred while waiting for the primary module's output".to_string() };
                                     return;
                                 }
                             }
@@ -456,7 +466,7 @@ impl LightningClientExt for Client {
                     _ => {}
                 }
 
-                yield LnPayState::Failed;
+                yield LnPayState::UnexpectedError { error_message: "Error occurred trying to get refund. Refund was not successful".to_string() };
             }
         }))
     }
@@ -477,18 +487,18 @@ impl LightningClientExt for Client {
                     if let Some(LightningClientStateMachines::InternalPay(state)) = stream.next().await {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) => break InternalPayState::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted(txid) => {
+                            IncomingSmStates::RefundSubmitted{ txid, error } => {
                                 let out_point = OutPoint { txid, out_idx: 0};
                                 match self.await_primary_module_output(operation_id, out_point).await {
-                                    Ok(_) => break InternalPayState::RefundSuccess(out_point),
-                                    Err(e) => break InternalPayState::RefundError(e.to_string()),
+                                    Ok(_) => break InternalPayState::RefundSuccess { outpoint: out_point, error },
+                                    Err(e) => break InternalPayState::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
-                            IncomingSmStates::FundingFailed(e) => break InternalPayState::FundingFailed(e),
+                            IncomingSmStates::FundingFailed { error } => break InternalPayState::FundingFailed{ error },
                             _ => {}
                         }
                     } else {
-                        break InternalPayState::Error("Unexpected State! Expected an InternalPay state".to_string())
+                        break InternalPayState::UnexpectedError("Unexpected State! Expected an InternalPay state".to_string())
                     }
                 };
                 yield state;
@@ -722,7 +732,9 @@ impl LightningClientModule {
         let invoice_amount = Amount {
             msats: invoice
                 .amount_milli_satoshis()
-                .ok_or(IncomingSmError::AmountError)?,
+                .ok_or(IncomingSmError::AmountError {
+                    invoice: invoice.clone(),
+                })?,
         };
 
         let (incoming_output, contract_id) = create_incoming_contract_output(

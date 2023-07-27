@@ -44,7 +44,10 @@ use tracing::info;
 use url::Url;
 
 use self::complete::GatewayCompleteStateMachine;
-use self::pay::{GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates};
+use self::pay::{
+    GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
+    OutgoingPaymentError,
+};
 use crate::db::FederationRegistrationKey;
 use crate::gatewaylnrpc::InterceptHtlcRequest;
 use crate::lnrpc_client::ILnRpcClient;
@@ -65,8 +68,13 @@ pub enum GatewayExtPayStates {
         preimage: Preimage,
         outpoint: OutPoint,
     },
-    Canceled,
-    Fail,
+    Canceled {
+        error: OutgoingPaymentError,
+    },
+    Fail {
+        error: OutgoingPaymentError,
+        error_message: String,
+    },
     OfferDoesNotExist {
         contract_id: ContractId,
     },
@@ -78,9 +86,17 @@ pub enum GatewayExtPayStates {
 pub enum GatewayExtReceiveStates {
     Funding,
     Preimage(Preimage),
-    RefundSuccess(OutPoint),
-    RefundError(String),
-    FundingFailed(String),
+    RefundSuccess {
+        outpoint: OutPoint,
+        error: IncomingSmError,
+    },
+    RefundError {
+        error_message: String,
+        error: IncomingSmError,
+    },
+    FundingFailed {
+        error: IncomingSmError,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -185,33 +201,33 @@ impl GatewayClientExt for Client {
             stream! {
                 yield GatewayExtPayStates::Created;
 
-                match gateway.await_paid_invoice(operation_id).await {
-                    Ok((outpoint, preimage)) => {
-                        yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
+                let mut stream = gateway.notifier.subscribe(operation_id).await;
+                loop {
+                    if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
+                        match state.state {
+                            GatewayPayStates::Preimage(outpoint, preimage) => {
+                                yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
-                        if self.await_primary_module_output(operation_id, outpoint).await.is_ok() {
-                            yield GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
-                            return;
-                        }
-
-                        yield GatewayExtPayStates::Fail;
-                    }
-                    Err(error) => {
-                        match error {
-                            GatewayError::Canceled(cancel_txid) => {
-                                if self.transaction_updates(operation_id).await.await_tx_accepted(cancel_txid).await.is_ok() {
-                                    yield GatewayExtPayStates::Canceled;
+                                if self.await_primary_module_output(operation_id, outpoint).await.is_ok() {
+                                    yield GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
+                                    return;
+                                }
+                            }
+                            GatewayPayStates::Canceled { txid, contract_id: _, error } => {
+                                if self.transaction_updates(operation_id).await.await_tx_accepted(txid).await.is_ok() {
+                                    yield GatewayExtPayStates::Canceled{ error };
                                     return;
                                 }
 
-                                yield GatewayExtPayStates::Fail;
+                                yield GatewayExtPayStates::Fail { error, error_message: "Refund transaction was not accepted by the federation".to_string() };
                             }
-                            GatewayError::OfferDoesNotExist(contract_id) => {
+                            GatewayPayStates::OfferDoesNotExist(contract_id) => {
                                 yield GatewayExtPayStates::OfferDoesNotExist { contract_id };
                             }
-                            _ => {
-                                yield GatewayExtPayStates::Fail;
-                            }
+                            GatewayPayStates::Failed{ error, error_message } => {
+                                yield GatewayExtPayStates::Fail{ error, error_message };
+                            },
+                            _ => {}
                         }
                     }
                 }
@@ -273,14 +289,14 @@ impl GatewayClientExt for Client {
                     if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted(txid) => {
+                            IncomingSmStates::RefundSubmitted{ txid, error } => {
                                 let out_point = OutPoint { txid, out_idx: 0};
                                 match self.await_primary_module_output(operation_id, out_point).await {
-                                    Ok(_) => break GatewayExtReceiveStates::RefundSuccess(out_point),
-                                    Err(e) => break GatewayExtReceiveStates::RefundError(e.to_string()),
+                                    Ok(_) => break GatewayExtReceiveStates::RefundSuccess{ outpoint: out_point, error },
+                                    Err(e) => break GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
-                            IncomingSmStates::FundingFailed(e) => break GatewayExtReceiveStates::FundingFailed(e),
+                            IncomingSmStates::FundingFailed{ error } => break GatewayExtReceiveStates::FundingFailed{ error },
                             _ => {}
                         }
                     }
@@ -358,16 +374,6 @@ impl From<&GatewayClientContext> for LightningClientContext {
             redeem_key: ctx.redeem_key,
         }
     }
-}
-
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum GatewayError {
-    #[error("Gateway canceled the contract")]
-    Canceled(TransactionId),
-    #[error("Offer does not exist")]
-    OfferDoesNotExist(ContractId),
-    #[error("Unrecoverable error occurred in the gateway")]
-    Failed,
 }
 
 #[derive(Debug)]
@@ -462,30 +468,6 @@ impl GatewayClientModule {
             registration.gateway_id, id
         );
         Ok(())
-    }
-
-    async fn await_paid_invoice(
-        &self,
-        operation_id: OperationId,
-    ) -> Result<(OutPoint, Preimage), GatewayError> {
-        let mut stream = self.notifier.subscribe(operation_id).await;
-        loop {
-            if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
-                match state.state {
-                    GatewayPayStates::Preimage(outpoint, preimage) => {
-                        return Ok((outpoint, preimage))
-                    }
-                    GatewayPayStates::Canceled(cancel_outpoint, _) => {
-                        return Err(GatewayError::Canceled(cancel_outpoint))
-                    }
-                    GatewayPayStates::OfferDoesNotExist(contract_id) => {
-                        return Err(GatewayError::OfferDoesNotExist(contract_id))
-                    }
-                    GatewayPayStates::Failed => return Err(GatewayError::Failed),
-                    _ => {}
-                }
-            }
-        }
     }
 
     async fn create_funding_incoming_contract_output(

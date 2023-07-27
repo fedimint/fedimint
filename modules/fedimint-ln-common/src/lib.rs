@@ -401,14 +401,23 @@ async fn fetch_and_validate_offer(
 ) -> anyhow::Result<IncomingContractOffer, IncomingSmError> {
     let offer = timeout(Duration::from_secs(5), module_api.fetch_offer(payment_hash))
         .await
-        .map_err(|_| IncomingSmError::Timeout)?
-        .map_err(|_| IncomingSmError::FetchContractError)?;
+        .map_err(|_| IncomingSmError::TimeoutFetchingOffer { payment_hash })?
+        .map_err(|e| IncomingSmError::FetchContractError {
+            payment_hash,
+            error_message: e.to_string(),
+        })?;
 
     if offer.amount > amount_msat {
-        return Err(IncomingSmError::ViolatedFeePolicy);
+        return Err(IncomingSmError::ViolatedFeePolicy {
+            offer_amount: offer.amount,
+            payment_amount: amount_msat,
+        });
     }
     if offer.hash != payment_hash {
-        return Err(IncomingSmError::InvalidOffer);
+        return Err(IncomingSmError::InvalidOffer {
+            offer_hash: offer.hash,
+            payment_hash,
+        });
     }
     Ok(offer)
 }
