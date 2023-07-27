@@ -107,7 +107,7 @@ pub async fn run(
     });
 
     // this is the minimum number of unit data that will be ordered before we reach
-    // the EXPONETIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
+    // the EXPONENTIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
     // data
     let batches_per_block = EXPONENTIAL_SLOWDOWN_OFFSET * keychain.peer_count() / 3;
     let mut pending_items = vec![];
@@ -189,7 +189,7 @@ pub async fn run(
                 }
             }
 
-            _ = ordered_item_sender.closed() => anyhow::bail!("Ordered Item Receiver has been droppped")
+            _ = ordered_item_sender.closed() => anyhow::bail!("Ordered Item Receiver has been dropped")
         }
     }
 

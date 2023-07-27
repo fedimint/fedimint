@@ -33,11 +33,11 @@
 //!
 //! ## API versions
 //!
-//! Unlike consensus version which has to be single and identical accross
-//! Federation, both server and client side components can advertise simultanous
-//! support for multiple API versions. This is the main mechanism to ensure
-//! interoperability in the face of hard to control and predict software changes
-//! across all the involved software.
+//! Unlike consensus version which has to be single and identical across
+//! Federation, both server and client side components can advertise
+//! simultaneous support for multiple API versions. This is the main mechanism
+//! to ensure interoperability in the face of hard to control and predict
+//! software changes across all the involved software.
 //!
 //! Each peer in the Federation and each client can update the Fedimint software
 //! at their own pace without cordinating API changes.

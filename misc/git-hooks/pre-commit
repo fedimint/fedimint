@@ -196,8 +196,7 @@ function check_typos() {
 
   if ! echo "$git_ls_nonbinary_files" | parallel typos {} ; then
     >&2 echo "Typos found: Valid new words can be added to '_typos.toml'"
-    # TODO: not enforcing anything right now, just being annoying in the CLI
-    # return 1
+    return 1
   fi
 }
 export -f check_typos

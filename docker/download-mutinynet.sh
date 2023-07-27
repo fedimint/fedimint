@@ -66,15 +66,15 @@ fi
 read -p "Do you want to install the LN gateway? [Y/n] " -n 1 -r -a gateway_install < /dev/tty
 if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
   # ask the user for the gateway password
-  DEFAUT_GATEWAY_PASSWORD=thereisnosecondbest
-  read -p "Enter the password for the LN gateway: [$DEFAUT_GATEWAY_PASSWORD] " -a gateway_password < /dev/tty
+  DEFAULT_GATEWAY_PASSWORD=thereisnosecondbest
+  read -p "Enter the password for the LN gateway: [$DEFAULT_GATEWAY_PASSWORD] " -a gateway_password < /dev/tty
   if [[ -z ${gateway_password[*]} ]]; then
-    gateway_password=$DEFAUT_GATEWAY_PASSWORD
+    gateway_password=$DEFAULT_GATEWAY_PASSWORD
   fi
   mkdir -p $GATEWAY_DIR
   download https://raw.githubusercontent.com/fedimint/fedimint/master/docker/gateway-mutinynet/docker-compose.yaml $GATEWAY_DIR/docker-compose.yaml
   replace_external_ip $GATEWAY_DIR/docker-compose.yaml
-  sed -i "s/$DEFAUT_GATEWAY_PASSWORD/$gateway_password/g" $GATEWAY_DIR/docker-compose.yaml
+  sed -i "s/$DEFAULT_GATEWAY_PASSWORD/$gateway_password/g" $GATEWAY_DIR/docker-compose.yaml
 fi
 
 if [[ ${fedimintd_install[*]} =~ ^[Yy]?$ ]]; then

@@ -83,7 +83,7 @@ pub enum ClientCmd {
     },
     /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress,
-    /// Wait for desposit on previously generated address
+    /// Wait for deposit on previously generated address
     AwaitDeposit { operation_id: OperationId },
     /// Withdraw funds from the federation
     Withdraw {
