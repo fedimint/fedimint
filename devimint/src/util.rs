@@ -256,8 +256,8 @@ where
         }
         // report every 20 seconds
         let now = fedimint_core::time::now();
-        if now.duration_since(last_time)? > Duration::from_secs(20) {
-            let total_duration = now.duration_since(start)?;
+        if now.duration_since(last_time).unwrap_or_default() > Duration::from_secs(20) {
+            let total_duration = now.duration_since(start).unwrap_or_default();
             warn!(
                 LOG_DEVIMINT,
                 "waiting {name} for over {} seconds",
