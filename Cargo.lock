@@ -4231,7 +4231,7 @@ dependencies = [
 [[package]]
 name = "ring"
 version = "0.16.20"
-source = "git+https://github.com/Maan2003/ring?rev=52a1294a8fc066cc0656911ec22b8358fb763ef1#52a1294a8fc066cc0656911ec22b8358fb763ef1"
+source = "git+https://github.com/dpc/ring?rev=5493e7e76d0d8fb1d3cbb0be9c4944700741b802#5493e7e76d0d8fb1d3cbb0be9c4944700741b802"
 dependencies = [
  "cc",
  "libc",
