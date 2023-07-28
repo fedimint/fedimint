@@ -14,7 +14,6 @@ use common::{
 use devimint::cmd;
 use fedimint_client::Client;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
-use fedimint_core::config::{load_from_file, ClientConfig};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{Amount, TieredMulti};
@@ -28,7 +27,7 @@ use tracing::{debug, info, warn};
 
 use crate::common::{
     build_client, do_spend_notes, remint_denomination, switch_default_gateway, try_get_notes_cli,
-    FedimintCli, GatewayClnCli, GatewayLndCli,
+    GatewayClnCli, GatewayLndCli,
 };
 pub mod common;
 
@@ -65,8 +64,8 @@ enum LnInvoiceGeneration {
 enum Command {
     #[command(about = "Keep many websocket connections to a federation for a duration of time")]
     TestConnect {
-        #[clap(flatten)]
-        connect_common_args: ConnectCommonArgs,
+        #[arg(long, help = "Federation invite code")]
+        invite_code: String,
         #[arg(
             long,
             default_value = "60",
@@ -86,31 +85,23 @@ enum Command {
         limit_endpoints: Option<usize>,
     },
     #[command(about = "Try to download the client config many times.")]
-    TestDownload { invite_code: String },
+    TestDownload {
+        #[arg(long, help = "Federation invite code")]
+        invite_code: String,
+    },
     #[command(
         about = "Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway"
     )]
     LoadTest(LoadTestArgs),
 }
-#[derive(Args, Clone)]
-struct ConnectCommonArgs {
-    #[arg(
-        long,
-        help = "Path of the client config.json. If none given, will try to download it from the --invite code"
-    )]
-    client_config: Option<PathBuf>,
-
-    #[arg(
-        long,
-        help = "Invite code string. If none given, will use the one from fedimint-cli if no --client-config given"
-    )]
-    invite_code: Option<String>,
-}
 
 #[derive(Args, Clone)]
 struct LoadTestArgs {
-    #[clap(flatten)]
-    connect_common_args: ConnectCommonArgs,
+    #[arg(
+        long,
+        help = "Federation invite code. If none given, we assume the client already has a config downloaded in DB"
+    )]
+    invite_code: Option<String>,
 
     #[arg(long, value_parser = parse_ecash, help = "Notes for the test. If none, will call fedimint-cli spend")]
     initial_notes: Option<TieredMulti<SpendableNote>>,
@@ -227,14 +218,14 @@ async fn main() -> anyhow::Result<()> {
     });
     let futures = match opts.command.clone() {
         Command::TestConnect {
-            connect_common_args,
+            invite_code,
             duration_secs,
             timeout_secs,
             limit_endpoints,
         } => {
-            let cfg = get_cfg_from_args(&connect_common_args).await?;
+            let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
             test_connect_raw_client(
-                cfg,
+                invite_code,
                 opts.users,
                 Duration::from_secs(duration_secs),
                 Duration::from_secs(timeout_secs),
@@ -244,10 +235,16 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
         Command::TestDownload { invite_code } => {
-            test_download_config(&invite_code, opts.users, event_sender.clone()).await?
+            let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
+            test_download_config(invite_code, opts.users, event_sender.clone()).await?
         }
         Command::LoadTest(args) => {
-            let cfg = get_cfg_from_args(&args.connect_common_args).await?;
+            let invite_code = if let Some(invite_code) = args.invite_code {
+                Some(InviteCode::from_str(&invite_code).context("invalid invite code")?)
+            } else {
+                None
+            };
+
             let initial_notes = if let Some(initial_notes) = args.initial_notes {
                 initial_notes
             } else {
@@ -279,7 +276,7 @@ async fn main() -> anyhow::Result<()> {
             run_load_test(
                 opts.archive_dir,
                 opts.users,
-                cfg,
+                invite_code,
                 initial_notes,
                 args.generate_invoice_with,
                 args.invoices_per_user,
@@ -317,7 +314,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_load_test(
     archive_dir: Option<PathBuf>,
     users: u16,
-    cfg: ClientConfig,
+    invite_code: Option<InviteCode>,
     initial_notes: TieredMulti<SpendableNote>,
     generate_invoice_with: Option<LnInvoiceGeneration>,
     generated_invoices_per_user: u16,
@@ -336,13 +333,13 @@ async fn run_load_test(
     } else {
         None
     };
-    let coordinator = build_client(&cfg, coordinator_db.as_ref()).await?;
+    let coordinator = build_client(invite_code.clone(), coordinator_db.as_ref()).await?;
     let mut users_clients = Vec::with_capacity(users.into());
     for u in 0..users {
         let user_db = db_path
             .as_ref()
             .map(|db_path| db_path.join(format!("user_{u}.db")));
-        let client = build_client(&cfg, user_db.as_ref()).await?;
+        let client = build_client(invite_code.clone(), user_db.as_ref()).await?;
         if let Some(gateway_id) = &gateway_id {
             switch_default_gateway(&client, gateway_id).await?;
         }
@@ -481,11 +478,10 @@ async fn do_user_task(
 }
 
 async fn test_download_config(
-    connect: &str,
+    invite_code: InviteCode,
     users: u16,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let invite_code: InviteCode = InviteCode::from_str(connect).context("invalid invite code")?;
     let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]));
 
     Ok((0..users)
@@ -507,59 +503,17 @@ async fn test_download_config(
         .collect())
 }
 
-async fn _test_connect_std_client(
-    mut cfg: ClientConfig,
-    users: u16,
-    duration: Duration,
-    limit_endpoints: Option<usize>,
-    event_sender: mpsc::UnboundedSender<MetricEvent>,
-) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    if let Some(limit_endpoints) = limit_endpoints {
-        cfg.api_endpoints = cfg
-            .api_endpoints
-            .into_iter()
-            .take(limit_endpoints)
-            .collect();
-        info!("Limiting endpoints to {:?}", cfg.api_endpoints);
-    }
-    let clients = (0..users)
-        .map(|_| async {
-            let client = build_client(&cfg, None).await?;
-            Ok::<_, anyhow::Error>(client)
-        })
-        .collect::<Vec<_>>();
-    let clients = futures::future::try_join_all(clients).await?;
-    info!("Keeping {users} clients connected for {duration:?}");
-    Ok(clients
-        .into_iter()
-        .map(|client| {
-            let event_sender = event_sender.clone();
-            let f: BoxFuture<_> = Box::pin(async move {
-                let initial_time = fedimint_core::time::now();
-                while initial_time.elapsed()? < duration {
-                    let m = fedimint_core::time::now();
-                    client.api().fetch_epoch_count().await?;
-                    event_sender.send(MetricEvent {
-                        name: "fetch_epoch_count".into(),
-                        duration: m.elapsed()?,
-                    })?;
-                    fedimint_core::task::sleep(Duration::from_secs(1)).await;
-                }
-                Ok(())
-            });
-            f
-        })
-        .collect())
-}
-
 async fn test_connect_raw_client(
-    mut cfg: ClientConfig,
+    invite_code: InviteCode,
     users: u16,
     duration: Duration,
     timeout: Duration,
     limit_endpoints: Option<usize>,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
+    let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]));
+    let mut cfg = api.download_client_config(&invite_code).await?;
+
     if let Some(limit_endpoints) = limit_endpoints {
         cfg.api_endpoints = cfg
             .api_endpoints
@@ -796,25 +750,4 @@ async fn get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -> anyhow::R
         .context("Missing gateway_id field")?;
 
     Ok(gateway_id.into())
-}
-
-async fn get_cfg_from_args(args: &ConnectCommonArgs) -> anyhow::Result<ClientConfig> {
-    Ok(match (&args.client_config, &args.invite_code) {
-        (Some(_), Some(_)) => bail!("Can't use both --client-config and --invite"),
-        (Some(client_config), None) => load_from_file(client_config)?,
-        (None, invite) => {
-            let invite = if let Some(invite) = invite {
-                invite.to_owned()
-            } else {
-                cmd!(FedimintCli, "dev", "invite-code").out_json().await?["invite_code"]
-                    .as_str()
-                    .map(ToOwned::to_owned)
-                    .expect("invite-code command to succeed")
-            };
-            let invite_code: InviteCode =
-                InviteCode::from_str(&invite).context("invalid invite code")?;
-            let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]));
-            api.download_client_config(&invite_code).await?
-        }
-    })
 }
