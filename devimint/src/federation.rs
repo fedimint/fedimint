@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
+use std::fs;
 
 use anyhow::{bail, Context};
 use bitcoincore_rpc::bitcoin::Network;
@@ -138,6 +139,12 @@ impl Federation {
         ]);
         let client = UserClient::new(cfg, decoders, module_gens, db, Default::default()).await;
         Ok(client)
+    }
+
+    pub fn invite_code(&self) -> Result<String> {
+        let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
+        let invite_code = fs::read_to_string(workdir.join("invite-code"))?;
+        Ok(invite_code)
     }
 
     /// Fork the built-in client of `Federation` and give it a name

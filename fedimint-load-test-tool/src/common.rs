@@ -10,7 +10,7 @@ use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientBuilder};
-use fedimint_core::config::ClientConfig;
+use fedimint_core::api::InviteCode;
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -121,13 +121,18 @@ pub async fn await_spend_notes_finish(
     Ok(())
 }
 
-pub async fn build_client(cfg: &ClientConfig, rocksdb: Option<&PathBuf>) -> anyhow::Result<Client> {
+pub async fn build_client(
+    invite_code: Option<InviteCode>,
+    rocksdb: Option<&PathBuf>,
+) -> anyhow::Result<Client> {
     let mut client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientGen);
     client_builder.with_module(LightningClientGen);
     client_builder.with_module(WalletClientGen::default());
     client_builder.with_primary_module(1);
-    client_builder.with_config(cfg.clone());
+    if let Some(invite_code) = invite_code {
+        client_builder.with_invite_code(invite_code);
+    }
     if let Some(rocksdb) = rocksdb {
         client_builder.with_database(fedimint_rocksdb::RocksDb::open(rocksdb)?)
     } else {
