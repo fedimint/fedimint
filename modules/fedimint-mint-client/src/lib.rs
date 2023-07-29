@@ -298,6 +298,7 @@ impl MintClientExt for Client {
                                 MintMeta {
                                     variant: MintMetaVariants::SpendOOB {
                                         requested_amount: min_amount,
+                                        notes: notes.clone(),
                                     },
                                     amount: notes.total_amount(),
                                     extra_meta,
@@ -405,8 +406,13 @@ pub struct MintMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum MintMetaVariants {
-    Reissuance { out_point: OutPoint },
-    SpendOOB { requested_amount: Amount },
+    Reissuance {
+        out_point: OutPoint,
+    },
+    SpendOOB {
+        requested_amount: Amount,
+        notes: TieredMulti<SpendableNote>,
+    },
 }
 
 #[derive(Debug, Clone)]
