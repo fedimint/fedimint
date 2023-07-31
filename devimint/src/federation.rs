@@ -27,6 +27,52 @@ pub struct Federation {
     bitcoind: Bitcoind,
 }
 
+/// `fedimint-cli` instance (basically path with client state: config + db)
+pub struct Client {
+    path: PathBuf,
+}
+
+impl Client {
+    /// Create a [`Client`] that starts with a state that is a copy of
+    /// of a [`Federation`] built-in client's state.
+    ///
+    /// TODO: Get rid of built-in client, make it a normal `Client` and let them
+    /// fork each other as they please.
+    async fn new_forked(name: &str) -> Result<Client> {
+        let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
+        let client_dir = workdir.join("clients").join(name);
+
+        std::fs::create_dir_all(&client_dir)?;
+
+        cmd!(
+            "cp",
+            "-R",
+            workdir.join("client.json").display(),
+            client_dir.join("client.json").display()
+        )
+        .run()
+        .await?;
+
+        cmd!(
+            "cp",
+            "-R",
+            workdir.join("client.db").display(),
+            client_dir.join("client.db").display()
+        )
+        .run()
+        .await?;
+
+        Ok(Self { path: client_dir })
+    }
+
+    pub async fn cmd(&self) -> Command {
+        cmd!(
+            "fedimint-cli",
+            format!("--data-dir={}", self.path.display())
+        )
+    }
+}
+
 impl Federation {
     pub async fn new(
         process_mgr: &ProcessManager,
@@ -92,6 +138,11 @@ impl Federation {
         ]);
         let client = UserClient::new(cfg, decoders, module_gens, db, Default::default()).await;
         Ok(client)
+    }
+
+    /// Fork the built-in client of `Federation` and give it a name
+    pub async fn fork_client(&self, name: &str) -> Result<Client> {
+        Client::new_forked(name).await
     }
 
     pub async fn start_server(&mut self, process_mgr: &ProcessManager, peer: usize) -> Result<()> {

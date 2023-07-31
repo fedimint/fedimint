@@ -746,17 +746,18 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
     // Testing restore in different setups would require multiple clients,
     // which is a larger refactor.
     {
-        let _ = cmd!(fed_cli, "wipe", "--force",).out_json().await?;
+        let client = fed_cli.fork_client("restore-without-backup").await?;
+        let _ = cmd!(client, "wipe", "--force",).out_json().await?;
 
         assert_eq!(
             0,
-            cmd!(fed_cli, "info").out_json().await?["total_msat"]
+            cmd!(client, "info").out_json().await?["total_msat"]
                 .as_u64()
                 .unwrap()
         );
-        let _ = cmd!(fed_cli, "restore", &secret,).out_json().await?;
+        let _ = cmd!(client, "restore", &secret,).out_json().await?;
 
-        let post_notes = cmd!(fed_cli, "info").out_json().await?;
+        let post_notes = cmd!(client, "info").out_json().await?;
         let post_balance = post_notes["total_msat"].as_u64().unwrap();
 
         debug!(%post_notes, post_balance, "State after backup");
@@ -764,25 +765,26 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
     }
 
     // with a backup
-    // {
-    //     let _ = cmd!(fed_cli, "backup",).out_json().await?;
+    {
+        let client = fed_cli.fork_client("restore-with-backup").await?;
+        let _ = cmd!(client, "backup",).out_json().await?;
 
-    //     let _ = cmd!(fed_cli, "wipe", "--force",).out_json().await?;
+        let _ = cmd!(client, "wipe", "--force",).out_json().await?;
 
-    //     assert_eq!(
-    //         0,
-    //         cmd!(fed_cli, "info").out_json().await?["total_msat"]
-    //             .as_u64()
-    //             .unwrap()
-    //     );
-    //     let _ = cmd!(fed_cli, "restore", &secret,).out_json().await?;
+        assert_eq!(
+            0,
+            cmd!(client, "info").out_json().await?["total_msat"]
+                .as_u64()
+                .unwrap()
+        );
+        let _ = cmd!(client, "restore", &secret,).out_json().await?;
 
-    //     let post_notes = cmd!(fed_cli, "info").out_json().await?;
-    //     let post_balance = post_notes["total_msat"].as_u64().unwrap();
+        let post_notes = cmd!(client, "info").out_json().await?;
+        let post_balance = post_notes["total_msat"].as_u64().unwrap();
 
-    //     debug!(%post_notes, post_balance, "State after backup");
-    //     assert_eq!(pre_balance, post_balance);
-    // }
+        debug!(%post_notes, post_balance, "State after backup");
+        assert_eq!(pre_balance, post_balance);
+    }
 
     Ok(())
 }
