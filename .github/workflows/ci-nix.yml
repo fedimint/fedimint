@@ -215,7 +215,6 @@ jobs:
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#cross.${{ matrix.target }}.client-pkgs
 
-
   containers:
     name: "Containers"
     runs-on: buildjet-8vcpu-ubuntu-2004
@@ -280,17 +279,20 @@ jobs:
 
   pkgs:
     if: github.ref == 'refs/heads/master'
-    name: "Release packages: ${{ matrix.build.pkg }}"
+    name: "Release packages: ${{ matrix.build.flake-output }}"
 
     strategy:
       matrix:
         build:
-          - pkg: client-pkgs
+          - flake-output: client-pkgs
             bin: fedimint-cli
-          - pkg: fedimint-pkgs
+            deb: fedimint
+          - flake-output: fedimint-pkgs
             bin: fedimintd
-          - pkg: gateway-pkgs
+            deb: fedimintd
+          - flake-output: gateway-pkgs
             bin: gateway-cli
+            deb: fedimint-gateway
 
     runs-on: buildjet-4vcpu-ubuntu-2004
     timeout-minutes: 30
@@ -305,14 +307,40 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
-      - name: Build ${{ matrix.build.pkg }}
-        run: nix build -L .#${{ matrix.build.pkg }}
+      - name: Build ${{ matrix.build.flake-output }}
+        run: nix build -L .#${{ matrix.build.flake-output }}
 
       - name: Check version ${{ matrix.build.bin }}
         run: nix run .#${{ matrix.build.bin }} version-hash && echo "$GITHUB_SHA" && test "$(nix run .#${{ matrix.build.bin }} version-hash)" = "${GITHUB_SHA}"
 
       - name: Check sha256sum ${{ matrix.build.bin }}
         run: nix build .#${{ matrix.build.bin }} && sha256sum "./result/bin/${{ matrix.build.bin }}"
+
+      - name: Build DEB package
+        run: |
+          nix bundle -L --bundler github:NixOS/bundlers#toDEB --accept-flake-config -o ${{ matrix.build.deb }}.deb .#${{ matrix.build.flake-output }}
+          # workaround: https://github.com/actions/upload-artifact/issues/92
+          mkdir -p debs
+          cp -a ${{ matrix.build.deb }}.deb/*.deb ./debs/
+
+      - name: Build RPM package
+        run: |
+          nix bundle -L --bundler github:NixOS/bundlers#toRPM --accept-flake-config -o ${{ matrix.build.deb }}.rpm .#${{ matrix.build.flake-output }}
+          # workaround: https://github.com/actions/upload-artifact/issues/92
+          mkdir -p rpms
+          cp -a ${{ matrix.build.deb }}.rpm/*.rpm ./rpms/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with: 
+          name: "deb-bundle"
+          path: "debs/**.deb"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with: 
+          name: "rpm-bundle"
+          path: "rpms/**.rpm"
 
   notifications:
     # if: github.ref == 'refs/heads/master'
