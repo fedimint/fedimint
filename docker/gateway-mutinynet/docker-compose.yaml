@@ -84,7 +84,7 @@ services:
     restart: always
 
   thunderhub:
-    image: apotdevin/thunderhub:base-v0.13.19
+    image: apotdevin/thunderhub:base-v0.13.20
     environment:
       - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
       - HOST=0.0.0.0
