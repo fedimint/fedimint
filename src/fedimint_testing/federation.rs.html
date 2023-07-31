@@ -373,7 +373,7 @@
                 local: ConfigGenParamsLocal {
                     our_id: <span class="kw-2">*</span>peer,
                     our_private_key: tls_keys[peer].<span class="number">1</span>.clone(),
-                    api_auth: ApiAuth(<span class="macro">format!</span>(<span class="string">&quot;pass{}&quot;</span>, peer.to_usize())),
+                    api_auth: ApiAuth(<span class="string">&quot;pass&quot;</span>.to_string()),
                     p2p_bind: p2p_bind.parse().expect(<span class="string">&quot;Valid address&quot;</span>),
                     api_bind: api_bind.parse().expect(<span class="string">&quot;Valid address&quot;</span>),
                     download_token_limit: <span class="prelude-val">None</span>,

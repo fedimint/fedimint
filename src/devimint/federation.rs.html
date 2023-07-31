@@ -282,30 +282,192 @@
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
 <a href="#284" id="284">284</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
-<span class="kw">use </span>fedimint_aead::random_salt;
+<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
+<span class="kw">use </span>fedimint_core::api::ServerStatus;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+<span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_core::util::write_new;
+<span class="kw">use </span>fedimint_core::module::ApiAuth;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
-<span class="kw">use </span>fedimint_server::config::io::{write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
-<span class="kw">use </span>fedimint_server::config::ServerConfig;
+<span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>fedimint_testing::federation::local_config_gen_params;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
 <span class="kw">use </span>fedimintd::attach_default_module_gen_params;
-<span class="kw">use </span>fedimintd::fedimintd::Fedimintd <span class="kw">as </span>FedimintBuilder;
-<span class="kw">use </span>tokio::fs;
+<span class="kw">use </span>futures::future::join_all;
+<span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>; <span class="comment">// TODO: remove this
 
 </span><span class="kw">pub struct </span>Federation {
     <span class="comment">// client is only for internal use, use cli commands instead
-    </span>client: Arc&lt;UserClient&gt;,
-    members: BTreeMap&lt;usize, Fedimintd&gt;,
+    </span>members: BTreeMap&lt;usize, Fedimintd&gt;,
     vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
     bitcoind: Bitcoind,
 }
@@ -314,16 +476,54 @@
     <span class="kw">pub async fn </span>new(
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
         bitcoind: Bitcoind,
-        vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
+        servers: usize,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>members = BTreeMap::new();
-        <span class="kw">for </span>(peer, var) <span class="kw">in </span><span class="kw-2">&amp;</span>vars {
+        <span class="kw">let </span><span class="kw-2">mut </span>vars = BTreeMap::new();
+
+        <span class="kw">let </span>peers: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..servers).map(|id| PeerId::from(id <span class="kw">as </span>u16)).collect();
+        <span class="kw">let </span>params: HashMap&lt;PeerId, ConfigGenParams&gt; =
+            local_config_gen_params(<span class="kw-2">&amp;</span>peers, BASE_PORT, ServerModuleGenParamsRegistry::default())<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>admin_clients: BTreeMap&lt;PeerId, WsAdminClient&gt; = BTreeMap::new();
+        <span class="kw">for </span>(peer, peer_params) <span class="kw">in </span><span class="kw-2">&amp;</span>params {
+            <span class="kw">let </span>var = vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, peer_params.to_owned()).<span class="kw">await</span><span class="question-mark">?</span>;
             members.insert(
-                <span class="kw-2">*</span>peer,
-                Fedimintd::new(process_mgr, bitcoind.clone(), <span class="kw-2">*</span>peer, var).<span class="kw">await</span><span class="question-mark">?</span>,
+                peer.to_usize(),
+                Fedimintd::new(process_mgr, bitcoind.clone(), peer.to_usize(), <span class="kw-2">&amp;</span>var).<span class="kw">await</span><span class="question-mark">?</span>,
             );
+            <span class="kw">let </span>admin_client = WsAdminClient::new(Url::parse(<span class="kw-2">&amp;</span>var.FM_API_URL)<span class="question-mark">?</span>);
+            admin_clients.insert(<span class="kw-2">*</span>peer, admin_client);
+            vars.insert(peer.to_usize(), var);
         }
 
+        run_dkg(admin_clients, params).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>out_dir = <span class="kw-2">&amp;</span>vars[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR;
+        <span class="kw">let </span>cfg_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_DATA_DIR;
+        <span class="kw">let </span>out_dir = utf8(out_dir);
+        <span class="kw">let </span>cfg_dir = utf8(cfg_dir);
+        <span class="comment">// copy configs to config directory
+        </span>tokio::fs::rename(
+            <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client-connect&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client-connect&quot;</span>),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        tokio::fs::rename(
+            <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client.json&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client.json&quot;</span>),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">&quot;copied client configs&quot;</span>);
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            members,
+            vars,
+            bitcoind,
+        })
+    }
+
+    <span class="kw">pub async fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UserClient&gt; {
         <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>cfg_path = workdir.join(<span class="string">&quot;client.json&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path)<span class="question-mark">?</span>;
@@ -336,12 +536,7 @@
             DynClientModuleGen::from(LightningClientGen),
         ]);
         <span class="kw">let </span>client = UserClient::new(cfg, decoders, module_gens, db, Default::default()).<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            members,
-            vars,
-            bitcoind,
-            client: Arc::new(client),
-        })
+        <span class="prelude-val">Ok</span>(client)
     }
 
     <span class="kw">pub async fn </span>start_server(<span class="kw-2">&amp;mut </span><span class="self">self</span>, process_mgr: <span class="kw-2">&amp;</span>ProcessManager, peer: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -408,12 +603,18 @@
     }
 
     <span class="kw">pub async fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="self">self</span>.client.config().<span class="number">0</span>.federation_id.to_string()
+        <span class="self">self</span>.client()
+            .<span class="kw">await
+            </span>.unwrap()
+            .config()
+            .<span class="number">0
+            </span>.federation_id
+            .to_string()
     }
 
     <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = <span class="self">self
-            </span>.client
+        <span class="kw">let </span>client = <span class="self">self</span>.client().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = client
             .config_ref()
             .<span class="number">0
             </span>.get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)<span class="question-mark">?</span>;
@@ -513,58 +714,179 @@
 <span class="doccomment">/// Base port for devimint
 </span><span class="kw">const </span>BASE_PORT: u16 = <span class="number">8173 </span>+ <span class="number">10000</span>;
 
-<span class="kw">pub async fn </span>run_config_gen(
-    process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
-    servers: usize,
-    write_password: bool,
-) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;usize, vars::Fedimintd&gt;&gt; {
-    <span class="comment">// TODO: Use proper builder
-    </span><span class="kw">let </span><span class="kw-2">mut </span>fed = FedimintBuilder::new()<span class="question-mark">?</span>.with_default_modules();
+<span class="kw">pub async fn </span>run_dkg(
+    admin_clients: BTreeMap&lt;PeerId, WsAdminClient&gt;,
+    params: HashMap&lt;PeerId, ConfigGenParams&gt;,
+) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>auth_for = |peer: <span class="kw-2">&amp;</span>PeerId| -&gt; ApiAuth { params[peer].local.api_auth.clone() };
+    <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
+        <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">20</span>;
+        poll_max_retries(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
+            <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span>.is_ok())
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">&quot;Connected to {peer_id}&quot;</span>)
+    }
+    <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
+        <span class="macro">assert_eq!</span>(
+            client.status().<span class="kw">await</span><span class="question-mark">?</span>.server,
+            fedimint_core::api::ServerStatus::AwaitingPassword,
+            <span class="string">&quot;peer_id isn&#39;t waiting for password: {peer_id}&quot;
+        </span>);
+    }
+
+    <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
+        client.set_password(auth_for(peer_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="kw">let </span>(leader_id, leader) = admin_clients.iter().next().context(<span class="string">&quot;missing peer&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>followers = admin_clients
+        .iter()
+        .filter(|(id, <span class="kw">_</span>)| <span class="kw-2">*</span>id != leader_id)
+        .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+    <span class="kw">let </span>leader_name = <span class="string">&quot;leader&quot;</span>.to_string();
+    leader
+        .set_config_gen_connections(
+            ConfigGenConnectionsRequest {
+                our_name: leader_name.clone(),
+                leader_api_url: <span class="prelude-val">None</span>,
+            },
+            auth_for(leader_id),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let _ </span>= leader
+        .get_default_config_gen_params(auth_for(leader_id))
+        .<span class="kw">await</span><span class="question-mark">?</span>; <span class="comment">// sanity check
+    </span><span class="kw">let </span>server_gen_params = params[leader_id].consensus.modules.clone();
+    set_config_gen_params(leader, auth_for(leader_id), server_gen_params.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>followers_names = followers
+        .keys()
+        .map(|peer_id| {
+            (<span class="kw-2">*</span>peer_id, {
+                <span class="comment">// This is to be clear that the name will be unrelated to peer id
+                </span><span class="kw">let </span>random_string = rand::thread_rng()
+                    .sample_iter(<span class="kw-2">&amp;</span>rand::distributions::Alphanumeric)
+                    .take(<span class="number">5</span>)
+                    .map(char::from)
+                    .collect::&lt;String&gt;();
+                <span class="macro">format!</span>(<span class="string">&quot;random-{random_string}{peer_id}&quot;</span>)
+            })
+        })
+        .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+    <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
+        <span class="kw">let </span>name = followers_names
+            .get(peer_id)
+            .context(<span class="string">&quot;missing follower name&quot;</span>)<span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">&quot;calling set_config_gen_connections for {peer_id} {name}&quot;</span>);
+        client
+            .set_config_gen_connections(
+                ConfigGenConnectionsRequest {
+                    our_name: name.clone(),
+                    leader_api_url: <span class="prelude-val">Some</span>(leader.url.clone()),
+                },
+                auth_for(peer_id),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        set_config_gen_params(client, auth_for(peer_id), server_gen_params.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="kw">let </span>found_names = leader
+        .get_config_gen_peers()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_iter()
+        .map(|peer| peer.name)
+        .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let </span>all_names = {
+        <span class="kw">let </span><span class="kw-2">mut </span>names = followers_names
+            .values()
+            .into_iter()
+            .cloned()
+            .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
+        names.insert(leader_name);
+        names
+    };
+    <span class="macro">assert_eq!</span>(found_names, all_names);
+    wait_server_status(leader, ServerStatus::SharingConfigGenParams).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>configs = <span class="macro">vec!</span>[];
+    <span class="kw">for </span>client <span class="kw">in </span>admin_clients.values() {
+        configs.push(client.get_consensus_config_gen_params().<span class="kw">await</span><span class="question-mark">?</span>);
+    }
+    <span class="comment">// Confirm all consensus configs are the same
+    </span><span class="kw">let </span><span class="kw-2">mut </span>consensus: Vec&lt;<span class="kw">_</span>&gt; = configs.iter().map(|p| p.consensus.clone()).collect();
+    consensus.dedup();
+    <span class="macro">assert_eq!</span>(consensus.len(), <span class="number">1</span>);
+    <span class="comment">// Confirm all peer ids are unique
+    </span><span class="kw">let </span>ids = configs
+        .iter()
+        .map(|p| p.our_current_id)
+        .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="macro">assert_eq!</span>(ids.len(), admin_clients.len());
+    <span class="kw">let </span>dkg_results = admin_clients
+        .iter()
+        .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
+    <span class="macro">info!</span>(<span class="string">&quot;Running DKG...&quot;</span>);
+    <span class="kw">let </span>(dkg_results, leader_wait_result) = <span class="macro">tokio::join!</span>(
+        join_all(dkg_results),
+        wait_server_status(leader, ServerStatus::ReadyForConfigGen)
+    );
+    <span class="kw">for </span>result <span class="kw">in </span>dkg_results {
+        result<span class="question-mark">?</span>;
+    }
+    leader_wait_result<span class="question-mark">?</span>;
+
+    <span class="comment">// verify config hashes equal for all peers
+    </span><span class="kw">let </span><span class="kw-2">mut </span>hashes = HashSet::new();
+    <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
+        wait_server_status(client, ServerStatus::VerifyingConfigs).<span class="kw">await</span><span class="question-mark">?</span>;
+        hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).<span class="kw">await</span><span class="question-mark">?</span>);
+    }
+    <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
+    <span class="macro">info!</span>(<span class="string">&quot;DKG successfully complete. Starting consensus...&quot;</span>);
+    <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.start_consensus(auth_for(peer_id)).<span class="kw">await </span>{
+            <span class="macro">tracing::info!</span>(<span class="string">&quot;Error calling start_consensus: {e:?}, trying to continue...&quot;</span>)
+        }
+        <span class="kw">const </span>RETRIES: usize = <span class="number">20</span>;
+        poll_max_retries(<span class="string">&quot;waiting-consensus-running-for-peer&quot;</span>, RETRIES, || <span class="kw">async </span>{
+            <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span><span class="question-mark">?</span>.server == ServerStatus::ConsensusRunning)
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="macro">info!</span>(<span class="string">&quot;Consensus is running&quot;</span>);
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>set_config_gen_params(
+    client: <span class="kw-2">&amp;</span>WsAdminClient,
+    auth: ApiAuth,
+    <span class="kw-2">mut </span>server_gen_params: ServerModuleGenParamsRegistry,
+) -&gt; anyhow::Result&lt;()&gt; {
     attach_default_module_gen_params(
         BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
-        <span class="kw-2">&amp;mut </span>fed.server_gen_params,
+        <span class="kw-2">&amp;mut </span>server_gen_params,
         Amount::from_sats(<span class="number">100_000_000</span>),
         Network::Regtest,
         <span class="number">10</span>,
     );
+    <span class="kw">let </span>request = ConfigGenParamsRequest {
+        meta: BTreeMap::from([(<span class="string">&quot;test&quot;</span>.to_string(), <span class="string">&quot;testvalue&quot;</span>.to_string())]),
+        modules: server_gen_params,
+    };
+    client.set_config_gen_params(request, auth.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
 
-    <span class="kw">let </span>peers: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..servers).map(|id| PeerId::from(id <span class="kw">as </span>u16)).collect();
-    <span class="kw">let </span>params = local_config_gen_params(<span class="kw-2">&amp;</span>peers, BASE_PORT, fed.server_gen_params.clone())<span class="question-mark">?</span>;
-    <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, fed.server_gens.clone());
-    <span class="kw">let </span><span class="kw-2">mut </span>fedimintd_envs = BTreeMap::new();
-    <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>configs {
-        <span class="kw">let </span>bind_metrics_api = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, <span class="number">3510 </span>+ peer.to_usize());
-        <span class="kw">let </span>envs = vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="kw-2">&amp;</span>cfg, bind_metrics_api).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>password = cfg.private.api_auth.<span class="number">0</span>.clone();
-        <span class="kw">let </span>data_dir = envs.FM_DATA_DIR.clone();
-        fedimintd_envs.insert(peer.to_usize(), envs);
-        write_new(data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
-        write_server_config(<span class="kw-2">&amp;</span>cfg, data_dir.clone(), <span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>fed.server_gens)<span class="question-mark">?</span>;
-        <span class="kw">if </span>write_password {
-            write_new(data_dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span>password)<span class="question-mark">?</span>;
-        }
-    }
-
-    <span class="kw">let </span>out_dir = <span class="kw-2">&amp;</span>fedimintd_envs[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR;
-    <span class="kw">let </span>cfg_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_DATA_DIR;
-    <span class="kw">let </span>out_dir = utf8(out_dir);
-    <span class="kw">let </span>cfg_dir = utf8(cfg_dir);
-    <span class="comment">// copy configs to config directory
-    </span>fs::rename(
-        <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client-connect&quot;</span>),
-        <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client-connect&quot;</span>),
-    )
+<span class="kw">async fn </span>wait_server_status(
+    client: <span class="kw-2">&amp;</span>WsAdminClient,
+    expected_status: ServerStatus,
+) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">const </span>RETRIES: usize = <span class="number">60</span>;
+    poll_max_retries(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
+        <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span><span class="question-mark">?</span>.server == expected_status)
+    })
     .<span class="kw">await</span><span class="question-mark">?</span>;
-    fs::rename(
-        <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client.json&quot;</span>),
-        <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client.json&quot;</span>),
-    )
-    .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;copied client configs&quot;</span>);
-
-    <span class="macro">info!</span>(<span class="string">&quot;DKG complete&quot;</span>);
-
-    <span class="prelude-val">Ok</span>(fedimintd_envs)
+    <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

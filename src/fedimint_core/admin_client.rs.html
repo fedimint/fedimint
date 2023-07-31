@@ -303,6 +303,8 @@
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -327,6 +329,7 @@
 </span><span class="comment">// TODO: Maybe should have it&#39;s own CLI client so it doesn&#39;t need to be in core
 </span><span class="kw">pub struct </span>WsAdminClient {
     inner: DynGlobalApi,
+    <span class="kw">pub </span>url: Url,
 }
 
 <span class="kw">impl </span>WsAdminClient {
@@ -335,7 +338,8 @@
         // multiple peers so errors can be attributed. The admin client has no use for
         // them.
         </span><span class="self">Self </span>{
-            inner: WsFederationApi::new(<span class="macro">vec!</span>[(PeerId(<span class="number">0</span>), url)]).into(),
+            inner: WsFederationApi::new(<span class="macro">vec!</span>[(PeerId(<span class="number">0</span>), url.clone())]).into(),
+            url,
         }
     }
 

@@ -224,16 +224,6 @@
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::future::Future;
@@ -243,16 +233,16 @@
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::RpcApi;
-<span class="kw">use </span>federation::{run_config_gen, Federation};
+<span class="kw">use </span>federation::Federation;
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 <span class="kw">use </span>fedimint_client_legacy::modules::mint::MintClientGen;
 <span class="kw">use </span>fedimint_client_legacy::{module_decode_stubs, UserClient, UserClientConfig};
+<span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::config::load_from_file;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
-<span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">pub mod </span>util;
@@ -406,16 +396,8 @@
 
 <span class="kw">impl </span>Faucet {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>connect_string =
-            fs::read_to_string(process_mgr.globals.FM_DATA_DIR.join(<span class="string">&quot;client-connect&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            _process: process_mgr
-                .spawn_daemon(
-                    <span class="string">&quot;faucet&quot;</span>,
-                    <span class="macro">cmd!</span>(<span class="string">&quot;faucet&quot;</span>, <span class="string">&quot;--connect-string={connect_string}&quot;</span>),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>,
+            _process: process_mgr.spawn_daemon(<span class="string">&quot;faucet&quot;</span>, <span class="macro">cmd!</span>(<span class="string">&quot;faucet&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>,
         })
     }
 }
@@ -443,9 +425,7 @@
         Esplora::new(process_mgr, bitcoind.clone()),
         <span class="kw">async </span>{
             <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
-            <span class="kw">let </span>members = run_config_gen(process_mgr, fed_size, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;config gen done&quot;</span>);
-            Federation::new(process_mgr, bitcoind.clone(), members).<span class="kw">await
+            Federation::new(process_mgr, bitcoind.clone(), fed_size).<span class="kw">await
         </span>},
     )<span class="question-mark">?</span>;
     <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;federation and gateways started&quot;</span>);

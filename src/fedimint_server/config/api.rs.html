@@ -2002,14 +2002,14 @@
             </span><span class="kw">let </span>leader_amount = leader.amount;
             <span class="kw">let </span>leader_name = leader.name.clone();
             followers.push(leader);
-            <span class="kw">let </span>followers = Arc::new(followers);
+            <span class="kw">let </span>all_peers = Arc::new(followers);
             <span class="kw">let </span>(results, <span class="kw">_</span>) = <span class="macro">tokio::join!</span>(
                 join_all(
-                    followers
+                    all_peers
                         .iter()
                         .map(|peer| peer.client.run_dkg(peer.auth.clone()))
                 ),
-                followers[<span class="number">0</span>].wait_status(ServerStatus::ReadyForConfigGen)
+                all_peers[<span class="number">0</span>].wait_status(ServerStatus::ReadyForConfigGen)
             );
             <span class="kw">for </span>result <span class="kw">in </span>results {
                 result.expect(<span class="string">&quot;DKG failed&quot;</span>);
@@ -2017,7 +2017,7 @@
 
             <span class="comment">// verify config hashes equal for all peers
             </span><span class="kw">let </span><span class="kw-2">mut </span>hashes = HashSet::new();
-            <span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
+            <span class="kw">for </span>peer <span class="kw">in </span>all_peers.iter() {
                 peer.wait_status(ServerStatus::VerifyingConfigs).<span class="kw">await</span>;
                 hashes.insert(
                     peer.client
@@ -2029,7 +2029,7 @@
             <span class="macro">assert_eq!</span>(hashes.len(), <span class="number">1</span>);
 
             <span class="comment">// verify the local and consensus values for peers
-            </span><span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
+            </span><span class="kw">for </span>peer <span class="kw">in </span>all_peers.iter() {
                 <span class="kw">let </span>cfg = peer.read_config();
                 <span class="kw">let </span>dummy: DummyConfig = cfg.get_module_config_typed(<span class="number">0</span>).unwrap();
                 <span class="macro">assert_eq!</span>(dummy.consensus.tx_fee, leader_amount);
@@ -2038,17 +2038,17 @@
             }
 
             <span class="comment">// start consensus
-            </span><span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
+            </span><span class="kw">for </span>peer <span class="kw">in </span>all_peers.iter() {
                 peer.client.start_consensus(peer.auth.clone()).<span class="kw">await</span>.ok();
                 <span class="macro">assert_eq!</span>(peer.status().<span class="kw">await</span>.server, ServerStatus::ConsensusRunning);
             }
 
             <span class="comment">// shutdown
-            </span><span class="kw">for </span>peer <span class="kw">in </span>followers.iter() {
+            </span><span class="kw">for </span>peer <span class="kw">in </span>all_peers.iter() {
                 peer.retry_signal_upgrade().<span class="kw">await</span>;
             }
 
-            followers
+            all_peers
         };
 
         <span class="comment">// Run the Fedimint servers and test concurrently

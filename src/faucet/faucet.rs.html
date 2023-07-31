@@ -128,8 +128,31 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>axum::extract::State;
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::routing::{get, post};
@@ -150,7 +173,7 @@
     <span class="attr">#[clap(long, env = <span class="string">&quot;FM_CLN_SOCKET&quot;</span>)]
     </span>cln_socket: String,
     <span class="attr">#[clap(long, env = <span class="string">&quot;FM_CONNECT_STRING&quot;</span>)]
-    </span>connect_string: String,
+    </span>connect_string: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Clone)]
@@ -165,7 +188,11 @@
         <span class="kw">let </span>url = cmd.bitcoind_rpc.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>(host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(<span class="kw-2">&amp;</span>url)<span class="question-mark">?</span>;
         <span class="kw">let </span>bitcoin = Arc::new(bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>host, auth)<span class="question-mark">?</span>);
-        <span class="kw">let </span>ln_rpc = Arc::new(Mutex::new(ClnRpc::new(<span class="kw-2">&amp;</span>cmd.cln_socket).<span class="kw">await</span><span class="question-mark">?</span>));
+        <span class="kw">let </span>ln_rpc = Arc::new(Mutex::new(
+            ClnRpc::new(<span class="kw-2">&amp;</span>cmd.cln_socket)
+                .<span class="kw">await
+                </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;couldn&#39;t open CLN socket {}&quot;</span>, <span class="kw-2">&amp;</span>cmd.cln_socket))<span class="question-mark">?</span>,
+        ));
         <span class="prelude-val">Ok</span>(Faucet { bitcoin, ln_rpc })
     }
 
@@ -219,6 +246,18 @@
     }
 }
 
+<span class="kw">fn </span>get_connect_string(connect_string: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; anyhow::Result&lt;String&gt; {
+    <span class="kw">match </span>connect_string {
+        <span class="prelude-val">Some</span>(s) =&gt; <span class="prelude-val">Ok</span>(s),
+        <span class="prelude-val">None </span>=&gt; {
+            <span class="kw">let </span>data_dir = std::env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(std::fs::read_to_string(
+                PathBuf::from(data_dir).join(<span class="string">&quot;client-connect&quot;</span>),
+            )<span class="question-mark">?</span>)
+        }
+    }
+}
+
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
     TracingSetup::default().init()<span class="question-mark">?</span>;
@@ -227,7 +266,10 @@
     <span class="kw">let </span>router = Router::new()
         .route(
             <span class="string">&quot;/connect-string&quot;</span>,
-            get(|| <span class="kw">async move </span>{ cmd.connect_string.clone() }),
+            get(|| <span class="kw">async move </span>{
+                get_connect_string(cmd.connect_string)
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, <span class="macro">format!</span>(<span class="string">&quot;{e:?}&quot;</span>)))
+            }),
         )
         .route(
             <span class="string">&quot;/pay&quot;</span>,
@@ -235,7 +277,7 @@
                 faucet
                     .pay_invoice(invoice)
                     .<span class="kw">await
-                    </span>.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+                    </span>.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, <span class="macro">format!</span>(<span class="string">&quot;{e:?}&quot;</span>)))
             }),
         )
         .route(
@@ -243,11 +285,11 @@
             post(|State(faucet): State&lt;Faucet&gt;, amt: String| <span class="kw">async move </span>{
                 <span class="kw">let </span>amt = amt
                     .parse::&lt;u64&gt;()
-                    .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))<span class="question-mark">?</span>;
+                    .map_err(|e| (StatusCode::BAD_REQUEST, <span class="macro">format!</span>(<span class="string">&quot;{e:?}&quot;</span>)))<span class="question-mark">?</span>;
                 faucet
                     .generate_invoice(amt)
                     .<span class="kw">await
-                    </span>.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+                    </span>.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, <span class="macro">format!</span>(<span class="string">&quot;{e:?}&quot;</span>)))
             }),
         )
         .layer(CorsLayer::permissive())
