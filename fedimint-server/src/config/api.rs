@@ -962,14 +962,14 @@ mod tests {
             let leader_amount = leader.amount;
             let leader_name = leader.name.clone();
             followers.push(leader);
-            let followers = Arc::new(followers);
+            let all_peers = Arc::new(followers);
             let (results, _) = tokio::join!(
                 join_all(
-                    followers
+                    all_peers
                         .iter()
                         .map(|peer| peer.client.run_dkg(peer.auth.clone()))
                 ),
-                followers[0].wait_status(ServerStatus::ReadyForConfigGen)
+                all_peers[0].wait_status(ServerStatus::ReadyForConfigGen)
             );
             for result in results {
                 result.expect("DKG failed");
@@ -977,7 +977,7 @@ mod tests {
 
             // verify config hashes equal for all peers
             let mut hashes = HashSet::new();
-            for peer in followers.iter() {
+            for peer in all_peers.iter() {
                 peer.wait_status(ServerStatus::VerifyingConfigs).await;
                 hashes.insert(
                     peer.client
@@ -989,7 +989,7 @@ mod tests {
             assert_eq!(hashes.len(), 1);
 
             // verify the local and consensus values for peers
-            for peer in followers.iter() {
+            for peer in all_peers.iter() {
                 let cfg = peer.read_config();
                 let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
                 assert_eq!(dummy.consensus.tx_fee, leader_amount);
@@ -998,17 +998,17 @@ mod tests {
             }
 
             // start consensus
-            for peer in followers.iter() {
+            for peer in all_peers.iter() {
                 peer.client.start_consensus(peer.auth.clone()).await.ok();
                 assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
             }
 
             // shutdown
-            for peer in followers.iter() {
+            for peer in all_peers.iter() {
                 peer.retry_signal_upgrade().await;
             }
 
-            followers
+            all_peers
         };
 
         // Run the Fedimint servers and test concurrently

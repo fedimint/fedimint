@@ -152,7 +152,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "--in-file={data_dir}/server-0/private.encrypt",
         "--out-file={data_dir}/server-0/config-plaintext.json"
     )
-    .env("FM_PASSWORD", "pass0")
+    .env("FM_PASSWORD", "pass")
     .run()
     .await?;
 
@@ -181,13 +181,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Test load last epoch with admin client
     info!("Testing load last epoch with admin client");
     let epoch_json = cmd!(fed, "admin", "last-epoch")
-        .env("FM_PASSWORD", "pass0")
+        .env("FM_PASSWORD", "pass")
         .env("FM_OUR_ID", "0")
         .out_json()
         .await?;
     let epoch_hex = epoch_json["hex_outcome"].as_str().unwrap();
     let _force_epoch = cmd!(fed, "admin", "force-epoch", epoch_hex)
-        .env("FM_PASSWORD", "pass0")
+        .env("FM_PASSWORD", "pass")
         .env("FM_OUR_ID", "0")
         .out_json()
         .await?;
@@ -1119,8 +1119,7 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     Ok((process_mgr, task_group))
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+async fn handle_command() -> Result<()> {
     let args = Args::parse();
     match args.command {
         Cmd::ExternalDaemons => {
@@ -1173,6 +1172,18 @@ async fn main() -> Result<()> {
         Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,
     }
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let ready_file = PathBuf::from(env::var("FM_TEST_DIR")?).join("ready");
+    match handle_command().await {
+        Ok(r) => Ok(r),
+        Err(e) => {
+            write_overwrite_async(ready_file, "ERROR").await?;
+            Err(e)
+        }
+    }
 }
 
 async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {

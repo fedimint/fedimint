@@ -12,7 +12,8 @@ export FM_VERBOSE_OUTPUT=0
 
 source scripts/build.sh
 
-devimint dev-fed 2>/dev/null &
+mkdir -p $FM_LOGS_DIR
+devimint dev-fed 2>$FM_LOGS_DIR/devimint-outer.log &
 echo $! >> $FM_PID_FILE
 eval "$(devimint env)"
 

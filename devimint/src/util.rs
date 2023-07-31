@@ -236,6 +236,39 @@ macro_rules! cmd {
 
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
+/// Will retry calling `f` until it returns `Ok(true)` or `retries` times.
+/// A notable difference from [`poll`] is that `f` may fail with an error at any
+/// time and we will still keep retrying.
+pub async fn poll_max_retries<Fut>(name: &str, retries: usize, f: impl Fn() -> Fut) -> Result<()>
+where
+    Fut: Future<Output = Result<bool>>,
+{
+    let mut i = 0;
+    loop {
+        let result = f().await;
+        if i == retries - 1 {
+            match result {
+                Ok(true) => return Ok(()),
+                Ok(false) => {
+                    bail!("{name} failed to reach good state after {retries} retries");
+                }
+                Err(e) => {
+                    bail!("{name} failed after {retries} retries with: {e:?}");
+                }
+            }
+        } else {
+            match result {
+                Ok(true) => return Ok(()),
+                other => {
+                    i += 1;
+                    debug!("polling {name} failed with: {other:?}, will retry... ({i}/{retries})");
+                    task::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+}
+
 pub async fn poll<Fut>(name: &str, f: impl Fn() -> Fut) -> Result<()>
 where
     Fut: Future<Output = Result<bool>>,
