@@ -50,8 +50,8 @@ impl IBitcoindRpc for ElectrumClient {
         })
     }
 
-    async fn get_block_height(&self) -> anyhow::Result<u64> {
-        Ok(block_in_place(|| self.0.block_headers_subscribe_raw())?.height as u64)
+    async fn get_block_count(&self) -> anyhow::Result<u64> {
+        Ok(block_in_place(|| self.0.block_headers_subscribe_raw())?.height as u64 + 1)
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {

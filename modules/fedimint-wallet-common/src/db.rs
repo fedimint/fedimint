@@ -12,7 +12,7 @@ use crate::{PendingTransaction, SpendableUTXO, UnsignedTransaction, WalletOutput
 pub enum DbKeyPrefix {
     BlockHash = 0x30,
     Utxo = 0x31,
-    BlockHeightVote = 0x32,
+    BlockCountVote = 0x32,
     FeeRateVote = 0x33,
     UnsignedTransaction = 0x34,
     PendingTransaction = 0x35,
@@ -119,21 +119,18 @@ impl_db_lookup!(
 );
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct BlockHeightVoteKey(pub PeerId);
+pub struct BlockCountVoteKey(pub PeerId);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct BlockHeightVotePrefix;
+pub struct BlockCountVotePrefix;
 
 impl_db_record!(
-    key = BlockHeightVoteKey,
+    key = BlockCountVoteKey,
     value = u32,
-    db_prefix = DbKeyPrefix::BlockHeightVote
+    db_prefix = DbKeyPrefix::BlockCountVote
 );
 
-impl_db_lookup!(
-    key = BlockHeightVoteKey,
-    query_prefix = BlockHeightVotePrefix
-);
+impl_db_lookup!(key = BlockCountVoteKey, query_prefix = BlockCountVotePrefix);
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct FeeRateVoteKey(pub PeerId);

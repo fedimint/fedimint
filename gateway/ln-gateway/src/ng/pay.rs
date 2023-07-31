@@ -180,16 +180,16 @@ impl GatewayPayInvoice {
                 contract,
             };
 
-            let consensus_block_height = global_context
+            let consensus_block_count = global_context
                 .module_api()
-                .fetch_consensus_block_height()
+                .fetch_consensus_block_count()
                 .await
                 .map_err(|_| OutgoingPaymentError::InvalidOutgoingContract {
                     error: OutgoingContractError::TimeoutTooClose,
                     contract: outgoing_contract_account.clone(),
                 })?;
 
-            if consensus_block_height.is_none() {
+            if consensus_block_count.is_none() {
                 return Err(OutgoingPaymentError::InvalidOutgoingContract {
                     error: OutgoingContractError::MissingContractData,
                     contract: outgoing_contract_account.clone(),
@@ -200,7 +200,7 @@ impl GatewayPayInvoice {
                 &outgoing_contract_account,
                 context.redeem_key,
                 context.timelock_delta,
-                consensus_block_height.unwrap(),
+                consensus_block_count.unwrap(),
             )
             .await
             .map_err(|e| OutgoingPaymentError::InvalidOutgoingContract {
@@ -305,7 +305,7 @@ impl GatewayPayInvoice {
         account: &OutgoingContractAccount,
         redeem_key: bitcoin::KeyPair,
         timelock_delta: u64,
-        consensus_block_height: u64,
+        consensus_block_count: u64,
     ) -> Result<PaymentParameters, OutgoingContractError> {
         let our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(&redeem_key).0;
 
@@ -332,7 +332,7 @@ impl GatewayPayInvoice {
         }
 
         let max_delay = (account.contract.timelock as u64)
-            .checked_sub(consensus_block_height)
+            .checked_sub(consensus_block_count.saturating_sub(1))
             .and_then(|delta| delta.checked_sub(timelock_delta));
         if max_delay.is_none() {
             return Err(OutgoingContractError::TimeoutTooClose);

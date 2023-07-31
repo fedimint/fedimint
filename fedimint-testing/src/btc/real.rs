@@ -52,18 +52,14 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             .expect(Self::ERROR)
             .last()
         {
-            let block = self
+            let last_mined_block = self
                 .client
                 .get_block_header_info(block_hash)
                 .expect("rpc failed");
             // waits for the rpc client to catch up to bitcoind
-            loop {
-                let height = self.rpc.get_block_height().await.expect("rpc failed");
-
-                if height >= block.height as u64 {
-                    break;
-                }
-            }
+            while self.rpc.get_block_count().await.expect("rpc failed")
+                < last_mined_block.height as u64
+            {}
         };
     }
 

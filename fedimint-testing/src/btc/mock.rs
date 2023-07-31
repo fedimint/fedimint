@@ -243,8 +243,8 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(Network::Regtest)
     }
 
-    async fn get_block_height(&self) -> BitcoinRpcResult<u64> {
-        Ok((self.blocks.lock().unwrap().len() as u64) - 1)
+    async fn get_block_count(&self) -> BitcoinRpcResult<u64> {
+        Ok(self.blocks.lock().unwrap().len() as u64)
     }
 
     async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<BlockHash> {

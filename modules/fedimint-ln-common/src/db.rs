@@ -17,7 +17,7 @@ pub enum DbKeyPrefix {
     AgreedDecryptionShare = 0x43,
     ContractUpdate = 0x44,
     LightningGateway = 0x45,
-    BlockHeightVote = 0x46,
+    BlockCountVote = 0x46,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -127,18 +127,15 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct BlockHeightVoteKey(pub PeerId);
+pub struct BlockCountVoteKey(pub PeerId);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct BlockHeightVotePrefix;
+pub struct BlockCountVotePrefix;
 
 impl_db_record!(
-    key = BlockHeightVoteKey,
+    key = BlockCountVoteKey,
     value = u64,
-    db_prefix = DbKeyPrefix::BlockHeightVote
+    db_prefix = DbKeyPrefix::BlockCountVote
 );
 
-impl_db_lookup!(
-    key = BlockHeightVoteKey,
-    query_prefix = BlockHeightVotePrefix
-);
+impl_db_lookup!(key = BlockCountVoteKey, query_prefix = BlockCountVotePrefix);

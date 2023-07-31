@@ -15,7 +15,7 @@ use bitcoin::{
 };
 use common::config::WalletConfigConsensus;
 use common::db::{
-    BlockHeightVoteKey, BlockHeightVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
     PegOutNonceKey,
 };
 use common::{
@@ -265,14 +265,14 @@ impl ServerModuleGen for WalletGen {
                     );
                 }
 
-                DbKeyPrefix::BlockHeightVote => {
+                DbKeyPrefix::BlockCountVote => {
                     push_db_pair_items!(
                         dbtx,
-                        BlockHeightVotePrefix,
-                        BlockHeightVoteKey,
+                        BlockCountVotePrefix,
+                        BlockCountVoteKey,
                         u32,
                         wallet,
-                        "Block Height Votes"
+                        "Block Count Votes"
                     );
                 }
 
@@ -321,13 +321,13 @@ impl ServerModule for Wallet {
             .collect::<Vec<WalletConsensusItem>>()
             .await;
 
-        let block_height_proposal = self
-            .block_height()
+        let block_count_proposal = self
+            .block_count()
             .await
             .saturating_sub(self.cfg.consensus.finality_delay);
 
-        if block_height_proposal != self.consensus_block_height(dbtx).await {
-            items.push(WalletConsensusItem::BlockHeight(block_height_proposal));
+        if block_count_proposal != self.consensus_block_count(dbtx).await {
+            items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
         let fee_rate_proposal = self.fee_rate().await;
@@ -348,33 +348,35 @@ impl ServerModule for Wallet {
         trace!(?consensus_item, "Received consensus proposals");
 
         match consensus_item {
-            WalletConsensusItem::BlockHeight(block_height) => {
+            WalletConsensusItem::BlockCount(block_count) => {
                 let current_vote = dbtx
-                    .get_value(&BlockHeightVoteKey(peer_id))
+                    .get_value(&BlockCountVoteKey(peer_id))
                     .await
                     .unwrap_or(0);
 
-                if block_height < current_vote {
-                    bail!("Block height vote decreased");
+                if block_count < current_vote {
+                    bail!("Block count vote decreased");
                 }
 
-                if block_height == current_vote {
+                if block_count == current_vote {
                     bail!("Block height vote is redundant");
                 }
 
-                let old_consensus_height = self.consensus_block_height(dbtx).await;
+                let old_consensus_block_count = self.consensus_block_count(dbtx).await;
 
-                dbtx.insert_entry(&BlockHeightVoteKey(peer_id), &block_height)
+                dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
                     .await;
 
-                let new_consensus_height = self.consensus_block_height(dbtx).await;
+                let new_consensus_block_count = self.consensus_block_count(dbtx).await;
 
-                // only sync from the first non-default consensus block height
-                if new_consensus_height > old_consensus_height && old_consensus_height > 0 {
+                // only sync from the first non-default consensus block count
+                if new_consensus_block_count > old_consensus_block_count
+                    && old_consensus_block_count > 0
+                {
                     self.sync_up_to_consensus_height(
                         dbtx,
-                        old_consensus_height,
-                        new_consensus_height,
+                        old_consensus_block_count,
+                        new_consensus_block_count,
                     )
                     .await;
                 }
@@ -572,9 +574,9 @@ impl ServerModule for Wallet {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "block_height",
+                "block_count",
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    Ok(module.consensus_block_height(&mut context.dbtx()).await)
+                    Ok(module.consensus_block_count(&mut context.dbtx()).await)
                 }
             },
             api_endpoint! {
@@ -654,7 +656,7 @@ impl Wallet {
             ));
         }
 
-        match bitcoind_rpc.get_block_height().await {
+        match bitcoind_rpc.get_block_count().await {
             Ok(height) => info!(height, "Connected to bitcoind"),
             Err(err) => warn!("Bitcoin node is not ready or configured properly. Modules relying on it may not function correctly: {:?}", err),
         }
@@ -780,9 +782,9 @@ impl Wallet {
         })
     }
 
-    pub async fn block_height(&self) -> u32 {
+    pub async fn block_count(&self) -> u32 {
         self.btc_rpc
-            .get_block_height()
+            .get_block_count()
             .await
             .expect("bitcoind rpc failed") as u32
     }
@@ -795,25 +797,25 @@ impl Wallet {
             .unwrap_or(self.cfg.consensus.default_fee)
     }
 
-    pub async fn consensus_block_height(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u32 {
+    pub async fn consensus_block_count(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u32 {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
 
-        let mut heights = dbtx
-            .find_by_prefix(&BlockHeightVotePrefix)
+        let mut counts = dbtx
+            .find_by_prefix(&BlockCountVotePrefix)
             .await
-            .map(|(.., height)| height)
+            .map(|(.., count)| count)
             .collect::<Vec<_>>()
             .await;
 
-        assert!(heights.len() <= peer_count);
+        assert!(counts.len() <= peer_count);
 
-        while heights.len() < peer_count {
-            heights.push(0);
+        while counts.len() < peer_count {
+            counts.push(0);
         }
 
-        heights.sort_unstable();
+        counts.sort_unstable();
 
-        heights[peer_count / 2]
+        counts[peer_count / 2]
     }
 
     pub async fn consensus_fee_rate(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Feerate {
@@ -1549,7 +1551,7 @@ mod fedimint_migration_tests {
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
     use fedimint_wallet_common::db::{
-        BlockHashKey, BlockHashKeyPrefix, BlockHeightVoteKey, BlockHeightVotePrefix, DbKeyPrefix,
+        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
         FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
         PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
         PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
@@ -1589,7 +1591,7 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(&PegOutNonceKey, &1).await;
 
-        dbtx.insert_new_entry(&BlockHeightVoteKey(PeerId::from(0)), &1)
+        dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
             .await;
 
         dbtx.insert_new_entry(
@@ -1839,9 +1841,9 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any UTXOs"
                             );
                         }
-                        DbKeyPrefix::BlockHeightVote => {
+                        DbKeyPrefix::BlockCountVote => {
                             let heights = dbtx
-                                .find_by_prefix(&BlockHeightVotePrefix)
+                                .find_by_prefix(&BlockCountVotePrefix)
                                 .await
                                 .collect::<Vec<_>>()
                                 .await;

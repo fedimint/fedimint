@@ -137,7 +137,7 @@ where
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletFederationApi {
-    async fn fetch_consensus_block_height(&self) -> FederationResult<u64>;
+    async fn fetch_consensus_block_count(&self) -> FederationResult<u64>;
     async fn fetch_peg_out_fees(
         &self,
         address: &Address,
@@ -150,11 +150,11 @@ impl<T: ?Sized> WalletFederationApi for T
 where
     T: IFederationApi + MaybeSend + MaybeSync + 'static,
 {
-    async fn fetch_consensus_block_height(&self) -> FederationResult<u64> {
+    async fn fetch_consensus_block_count(&self) -> FederationResult<u64> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .request_with_strategy(
                 EventuallyConsistent::new(self.all_members().one_honest()),
-                "block_height".to_string(),
+                "block_count".to_string(),
                 ApiRequestErased::default(),
             )
             .await

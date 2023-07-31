@@ -34,7 +34,7 @@ use fedimint_ln_common::contracts::{
 };
 use fedimint_ln_common::db::{
     AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
-    AgreedDecryptionShareKeyPrefix, BlockHeightVoteKey, BlockHeightVotePrefix, ContractKey,
+    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix, ContractKey,
     ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
     LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
     ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
@@ -295,14 +295,14 @@ impl ServerModuleGen for LightningGen {
                         "Proposed Decryption Shares"
                     );
                 }
-                DbKeyPrefix::BlockHeightVote => {
+                DbKeyPrefix::BlockCountVote => {
                     push_db_pair_items!(
                         dbtx,
-                        BlockHeightVotePrefix,
-                        BlockHeightVoteKey,
+                        BlockCountVotePrefix,
+                        BlockCountVoteKey,
                         u64,
                         lightning,
-                        "Block Height Votes"
+                        "Block Count Votes"
                     );
                 }
             }
@@ -363,10 +363,10 @@ impl ServerModule for Lightning {
             .collect()
             .await;
 
-        let block_height_vote = self.block_height().await;
+        let block_count_vote = self.block_count().await;
 
-        if block_height_vote != self.consensus_block_height(dbtx).await {
-            items.push(LightningConsensusItem::BlockHeight(block_height_vote));
+        if block_count_vote != self.consensus_block_count(dbtx).await {
+            items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
         ConsensusProposal::new_auto_trigger(items)
@@ -502,21 +502,21 @@ impl ServerModule for Lightning {
                 dbtx.insert_entry(&ContractUpdateKey(out_point), &outcome)
                     .await;
             }
-            LightningConsensusItem::BlockHeight(block_height) => {
+            LightningConsensusItem::BlockCount(block_count) => {
                 let current_vote = dbtx
-                    .get_value(&BlockHeightVoteKey(peer_id))
+                    .get_value(&BlockCountVoteKey(peer_id))
                     .await
                     .unwrap_or(0);
 
-                if block_height < current_vote {
-                    bail!("Block height vote decreased");
+                if block_count < current_vote {
+                    bail!("Block count vote decreased");
                 }
 
-                if block_height == current_vote {
+                if block_count == current_vote {
                     bail!("Block height vote is redundant");
                 }
 
-                dbtx.insert_entry(&BlockHeightVoteKey(peer_id), &block_height)
+                dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
                     .await;
             }
         }
@@ -551,11 +551,11 @@ impl ServerModule for Lightning {
             .into_module_error_other();
         }
 
-        let consensus_height = self.consensus_block_height(dbtx).await;
+        let consensus_block_count = self.consensus_block_count(dbtx).await;
 
         let pub_key = match &account.contract {
             FundedContract::Outgoing(outgoing) => {
-                if outgoing.timelock as u64 > consensus_height && !outgoing.cancelled {
+                if outgoing.timelock as u64 + 1 > consensus_block_count && !outgoing.cancelled {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         &input
@@ -804,9 +804,9 @@ impl ServerModule for Lightning {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "block_height",
+                "block_count",
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
-                    Ok(Some(module.consensus_block_height(&mut context.dbtx()).await))
+                    Ok(Some(module.consensus_block_count(&mut context.dbtx()).await))
                 }
             },
             api_endpoint! {
@@ -864,32 +864,32 @@ impl Lightning {
         Ok(Lightning { cfg, btc_rpc })
     }
 
-    pub async fn block_height(&self) -> u64 {
+    pub async fn block_count(&self) -> u64 {
         self.btc_rpc
-            .get_block_height()
+            .get_block_count()
             .await
             .expect("bitcoind rpc failed")
     }
 
-    pub async fn consensus_block_height(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u64 {
+    pub async fn consensus_block_count(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u64 {
         let peer_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
 
-        let mut heights = dbtx
-            .find_by_prefix(&BlockHeightVotePrefix)
+        let mut counts = dbtx
+            .find_by_prefix(&BlockCountVotePrefix)
             .await
-            .map(|(.., height)| height)
+            .map(|(.., count)| count)
             .collect::<Vec<_>>()
             .await;
 
-        assert!(heights.len() <= peer_count);
+        assert!(counts.len() <= peer_count);
 
-        while heights.len() < peer_count {
-            heights.push(0);
+        while counts.len() < peer_count {
+            counts.push(0);
         }
 
-        heights.sort_unstable();
+        counts.sort_unstable();
 
-        heights[peer_count / 2]
+        counts[peer_count / 2]
     }
 
     fn validate_decryption_share(
@@ -1238,7 +1238,7 @@ mod fedimint_migration_tests {
                             "validate_migrations was not able to read any ProposeDecryptionShares"
                         );
                         }
-                        DbKeyPrefix::BlockHeightVote => {}
+                        DbKeyPrefix::BlockCountVote => {}
                     }
                 }
             },

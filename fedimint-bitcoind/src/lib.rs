@@ -86,15 +86,15 @@ pub trait IBitcoindRpc: Debug {
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 
-    /// Returns the current block height
-    async fn get_block_height(&self) -> Result<u64>;
+    /// Returns the current block count
+    async fn get_block_count(&self) -> Result<u64>;
 
     /// Returns the block hash at a given height
     ///
     /// # Panics
     /// If the node does not know a block for that height. Make sure to only
-    /// query blocks of a height less or equal to the one returned by
-    /// `Self::get_block_height`.
+    /// query blocks of a height less to the one returned by
+    /// `Self::get_block_count`.
     ///
     /// While there is a corner case that the blockchain shrinks between these
     /// two calls (through on average heavier blocks on a fork) this is
@@ -195,8 +195,8 @@ where
             .await
     }
 
-    async fn get_block_height(&self) -> Result<u64> {
-        self.retry_call(|| async { self.inner.get_block_height().await })
+    async fn get_block_count(&self) -> Result<u64> {
+        self.retry_call(|| async { self.inner.get_block_count().await })
             .await
     }
 

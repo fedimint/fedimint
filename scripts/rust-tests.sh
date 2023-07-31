@@ -4,7 +4,7 @@
 set -euo pipefail
 export RUST_LOG="${RUST_LOG:-info,timing=debug}"
 
-source scripts/build.sh
+source scripts/build.sh ""
 
 >&2 echo "### Setting up tests"
 

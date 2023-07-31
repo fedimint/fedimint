@@ -360,7 +360,7 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         online_peers.run_consensus_epochs(1).await;
         bitcoin.mine_blocks(100).await;
         online_peers.run_consensus_epochs(1).await;
-        let height = user.await_consensus_block_height(0).await.unwrap();
+        let block_count = user.await_consensus_block_count(1).await.unwrap();
 
         // Run until peer 3 has rejoined
         join_all(vec![
@@ -377,8 +377,11 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
         // Ensure peer 3 rejoined and caught up to consensus
         let client2 = user.new_client_with_peers(peers(&[1, 2, 3]));
 
-        let new_height = client2.await_consensus_block_height(height).await.unwrap();
-        assert_eq!(new_height, height);
+        let new_block_count = client2
+            .await_consensus_block_count(block_count)
+            .await
+            .unwrap();
+        assert_eq!(new_block_count, block_count);
     })
     .await
 }
@@ -416,10 +419,10 @@ async fn rejoin_consensus_split_peers() -> Result<()> {
         fed.run_consensus_epochs(1).await;
 
         // We cannot process a past epoch and reverse the block height
-        let height = user.await_consensus_block_height(0).await.unwrap();
+        let block_count = user.await_consensus_block_count(1).await.unwrap();
         fed.force_process_outcome(epoch);
         fed.run_consensus_epochs_wait(1).await.unwrap();
-        user.await_consensus_block_height(height).await.unwrap();
+        user.await_consensus_block_count(block_count).await.unwrap();
     })
     .await
 }

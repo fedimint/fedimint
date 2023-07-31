@@ -492,7 +492,8 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                 .unwrap();
             assert_eq!(invoice.expiry_time(), Duration::from_secs(1));
 
-            sleep(Duration::from_secs(1)).await;
+            // at seconds granularity, must wait `expiry + 1s` to make sure expired
+            sleep(Duration::from_secs(2)).await;
 
             // Print money for user_client
             let (_, outpoint) = user_client.print_money(sats(2000)).await?;
