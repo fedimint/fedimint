@@ -15,13 +15,13 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::server::DynVerificationCache;
-use fedimint_core::{timing, Amount, ConsensusDecision, NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_core::{timing, Amount, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_CONSENSUS;
 use futures::future::select_all;
 use futures::StreamExt;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use tracing::{instrument, warn};
+use tracing::{debug, instrument, warn};
 
 use crate::config::ServerConfig;
 use crate::db::{
@@ -157,24 +157,20 @@ impl FedimintConsensus {
                                 }
                             }
 
-                            let decision = match self.process_consensus_item(dbtx, consensus_item.clone(), peer_id).await {
-                                Ok(decision) => {
-                                    decision
+                            match self.process_consensus_item(dbtx, consensus_item.clone(), peer_id).await {
+                                Ok(()) => {
+                                    debug!(target: LOG_CONSENSUS, "Accept consensus item from {peer_id}");
                                 },
                                 Err(error) => {
-                                    warn!(target: "consensus", "Invalid consensus item from {peer_id}: {error}");
-                                    ConsensusDecision::Discard
-                                }
-                            };
+                                    debug!(target: LOG_CONSENSUS, "Discard consensus item from {peer_id}: {error}");
 
+                                    dbtx.rollback_tx_to_savepoint()
+                                        .await
+                                        .expect("Rolling back transaction to savepoint failed");
 
-                            if decision == ConsensusDecision::Discard {
-                                dbtx.rollback_tx_to_savepoint()
-                                    .await
-                                    .expect("Rolling back transaction to savepoint failed");
-
-                                if let ConsensusItem::Transaction(transaction) = consensus_item {
-                                    rejected_txs.insert(transaction.tx_hash());
+                                    if let ConsensusItem::Transaction(transaction) = consensus_item {
+                                        rejected_txs.insert(transaction.tx_hash());
+                                    }
                                 }
                             }
                         }
@@ -216,7 +212,7 @@ impl FedimintConsensus {
         dbtx: &mut DatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision> {
+    ) -> anyhow::Result<()> {
         match consensus_item {
             ConsensusItem::Module(module_item) => {
                 let moduletx = &mut dbtx.with_module_prefix(module_item.module_instance_id());
@@ -283,7 +279,7 @@ impl FedimintConsensus {
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
                     .await;
 
-                Ok(ConsensusDecision::Accept)
+                Ok(())
             }
             ConsensusItem::ClientConfigSignatureShare(signature_share) => {
                 if dbtx
@@ -292,8 +288,7 @@ impl FedimintConsensus {
                     .await
                     .is_some()
                 {
-                    // Client config is already signed
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Client config is already signed");
                 }
 
                 if dbtx
@@ -301,8 +296,7 @@ impl FedimintConsensus {
                     .await
                     .is_some()
                 {
-                    // Already received a valid signature share for this peer
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Already received a valid signature share for this peer");
                 }
 
                 let pks = self.cfg.consensus.auth_pk_set.clone();
@@ -327,7 +321,7 @@ impl FedimintConsensus {
                     .await;
 
                 if signature_shares.len() <= pks.threshold() {
-                    return Ok(ConsensusDecision::Accept);
+                    return Ok(());
                 }
 
                 let threshold_signature = pks
@@ -343,7 +337,7 @@ impl FedimintConsensus {
                 )
                 .await;
 
-                Ok(ConsensusDecision::Accept)
+                Ok(())
             }
             ConsensusItem::ConsensusUpgrade(..) => {
                 let mut peers = dbtx
@@ -352,16 +346,15 @@ impl FedimintConsensus {
                     .unwrap_or_default();
 
                 if !peers.insert(peer_id) {
-                    // Already received an upgrade signal by this peer
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Already received an upgrade signal by this peer")
                 }
 
                 dbtx.insert_entry(&ConsensusUpgradeKey, &peers).await;
 
-                Ok(ConsensusDecision::Accept)
+                Ok(())
             }
             // these items are handled in save_epoch_history
-            ConsensusItem::EpochOutcomeSignatureShare(..) => Ok(ConsensusDecision::Accept),
+            ConsensusItem::EpochOutcomeSignatureShare(..) => Ok(()),
         }
     }
 

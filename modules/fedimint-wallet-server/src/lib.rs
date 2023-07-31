@@ -44,8 +44,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, ConsensusDecision,
-    Feerate, NumPeers, OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeers,
+    OutPoint, PeerId, ServerModule,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
@@ -344,7 +344,7 @@ impl ServerModule for Wallet {
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_item: WalletConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision> {
+    ) -> anyhow::Result<()> {
         trace!(?consensus_item, "Received consensus proposals");
 
         match consensus_item {
@@ -359,7 +359,7 @@ impl ServerModule for Wallet {
                 }
 
                 if block_height == current_vote {
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Block height vote is redundant");
                 }
 
                 let old_consensus_height = self.consensus_block_height(dbtx).await;
@@ -381,15 +381,14 @@ impl ServerModule for Wallet {
             }
             WalletConsensusItem::Feerate(feerate) => {
                 if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer_id), &feerate).await {
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Fee rate vote is redundant");
                 }
             }
             WalletConsensusItem::PegOutSignature(peg_out_signature) => {
                 let txid = peg_out_signature.txid;
 
                 if dbtx.get_value(&PendingTransactionKey(txid)).await.is_some() {
-                    // We already received a threshold of valid signatures
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Already received a threshold of valid signatures");
                 }
 
                 let mut unsigned = dbtx
@@ -417,7 +416,7 @@ impl ServerModule for Wallet {
             }
         }
 
-        Ok(ConsensusDecision::Accept)
+        Ok(())
     }
 
     fn build_verification_cache<'a>(
