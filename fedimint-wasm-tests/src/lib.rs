@@ -54,6 +54,7 @@ mod faucet {
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 mod tests {
+    use fedimint_client::derivable_secret::DerivableSecret;
     use fedimint_core::task::TaskGroup;
     use fedimint_core::Amount;
     use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState, PayType};
@@ -96,6 +97,18 @@ mod tests {
             }
         }
         Err(anyhow::anyhow!("Lightning receive failed"))
+    }
+
+    // Tests that ChaCha20 crypto functions used for backup and recovery are
+    // available in WASM at runtime. Related issue: https://github.com/fedimint/fedimint/issues/2843
+    #[wasm_bindgen_test]
+    async fn derive_chacha_key() {
+        let root_secret = DerivableSecret::new_root(&[0x42; 32], &[0x2a; 32]);
+        let key = root_secret.to_chacha20_poly1305_key();
+
+        // Prevent optimization
+        // FIXME: replace with `std::hint::black_box` once stabilized
+        assert!(format!("key: {key:?}").len() > 8);
     }
 
     #[wasm_bindgen_test]
