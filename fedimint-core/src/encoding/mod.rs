@@ -729,14 +729,18 @@ where
 {
     pub fn expect_decoded(self) -> T {
         match self {
-            DynRawFallback::Raw { .. } => panic!("Expected decoded value"),
+            DynRawFallback::Raw { .. } => {
+                panic!("Expected decoded value. Possibly `redecode_raw` call is missing.")
+            }
             DynRawFallback::Decoded(v) => v,
         }
     }
 
     pub fn expect_decoded_ref(&self) -> &T {
         match self {
-            DynRawFallback::Raw { .. } => panic!("Expected decoded value"),
+            DynRawFallback::Raw { .. } => {
+                panic!("Expected decoded value. Possibly `redecode_raw` call is missing.")
+            }
             DynRawFallback::Decoded(v) => v,
         }
     }
