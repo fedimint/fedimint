@@ -119,6 +119,11 @@
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -126,6 +131,7 @@
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_client_legacy::modules::ln::config::GatewayFee;
+<span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -165,6 +171,10 @@
     <span class="doccomment">/// Removes a client from the gateway
     </span><span class="kw">pub async fn </span>remove_client(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; Client {
         <span class="self">self</span>.gateway.remove_client(fed.id()).<span class="kw">await</span>.unwrap()
+    }
+
+    <span class="kw">pub async fn </span>select_client(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; Client {
+        <span class="self">self</span>.gateway.select_client(federation_id).<span class="kw">await</span>.unwrap()
     }
 
     <span class="doccomment">/// Connects to a new federation and stores the info
