@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::format_err;
 use async_trait::async_trait;
+use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hash_types::Txid;
 use bitcoin::hashes::Hash;
 use bitcoin::util::merkleblock::PartialMerkleTree;
@@ -77,7 +78,7 @@ impl Default for FakeBitcoinTest {
 impl FakeBitcoinTest {
     pub fn new() -> Self {
         FakeBitcoinTest {
-            blocks: Arc::new(Mutex::new(vec![])),
+            blocks: Arc::new(Mutex::new(vec![genesis_block(Network::Regtest)])),
             pending: Arc::new(Mutex::new(vec![])),
             addresses: Arc::new(Mutex::new(Default::default())),
             proofs: Arc::new(Mutex::new(Default::default())),
@@ -243,11 +244,11 @@ impl IBitcoindRpc for FakeBitcoinTest {
     }
 
     async fn get_block_height(&self) -> BitcoinRpcResult<u64> {
-        Ok(self.blocks.lock().unwrap().len() as u64)
+        Ok((self.blocks.lock().unwrap().len() as u64) - 1)
     }
 
     async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<BlockHash> {
-        Ok(self.blocks.lock().unwrap()[(height - 1) as usize]
+        Ok(self.blocks.lock().unwrap()[height as usize]
             .header
             .block_hash())
     }
