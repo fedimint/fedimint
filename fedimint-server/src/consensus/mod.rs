@@ -128,73 +128,74 @@ impl FedimintConsensus {
         reference_rejected_txs: Option<BTreeSet<TransactionId>>,
     ) -> SignedEpochOutcome {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_outcome");
+
+        let mut rejected_txs = BTreeSet::new();
+        // Since multiple peers can submit the same tx within epoch, track them
+        // and handle only once.
+        let mut processed_txes = BTreeSet::new();
+
+        let items = consensus_outcome
+            .clone()
+            .contributions
+            .into_iter()
+            .flat_map(|(peer_id, items)| items.into_iter().map(move |item| (peer_id, item)));
+
+        let mut dbtx = self.db.begin_transaction().await;
+
+        for (peer_id, consensus_item) in items {
+            dbtx.set_tx_savepoint()
+                .await
+                .expect("Setting transaction savepoint failed");
+
+            if let ConsensusItem::Transaction(ref transaction) = consensus_item {
+                if !processed_txes.insert(transaction.tx_hash()) {
+                    continue;
+                }
+            }
+
+            match self
+                .process_consensus_item(&mut dbtx, consensus_item.clone(), peer_id)
+                .await
+            {
+                Ok(()) => {
+                    debug!(
+                        target: LOG_CONSENSUS,
+                        "Accept consensus item from {peer_id}"
+                    );
+                }
+                Err(error) => {
+                    debug!(
+                        target: LOG_CONSENSUS,
+                        "Discard consensus item from {peer_id}: {error}"
+                    );
+
+                    dbtx.rollback_tx_to_savepoint()
+                        .await
+                        .expect("Rolling back transaction to savepoint failed");
+
+                    if let ConsensusItem::Transaction(transaction) = consensus_item {
+                        rejected_txs.insert(transaction.tx_hash());
+                    }
+                }
+            }
+        }
+
+        if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
+            // Result of the consensus are supposed to be deterministic.
+            // If our result is not the same as what the (honest) majority of the federation
+            // signed over, it's a catastrophic bug/mismatch of Federation's fedimintd
+            // implementations.
+            assert_eq!(
+                reference_rejected_txs, &rejected_txs,
+                "rejected_txs mismatch: reference = {reference_rejected_txs:?} != {rejected_txs:?}"
+            );
+        }
+
         let epoch_history = self
-            .db
-            .autocommit(
-                |dbtx| {
-                    let consensus_outcome = consensus_outcome.clone();
-                    let reference_rejected_txs = reference_rejected_txs.clone();
+            .save_epoch_history(consensus_outcome, &mut dbtx, &mut vec![], rejected_txs)
+            .await;
 
-                    Box::pin(async move {
-                        let mut rejected_txs = BTreeSet::new();
-                        // Since multiple peers can submit the same tx within epoch, track them
-                        // and handle only once.
-                        let mut processed_txes = BTreeSet::new();
-
-                        let items = consensus_outcome.clone()
-                            .contributions
-                            .into_iter()
-                            .flat_map(|(peer_id, items)| items.into_iter().map(move |item| (peer_id, item)));
-
-                        for (peer_id, consensus_item) in items {
-                            dbtx.set_tx_savepoint()
-                                .await
-                                .expect("Setting transaction savepoint failed");
-
-                            if let  ConsensusItem::Transaction(ref transaction) = consensus_item {
-                                if !processed_txes.insert(transaction.tx_hash()) {
-                                    continue;
-                                }
-                            }
-
-                            match self.process_consensus_item(dbtx, consensus_item.clone(), peer_id).await {
-                                Ok(()) => {
-                                    debug!(target: LOG_CONSENSUS, "Accept consensus item from {peer_id}");
-                                },
-                                Err(error) => {
-                                    debug!(target: LOG_CONSENSUS, "Discard consensus item from {peer_id}: {error}");
-
-                                    dbtx.rollback_tx_to_savepoint()
-                                        .await
-                                        .expect("Rolling back transaction to savepoint failed");
-
-                                    if let ConsensusItem::Transaction(transaction) = consensus_item {
-                                        rejected_txs.insert(transaction.tx_hash());
-                                    }
-                                }
-                            }
-                        }
-
-                        if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
-                            // Result of the consensus are supposed to be deterministic.
-                            // If our result is not the same as what the (honest) majority of the federation
-                            // signed over, it's a catastrophic bug/mismatch of Federation's fedimintd
-                            // implementations.
-                            assert_eq!(
-                                reference_rejected_txs, &rejected_txs,
-                                "rejected_txs mismatch: reference = {reference_rejected_txs:?} != {rejected_txs:?}"
-                            );
-                        }
-
-                        let epoch_history = self
-                            .save_epoch_history(consensus_outcome, dbtx, &mut vec![], rejected_txs)
-                            .await;
-
-                        Result::<_, ()>::Ok(epoch_history)
-                    })
-                },
-                Some(100),
-            )
+        dbtx.commit_tx_result()
             .await
             .expect("Committing consensus epoch failed");
 
