@@ -8,7 +8,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::sleep;
 use fedimint_core::PeerId;
-use secp256k1::{rand, Secp256k1, SecretKey};
+use secp256k1_zkp::{rand, Secp256k1, SecretKey};
 use tokio::task::JoinHandle;
 
 fn to_peer_id(peer_index: usize) -> PeerId {
@@ -27,7 +27,7 @@ pub fn bootstrap_keychains(peer_count: usize) -> Vec<Keychain> {
 
     let public_keys = secret_keys
         .iter()
-        .map(|(peer_id, secret_key)| (*peer_id, secret_key.x_only_public_key(&secp).0));
+        .map(|(peer_id, secret_key)| (*peer_id, secret_key.public_key(&secp)));
 
     let public_keys = BTreeMap::from_iter(public_keys);
 
