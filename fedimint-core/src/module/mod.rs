@@ -3,7 +3,7 @@ pub mod registry;
 pub mod version;
 
 use std::collections::BTreeMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::io::Read;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -113,8 +113,14 @@ impl ApiRequestErased {
 }
 
 /// Authentication uses the hashed user password in PHC format
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiAuth(pub String);
+
+impl Debug for ApiAuth {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ApiAuth(****)")
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ApiError {
