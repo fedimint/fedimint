@@ -1408,6 +1408,49 @@
 <a href="#1408" id="1408">1408</a>
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
 </pre><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1708,6 +1751,7 @@
                                 MintMeta {
                                     variant: MintMetaVariants::SpendOOB {
                                         requested_amount: min_amount,
+                                        notes: notes.clone(),
                                     },
                                     amount: notes.total_amount(),
                                     extra_meta,
@@ -1815,8 +1859,14 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">enum </span>MintMetaVariants {
-    Reissuance { out_point: OutPoint },
-    SpendOOB { requested_amount: Amount },
+    Reissuance {
+        out_point: OutPoint,
+    },
+    SpendOOB {
+        requested_amount: Amount,
+        <span class="attr">#[serde(with = <span class="string">&quot;serde_ecash&quot;</span>)]
+        </span>notes: TieredMulti&lt;SpendableNote&gt;,
+    },
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -2635,6 +2685,50 @@
     <span class="kw">pub </span>spend_key: KeyPair,
 }
 
+<span class="doccomment">/// Base64 encode a set of e-cash notes. See also [`parse_ecash`].
+</span><span class="kw">pub fn </span>serialize_ecash(ecash: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;) -&gt; String {
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+    Encodable::consensus_encode(ecash, <span class="kw-2">&amp;mut </span>bytes).expect(<span class="string">&quot;encodes correctly&quot;</span>);
+    base64::encode(<span class="kw-2">&amp;</span>bytes)
+}
+
+<span class="doccomment">/// Decode a set of e-cash notes from a base64 string. See also
+/// [`serialize_ecash`].
+</span><span class="kw">pub fn </span>parse_ecash(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
+    <span class="kw">let </span>bytes = base64::decode(s)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
+        <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
+        <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+    )<span class="question-mark">?</span>)
+}
+
+<span class="doccomment">/// `serde` impl for `TieredMulti&lt;SpendableNote&gt;` sets of e-cash notes using
+/// [`serialize_ecash`] and [`parse_ecash`].
+</span><span class="kw">pub mod </span>serde_ecash {
+    <span class="kw">use </span>fedimint_core::TieredMulti;
+    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
+
+    <span class="kw">use crate</span>::{parse_ecash, serialize_ecash, SpendableNote};
+
+    <span class="kw">pub fn </span>serialize&lt;S&gt;(
+        ecash: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;,
+        serializer: S,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
+    {
+        serializer.serialize_str(<span class="kw-2">&amp;</span>serialize_ecash(ecash))
+    }
+
+    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;, D::Error&gt;
+    <span class="kw">where
+        </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
+    {
+        <span class="kw">let </span>s = String::deserialize(deserializer)<span class="question-mark">?</span>;
+        parse_ecash(<span class="kw-2">&amp;</span>s).map_err(serde::de::Error::custom)
+    }
+}
+
 <span class="doccomment">/// An index used to deterministically derive [`Note`]s
 ///
 /// We allow converting it to u64 and incrementing it, but
@@ -2789,14 +2883,6 @@
             .flat_map(|(amount, number)| <span class="macro">vec!</span>[(amount, <span class="string">&quot;dummy note&quot;</span>.into()); number])
             .collect()
     }
-}
-
-<span class="kw">pub fn </span>parse_ecash(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-    <span class="kw">let </span>bytes = base64::decode(s)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
-        <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
-        <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-    )<span class="question-mark">?</span>)
 }
 
 <span class="kw">struct </span>OOBSpendTag;
