@@ -304,6 +304,7 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -311,6 +312,7 @@
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin::blockdata::constants::genesis_block;
 <span class="kw">use </span>bitcoin::hash_types::Txid;
 <span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
@@ -383,7 +385,7 @@
 <span class="kw">impl </span>FakeBitcoinTest {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         FakeBitcoinTest {
-            blocks: Arc::new(Mutex::new(<span class="macro">vec!</span>[])),
+            blocks: Arc::new(Mutex::new(<span class="macro">vec!</span>[genesis_block(Network::Regtest)])),
             pending: Arc::new(Mutex::new(<span class="macro">vec!</span>[])),
             addresses: Arc::new(Mutex::new(Default::default())),
             proofs: Arc::new(Mutex::new(Default::default())),
@@ -549,11 +551,11 @@
     }
 
     <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcResult&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.blocks.lock().unwrap().len() <span class="kw">as </span>u64)
+        <span class="prelude-val">Ok</span>((<span class="self">self</span>.blocks.lock().unwrap().len() <span class="kw">as </span>u64) - <span class="number">1</span>)
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BitcoinRpcResult&lt;BlockHash&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.blocks.lock().unwrap()[(height - <span class="number">1</span>) <span class="kw">as </span>usize]
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.blocks.lock().unwrap()[height <span class="kw">as </span>usize]
             .header
             .block_hash())
     }

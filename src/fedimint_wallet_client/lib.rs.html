@@ -607,8 +607,34 @@
 <a href="#607" id="607">607</a>
 <a href="#608" id="608">608</a>
 <a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 
+<span class="kw">mod </span>db;
 <span class="kw">mod </span>deposit;
 <span class="kw">mod </span>withdraw;
 
@@ -619,7 +645,7 @@
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-<span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
+<span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
@@ -630,7 +656,7 @@
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
@@ -644,12 +670,15 @@
 <span class="kw">use </span>futures::{Stream, StreamExt};
 <span class="kw">use </span>miniscript::ToPublicKey;
 <span class="kw">use </span>rand::{thread_rng, Rng};
-<span class="kw">use </span>secp256k1::{All, KeyPair, Secp256k1};
+<span class="kw">use </span>secp256k1::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
+<span class="kw">use </span><span class="kw">crate</span>::db::NextPegInTweakIndexKey;
 <span class="kw">use </span><span class="kw">crate</span>::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
 <span class="kw">use </span><span class="kw">crate</span>::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
+
+<span class="kw">const </span>WALLET_TWEAK_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>WalletClientExt {
@@ -726,8 +755,13 @@
             .autocommit(
                 |dbtx| {
                     Box::pin(<span class="kw">async move </span>{
-                        <span class="kw">let </span>(operation_id, sm, address) =
-                            wallet_client.get_deposit_address(valid_until);
+                        <span class="kw">let </span>(operation_id, sm, address) = wallet_client
+                            .get_deposit_address(
+                                valid_until,
+                                <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance.id),
+                            )
+                            .<span class="kw">await</span>;
+
                         <span class="comment">// Begin watching the script address
                         </span>wallet_client
                             .rpc
@@ -1004,7 +1038,7 @@
         cfg: WalletClientConfig,
         _db: Database,
         _api_version: ApiVersion,
-        _module_root_secret: DerivableSecret,
+        module_root_secret: DerivableSecret,
         notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
         _api: DynGlobalApi,
         module_api: DynModuleApi,
@@ -1012,9 +1046,11 @@
         <span class="kw">let </span>rpc_config = <span class="self">self</span>.<span class="number">0</span>.clone().unwrap_or(cfg.default_bitcoin_rpc.clone());
         <span class="prelude-val">Ok</span>(WalletClientModule {
             cfg,
+            module_root_secret,
             module_api,
             notifier,
             rpc: create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>,
+            secp: Default::default(),
         })
     }
 }
@@ -1037,9 +1073,11 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>WalletClientModule {
     cfg: WalletClientConfig,
+    module_root_secret: DerivableSecret,
     module_api: DynModuleApi,
     notifier: ModuleNotifier&lt;DynGlobalClientContext, WalletClientStates&gt;,
     rpc: DynBitcoindRpc,
+    secp: Secp256k1&lt;All&gt;,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>WalletClientModule {
@@ -1089,13 +1127,17 @@
         <span class="self">self</span>.cfg.network
     }
 
-    <span class="kw">pub fn </span>get_deposit_address(
+    <span class="kw">pub async fn </span>get_deposit_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         valid_until: SystemTime,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; (OperationId, WalletClientStates, Address) {
-        <span class="comment">// TODO: derive from root secret
-        // TODO: don&#39;t use global secp context
-        </span><span class="kw">let </span>tweak_key = KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng());
+        <span class="kw">let </span>tweak_key = <span class="self">self
+            </span>.module_root_secret
+            .child_key(WALLET_TWEAK_CHILD_ID)
+            .child_key(get_next_peg_in_tweak_child_id(dbtx).<span class="kw">await</span>)
+            .to_secp_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp);
+
         <span class="kw">let </span>x_only_pk = tweak_key.public_key().to_x_only_pubkey();
         <span class="kw">let </span>operation_id = OperationId(x_only_pk.serialize());
 
@@ -1168,6 +1210,14 @@
     </span>);
 
     <span class="prelude-val">Ok</span>(())
+}
+
+<span class="doccomment">/// Returns the child index to derive the next peg-in tweak key from.
+</span><span class="kw">async fn </span>get_next_peg_in_tweak_child_id(dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; ChildId {
+    <span class="kw">let </span>index = dbtx.get_value(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
+    dbtx.insert_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>(index + <span class="number">1</span>))
+        .<span class="kw">await</span>;
+    ChildId(index)
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
