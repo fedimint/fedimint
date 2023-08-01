@@ -8,6 +8,7 @@ use strum_macros::EnumIter;
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     LightningGateway = 0x28,
+    NextContractIndexKey = 0x29,
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
@@ -24,4 +25,13 @@ impl_db_record!(
 impl_db_lookup!(
     key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
+);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub(crate) struct NextContractIndexKey;
+
+impl_db_record!(
+    key = NextContractIndexKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::NextContractIndexKey,
 );

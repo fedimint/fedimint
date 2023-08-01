@@ -374,7 +374,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
-            redeem_key: ctx.redeem_key,
+            outgoing_redeem_key: ctx.redeem_key,
         }
     }
 }

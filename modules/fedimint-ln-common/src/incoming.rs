@@ -293,7 +293,7 @@ impl DecryptingPreimageState {
         let client_input = ClientInput::<LightningInput, IncomingStateMachine> {
             input: claim_input,
             state_machines: Arc::new(|_, _| vec![]),
-            keys: vec![context.redeem_key],
+            keys: vec![context.outgoing_redeem_key],
         };
 
         let (refund_txid, _) = global_context.claim_input(dbtx, client_input).await;

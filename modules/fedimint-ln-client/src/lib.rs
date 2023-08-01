@@ -22,7 +22,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::Database;
+use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
@@ -54,6 +54,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error};
 
+use crate::db::NextContractIndexKey;
 use crate::pay::{
     GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
     LightningPayStateMachine, LightningPayStates,
@@ -66,6 +67,8 @@ use crate::receive::{
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
+const LIGHTNING_OUTGOING_CHILD_ID: ChildId = ChildId(0);
+const LIGHTNING_INCOMING_CHILD_ID: ChildId = ChildId(1);
 
 #[apply(async_trait_maybe_send!)]
 pub trait LightningClientExt {
@@ -268,7 +271,6 @@ impl LightningClientExt for Client {
                     invoice.clone(),
                     active_gateway,
                     self.get_config().federation_id,
-                    rand::rngs::OsRng,
                 )
                 .await?;
             (PayType::Lightning(operation_id), output, contract_id)
@@ -312,41 +314,60 @@ impl LightningClientExt for Client {
             }
         };
 
-        let (operation_id, invoice, output) = lightning
-            .create_lightning_receive_output(
-                amount,
-                description,
-                rand::rngs::OsRng,
-                expiry_time,
-                src_node_id,
-                short_channel_id,
-                route_hints,
-                lightning.cfg.network,
-            )
-            .await?;
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |txid, _| LightningMeta::Receive {
-            out_point: OutPoint { txid, out_idx: 0 },
-            invoice: invoice.clone(),
-        };
-        let txid = self
-            .finalize_and_submit_transaction(
-                operation_id,
-                LightningCommonGen::KIND.as_str(),
-                operation_meta_gen,
-                tx,
-            )
-            .await?;
+        self.db()
+            .autocommit(
+                |dbtx| {
+                    Box::pin(async {
+                        let (operation_id, invoice, output) = lightning
+                            .create_lightning_receive_output(
+                                amount,
+                                description.clone(),
+                                rand::rngs::OsRng,
+                                expiry_time,
+                                src_node_id,
+                                short_channel_id,
+                                route_hints.clone(),
+                                lightning.cfg.network,
+                                &mut dbtx.with_module_prefix(instance.id),
+                            )
+                            .await?;
+                        let tx =
+                            TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+                        let operation_meta_gen = |txid, _| LightningMeta::Receive {
+                            out_point: OutPoint { txid, out_idx: 0 },
+                            invoice: invoice.clone(),
+                        };
+                        let txid = self
+                            .finalize_and_submit_transaction(
+                                operation_id,
+                                LightningCommonGen::KIND.as_str(),
+                                operation_meta_gen,
+                                tx,
+                            )
+                            .await?;
 
-        // Wait for the transaction to be accepted by the federation, otherwise the
-        // invoice will not be able to be paid
-        self.transaction_updates(operation_id)
-            .await
-            .await_tx_accepted(txid)
-            .await
-            .map_err(|e| anyhow::anyhow!("Offer transaction was not accepted: {e:?}"))?;
+                        // Wait for the transaction to be accepted by the federation, otherwise the
+                        // invoice will not be able to be paid
+                        self.transaction_updates(operation_id)
+                            .await
+                            .await_tx_accepted(txid)
+                            .await
+                            .map_err(|e| {
+                                anyhow::anyhow!("Offer transaction was not accepted: {e:?}")
+                            })?;
 
-        Ok((operation_id, invoice))
+                        Ok((operation_id, invoice))
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow::anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
     }
 
     async fn subscribe_ln_receive(
@@ -550,9 +571,12 @@ impl ClientModuleGen for LightningClientGen {
         Ok(LightningClientModule {
             cfg,
             notifier,
-            redeem_key: module_root_secret.child_key(ChildId(0)).to_secp_key(&secp),
+            outgoing_redeem_key: module_root_secret
+                .child_key(LIGHTNING_OUTGOING_CHILD_ID)
+                .to_secp_key(&secp),
             secp,
             module_api,
+            module_root_secret,
         })
     }
 }
@@ -561,9 +585,10 @@ impl ClientModuleGen for LightningClientGen {
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<DynGlobalClientContext, LightningClientStateMachines>,
-    redeem_key: KeyPair,
+    outgoing_redeem_key: KeyPair,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
+    module_root_secret: DerivableSecret,
 }
 
 impl ClientModule for LightningClientModule {
@@ -574,7 +599,7 @@ impl ClientModule for LightningClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
             ln_decoder: self.decoder(),
-            redeem_key: self.redeem_key,
+            outgoing_redeem_key: self.outgoing_redeem_key,
         }
     }
 
@@ -620,14 +645,13 @@ impl LightningClientModule {
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
-    pub async fn create_outgoing_output<'a, 'b>(
-        &'a self,
+    pub async fn create_outgoing_output(
+        &self,
         operation_id: OperationId,
         api: DynModuleApi,
         invoice: Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,
-        mut rng: impl RngCore + CryptoRng + 'a,
     ) -> anyhow::Result<(
         ClientOutput<LightningOutput, LightningClientStateMachines>,
         ContractId,
@@ -664,7 +688,7 @@ impl LightningClientModule {
         let contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
         let contract_amount = Amount::from_msats(contract_amount_msat);
 
-        let user_sk = bitcoin::KeyPair::new(&self.secp, &mut rng);
+        let user_sk = self.outgoing_redeem_key;
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
@@ -741,7 +765,7 @@ impl LightningClientModule {
             &self.module_api,
             *payment_hash,
             invoice_amount,
-            self.redeem_key,
+            self.outgoing_redeem_key,
         )
         .await?;
 
@@ -846,6 +870,14 @@ impl LightningClientModule {
         }
     }
 
+    async fn get_next_incoming_contract_child_id(
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> ChildId {
+        let index = dbtx.get_value(&NextContractIndexKey).await.unwrap_or(0);
+        dbtx.insert_entry(&NextContractIndexKey, &(index + 1)).await;
+        ChildId(index)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn create_lightning_receive_output<'a>(
         &'a self,
@@ -857,16 +889,22 @@ impl LightningClientModule {
         short_channel_id: u64,
         route_hints: Vec<fedimint_ln_common::route_hints::RouteHint>,
         network: Network,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> anyhow::Result<(
         OperationId,
         Invoice,
         ClientOutput<LightningOutput, LightningClientStateMachines>,
     )> {
-        let payment_keypair = KeyPair::new(&self.secp, &mut rng);
+        let payment_keypair = self
+            .module_root_secret
+            .child_key(LIGHTNING_INCOMING_CHILD_ID)
+            .child_key(Self::get_next_incoming_contract_child_id(dbtx).await)
+            .to_secp_key(&self.secp);
+        // Use the public key of the `payment_keypair` as the preimage for the invoice.
         let preimage: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&preimage);
 
-        // Temporary lightning node pubkey
+        // Temporary lightning node pubkey - does not need to be deterministic
         let (node_secret_key, node_public_key) = self.secp.generate_keypair(&mut rng);
 
         // Route hint instructing payer how to route to gateway
