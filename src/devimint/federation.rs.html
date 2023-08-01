@@ -443,6 +443,57 @@
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
 <span class="kw">use </span>anyhow::{anyhow, Context};
@@ -470,6 +521,52 @@
     </span>members: BTreeMap&lt;usize, Fedimintd&gt;,
     vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
     bitcoind: Bitcoind,
+}
+
+<span class="doccomment">/// `fedimint-cli` instance (basically path with client state: config + db)
+</span><span class="kw">pub struct </span>Client {
+    path: PathBuf,
+}
+
+<span class="kw">impl </span>Client {
+    <span class="doccomment">/// Create a [`Client`] that starts with a state that is a copy of
+    /// of a [`Federation`] built-in client&#39;s state.
+    ///
+    /// TODO: Get rid of built-in client, make it a normal `Client` and let them
+    /// fork each other as they please.
+    </span><span class="kw">async fn </span>new_forked(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+        <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
+        <span class="kw">let </span>client_dir = workdir.join(<span class="string">&quot;clients&quot;</span>).join(name);
+
+        std::fs::create_dir_all(<span class="kw-2">&amp;</span>client_dir)<span class="question-mark">?</span>;
+
+        <span class="macro">cmd!</span>(
+            <span class="string">&quot;cp&quot;</span>,
+            <span class="string">&quot;-R&quot;</span>,
+            workdir.join(<span class="string">&quot;client.json&quot;</span>).display(),
+            client_dir.join(<span class="string">&quot;client.json&quot;</span>).display()
+        )
+        .run()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="macro">cmd!</span>(
+            <span class="string">&quot;cp&quot;</span>,
+            <span class="string">&quot;-R&quot;</span>,
+            workdir.join(<span class="string">&quot;client.db&quot;</span>).display(),
+            client_dir.join(<span class="string">&quot;client.db&quot;</span>).display()
+        )
+        .run()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ path: client_dir })
+    }
+
+    <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
+        <span class="macro">cmd!</span>(
+            <span class="string">&quot;fedimint-cli&quot;</span>,
+            <span class="macro">format!</span>(<span class="string">&quot;--data-dir={}&quot;</span>, <span class="self">self</span>.path.display())
+        )
+    }
 }
 
 <span class="kw">impl </span>Federation {
@@ -538,6 +635,11 @@
         <span class="kw">let </span>client = UserClient::new(cfg, decoders, module_gens, db, Default::default()).<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(client)
     }
+
+    <span class="doccomment">/// Fork the built-in client of `Federation` and give it a name
+    </span><span class="kw">pub async fn </span>fork_client(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+        Client::new_forked(name).<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>start_server(<span class="kw-2">&amp;mut </span><span class="self">self</span>, process_mgr: <span class="kw-2">&amp;</span>ProcessManager, peer: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.members.contains_key(<span class="kw-2">&amp;</span>peer) {
