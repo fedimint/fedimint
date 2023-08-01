@@ -425,7 +425,7 @@ async fn set_config_gen_params(
         10,
     );
     let request = ConfigGenParamsRequest {
-        meta: BTreeMap::from([("test".to_string(), "testvalue".to_string())]),
+        meta: BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]),
         modules: server_gen_params,
     };
     client.set_config_gen_params(request, auth.clone()).await?;
