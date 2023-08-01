@@ -13,7 +13,7 @@ use common::{
 };
 use devimint::cmd;
 use fedimint_client::Client;
-use fedimint_core::api::{GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
+use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::config::{load_from_file, ClientConfig};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::TaskGroup;
@@ -87,7 +87,7 @@ enum Command {
         limit_endpoints: Option<usize>,
     },
     #[command(about = "Try to download the client config many times.")]
-    TestDownload { connect: String },
+    TestDownload { invite_code: String },
     #[command(
         about = "Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway"
     )]
@@ -97,15 +97,15 @@ enum Command {
 struct ConnectCommonArgs {
     #[arg(
         long,
-        help = "Path of the client config.json. If none given, will try to download it from the --connect info"
+        help = "Path of the client config.json. If none given, will try to download it from the --invite code"
     )]
     client_config: Option<PathBuf>,
 
     #[arg(
         long,
-        help = "Connect info string. If none given, will use the one from fedimint-cli if no --client-config given"
+        help = "Invite code string. If none given, will use the one from fedimint-cli if no --client-config given"
     )]
-    connect: Option<String>,
+    invite_code: Option<String>,
 }
 
 #[derive(Args, Clone)]
@@ -244,8 +244,8 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?
         }
-        Command::TestDownload { connect } => {
-            test_download_config(&connect, opts.users, event_sender.clone()).await?
+        Command::TestDownload { invite_code } => {
+            test_download_config(&invite_code, opts.users, event_sender.clone()).await?
         }
         Command::LoadTest(args) => {
             let cfg = get_cfg_from_args(&args.connect_common_args).await?;
@@ -487,18 +487,17 @@ async fn test_download_config(
     users: u16,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let connect_obj: WsClientConnectInfo =
-        WsClientConnectInfo::from_str(connect).context("invalid connect info")?;
-    let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]));
+    let invite_code: InviteCode = InviteCode::from_str(connect).context("invalid invite code")?;
+    let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]));
 
     Ok((0..users)
         .map(|_| {
             let api = api.clone();
-            let connect_obj = connect_obj.clone();
+            let invite_code = invite_code.clone();
             let event_sender = event_sender.clone();
             let f: BoxFuture<_> = Box::pin(async move {
                 let m = fedimint_core::time::now();
-                let _ = api.download_client_config(&connect_obj).await?;
+                let _ = api.download_client_config(&invite_code).await?;
                 event_sender.send(MetricEvent {
                     name: "download_client_config".into(),
                     duration: m.elapsed()?,
@@ -803,22 +802,22 @@ async fn get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -> anyhow::R
 }
 
 async fn get_cfg_from_args(args: &ConnectCommonArgs) -> anyhow::Result<ClientConfig> {
-    Ok(match (&args.client_config, &args.connect) {
-        (Some(_), Some(_)) => bail!("Can't use both --client-config and --connect"),
+    Ok(match (&args.client_config, &args.invite_code) {
+        (Some(_), Some(_)) => bail!("Can't use both --client-config and --invite"),
         (Some(client_config), None) => load_from_file(client_config)?,
-        (None, connect) => {
-            let connect = if let Some(connect) = connect {
-                connect.to_owned()
+        (None, invite) => {
+            let invite = if let Some(invite) = invite {
+                invite.to_owned()
             } else {
-                cmd!(FedimintCli, "dev", "connect-info").out_json().await?["connect_info"]
+                cmd!(FedimintCli, "dev", "invite-code").out_json().await?["invite_code"]
                     .as_str()
                     .map(ToOwned::to_owned)
-                    .expect("connect-info command to succeed")
+                    .expect("invite-code command to succeed")
             };
-            let connect_obj: WsClientConnectInfo =
-                WsClientConnectInfo::from_str(&connect).context("invalid connect info")?;
-            let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]));
-            api.download_client_config(&connect_obj).await?
+            let invite_code: InviteCode =
+                InviteCode::from_str(&invite).context("invalid invite code")?;
+            let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]));
+            api.download_client_config(&invite_code).await?
         }
     })
 }

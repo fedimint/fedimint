@@ -26,12 +26,12 @@ async fn gatewayd_api_authentication() -> anyhow::Result<()> {
     let client2 = &rpc.with_password("bad password".to_string());
 
     // Create a test federation ID
-    let connection_code = fed1.connection_code();
-    let federation_id = fed1.connection_code().id;
+    let invite_code = fed1.invite_code();
+    let federation_id = fed1.invite_code().id;
 
     // Test gateway authentication on `connect_federation` function
     let payload = ConnectFedPayload {
-        connect: connection_code.to_string(),
+        invite_code: invite_code.to_string(),
     };
     auth_success(|| client1.connect_federation(payload.clone())).await;
     auth_fails(|| client2.connect_federation(payload.clone())).await;

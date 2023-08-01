@@ -52,8 +52,8 @@ pub enum Commands {
     },
     /// Register federation with the gateway
     ConnectFed {
-        /// ConnectInfo code to connect to the federation
-        connect: String,
+        /// InviteCode code to connect to the federation
+        invite_code: String,
     },
     /// Make a backup of snapshot of all ecash
     Backup {
@@ -115,9 +115,9 @@ async fn main() -> anyhow::Result<()> {
 
             print_response(response).await;
         }
-        Commands::ConnectFed { connect } => {
+        Commands::ConnectFed { invite_code } => {
             let response = client()
-                .connect_federation(ConnectFedPayload { connect })
+                .connect_federation(ConnectFedPayload { invite_code })
                 .await?;
 
             print_response(response).await;

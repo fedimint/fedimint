@@ -7,8 +7,8 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::{
-    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
-    WsClientConnectInfo,
+    ConsensusStatus, InviteCode, PeerConnectionStatus, PeerConsensusStatus, ServerStatus,
+    StatusResponse,
 };
 use fedimint_core::backup::ClientBackupKey;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse};
@@ -198,7 +198,7 @@ impl ConsensusApi {
 
     pub async fn download_client_config(
         &self,
-        info: WsClientConnectInfo,
+        info: InviteCode,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ApiResult<ClientConfig> {
         let token = self.cfg.local.download_token.clone();
@@ -491,16 +491,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "connection_code",
+            "invite_code",
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
-                Ok(fedimint.cfg.get_connect_info().to_string())
+                Ok(fedimint.cfg.get_invite_code().to_string())
             }
         },
         api_endpoint! {
             "config",
-            async |fedimint: &ConsensusApi, context, connection_code: String| -> ClientConfigResponse {
-                let info = connection_code.parse()
-                    .map_err(|_| ApiError::bad_request("Could not parse connection code".to_string()))?;
+            async |fedimint: &ConsensusApi, context, invite_code: String| -> ClientConfigResponse {
+                let info = invite_code.parse()
+                    .map_err(|_| ApiError::bad_request("Could not parse invite code".to_string()))?;
                 let future = context.wait_key_exists(ClientConfigSignatureKey);
                 let signature = future.await;
                 let client_config = fedimint.download_client_config(info, &mut context.dbtx()).await?;

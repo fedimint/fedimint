@@ -21,7 +21,7 @@ use crate::{Gateway, Result};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
-    pub connect: String,
+    pub invite_code: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

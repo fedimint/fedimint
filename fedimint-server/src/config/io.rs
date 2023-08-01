@@ -26,7 +26,7 @@ pub const LOCAL_CONFIG: &str = "local";
 pub const CONSENSUS_CONFIG: &str = "consensus";
 
 /// Client connection string file
-pub const CLIENT_CONNECT_FILE: &str = "client-connect";
+pub const CLIENT_INVITE_CODE_FILE: &str = "invite-code";
 
 /// Salt backup for combining with the private key
 pub const SALT_FILE: &str = "private.salt";
@@ -83,7 +83,10 @@ pub fn write_server_config(
     let client_config = server.consensus.to_client_config(module_config_gens)?;
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
-    plaintext_display_write(&server.get_connect_info(), &path.join(CLIENT_CONNECT_FILE))?;
+    plaintext_display_write(
+        &server.get_invite_code(),
+        &path.join(CLIENT_INVITE_CODE_FILE),
+    )?;
     plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))?;
     encrypted_json_write(&server.private, &key, path.join(PRIVATE_CONFIG))
 }

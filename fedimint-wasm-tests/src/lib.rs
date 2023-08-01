@@ -1,14 +1,14 @@
 use anyhow::Result;
 use fedimint_client::secret::PlainRootSecretStrategy;
-use fedimint_core::api::{GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
+use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
 use fedimint_wallet_client::WalletClientGen;
 
-async fn client(connect_info: &WsClientConnectInfo) -> Result<fedimint_client::Client> {
-    let client = WsFederationApi::from_connect_info(&[connect_info.clone()]);
-    let cfg = client.download_client_config(connect_info).await?;
+async fn client(invite_code: &InviteCode) -> Result<fedimint_client::Client> {
+    let client = WsFederationApi::from_invite_code(&[invite_code.clone()]);
+    let cfg = client.download_client_config(invite_code).await?;
     let mut builder = fedimint_client::ClientBuilder::default();
     builder.with_module(LightningClientGen);
     builder.with_module(MintClientGen);
@@ -20,7 +20,7 @@ async fn client(connect_info: &WsClientConnectInfo) -> Result<fedimint_client::C
 }
 
 mod faucet {
-    pub async fn connect_string() -> anyhow::Result<String> {
+    pub async fn invite_code() -> anyhow::Result<String> {
         let resp = gloo_net::http::Request::get("http://localhost:15243/connect-string")
             .send()
             .await?;
@@ -65,13 +65,13 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn build_client() -> Result<()> {
-        let _client = client(&faucet::connect_string().await?.parse()?).await?;
+        let _client = client(&faucet::invite_code().await?.parse()?).await?;
         Ok(())
     }
 
     #[wasm_bindgen_test]
     async fn receive() -> Result<()> {
-        let client = client(&faucet::connect_string().await?.parse()?).await?;
+        let client = client(&faucet::invite_code().await?.parse()?).await?;
         let tg = TaskGroup::new();
         client.start_executor(tg).await;
         let gws = client.fetch_registered_gateways().await?;
@@ -113,7 +113,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn receive_and_pay() -> Result<()> {
-        let client = client(&faucet::connect_string().await?.parse()?).await?;
+        let client = client(&faucet::invite_code().await?.parse()?).await?;
         let tg = TaskGroup::new();
         client.start_executor(tg).await;
         let gws = client.fetch_registered_gateways().await?;

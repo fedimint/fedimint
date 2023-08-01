@@ -18,24 +18,24 @@ async fn gatewayd_supports_connecting_multiple_federations() {
 
     assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 
-    let connection1 = fed1.connection_code();
+    let invite1 = fed1.invite_code();
     let info = rpc
         .connect_federation(ConnectFedPayload {
-            connect: connection1.to_string(),
+            invite_code: invite1.to_string(),
         })
         .await
         .unwrap();
 
-    assert_eq!(info.federation_id, connection1.id);
+    assert_eq!(info.federation_id, invite1.id);
 
-    let connection2 = fed2.connection_code();
+    let invite2 = fed2.invite_code();
     let info = rpc
         .connect_federation(ConnectFedPayload {
-            connect: connection2.to_string(),
+            invite_code: invite2.to_string(),
         })
         .await
         .unwrap();
-    assert_eq!(info.federation_id, connection2.id);
+    assert_eq!(info.federation_id, invite2.id);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -44,8 +44,8 @@ async fn gatewayd_shows_info_about_all_connected_federations() {
 
     assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 
-    let id1 = fed1.connection_code().id;
-    let id2 = fed2.connection_code().id;
+    let id1 = fed1.invite_code().id;
+    let id2 = fed2.invite_code().id;
 
     connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
 
@@ -66,8 +66,8 @@ async fn gatewayd_shows_info_about_all_connected_federations() {
 async fn gatewayd_shows_balance_for_any_connected_federation() {
     let (gateway, rpc, fed1, fed2, _) = fixtures::fixtures().await;
 
-    let id1 = fed1.connection_code().id;
-    let id2 = fed2.connection_code().id;
+    let id1 = fed1.invite_code().id;
+    let id2 = fed2.invite_code().id;
 
     connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
 
@@ -147,8 +147,8 @@ pub async fn connect_federations(
     feds: &[FederationTest],
 ) -> anyhow::Result<()> {
     for fed in feds {
-        let connect = fed.connection_code().to_string();
-        rpc.connect_federation(ConnectFedPayload { connect })
+        let invite_code = fed.invite_code().to_string();
+        rpc.connect_federation(ConnectFedPayload { invite_code })
             .await?;
     }
     Ok(())

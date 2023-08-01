@@ -140,12 +140,12 @@ impl Gatewayd {
     }
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
-        let connect_str = poll_value("connect info", || async {
-            match cmd!(fed, "dev", "connect-info").out_json().await {
+        let connect_str = poll_value("invite code", || async {
+            match cmd!(fed, "dev", "invite-code").out_json().await {
                 Ok(info) => Ok(Some(
-                    info["connect_info"]
+                    info["invite_code"]
                         .as_str()
-                        .context("connect_info must be string")?
+                        .context("invite_code must be string")?
                         .to_owned(),
                 )),
                 Err(_) => Ok(None),

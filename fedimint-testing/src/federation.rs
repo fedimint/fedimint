@@ -4,7 +4,7 @@ use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
-use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::api::InviteCode;
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
     META_FEDERATION_NAME_KEY,
@@ -61,9 +61,9 @@ impl FederationTest {
             .expect("Failed to build client")
     }
 
-    /// Return first connection code for gateways
-    pub fn connection_code(&self) -> WsClientConnectInfo {
-        self.configs[&PeerId::from(0)].get_connect_info()
+    /// Return first invite code for gateways
+    pub fn invite_code(&self) -> InviteCode {
+        self.configs[&PeerId::from(0)].get_invite_code()
     }
 
     ///  Return first id for gateways

@@ -53,9 +53,9 @@ impl GatewayTest {
 
     /// Connects to a new federation and stores the info
     pub async fn connect_fed(&mut self, fed: &FederationTest) -> FederationInfo {
-        let connect = fed.connection_code().to_string();
+        let invite_code = fed.invite_code().to_string();
         let rpc = self.get_rpc().await;
-        rpc.connect_federation(ConnectFedPayload { connect })
+        rpc.connect_federation(ConnectFedPayload { invite_code })
             .await
             .unwrap()
     }

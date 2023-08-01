@@ -21,8 +21,8 @@ struct Cmd {
     bitcoind_rpc: String,
     #[clap(long, env = "FM_CLN_SOCKET")]
     cln_socket: String,
-    #[clap(long, env = "FM_CONNECT_STRING")]
-    connect_string: Option<String>,
+    #[clap(long, env = "FM_INVITE_CODE")]
+    invite_code: Option<String>,
 }
 
 #[derive(Clone)]
@@ -95,13 +95,13 @@ impl Faucet {
     }
 }
 
-fn get_connect_string(connect_string: Option<String>) -> anyhow::Result<String> {
-    match connect_string {
+fn get_invite_code(invite_code: Option<String>) -> anyhow::Result<String> {
+    match invite_code {
         Some(s) => Ok(s),
         None => {
             let data_dir = std::env::var("FM_DATA_DIR")?;
             Ok(std::fs::read_to_string(
-                PathBuf::from(data_dir).join("client-connect"),
+                PathBuf::from(data_dir).join("invite-code"),
             )?)
         }
     }
@@ -116,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/connect-string",
             get(|| async move {
-                get_connect_string(cmd.connect_string)
+                get_invite_code(cmd.invite_code)
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")))
             }),
         )

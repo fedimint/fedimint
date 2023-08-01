@@ -203,34 +203,32 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     fed.pegin_gateway(99_999, &gw_cln).await?;
 
-    let connect_string = fs::read_to_string(format!("{data_dir}/client-connect")).await?;
+    let invite = fs::read_to_string(format!("{data_dir}/invite-code")).await?;
     fs::remove_file(format!("{data_dir}/client.json")).await?;
-    cmd!(fed, "join-federation", connect_string.clone())
-        .run()
-        .await?;
+    cmd!(fed, "join-federation", invite.clone()).run().await?;
 
     let fed_id = fed.federation_id().await;
-    let connect_info = cmd!(fed, "dev", "decode-connect-info", connect_string.clone())
+    let invite_code = cmd!(fed, "dev", "decode-invite-code", invite.clone())
         .out_json()
         .await?;
     anyhow::ensure!(
         cmd!(
             fed,
             "dev",
-            "encode-connect-info",
-            format!("--url={}", connect_info["url"].as_str().unwrap()),
+            "encode-invite-code",
+            format!("--url={}", invite_code["url"].as_str().unwrap()),
             format!(
                 "--download-token={}",
-                connect_info["download_token"].as_str().unwrap()
+                invite_code["download_token"].as_str().unwrap()
             ),
             "--id={fed_id}"
         )
         .out_json()
-        .await?["connect_info"]
+        .await?["invite_code"]
             .as_str()
             .unwrap()
-            == connect_string,
-        "failed to decode and encode the client connection info string",
+            == invite,
+        "failed to decode and encode the client invite code",
     );
 
     // Test that LND and CLN can still send directly to each other
