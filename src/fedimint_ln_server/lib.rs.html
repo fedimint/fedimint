@@ -1273,7 +1273,6 @@
 <a href="#1273" id="1273">1273</a>
 <a href="#1274" id="1274">1274</a>
 <a href="#1275" id="1275">1275</a>
-<a href="#1276" id="1276">1276</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1295,8 +1294,8 @@
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, ConsensusDecision, NumPeers,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
+    ServerModule,
 };
 <span class="kw">pub use </span>fedimint_ln_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_ln_common::config::{
@@ -1653,7 +1652,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_item: LightningConsensusItem,
         peer_id: PeerId,
-    ) -&gt; anyhow::Result&lt;ConsensusDecision&gt; {
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer_id);
         <span class="kw">let </span>_guard = span.enter();
 
@@ -1664,8 +1663,7 @@
                     .<span class="kw">await
                     </span>.is_some()
                 {
-                    <span class="comment">// We already received a valid decryption share for this peer
-                    </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+                    <span class="macro">bail!</span>(<span class="string">&quot;Already received a valid decryption share for this peer&quot;</span>);
                 }
 
                 <span class="kw">let </span>account = <span class="self">self
@@ -1701,7 +1699,7 @@
                     .<span class="kw">await</span>;
 
                 <span class="kw">if </span>decryption_shares.len() &lt; <span class="self">self</span>.cfg.consensus.threshold() {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Accept);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
 
                 <span class="macro">debug!</span>(<span class="string">&quot;Beginning to decrypt preimage&quot;</span>);
@@ -1717,7 +1715,7 @@
                         <span class="comment">// TODO: check if that can happen even though shares are verified
                         // before
                         </span><span class="macro">error!</span>(contract_hash = %contract.hash, <span class="string">&quot;Failed to decrypt preimage&quot;</span>);
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Accept);
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                     }
                 };
 
@@ -1790,7 +1788,7 @@
                 }
 
                 <span class="kw">if </span>block_height == current_vote {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+                    <span class="macro">bail!</span>(<span class="string">&quot;Block height vote is redundant&quot;</span>);
                 }
 
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id), <span class="kw-2">&amp;</span>block_height)
@@ -1798,7 +1796,7 @@
             }
         }
 
-        <span class="prelude-val">Ok</span>(ConsensusDecision::Accept)
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(

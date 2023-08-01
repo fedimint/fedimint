@@ -1089,9 +1089,6 @@
 <a href="#1089" id="1089">1089</a>
 <a href="#1090" id="1090">1090</a>
 <a href="#1091" id="1091">1091</a>
-<a href="#1092" id="1092">1092</a>
-<a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1111,9 +1108,8 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, TaskGroup};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount,
-    ConsensusDecision, NumPeers, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
-    TieredMultiZip,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
+    OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_mint_common::config::{
@@ -1450,13 +1446,12 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_item: MintConsensusItem,
         peer_id: PeerId,
-    ) -&gt; anyhow::Result&lt;ConsensusDecision&gt; {
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>out_point = consensus_item.out_point;
         <span class="kw">let </span>signatures = consensus_item.signatures;
 
         <span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point)).<span class="kw">await</span>.is_some() {
-            <span class="comment">// We already obtained a threshold of blind signature shares
-            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+            <span class="macro">bail!</span>(<span class="string">&quot;Already obtained a threshold of blind signature shares&quot;</span>)
         }
 
         <span class="kw">if </span>dbtx
@@ -1464,8 +1459,7 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="comment">// We already received a valid signature share by this peer
-            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+            <span class="macro">bail!</span>(<span class="string">&quot;Already received a valid signature share by this peer&quot;</span>);
         }
 
         <span class="comment">// check if we are collecting signature shares for this out_point
@@ -1513,7 +1507,7 @@
 
         <span class="comment">// check if we have enough signature shares to combine
         </span><span class="kw">if </span>signature_shares.len() &lt; <span class="self">self</span>.cfg.consensus.peer_tbs_pks.threshold() {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Accept);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
         <span class="comment">// combine valid signature shares
@@ -1578,7 +1572,7 @@
         dbtx.insert_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::RedemptionTotal, <span class="kw-2">&amp;</span>redemptions)
             .<span class="kw">await</span>;
 
-        <span class="prelude-val">Ok</span>(ConsensusDecision::Accept)
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(

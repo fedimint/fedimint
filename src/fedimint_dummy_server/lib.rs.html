@@ -482,9 +482,6 @@
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
 <a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::string::ToString;
 
@@ -504,9 +501,7 @@
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::{
-    push_db_pair_items, Amount, ConsensusDecision, NumPeers, OutPoint, PeerId, ServerModule,
-};
+<span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
     DummyGenParams,
@@ -764,7 +759,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_item: DummyConsensusItem,
         peer_id: PeerId,
-    ) -&gt; anyhow::Result&lt;ConsensusDecision&gt; {
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>DummyConsensusItem::Sign(request, share) = consensus_item;
 
         <span class="kw">if </span>dbtx
@@ -772,8 +767,7 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="comment">// We already received a valid signature share
-            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Discard);
+            <span class="macro">bail!</span>(<span class="string">&quot;Already received a valid signature share&quot;</span>)
         }
 
         <span class="kw">if </span>!<span class="self">self
@@ -797,7 +791,7 @@
             .<span class="kw">await</span>;
 
         <span class="kw">if </span>signature_shares.len() &lt;= <span class="self">self</span>.cfg.consensus.public_key_set.threshold() {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ConsensusDecision::Accept);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
         <span class="kw">let </span>threshold_signature = <span class="self">self
@@ -820,7 +814,7 @@
         )
         .<span class="kw">await</span>;
 
-        <span class="prelude-val">Ok</span>(ConsensusDecision::Accept)
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
