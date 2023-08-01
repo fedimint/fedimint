@@ -19,8 +19,8 @@ use fedimint_core::module::{
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, ConsensusDecision, NumPeers,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
+    ServerModule,
 };
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
@@ -377,7 +377,7 @@ impl ServerModule for Lightning {
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_item: LightningConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision> {
+    ) -> anyhow::Result<()> {
         let span = info_span!("process decryption share", %peer_id);
         let _guard = span.enter();
 
@@ -388,8 +388,7 @@ impl ServerModule for Lightning {
                     .await
                     .is_some()
                 {
-                    // We already received a valid decryption share for this peer
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Already received a valid decryption share for this peer");
                 }
 
                 let account = self
@@ -425,7 +424,7 @@ impl ServerModule for Lightning {
                     .await;
 
                 if decryption_shares.len() < self.cfg.consensus.threshold() {
-                    return Ok(ConsensusDecision::Accept);
+                    return Ok(());
                 }
 
                 debug!("Beginning to decrypt preimage");
@@ -441,7 +440,7 @@ impl ServerModule for Lightning {
                         // TODO: check if that can happen even though shares are verified
                         // before
                         error!(contract_hash = %contract.hash, "Failed to decrypt preimage");
-                        return Ok(ConsensusDecision::Accept);
+                        return Ok(());
                     }
                 };
 
@@ -514,7 +513,7 @@ impl ServerModule for Lightning {
                 }
 
                 if block_height == current_vote {
-                    return Ok(ConsensusDecision::Discard);
+                    bail!("Block height vote is redundant");
                 }
 
                 dbtx.insert_entry(&BlockHeightVoteKey(peer_id), &block_height)
@@ -522,7 +521,7 @@ impl ServerModule for Lightning {
             }
         }
 
-        Ok(ConsensusDecision::Accept)
+        Ok(())
     }
 
     fn build_verification_cache<'a>(

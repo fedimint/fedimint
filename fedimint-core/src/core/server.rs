@@ -11,12 +11,12 @@ use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
 use super::*;
 use crate::db::ModuleDatabaseTransaction;
+use crate::maybe_add_send_sync;
 use crate::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal, InputMeta, ModuleCommon,
     ModuleError, ServerModule, TransactionItemAmount,
 };
 use crate::task::{MaybeSend, MaybeSync};
-use crate::{maybe_add_send_sync, ConsensusDecision};
 
 pub trait IVerificationCache: Debug {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
@@ -63,18 +63,15 @@ pub trait IServerModule: Debug {
         module_instance_id: ModuleInstanceId,
     ) -> ConsensusProposal<DynModuleConsensusItem>;
 
-    /// This function is called once for every consensus item. If the function
-    /// returns Ok(ConsensusDecision::Accept) then the item changed the
-    /// modules state and has to be included in the history of the
-    /// federation, otherwise it may safely be discarded. We return an error
-    /// for actually invalid items while we return
-    /// Ok(ConsensusDecision::Discard) for merely superfluous items.
+    /// This function is called once for every consensus item. The function
+    /// returns an error if any only if the consensus item does not change
+    /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
         consensus_item: DynModuleConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision>;
+    ) -> anyhow::Result<()>;
 
     /// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a
@@ -199,7 +196,7 @@ where
         dbtx: &mut ModuleDatabaseTransaction<'a>,
         consensus_item: DynModuleConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision> {
+    ) -> anyhow::Result<()> {
         <Self as ServerModule>::process_consensus_item(
             self,
             dbtx,

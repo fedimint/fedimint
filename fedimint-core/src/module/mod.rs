@@ -36,7 +36,7 @@ use crate::server::{DynServerModule, VerificationCache};
 use crate::task::{MaybeSend, TaskGroup};
 use crate::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    ConsensusDecision, OutPoint, PeerId,
+    OutPoint, PeerId,
 };
 
 pub struct InputMeta {
@@ -804,18 +804,15 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
 
-    /// This function is called once for every consensus item. If the function
-    /// returns Ok(ConsensusDecision::Accept) then the item changed the
-    /// modules state and has to be included in the history of the
-    /// federation, otherwise it may safely be discarded. We return an error
-    /// for actually invalid items while we return
-    /// Ok(ConsensusDecision::Discard) for merely superfluous items.
+    /// This function is called once for every consensus item. The function
+    /// returns an error if any only if the consensus item does not change
+    /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision>;
+    ) -> anyhow::Result<()>;
 
     /// Some modules may have slow to verify inputs that would block transaction
     /// processing. If the slow part of verification can be modeled as a

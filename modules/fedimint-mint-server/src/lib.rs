@@ -17,9 +17,8 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount,
-    ConsensusDecision, NumPeers, OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
-    TieredMultiZip,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
+    OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
 };
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
@@ -356,13 +355,12 @@ impl ServerModule for Mint {
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_item: MintConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision> {
+    ) -> anyhow::Result<()> {
         let out_point = consensus_item.out_point;
         let signatures = consensus_item.signatures;
 
         if dbtx.get_value(&OutputOutcomeKey(out_point)).await.is_some() {
-            // We already obtained a threshold of blind signature shares
-            return Ok(ConsensusDecision::Discard);
+            bail!("Already obtained a threshold of blind signature shares")
         }
 
         if dbtx
@@ -370,8 +368,7 @@ impl ServerModule for Mint {
             .await
             .is_some()
         {
-            // We already received a valid signature share by this peer
-            return Ok(ConsensusDecision::Discard);
+            bail!("Already received a valid signature share by this peer");
         }
 
         // check if we are collecting signature shares for this out_point
@@ -419,7 +416,7 @@ impl ServerModule for Mint {
 
         // check if we have enough signature shares to combine
         if signature_shares.len() < self.cfg.consensus.peer_tbs_pks.threshold() {
-            return Ok(ConsensusDecision::Accept);
+            return Ok(());
         }
 
         // combine valid signature shares
@@ -484,7 +481,7 @@ impl ServerModule for Mint {
         dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
             .await;
 
-        Ok(ConsensusDecision::Accept)
+        Ok(())
     }
 
     fn build_verification_cache<'a>(

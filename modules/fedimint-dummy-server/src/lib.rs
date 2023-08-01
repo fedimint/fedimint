@@ -17,9 +17,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{
-    push_db_pair_items, Amount, ConsensusDecision, NumPeers, OutPoint, PeerId, ServerModule,
-};
+use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 use fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
     DummyGenParams,
@@ -277,7 +275,7 @@ impl ServerModule for Dummy {
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         consensus_item: DummyConsensusItem,
         peer_id: PeerId,
-    ) -> anyhow::Result<ConsensusDecision> {
+    ) -> anyhow::Result<()> {
         let DummyConsensusItem::Sign(request, share) = consensus_item;
 
         if dbtx
@@ -285,8 +283,7 @@ impl ServerModule for Dummy {
             .await
             .is_some()
         {
-            // We already received a valid signature share
-            return Ok(ConsensusDecision::Discard);
+            bail!("Already received a valid signature share")
         }
 
         if !self
@@ -310,7 +307,7 @@ impl ServerModule for Dummy {
             .await;
 
         if signature_shares.len() <= self.cfg.consensus.public_key_set.threshold() {
-            return Ok(ConsensusDecision::Accept);
+            return Ok(());
         }
 
         let threshold_signature = self
@@ -333,7 +330,7 @@ impl ServerModule for Dummy {
         )
         .await;
 
-        Ok(ConsensusDecision::Accept)
+        Ok(())
     }
 
     fn build_verification_cache<'a>(
