@@ -1,5 +1,6 @@
 pub mod api;
 
+mod db;
 mod deposit;
 mod withdraw;
 
@@ -10,7 +11,7 @@ use anyhow::{anyhow, bail, ensure};
 use async_stream::stream;
 use bitcoin::{Address, Network};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_client::derivable_secret::DerivableSecret;
+use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
@@ -21,7 +22,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database};
+use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
@@ -35,12 +36,15 @@ pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
 use miniscript::ToPublicKey;
 use rand::{thread_rng, Rng};
-use secp256k1::{All, KeyPair, Secp256k1};
+use secp256k1::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 
 use crate::api::WalletFederationApi;
+use crate::db::NextPegInTweakIndexKey;
 use crate::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
+
+const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
 
 #[apply(async_trait_maybe_send!)]
 pub trait WalletClientExt {
@@ -117,8 +121,13 @@ impl WalletClientExt for Client {
             .autocommit(
                 |dbtx| {
                     Box::pin(async move {
-                        let (operation_id, sm, address) =
-                            wallet_client.get_deposit_address(valid_until);
+                        let (operation_id, sm, address) = wallet_client
+                            .get_deposit_address(
+                                valid_until,
+                                &mut dbtx.with_module_prefix(instance.id),
+                            )
+                            .await;
+
                         // Begin watching the script address
                         wallet_client
                             .rpc
@@ -395,7 +404,7 @@ impl ClientModuleGen for WalletClientGen {
         cfg: WalletClientConfig,
         _db: Database,
         _api_version: ApiVersion,
-        _module_root_secret: DerivableSecret,
+        module_root_secret: DerivableSecret,
         notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
         _api: DynGlobalApi,
         module_api: DynModuleApi,
@@ -403,9 +412,11 @@ impl ClientModuleGen for WalletClientGen {
         let rpc_config = self.0.clone().unwrap_or(cfg.default_bitcoin_rpc.clone());
         Ok(WalletClientModule {
             cfg,
+            module_root_secret,
             module_api,
             notifier,
             rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
+            secp: Default::default(),
         })
     }
 }
@@ -428,9 +439,11 @@ pub enum WalletOperationMeta {
 #[derive(Debug)]
 pub struct WalletClientModule {
     cfg: WalletClientConfig,
+    module_root_secret: DerivableSecret,
     module_api: DynModuleApi,
     notifier: ModuleNotifier<DynGlobalClientContext, WalletClientStates>,
     rpc: DynBitcoindRpc,
+    secp: Secp256k1<All>,
 }
 
 impl ClientModule for WalletClientModule {
@@ -480,13 +493,17 @@ impl WalletClientModule {
         self.cfg.network
     }
 
-    pub fn get_deposit_address(
+    pub async fn get_deposit_address(
         &self,
         valid_until: SystemTime,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> (OperationId, WalletClientStates, Address) {
-        // TODO: derive from root secret
-        // TODO: don't use global secp context
-        let tweak_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
+        let tweak_key = self
+            .module_root_secret
+            .child_key(WALLET_TWEAK_CHILD_ID)
+            .child_key(get_next_peg_in_tweak_child_id(dbtx).await)
+            .to_secp_key(&self.secp);
+
         let x_only_pk = tweak_key.public_key().to_x_only_pubkey();
         let operation_id = OperationId(x_only_pk.serialize());
 
@@ -559,6 +576,14 @@ fn check_address(address: &Address, network: Network) -> anyhow::Result<()> {
     );
 
     Ok(())
+}
+
+/// Returns the child index to derive the next peg-in tweak key from.
+async fn get_next_peg_in_tweak_child_id(dbtx: &mut ModuleDatabaseTransaction<'_>) -> ChildId {
+    let index = dbtx.get_value(&NextPegInTweakIndexKey).await.unwrap_or(0);
+    dbtx.insert_entry(&NextPegInTweakIndexKey, &(index + 1))
+        .await;
+    ChildId(index)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
