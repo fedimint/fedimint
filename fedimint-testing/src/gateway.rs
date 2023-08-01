@@ -5,6 +5,7 @@ use std::sync::Arc;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::Client;
 use fedimint_client_legacy::modules::ln::config::GatewayFee;
+use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -44,6 +45,10 @@ impl GatewayTest {
     /// Removes a client from the gateway
     pub async fn remove_client(&self, fed: &FederationTest) -> Client {
         self.gateway.remove_client(fed.id()).await.unwrap()
+    }
+
+    pub async fn select_client(&self, federation_id: FederationId) -> Client {
+        self.gateway.select_client(federation_id).await.unwrap()
     }
 
     /// Connects to a new federation and stores the info

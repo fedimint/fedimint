@@ -4,10 +4,13 @@
 //! and business logic.
 mod fixtures;
 
+use fedimint_core::config::FederationId;
 use fedimint_core::Amount;
+use fedimint_dummy_client::DummyClientExt;
 use fedimint_testing::federation::FederationTest;
+use fedimint_testing::gateway::GatewayTest;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::ConnectFedPayload;
+use ln_gateway::rpc::{BalancePayload, ConnectFedPayload};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn gatewayd_supports_connecting_multiple_federations() {
@@ -60,10 +63,25 @@ async fn gatewayd_shows_info_about_all_connected_federations() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn gatewayd_shows_balance_for_any_connected_federation() -> anyhow::Result<()> {
-    // todo: implement test case
+async fn gatewayd_shows_balance_for_any_connected_federation() {
+    let (gateway, rpc, fed1, fed2, _) = fixtures::fixtures().await;
 
-    Ok(())
+    let id1 = fed1.connection_code().id;
+    let id2 = fed2.connection_code().id;
+
+    connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+
+    let pre_balances = get_balances(&rpc, &[id1, id2]).await;
+
+    send_msats_to_gateway(&gateway, id1, 5_000).await;
+    send_msats_to_gateway(&gateway, id2, 1_000).await;
+
+    let post_balances = get_balances(&rpc, &[id1, id2]).await;
+
+    assert_eq!(pre_balances[0], 0);
+    assert_eq!(pre_balances[1], 0);
+    assert_eq!(post_balances[0], 5_000);
+    assert_eq!(post_balances[1], 1_000);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -134,4 +152,27 @@ pub async fn connect_federations(
             .await?;
     }
     Ok(())
+}
+
+async fn get_balances(
+    rpc: &GatewayRpcClient,
+    ids: impl IntoIterator<Item = &FederationId>,
+) -> Vec<u64> {
+    let mut balances = vec![];
+    for id in ids.into_iter() {
+        balances.push(
+            rpc.get_balance(BalancePayload { federation_id: *id })
+                .await
+                .unwrap()
+                .msats,
+        )
+    }
+
+    balances
+}
+
+async fn send_msats_to_gateway(gateway: &GatewayTest, id: FederationId, msats: u64) {
+    let client = gateway.select_client(id).await;
+    let (_, outpoint) = client.print_money(Amount::from_msats(msats)).await.unwrap();
+    client.receive_money(outpoint).await.unwrap();
 }
