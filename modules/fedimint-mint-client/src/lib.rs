@@ -298,6 +298,7 @@ impl MintClientExt for Client {
                                 MintMeta {
                                     variant: MintMetaVariants::SpendOOB {
                                         requested_amount: min_amount,
+                                        notes: notes.clone(),
                                     },
                                     amount: notes.total_amount(),
                                     extra_meta,
@@ -405,8 +406,14 @@ pub struct MintMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum MintMetaVariants {
-    Reissuance { out_point: OutPoint },
-    SpendOOB { requested_amount: Amount },
+    Reissuance {
+        out_point: OutPoint,
+    },
+    SpendOOB {
+        requested_amount: Amount,
+        #[serde(with = "serde_ecash")]
+        notes: TieredMulti<SpendableNote>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -1225,6 +1232,50 @@ pub struct SpendableNote {
     pub spend_key: KeyPair,
 }
 
+/// Base64 encode a set of e-cash notes. See also [`parse_ecash`].
+pub fn serialize_ecash(ecash: &TieredMulti<SpendableNote>) -> String {
+    let mut bytes = Vec::new();
+    Encodable::consensus_encode(ecash, &mut bytes).expect("encodes correctly");
+    base64::encode(&bytes)
+}
+
+/// Decode a set of e-cash notes from a base64 string. See also
+/// [`serialize_ecash`].
+pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
+    let bytes = base64::decode(s)?;
+    Ok(Decodable::consensus_decode(
+        &mut std::io::Cursor::new(bytes),
+        &ModuleDecoderRegistry::default(),
+    )?)
+}
+
+/// `serde` impl for `TieredMulti<SpendableNote>` sets of e-cash notes using
+/// [`serialize_ecash`] and [`parse_ecash`].
+pub mod serde_ecash {
+    use fedimint_core::TieredMulti;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    use crate::{parse_ecash, serialize_ecash, SpendableNote};
+
+    pub fn serialize<S>(
+        ecash: &TieredMulti<SpendableNote>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&serialize_ecash(ecash))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<TieredMulti<SpendableNote>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        parse_ecash(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 /// An index used to deterministically derive [`Note`]s
 ///
 /// We allow converting it to u64 and incrementing it, but
@@ -1379,14 +1430,6 @@ mod tests {
             .flat_map(|(amount, number)| vec![(amount, "dummy note".into()); number])
             .collect()
     }
-}
-
-pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
-    let bytes = base64::decode(s)?;
-    Ok(Decodable::consensus_decode(
-        &mut std::io::Cursor::new(bytes),
-        &ModuleDecoderRegistry::default(),
-    )?)
 }
 
 struct OOBSpendTag;

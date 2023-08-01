@@ -12,15 +12,15 @@ use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
 use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_client::{
     InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
 };
-use fedimint_mint_client::{MintClientExt, MintClientModule, SpendableNote};
+use fedimint_mint_client::{
+    parse_ecash, serialize_ecash, MintClientExt, MintClientModule, SpendableNote,
+};
 use fedimint_wallet_client::{WalletClientExt, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -415,23 +415,9 @@ pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmou
     }
 }
 
-pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
-    let bytes = base64::decode(s)?;
-    Ok(Decodable::consensus_decode(
-        &mut std::io::Cursor::new(bytes),
-        &ModuleDecoderRegistry::default(),
-    )?)
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PayInvoiceResponse {
     operation_id: OperationId,
     contract_id: ContractId,
     preimage: String,
-}
-
-pub fn serialize_ecash(c: &TieredMulti<SpendableNote>) -> String {
-    let mut bytes = Vec::new();
-    Encodable::consensus_encode(c, &mut bytes).expect("encodes correctly");
-    base64::encode(&bytes)
 }
