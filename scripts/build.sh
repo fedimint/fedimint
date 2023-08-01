@@ -25,6 +25,10 @@ echo "Setting up env variables in $FM_TEST_DIR"
 mkdir -p "$FM_TEST_DIR"
 touch "$FM_PID_FILE"
 
+# Symlink $FM_TEST_DIR to local gitignored target/ directory so they're easier to find
+rm target/devimint &> /dev/null || true
+ln -s $FM_TEST_DIR target/devimint
+
 # Builds the rust executables and sets environment variables
 SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 cd $SRC_DIR || exit 1
