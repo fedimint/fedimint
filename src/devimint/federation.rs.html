@@ -972,7 +972,7 @@
         <span class="number">10</span>,
     );
     <span class="kw">let </span>request = ConfigGenParamsRequest {
-        meta: BTreeMap::from([(<span class="string">&quot;test&quot;</span>.to_string(), <span class="string">&quot;testvalue&quot;</span>.to_string())]),
+        meta: BTreeMap::from([(<span class="string">&quot;federation_name&quot;</span>.to_string(), <span class="string">&quot;testfed&quot;</span>.to_string())]),
         modules: server_gen_params,
     };
     client.set_config_gen_params(request, auth.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
