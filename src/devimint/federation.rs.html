@@ -602,8 +602,8 @@
         <span class="kw">let </span>cfg_dir = utf8(cfg_dir);
         <span class="comment">// copy configs to config directory
         </span>tokio::fs::rename(
-            <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client-connect&quot;</span>),
-            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client-connect&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/invite-code&quot;</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/invite-code&quot;</span>),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
         tokio::fs::rename(

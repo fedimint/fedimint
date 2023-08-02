@@ -120,6 +120,9 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
@@ -148,7 +151,7 @@
 </span><span class="kw">pub const </span>CONSENSUS_CONFIG: <span class="kw-2">&amp;</span>str = <span class="string">&quot;consensus&quot;</span>;
 
 <span class="doccomment">/// Client connection string file
-</span><span class="kw">pub const </span>CLIENT_CONNECT_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;client-connect&quot;</span>;
+</span><span class="kw">pub const </span>CLIENT_INVITE_CODE_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;invite-code&quot;</span>;
 
 <span class="doccomment">/// Salt backup for combining with the private key
 </span><span class="kw">pub const </span>SALT_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;private.salt&quot;</span>;
@@ -205,7 +208,10 @@
     <span class="kw">let </span>client_config = server.consensus.to_client_config(module_config_gens)<span class="question-mark">?</span>;
     plaintext_json_write(<span class="kw-2">&amp;</span>server.local, path.join(LOCAL_CONFIG))<span class="question-mark">?</span>;
     plaintext_json_write(<span class="kw-2">&amp;</span>server.consensus, path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>;
-    plaintext_display_write(<span class="kw-2">&amp;</span>server.get_connect_info(), <span class="kw-2">&amp;</span>path.join(CLIENT_CONNECT_FILE))<span class="question-mark">?</span>;
+    plaintext_display_write(
+        <span class="kw-2">&amp;</span>server.get_invite_code(),
+        <span class="kw-2">&amp;</span>path.join(CLIENT_INVITE_CODE_FILE),
+    )<span class="question-mark">?</span>;
     plaintext_json_write(<span class="kw-2">&amp;</span>client_config, path.join(CLIENT_CONFIG))<span class="question-mark">?</span>;
     encrypted_json_write(<span class="kw-2">&amp;</span>server.private, <span class="kw-2">&amp;</span>key, path.join(PRIVATE_CONFIG))
 }

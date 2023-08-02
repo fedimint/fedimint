@@ -131,7 +131,7 @@
 <span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::ClientBuilder;
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, InviteCode, WsFederationApi};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -207,11 +207,11 @@
 
     <span class="kw">pub async fn </span>create_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connect: WsClientConnectInfo,
+        connect: InviteCode,
         mint_channel_id: u64,
         fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationConfig&gt; {
-        <span class="kw">let </span>api: DynGlobalApi = WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect.clone()]).into();
+        <span class="kw">let </span>api: DynGlobalApi = WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[connect.clone()]).into();
         <span class="kw">let </span>client_config = api.download_client_config(<span class="kw-2">&amp;</span>connect).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(FederationConfig {
             mint_channel_id,

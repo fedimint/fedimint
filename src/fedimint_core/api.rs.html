@@ -1284,12 +1284,6 @@
 <a href="#1284" id="1284">1284</a>
 <a href="#1285" id="1285">1285</a>
 <a href="#1286" id="1286">1286</a>
-<a href="#1287" id="1287">1287</a>
-<a href="#1288" id="1288">1288</a>
-<a href="#1289" id="1289">1289</a>
-<a href="#1290" id="1290">1290</a>
-<a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1689,10 +1683,7 @@
         </span>R: OutputOutcome;
 
     <span class="doccomment">/// Fetch client configuration info only if verified against a federation id
-    </span><span class="kw">async fn </span>download_client_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        info: <span class="kw-2">&amp;</span>WsClientConnectInfo,
-    ) -&gt; FederationResult&lt;ClientConfig&gt;;
+    </span><span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt;;
 
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
     </span><span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
@@ -1870,10 +1861,7 @@
         </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
     </span>}
 
-    <span class="kw">async fn </span>download_client_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        info: <span class="kw-2">&amp;</span>WsClientConnectInfo,
-    ) -&gt; FederationResult&lt;ClientConfig&gt; {
+    <span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>id = info.id;
         <span class="kw">let </span>qs = VerifiableResponse::new(
             <span class="self">self</span>.all_members().total(),
@@ -1964,7 +1952,7 @@
 ///
 /// Can be used to download the configs and bootstrap a client
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
-</span><span class="kw">pub struct </span>WsClientConnectInfo {
+</span><span class="kw">pub struct </span>InviteCode {
     <span class="doccomment">/// Url to reach an API that we can download configs from
     </span><span class="kw">pub </span>url: Url,
     <span class="doccomment">/// Config download token (might only be used a certain number of times)
@@ -1980,7 +1968,7 @@
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ClientConfigDownloadToken(<span class="kw">pub </span>[u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
 
-<span class="doccomment">/// We can represent client connect info as a bech32 string for compactness and
+<span class="doccomment">/// We can represent client invite code as a bech32 string for compactness and
 /// error-checking
 ///
 /// Human readable part (HRP) includes the version
@@ -1989,7 +1977,7 @@
 /// ```
 </span><span class="kw">const </span>BECH32_HRP: <span class="kw-2">&amp;</span>str = <span class="string">&quot;fed1&quot;</span>;
 
-<span class="kw">impl </span>FromStr <span class="kw">for </span>WsClientConnectInfo {
+<span class="kw">impl </span>FromStr <span class="kw">for </span>InviteCode {
     <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
 
     <span class="kw">fn </span>from_str(encoded: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
@@ -2021,8 +2009,8 @@
     }
 }
 
-<span class="doccomment">/// Parses the connect info from a bech32 string
-</span><span class="kw">impl </span>Display <span class="kw">for </span>WsClientConnectInfo {
+<span class="doccomment">/// Parses the invite code from a bech32 string
+</span><span class="kw">impl </span>Display <span class="kw">for </span>InviteCode {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[];
         data.extend(<span class="self">self</span>.id.<span class="number">0</span>.to_bytes());
@@ -2037,7 +2025,7 @@
     }
 }
 
-<span class="kw">impl </span>Serialize <span class="kw">for </span>WsClientConnectInfo {
+<span class="kw">impl </span>Serialize <span class="kw">for </span>InviteCode {
     <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
     <span class="kw">where
         </span>S: serde::Serializer,
@@ -2046,7 +2034,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>WsClientConnectInfo {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>InviteCode {
     <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
     <span class="kw">where
         </span>D: serde::Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
@@ -2141,9 +2129,9 @@
         )
     }
 
-    <span class="doccomment">/// Creates a new API client from a connect info, assumes they are in peer
+    <span class="doccomment">/// Creates a new API client from a invite code, assumes they are in peer
     /// id order
-    </span><span class="kw">pub fn </span>from_connect_info(info: <span class="kw-2">&amp;</span>[WsClientConnectInfo]) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>from_invite_code(info: <span class="kw-2">&amp;</span>[InviteCode]) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(
             info.iter()
                 .enumerate()
@@ -2564,21 +2552,21 @@
     }
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>converts_connect_string() {
-        <span class="kw">let </span>connect = WsClientConnectInfo {
+    </span><span class="kw">fn </span>converts_invite_code() {
+        <span class="kw">let </span>connect = InviteCode {
             url: <span class="string">&quot;ws://test1&quot;</span>.parse().unwrap(),
             id: FederationId::dummy(),
             download_token: ClientConfigDownloadToken(OsRng::default().gen()),
         };
 
         <span class="kw">let </span>bech32 = connect.to_string();
-        <span class="kw">let </span>connect_parsed = WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>bech32).expect(<span class="string">&quot;parses&quot;</span>);
+        <span class="kw">let </span>connect_parsed = InviteCode::from_str(<span class="kw-2">&amp;</span>bech32).expect(<span class="string">&quot;parses&quot;</span>);
         <span class="macro">assert_eq!</span>(connect, connect_parsed);
 
         <span class="kw">let </span>json = serde_json::to_string(<span class="kw-2">&amp;</span>connect).unwrap();
         <span class="kw">let </span>connect_as_string: String = serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap();
         <span class="macro">assert_eq!</span>(connect_as_string, bech32);
-        <span class="kw">let </span>connect_parsed_json: WsClientConnectInfo = serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap();
+        <span class="kw">let </span>connect_parsed_json: InviteCode = serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap();
         <span class="macro">assert_eq!</span>(connect_parsed_json, connect_parsed);
     }
 }

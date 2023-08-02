@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["get_connect_string",""],["main",""]],"struct":[["Cmd",""],["Faucet",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["get_invite_code",""],["main",""]],"struct":[["Cmd",""],["Faucet",""]]};

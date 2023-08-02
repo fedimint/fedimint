@@ -172,8 +172,8 @@
     </span>bitcoind_rpc: String,
     <span class="attr">#[clap(long, env = <span class="string">&quot;FM_CLN_SOCKET&quot;</span>)]
     </span>cln_socket: String,
-    <span class="attr">#[clap(long, env = <span class="string">&quot;FM_CONNECT_STRING&quot;</span>)]
-    </span>connect_string: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="attr">#[clap(long, env = <span class="string">&quot;FM_INVITE_CODE&quot;</span>)]
+    </span>invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Clone)]
@@ -246,13 +246,13 @@
     }
 }
 
-<span class="kw">fn </span>get_connect_string(connect_string: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; anyhow::Result&lt;String&gt; {
-    <span class="kw">match </span>connect_string {
+<span class="kw">fn </span>get_invite_code(invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; anyhow::Result&lt;String&gt; {
+    <span class="kw">match </span>invite_code {
         <span class="prelude-val">Some</span>(s) =&gt; <span class="prelude-val">Ok</span>(s),
         <span class="prelude-val">None </span>=&gt; {
             <span class="kw">let </span>data_dir = std::env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(std::fs::read_to_string(
-                PathBuf::from(data_dir).join(<span class="string">&quot;client-connect&quot;</span>),
+                PathBuf::from(data_dir).join(<span class="string">&quot;invite-code&quot;</span>),
             )<span class="question-mark">?</span>)
         }
     }
@@ -267,7 +267,7 @@
         .route(
             <span class="string">&quot;/connect-string&quot;</span>,
             get(|| <span class="kw">async move </span>{
-                get_connect_string(cmd.connect_string)
+                get_invite_code(cmd.invite_code)
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, <span class="macro">format!</span>(<span class="string">&quot;{e:?}&quot;</span>)))
             }),
         )

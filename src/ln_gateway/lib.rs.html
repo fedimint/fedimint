@@ -867,7 +867,7 @@
 <span class="kw">use </span>client::StandardGatewayClientBuilder;
 <span class="kw">use </span>db::{FederationRegistrationKey, GatewayPublicKey};
 <span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
-<span class="kw">use </span>fedimint_core::api::{FederationError, WsClientConnectInfo};
+<span class="kw">use </span>fedimint_core::api::{FederationError, InviteCode};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -1478,7 +1478,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         payload: ConnectFedPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
-        <span class="kw">let </span>connect = WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>payload.connect).map_err(|e| {
+        <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>payload.invite_code).map_err(|e| {
             GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid federation member string {e}&quot;</span>))
         })<span class="question-mark">?</span>;
 
@@ -1496,7 +1496,7 @@
         </span><span class="kw">let </span>gw_client_cfg = <span class="kw">loop </span>{
             <span class="kw">match </span><span class="self">self
                 </span>.client_builder
-                .create_config(connect.clone(), channel_id, <span class="self">self</span>.fees)
+                .create_config(invite_code.clone(), channel_id, <span class="self">self</span>.fees)
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(gw_client_cfg) =&gt; <span class="kw">break </span>gw_client_cfg,

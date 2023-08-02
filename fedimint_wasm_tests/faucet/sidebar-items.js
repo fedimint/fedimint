@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["connect_string",""],["generate_invoice",""],["pay_invoice",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["generate_invoice",""],["invite_code",""],["pay_invoice",""]]};

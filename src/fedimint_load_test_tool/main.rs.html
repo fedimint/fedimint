@@ -821,7 +821,6 @@
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -837,7 +836,7 @@
 };
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>fedimint_client::Client;
-<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
+<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -911,7 +910,7 @@
         </span>limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     },
     <span class="attr">#[command(about = <span class="string">&quot;Try to download the client config many times.&quot;</span>)]
-    </span>TestDownload { connect: String },
+    </span>TestDownload { invite_code: String },
     <span class="attr">#[command(
         about = <span class="string">&quot;Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway&quot;
     </span>)]
@@ -921,15 +920,15 @@
 </span><span class="kw">struct </span>ConnectCommonArgs {
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Path of the client config.json. If none given, will try to download it from the --connect info&quot;
+        help = <span class="string">&quot;Path of the client config.json. If none given, will try to download it from the --invite code&quot;
     </span>)]
     </span>client_config: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Connect info string. If none given, will use the one from fedimint-cli if no --client-config given&quot;
+        help = <span class="string">&quot;Invite code string. If none given, will use the one from fedimint-cli if no --client-config given&quot;
     </span>)]
-    </span>connect: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    </span>invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Args, Clone)]
@@ -1068,8 +1067,8 @@
             )
             .<span class="kw">await</span><span class="question-mark">?
         </span>}
-        Command::TestDownload { connect } =&gt; {
-            test_download_config(<span class="kw-2">&amp;</span>connect, opts.users, event_sender.clone()).<span class="kw">await</span><span class="question-mark">?
+        Command::TestDownload { invite_code } =&gt; {
+            test_download_config(<span class="kw-2">&amp;</span>invite_code, opts.users, event_sender.clone()).<span class="kw">await</span><span class="question-mark">?
         </span>}
         Command::LoadTest(args) =&gt; {
             <span class="kw">let </span>cfg = get_cfg_from_args(<span class="kw-2">&amp;</span>args.connect_common_args).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1311,18 +1310,17 @@
     users: u16,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>connect_obj: WsClientConnectInfo =
-        WsClientConnectInfo::from_str(connect).context(<span class="string">&quot;invalid connect info&quot;</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>api = Arc::new(WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect_obj.clone()]));
+    <span class="kw">let </span>invite_code: InviteCode = InviteCode::from_str(connect).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]));
 
     <span class="prelude-val">Ok</span>((<span class="number">0</span>..users)
         .map(|<span class="kw">_</span>| {
             <span class="kw">let </span>api = api.clone();
-            <span class="kw">let </span>connect_obj = connect_obj.clone();
+            <span class="kw">let </span>invite_code = invite_code.clone();
             <span class="kw">let </span>event_sender = event_sender.clone();
             <span class="kw">let </span>f: BoxFuture&lt;<span class="kw">_</span>&gt; = Box::pin(<span class="kw">async move </span>{
                 <span class="kw">let </span>m = fedimint_core::time::now();
-                <span class="kw">let _ </span>= api.download_client_config(<span class="kw-2">&amp;</span>connect_obj).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let _ </span>= api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
                 event_sender.send(MetricEvent {
                     name: <span class="string">&quot;download_client_config&quot;</span>.into(),
                     duration: m.elapsed()<span class="question-mark">?</span>,
@@ -1627,22 +1625,22 @@
 }
 
 <span class="kw">async fn </span>get_cfg_from_args(args: <span class="kw-2">&amp;</span>ConnectCommonArgs) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>(<span class="kw-2">&amp;</span>args.client_config, <span class="kw-2">&amp;</span>args.connect) {
-        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Can&#39;t use both --client-config and --connect&quot;</span>),
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span>(<span class="kw-2">&amp;</span>args.client_config, <span class="kw-2">&amp;</span>args.invite_code) {
+        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Can&#39;t use both --client-config and --invite&quot;</span>),
         (<span class="prelude-val">Some</span>(client_config), <span class="prelude-val">None</span>) =&gt; load_from_file(client_config)<span class="question-mark">?</span>,
-        (<span class="prelude-val">None</span>, connect) =&gt; {
-            <span class="kw">let </span>connect = <span class="kw">if let </span><span class="prelude-val">Some</span>(connect) = connect {
-                connect.to_owned()
+        (<span class="prelude-val">None</span>, invite) =&gt; {
+            <span class="kw">let </span>invite = <span class="kw">if let </span><span class="prelude-val">Some</span>(invite) = invite {
+                invite.to_owned()
             } <span class="kw">else </span>{
-                <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;connect-info&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;connect_info&quot;</span>]
+                <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;invite-code&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invite_code&quot;</span>]
                     .as_str()
                     .map(ToOwned::to_owned)
-                    .expect(<span class="string">&quot;connect-info command to succeed&quot;</span>)
+                    .expect(<span class="string">&quot;invite-code command to succeed&quot;</span>)
             };
-            <span class="kw">let </span>connect_obj: WsClientConnectInfo =
-                WsClientConnectInfo::from_str(<span class="kw-2">&amp;</span>connect).context(<span class="string">&quot;invalid connect info&quot;</span>)<span class="question-mark">?</span>;
-            <span class="kw">let </span>api = Arc::new(WsFederationApi::from_connect_info(<span class="kw-2">&amp;</span>[connect_obj.clone()]));
-            api.download_client_config(<span class="kw-2">&amp;</span>connect_obj).<span class="kw">await</span><span class="question-mark">?
+            <span class="kw">let </span>invite_code: InviteCode =
+                InviteCode::from_str(<span class="kw-2">&amp;</span>invite).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+            <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]));
+            api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?
         </span>}
     })
 }

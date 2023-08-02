@@ -366,12 +366,12 @@
     }
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>connect_str = poll_value(<span class="string">&quot;connect info&quot;</span>, || <span class="kw">async </span>{
-            <span class="kw">match </span><span class="macro">cmd!</span>(fed, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;connect-info&quot;</span>).out_json().<span class="kw">await </span>{
+        <span class="kw">let </span>connect_str = poll_value(<span class="string">&quot;invite code&quot;</span>, || <span class="kw">async </span>{
+            <span class="kw">match </span><span class="macro">cmd!</span>(fed, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;invite-code&quot;</span>).out_json().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(info) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
-                    info[<span class="string">&quot;connect_info&quot;</span>]
+                    info[<span class="string">&quot;invite_code&quot;</span>]
                         .as_str()
-                        .context(<span class="string">&quot;connect_info must be string&quot;</span>)<span class="question-mark">?
+                        .context(<span class="string">&quot;invite_code must be string&quot;</span>)<span class="question-mark">?
                         </span>.to_owned(),
                 )),
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),

@@ -201,7 +201,7 @@
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
-<span class="kw">use </span>fedimint_core::api::WsClientConnectInfo;
+<span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
     META_FEDERATION_NAME_KEY,
@@ -258,9 +258,9 @@
             </span>.expect(<span class="string">&quot;Failed to build client&quot;</span>)
     }
 
-    <span class="doccomment">/// Return first connection code for gateways
-    </span><span class="kw">pub fn </span>connection_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; WsClientConnectInfo {
-        <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].get_connect_info()
+    <span class="doccomment">/// Return first invite code for gateways
+    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InviteCode {
+        <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].get_invite_code()
     }
 
     <span class="doccomment">///  Return first id for gateways

@@ -807,7 +807,7 @@
 
 <span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsConsensus;
-<span class="kw">use </span>fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
+<span class="kw">use </span>fedimint_core::api::{ClientConfigDownloadToken, InviteCode};
 <span class="kw">use </span>fedimint_core::cancellable::Cancelled;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::config::{
@@ -1066,14 +1066,14 @@
         cfg
     }
 
-    <span class="kw">pub fn </span>get_connect_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; WsClientConnectInfo {
+    <span class="kw">pub fn </span>get_invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InviteCode {
         <span class="kw">let </span>id = FederationId(<span class="self">self</span>.consensus.auth_pk_set.public_key());
         <span class="kw">let </span>url = <span class="self">self</span>.consensus.api_endpoints[<span class="kw-2">&amp;</span><span class="self">self</span>.local.identity]
             .url
             .clone();
         <span class="kw">let </span>download_token = <span class="self">self</span>.local.download_token.clone();
 
-        WsClientConnectInfo {
+        InviteCode {
             url,
             download_token,
             id,

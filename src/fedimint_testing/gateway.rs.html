@@ -179,9 +179,9 @@
 
     <span class="doccomment">/// Connects to a new federation and stores the info
     </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; FederationInfo {
-        <span class="kw">let </span>connect = fed.connection_code().to_string();
+        <span class="kw">let </span>invite_code = fed.invite_code().to_string();
         <span class="kw">let </span>rpc = <span class="self">self</span>.get_rpc().<span class="kw">await</span>;
-        rpc.connect_federation(ConnectFedPayload { connect })
+        rpc.connect_federation(ConnectFedPayload { invite_code })
             .<span class="kw">await
             </span>.unwrap()
     }

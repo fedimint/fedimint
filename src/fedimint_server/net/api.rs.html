@@ -770,8 +770,8 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::api::{
-    ConsensusStatus, PeerConnectionStatus, PeerConsensusStatus, ServerStatus, StatusResponse,
-    WsClientConnectInfo,
+    ConsensusStatus, InviteCode, PeerConnectionStatus, PeerConsensusStatus, ServerStatus,
+    StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse};
@@ -961,7 +961,7 @@
 
     <span class="kw">pub async fn </span>download_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        info: WsClientConnectInfo,
+        info: InviteCode,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; ApiResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>token = <span class="self">self</span>.cfg.local.download_token.clone();
@@ -1254,16 +1254,16 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;connection_code&quot;</span>,
+            <span class="string">&quot;invite_code&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context,  _v: ()| -&gt; String {
-                <span class="prelude-val">Ok</span>(fedimint.cfg.get_connect_info().to_string())
+                <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code().to_string())
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;config&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, connection_code: String| -&gt; ClientConfigResponse {
-                <span class="kw">let </span>info = connection_code.parse()
-                    .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;Could not parse connection code&quot;</span>.to_string()))<span class="question-mark">?</span>;
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, invite_code: String| -&gt; ClientConfigResponse {
+                <span class="kw">let </span>info = invite_code.parse()
+                    .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;Could not parse invite code&quot;</span>.to_string()))<span class="question-mark">?</span>;
                 <span class="kw">let </span>future = context.wait_key_exists(ClientConfigSignatureKey);
                 <span class="kw">let </span>signature = future.<span class="kw">await</span>;
                 <span class="kw">let </span>client_config = fedimint.download_client_config(info, <span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span><span class="question-mark">?</span>;

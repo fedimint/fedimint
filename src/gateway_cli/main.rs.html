@@ -211,8 +211,8 @@
     },
     <span class="doccomment">/// Register federation with the gateway
     </span>ConnectFed {
-        <span class="doccomment">/// ConnectInfo code to connect to the federation
-        </span>connect: String,
+        <span class="doccomment">/// InviteCode code to connect to the federation
+        </span>invite_code: String,
     },
     <span class="doccomment">/// Make a backup of snapshot of all ecash
     </span>Backup {
@@ -274,9 +274,9 @@
 
             print_response(response).<span class="kw">await</span>;
         }
-        Commands::ConnectFed { connect } =&gt; {
+        Commands::ConnectFed { invite_code } =&gt; {
             <span class="kw">let </span>response = client()
-                .connect_federation(ConnectFedPayload { connect })
+                .connect_federation(ConnectFedPayload { invite_code })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             print_response(response).<span class="kw">await</span>;
