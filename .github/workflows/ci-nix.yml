@@ -81,6 +81,9 @@ jobs:
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceBuild
 
+      - name: check df
+        run: df -h
+
       - name: Clippy workspace
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceClippy
@@ -89,17 +92,29 @@ jobs:
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceDoc
 
+      - name: check df
+        run: df -h
+
       - name: Test docs
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceTestDoc
+
+      - name: check df
+        run: df -h
 
       - name: Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
         run: nix build -L .#ci.cli-test.all
 
+      - name: check df
+        run: df -h
+
       - name: Wasm Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
         run: nix build -L .#ci.wasm-tests
+
+      - name: check df
+        run: df -h
 
   audit:
     name: "Audit"
