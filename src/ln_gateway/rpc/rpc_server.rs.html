@@ -167,8 +167,8 @@
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::sync::mpsc;
-<span class="kw">use </span>tower_http::auth::RequireAuthorizationLayer;
 <span class="kw">use </span>tower_http::cors::CorsLayer;
+<span class="kw">use </span>tower_http::validate_request::ValidateRequestHeaderLayer;
 <span class="kw">use </span>tracing::{error, instrument};
 
 <span class="kw">use super</span>::{
@@ -194,7 +194,7 @@
         .route(<span class="string">&quot;/connect-fed&quot;</span>, post(connect_fed))
         .route(<span class="string">&quot;/backup&quot;</span>, post(backup))
         .route(<span class="string">&quot;/restore&quot;</span>, post(restore))
-        .layer(RequireAuthorizationLayer::bearer(<span class="kw-2">&amp;</span>authkey));
+        .layer(ValidateRequestHeaderLayer::bearer(<span class="kw-2">&amp;</span>authkey));
 
     <span class="kw">let </span>app = Router::new()
         .merge(routes)
