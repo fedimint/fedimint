@@ -508,7 +508,8 @@ impl Client {
         ClientBuilder::default()
     }
 
-    pub async fn start_executor(&self, mut tg: TaskGroup) {
+    pub async fn start_executor(&self, tg: TaskGroup) {
+        let mut tg = tg.make_subgroup().await;
         self.inner
             .executor
             .start_executor(&mut tg, self.inner.context_gen())
