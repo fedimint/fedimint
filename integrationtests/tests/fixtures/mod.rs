@@ -15,7 +15,7 @@ use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, UserClientConfig};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
-use fedimint_core::api::WsClientConnectInfo;
+use fedimint_core::api::InviteCode;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{
@@ -427,7 +427,7 @@ pub struct FederationTest {
     pub mint_id: ModuleInstanceId,
     pub ln_id: ModuleInstanceId,
     pub wallet_id: ModuleInstanceId,
-    pub connect_info: WsClientConnectInfo,
+    pub invite_code: InviteCode,
 }
 
 struct ServerTest {
@@ -561,7 +561,7 @@ impl FederationTest {
             mint_id: self.mint_id,
             ln_id: self.ln_id,
             wallet_id: self.wallet_id,
-            connect_info: self.connect_info.clone(),
+            invite_code: self.invite_code.clone(),
         }
     }
 
@@ -1052,7 +1052,7 @@ impl FederationTest {
             mint_id: LEGACY_HARDCODED_INSTANCE_ID_MINT,
             ln_id: LEGACY_HARDCODED_INSTANCE_ID_LN,
             wallet_id: LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            connect_info: cfg.get_connect_info(),
+            invite_code: cfg.get_invite_code(),
         }
     }
 }

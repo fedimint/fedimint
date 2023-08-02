@@ -465,8 +465,8 @@ async fn ecash_can_be_recovered() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn limits_client_config_downloads() -> Result<()> {
     test(2, |fed, user, _| async move {
-        let connect = &fed.connect_info.clone();
-        let api = WsFederationApi::from_connect_info(&[connect.clone()]);
+        let connect = &fed.invite_code.clone();
+        let api = WsFederationApi::from_invite_code(&[connect.clone()]);
 
         // consensus hash should be the same among all peers
         let res = api.consensus_config_hash().await;

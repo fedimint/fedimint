@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
-use fedimint_core::api::{ClientConfigDownloadToken, WsClientConnectInfo};
+use fedimint_core::api::{ClientConfigDownloadToken, InviteCode};
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
@@ -264,14 +264,14 @@ impl ServerConfig {
         cfg
     }
 
-    pub fn get_connect_info(&self) -> WsClientConnectInfo {
+    pub fn get_invite_code(&self) -> InviteCode {
         let id = FederationId(self.consensus.auth_pk_set.public_key());
         let url = self.consensus.api_endpoints[&self.local.identity]
             .url
             .clone();
         let download_token = self.local.download_token.clone();
 
-        WsClientConnectInfo {
+        InviteCode {
             url,
             download_token,
             id,

@@ -21,7 +21,7 @@ use fedimint_client::{ClientBuilder, ClientSecret};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
-    IFederationApi, IGlobalFederationApi, WsClientConnectInfo, WsFederationApi,
+    IFederationApi, IGlobalFederationApi, InviteCode, WsFederationApi,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, FederationId};
 use fedimint_core::db::DatabaseValue;
@@ -64,11 +64,11 @@ enum CliOutput {
         reached: u64,
     },
 
-    ConnectInfo {
-        connect_info: WsClientConnectInfo,
+    InviteCode {
+        invite_code: InviteCode,
     },
 
-    DecodeConnectInfo {
+    DecodeInviteCode {
         url: Url,
         download_token: String,
         id: FederationId,
@@ -359,9 +359,9 @@ enum Command {
     #[clap(subcommand)]
     Dev(DevCmd),
 
-    /// Join a federation using it's ConnectInfo
+    /// Join a federation using it's InviteCode
     JoinFederation {
-        connect: String,
+        invite_code: String,
     },
 
     Completion {
@@ -400,16 +400,16 @@ enum DevCmd {
     },
 
     /// Config enabling client to establish websocket connection to federation
-    ConnectInfo,
+    InviteCode,
 
     /// Wait for the fed to reach a consensus block height
     WaitBlockHeight { height: u64 },
 
     /// Decode connection info into its JSON representation
-    DecodeConnectInfo { connect_info: WsClientConnectInfo },
+    DecodeInviteCode { invite_code: InviteCode },
 
     /// Encode connection info from its constituent parts
-    EncodeConnectInfo {
+    EncodeInviteCode {
         #[clap(long = "url")]
         url: Url,
         #[clap(long = "download-token", value_parser = from_hex::<ClientConfigDownloadToken>)]
@@ -519,18 +519,15 @@ impl FedimintCli {
 
     async fn handle_command(&self, cli: Opts) -> CliOutputResult {
         match cli.command.clone() {
-            Command::JoinFederation { connect } => {
-                let connect_obj: WsClientConnectInfo = WsClientConnectInfo::from_str(&connect)
-                    .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid connect info")?;
-                let api = Arc::new(WsFederationApi::from_connect_info(&[connect_obj.clone()]))
+            Command::JoinFederation { invite_code } => {
+                let invite: InviteCode = InviteCode::from_str(&invite_code)
+                    .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid invite code")?;
+                let api = Arc::new(WsFederationApi::from_invite_code(&[invite.clone()]))
                     as Arc<dyn IGlobalFederationApi + Send + Sync + 'static>;
-                let cfg: ClientConfig = api
-                    .download_client_config(&connect_obj)
-                    .await
-                    .map_err_cli_msg(
-                        CliErrorKind::NetworkError,
-                        "couldn't download config from peer",
-                    )?;
+                let cfg: ClientConfig = api.download_client_config(&invite).await.map_err_cli_msg(
+                    CliErrorKind::NetworkError,
+                    "couldn't download config from peer",
+                )?;
                 std::fs::create_dir_all(cli.workdir()?)
                     .map_err_cli_msg(CliErrorKind::IOError, "failed to create config directory")?;
                 let cfg_path = cli.workdir()?.join("client.json");
@@ -541,7 +538,9 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::IOError, "couldn't create config.json")?;
                 serde_json::to_writer_pretty(writer, &cfg)
                     .map_err_cli_msg(CliErrorKind::IOError, "couldn't write config")?;
-                Ok(CliOutput::JoinFederation { joined: connect })
+                Ok(CliOutput::JoinFederation {
+                    joined: invite_code,
+                })
             }
             Command::VersionHash => Ok(CliOutput::VersionHash {
                 hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
@@ -645,19 +644,19 @@ impl FedimintCli {
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
             }
-            Command::Dev(DevCmd::ConnectInfo) => {
-                let path = cli.workdir()?.join("client-connect");
+            Command::Dev(DevCmd::InviteCode) => {
+                let path = cli.workdir()?.join("invite-code");
                 let string = fs::read_to_string(path).map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
-                    "cannot read connect string",
+                    "cannot read invite code",
                 )?;
 
-                let connect_info = WsClientConnectInfo::from_str(&string).map_err_cli_msg(
+                let invite_code = InviteCode::from_str(&string).map_err_cli_msg(
                     CliErrorKind::GeneralFederationError,
-                    "cannot parse connect string",
+                    "cannot parse invite code",
                 )?;
 
-                Ok(CliOutput::ConnectInfo { connect_info })
+                Ok(CliOutput::InviteCode { invite_code })
             }
             Command::Dev(DevCmd::WaitBlockHeight { height: target }) => {
                 task::timeout(Duration::from_secs(30), async move {
@@ -679,22 +678,22 @@ impl FedimintCli {
                 .await
                 .map_err_cli_msg(CliErrorKind::Timeout, "reached timeout")?
             }
-            Command::Dev(DevCmd::DecodeConnectInfo { connect_info }) => {
-                Ok(CliOutput::DecodeConnectInfo {
-                    url: connect_info.url,
-                    download_token: connect_info
+            Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
+                Ok(CliOutput::DecodeInviteCode {
+                    url: invite_code.url,
+                    download_token: invite_code
                         .download_token
                         .consensus_encode_to_hex()
                         .expect("encodes"),
-                    id: connect_info.id,
+                    id: invite_code.id,
                 })
             }
-            Command::Dev(DevCmd::EncodeConnectInfo {
+            Command::Dev(DevCmd::EncodeInviteCode {
                 url,
                 download_token,
                 id,
-            }) => Ok(CliOutput::ConnectInfo {
-                connect_info: WsClientConnectInfo {
+            }) => Ok(CliOutput::InviteCode {
+                invite_code: InviteCode {
                     url,
                     download_token,
                     id,

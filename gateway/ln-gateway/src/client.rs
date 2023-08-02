@@ -6,7 +6,7 @@ use std::sync::Arc;
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::ClientBuilder;
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsClientConnectInfo, WsFederationApi};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::task::TaskGroup;
@@ -82,11 +82,11 @@ impl StandardGatewayClientBuilder {
 
     pub async fn create_config(
         &self,
-        connect: WsClientConnectInfo,
+        connect: InviteCode,
         mint_channel_id: u64,
         fees: RoutingFees,
     ) -> Result<FederationConfig> {
-        let api: DynGlobalApi = WsFederationApi::from_connect_info(&[connect.clone()]).into();
+        let api: DynGlobalApi = WsFederationApi::from_invite_code(&[connect.clone()]).into();
         let client_config = api.download_client_config(&connect).await?;
         Ok(FederationConfig {
             mint_channel_id,

@@ -397,10 +397,7 @@ pub trait GlobalFederationApi {
         R: OutputOutcome;
 
     /// Fetch client configuration info only if verified against a federation id
-    async fn download_client_config(
-        &self,
-        info: &WsClientConnectInfo,
-    ) -> FederationResult<ClientConfig>;
+    async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig>;
 
     /// Fetches the server consensus hash if enough peers agree on it
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
@@ -578,10 +575,7 @@ where
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 
-    async fn download_client_config(
-        &self,
-        info: &WsClientConnectInfo,
-    ) -> FederationResult<ClientConfig> {
+    async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig> {
         let id = info.id;
         let qs = VerifiableResponse::new(
             self.all_members().total(),
@@ -672,7 +666,7 @@ struct FederationMember<C> {
 ///
 /// Can be used to download the configs and bootstrap a client
 #[derive(Clone, Debug, Eq, PartialEq, Encodable)]
-pub struct WsClientConnectInfo {
+pub struct InviteCode {
     /// Url to reach an API that we can download configs from
     pub url: Url,
     /// Config download token (might only be used a certain number of times)
@@ -688,7 +682,7 @@ const CONFIG_DOWNLOAD_TOKEN_BYTES: usize = 12;
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ClientConfigDownloadToken(pub [u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
 
-/// We can represent client connect info as a bech32 string for compactness and
+/// We can represent client invite code as a bech32 string for compactness and
 /// error-checking
 ///
 /// Human readable part (HRP) includes the version
@@ -697,7 +691,7 @@ pub struct ClientConfigDownloadToken(pub [u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
 /// ```
 const BECH32_HRP: &str = "fed1";
 
-impl FromStr for WsClientConnectInfo {
+impl FromStr for InviteCode {
     type Err = anyhow::Error;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
@@ -729,8 +723,8 @@ impl FromStr for WsClientConnectInfo {
     }
 }
 
-/// Parses the connect info from a bech32 string
-impl Display for WsClientConnectInfo {
+/// Parses the invite code from a bech32 string
+impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let mut data = vec![];
         data.extend(self.id.0.to_bytes());
@@ -745,7 +739,7 @@ impl Display for WsClientConnectInfo {
     }
 }
 
-impl Serialize for WsClientConnectInfo {
+impl Serialize for InviteCode {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -754,7 +748,7 @@ impl Serialize for WsClientConnectInfo {
     }
 }
 
-impl<'de> Deserialize<'de> for WsClientConnectInfo {
+impl<'de> Deserialize<'de> for InviteCode {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -849,9 +843,9 @@ impl WsFederationApi<WsClient> {
         )
     }
 
-    /// Creates a new API client from a connect info, assumes they are in peer
+    /// Creates a new API client from a invite code, assumes they are in peer
     /// id order
-    pub fn from_connect_info(info: &[WsClientConnectInfo]) -> Self {
+    pub fn from_invite_code(info: &[InviteCode]) -> Self {
         Self::new(
             info.iter()
                 .enumerate()
@@ -1272,21 +1266,21 @@ mod tests {
     }
 
     #[test]
-    fn converts_connect_string() {
-        let connect = WsClientConnectInfo {
+    fn converts_invite_code() {
+        let connect = InviteCode {
             url: "ws://test1".parse().unwrap(),
             id: FederationId::dummy(),
             download_token: ClientConfigDownloadToken(OsRng::default().gen()),
         };
 
         let bech32 = connect.to_string();
-        let connect_parsed = WsClientConnectInfo::from_str(&bech32).expect("parses");
+        let connect_parsed = InviteCode::from_str(&bech32).expect("parses");
         assert_eq!(connect, connect_parsed);
 
         let json = serde_json::to_string(&connect).unwrap();
         let connect_as_string: String = serde_json::from_str(&json).unwrap();
         assert_eq!(connect_as_string, bech32);
-        let connect_parsed_json: WsClientConnectInfo = serde_json::from_str(&json).unwrap();
+        let connect_parsed_json: InviteCode = serde_json::from_str(&json).unwrap();
         assert_eq!(connect_parsed_json, connect_parsed);
     }
 }

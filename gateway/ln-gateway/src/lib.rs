@@ -29,7 +29,7 @@ use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
 use db::{FederationRegistrationKey, GatewayPublicKey};
 use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
-use fedimint_core::api::{FederationError, WsClientConnectInfo};
+use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -640,7 +640,7 @@ impl Gateway {
         &mut self,
         payload: ConnectFedPayload,
     ) -> Result<FederationInfo> {
-        let connect = WsClientConnectInfo::from_str(&payload.connect).map_err(|e| {
+        let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
             GatewayError::InvalidMetadata(format!("Invalid federation member string {e}"))
         })?;
 
@@ -658,7 +658,7 @@ impl Gateway {
         let gw_client_cfg = loop {
             match self
                 .client_builder
-                .create_config(connect.clone(), channel_id, self.fees)
+                .create_config(invite_code.clone(), channel_id, self.fees)
                 .await
             {
                 Ok(gw_client_cfg) => break gw_client_cfg,

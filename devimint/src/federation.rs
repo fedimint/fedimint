@@ -106,8 +106,8 @@ impl Federation {
         let cfg_dir = utf8(cfg_dir);
         // copy configs to config directory
         tokio::fs::rename(
-            format!("{out_dir}/client-connect"),
-            format!("{cfg_dir}/client-connect"),
+            format!("{out_dir}/invite-code"),
+            format!("{cfg_dir}/invite-code"),
         )
         .await?;
         tokio::fs::rename(
