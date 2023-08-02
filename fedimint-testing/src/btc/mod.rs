@@ -10,7 +10,7 @@ use fedimint_core::Amount;
 pub trait BitcoinTest {
     /// Make the underlying instance act as if it was exclusively available
     /// for the existence of the returned guard.
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send>;
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync>;
 
     /// Mines a given number of blocks
     async fn mine_blocks(&self, block_num: u64);

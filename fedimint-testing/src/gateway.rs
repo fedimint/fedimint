@@ -16,6 +16,7 @@ use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::rpc_server::run_webserver;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::Gateway;
+use secp256k1::PublicKey;
 use tempfile::TempDir;
 use tokio::sync::RwLock;
 use url::Url;
@@ -34,6 +35,10 @@ pub struct GatewayTest {
     gateway: Gateway,
     /// Temporary dir that stores the gateway config
     _config_dir: Option<TempDir>,
+    // Public key of the lightning node
+    pub node_pub_key: PublicKey,
+    // Listening address of the lightning node
+    pub listening_addr: String,
 }
 
 impl GatewayTest {
@@ -79,6 +84,9 @@ impl GatewayTest {
         let client_builder: StandardGatewayClientBuilder =
             StandardGatewayClientBuilder::new(path.clone(), registry, 0);
 
+        let listening_addr = lightning.listening_address();
+        let info = lightning.info().await.unwrap();
+
         let mut tg = TaskGroup::new();
         // Create the stream to route HTLCs. We cannot create the Gateway until the
         // stream to the lightning node has been setup.
@@ -121,6 +129,8 @@ impl GatewayTest {
             api: address,
             _config_dir,
             gateway,
+            node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
+            listening_addr,
         }
     }
 }

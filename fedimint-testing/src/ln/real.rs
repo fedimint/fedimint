@@ -1,15 +1,16 @@
-use std::ops::Sub;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{env, fmt};
 
 use async_trait::async_trait;
-use bitcoin::secp256k1;
+use bitcoin::{secp256k1, Network};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
+use ldk_node::io::SqliteStore;
+use ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
 use lightning_invoice::Invoice;
 use ln_gateway::gatewaylnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
@@ -19,13 +20,17 @@ use ln_gateway::lnd::GatewayLndClient;
 use ln_gateway::lnrpc_client::{
     ILnRpcClient, LightningRpcError, NetworkLnRpcClient, RouteHtlcStream,
 };
+use secp256k1::PublicKey;
 use tokio::sync::Mutex;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};
 use tonic_lnd::{connect, LndClient};
-use tracing::info;
+use tracing::{error, info, warn};
 use url::Url;
 
+use crate::btc::BitcoinTest;
 use crate::ln::LightningTest;
+
+const DEFAULT_ESPLORA_SERVER: &str = "http://127.0.0.1:50002";
 
 pub struct ClnLightningTest {
     rpc_cln: Arc<Mutex<ClnRpc>>,
@@ -80,13 +85,12 @@ impl LightningTest for ClnLightningTest {
         Ok(Invoice::from_str(&invoice_resp.bolt11).unwrap())
     }
 
-    async fn amount_sent(&self) -> Amount {
-        let current_balance = Self::channel_balance(self.rpc_cln.clone()).await;
-        self.initial_balance.sub(current_balance)
-    }
-
     fn is_shared(&self) -> bool {
         true
+    }
+
+    fn listening_address(&self) -> String {
+        "127.0.0.1:9000".to_string()
     }
 }
 
@@ -221,13 +225,12 @@ impl LightningTest for LndLightningTest {
         Ok(Invoice::from_str(&invoice_resp.payment_request).unwrap())
     }
 
-    async fn amount_sent(&self) -> Amount {
-        let current_balance = Self::channel_balance(self.rpc_lnd.clone()).await;
-        self.initial_balance.sub(current_balance)
-    }
-
     fn is_shared(&self) -> bool {
         true
+    }
+
+    fn listening_address(&self) -> String {
+        "127.0.0.1:9734".to_string()
     }
 }
 
@@ -334,5 +337,396 @@ impl LndLightningTest {
             .map(|channel| channel.local_balance)
             .sum();
         Amount::from_msats(funds as u64)
+    }
+}
+
+#[derive(Debug)]
+pub struct LdkLightningTest {
+    node_pub_key: PublicKey,
+    alias: String,
+    ldk_node_sender: Arc<Mutex<std::sync::mpsc::Sender<LdkMessage>>>,
+    listening_address: String,
+}
+
+#[derive(Debug)]
+enum LdkMessage {
+    InvoiceRequest {
+        amount_msat: u64,
+        description: String,
+        expiry_secs: u32,
+        response_sender: std::sync::mpsc::Sender<LdkMessage>,
+    },
+    InvoiceResponse {
+        invoice: Invoice,
+    },
+    OpenChannelRequest {
+        node_id: PublicKey,
+        amount: u64,
+        connect_address: NetAddress,
+        response_sender: std::sync::mpsc::Sender<LdkMessage>,
+    },
+    MineBlocksResponse,
+    OpenChannelResponse,
+    StopRequest {
+        response_sender: std::sync::mpsc::Sender<LdkMessage>,
+    },
+    StopResponse,
+    PayInvoiceRequest {
+        invoice: String,
+        response_sender: std::sync::mpsc::Sender<LdkMessage>,
+    },
+    PayInvoiceSuccessResponse {
+        preimage: [u8; 32],
+    },
+    PayInvoiceFailureResponse,
+}
+
+impl LdkLightningTest {
+    pub async fn new(
+        db_path: PathBuf,
+        bitcoin: Arc<dyn BitcoinTest>,
+    ) -> Result<LdkLightningTest, LightningRpcError> {
+        let mut builder = Builder::new();
+        builder.set_network(Network::Regtest);
+        // TODO: Set unique port
+        builder.set_listening_address(
+            NetAddress::from_str("0.0.0.0:9091").expect("Couldnt parse listening address"),
+        );
+        builder.set_storage_dir_path(db_path.to_string_lossy().to_string());
+        builder.set_esplora_server(DEFAULT_ESPLORA_SERVER.to_string());
+        builder.set_log_level(LogLevel::Debug);
+        let node = builder.build().map_err(|e| {
+            error!("Failed to build LDK Node: {e:?}");
+            LightningRpcError::FailedToConnect
+        })?;
+        let pub_key = node.node_id();
+
+        // Add 1 BTC to LDK's onchain wallet so it can open channels
+        let address = node.new_onchain_address().map_err(|e| {
+            error!("Failed to get onchain address from LDK Node: {e:?}");
+            LightningRpcError::FailedToConnect
+        })?;
+        let btc_amount = bitcoin::Amount::from_sat(100000000);
+        bitcoin.send_and_mine_block(&address, btc_amount).await;
+        bitcoin.mine_blocks(1).await;
+
+        let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
+        node.start().map_err(|e| {
+            error!("Failed to start LDK Node: {e:?}");
+            LightningRpcError::FailedToConnect
+        })?;
+
+        while btc_amount.to_sat()
+            != node.total_onchain_balance_sats().map_err(|e| {
+                error!("Failed to get LDK onchain balance: {e:?}");
+                LightningRpcError::FailedToConnect
+            })?
+        {
+            fedimint_core::task::sleep(std::time::Duration::from_secs(1)).await;
+
+            info!("LDK Node didn't find onchain balance, syncing wallet...");
+            node.sync_wallets().map_err(|e| {
+                error!("Failed to sync LDK Node onchain wallet: {e:?}");
+                LightningRpcError::FailedToConnect
+            })?;
+        }
+
+        Self::spawn_ldk_event_loop(node, receiver).await;
+
+        Ok(LdkLightningTest {
+            node_pub_key: pub_key,
+            alias: format!("LDKNode-{}", rand::random::<u64>()),
+            ldk_node_sender: Arc::new(Mutex::new(sender)),
+            listening_address: "127.0.0.1:9091".to_string(),
+        })
+    }
+
+    async fn spawn_ldk_event_loop(
+        node: Node<SqliteStore>,
+        receiver: std::sync::mpsc::Receiver<LdkMessage>,
+    ) {
+        tokio::task::spawn_blocking(move || {
+            loop {
+                let request = receiver.recv().expect("Failed to receive Ldk Message");
+                match request {
+                    LdkMessage::InvoiceRequest {
+                        amount_msat,
+                        description,
+                        expiry_secs,
+                        response_sender,
+                    } => {
+                        let ldk_invoice = node
+                            .receive_payment(amount_msat, description.as_str(), expiry_secs)
+                            .expect("LDK Node failed to create invoice");
+                        let invoice =
+                            lightning_invoice::Invoice::from_str(ldk_invoice.to_string().as_str())
+                                .expect("Failed to create lightning_invoice");
+                        response_sender
+                            .send(LdkMessage::InvoiceResponse { invoice })
+                            .expect("Failed to send InvoiceResponse");
+                    }
+                    LdkMessage::OpenChannelRequest {
+                        node_id,
+                        amount,
+                        connect_address,
+                        response_sender,
+                    } => {
+                        // Always push half of the balance to the other side so we have a balanced
+                        // channel initially
+                        let amount_push = amount / 2;
+                        node.connect_open_channel(
+                            node_id,
+                            connect_address.clone(),
+                            amount,
+                            Some(amount_push * 1000),
+                            None,
+                            true,
+                        )
+                        .expect("LDK Node Failed to open channel");
+
+                        // Wait for ChannelReady event
+                        loop {
+                            let event = node.wait_next_event();
+                            match event {
+                                Event::ChannelPending { .. } => {
+                                    node.event_handled();
+                                    response_sender
+                                        .send(LdkMessage::MineBlocksResponse)
+                                        .expect("Failed to send MineBlocksResponse");
+                                }
+                                Event::ChannelReady { .. } => {
+                                    node.event_handled();
+                                    break;
+                                }
+                                _ => {
+                                    panic!("Received unexpected event while opening the channel to {connect_address:?}. Event: {event:?}");
+                                }
+                            }
+                        }
+
+                        response_sender
+                            .send(LdkMessage::OpenChannelResponse)
+                            .expect("Failed to send OpenChannelResponse");
+                    }
+                    LdkMessage::StopRequest { response_sender } => {
+                        node.stop().expect("Failed to stop LDK Node");
+                        response_sender
+                            .send(LdkMessage::StopResponse)
+                            .expect("Failed to send StopResponse");
+                        break;
+                    }
+                    LdkMessage::PayInvoiceRequest {
+                        invoice,
+                        response_sender,
+                    } => {
+                        node.send_payment(
+                            &ldk_node::lightning_invoice::Invoice::from_str(invoice.as_str())
+                                .expect("SendPayment could not parse invoice"),
+                        )
+                        .expect("Failed to send payment to invoice");
+                        loop {
+                            let event = node.wait_next_event();
+                            match event {
+                                Event::PaymentFailed { payment_hash: _ } => {
+                                    node.event_handled();
+                                    response_sender
+                                        .send(LdkMessage::PayInvoiceFailureResponse)
+                                        .expect("Failed to send PayInvoiceFailureResponse");
+                                    break;
+                                }
+                                Event::PaymentSuccessful { payment_hash } => {
+                                    node.event_handled();
+                                    // PaymentSuccess doesn't return the preimage?
+                                    response_sender
+                                        .send(LdkMessage::PayInvoiceSuccessResponse {
+                                            preimage: payment_hash.0,
+                                        })
+                                        .expect("Failed to send PayInvoiceSuccessResponse");
+                                    break;
+                                }
+                                _ => {
+                                    panic!(
+                                        "Received unexpected event while paying invoice: {event:?}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        warn!("Unsupported LdkMessage received: {request:?}");
+                    }
+                }
+            }
+        });
+    }
+
+    pub async fn open_channel(
+        &self,
+        amount: Amount,
+        node_pubkey: PublicKey,
+        address: String,
+        bitcoin: Box<dyn BitcoinTest + Send + Sync>,
+    ) -> anyhow::Result<()> {
+        let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
+        let connect_address = NetAddress::from_str(address.as_str()).map_err(|e| {
+            LightningRpcError::FailedToOpenChannel {
+                failure_reason: format!("Failed to parse connect address: {e:?}"),
+            }
+        })?;
+        self.ldk_node_sender
+            .lock()
+            .await
+            .send(LdkMessage::OpenChannelRequest {
+                node_id: node_pubkey,
+                amount: amount.msats,
+                connect_address,
+                response_sender: sender,
+            })
+            .map_err(|e| LightningRpcError::FailedToOpenChannel {
+                failure_reason: format!("Failed to open channel {e:?}"),
+            })?;
+
+        loop {
+            let response = receiver
+                .recv()
+                .map_err(|e| LightningRpcError::FailedToOpenChannel {
+                    failure_reason: format!("Failed to open channel {e:?}"),
+                })?;
+
+            match response {
+                LdkMessage::MineBlocksResponse => {
+                    bitcoin.mine_blocks(3).await;
+                }
+                LdkMessage::OpenChannelResponse => {
+                    return Ok(());
+                }
+                _ => {
+                    panic!("Received unexpected LdkMessage: {response:?}");
+                }
+            }
+        }
+    }
+}
+
+impl Drop for LdkLightningTest {
+    fn drop(&mut self) {
+        fedimint_core::task::block_in_place(|| {
+            let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
+            self.ldk_node_sender
+                .blocking_lock()
+                .send(LdkMessage::StopRequest {
+                    response_sender: sender,
+                })
+                .expect("Failed to send Drop message to LDK node");
+            // Wait for the response
+            receiver.recv().expect("Failed to receive StopResponse");
+        });
+    }
+}
+
+#[async_trait]
+impl ILnRpcClient for LdkLightningTest {
+    async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
+        Ok(GetNodeInfoResponse {
+            pub_key: self.node_pub_key.serialize().to_vec(),
+            alias: self.alias.clone(),
+        })
+    }
+
+    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
+        unimplemented!("Unsupported: we dont currently support route hints for LDK Node")
+    }
+
+    async fn pay(
+        &self,
+        invoice: PayInvoiceRequest,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
+        self.ldk_node_sender
+            .lock()
+            .await
+            .send(LdkMessage::PayInvoiceRequest {
+                invoice: invoice.invoice,
+                response_sender: sender,
+            })
+            .map_err(|e| LightningRpcError::FailedPayment {
+                failure_reason: format!("LDK Node failed to pay invoice: {e:?}"),
+            })?;
+
+        let response = receiver
+            .recv()
+            .map_err(|e| LightningRpcError::FailedPayment {
+                failure_reason: format!("LDK Node failed to pay invoice: {e:?}"),
+            })?;
+        match response {
+            LdkMessage::PayInvoiceFailureResponse => {
+                return Err(LightningRpcError::FailedPayment {
+                    failure_reason: format!("LDK Node failed to pay invoice"),
+                });
+            }
+            LdkMessage::PayInvoiceSuccessResponse { preimage } => Ok(PayInvoiceResponse {
+                preimage: preimage.to_vec(),
+            }),
+            _ => {
+                panic!("Received unexpected LdkMessage: {response:?}");
+            }
+        }
+    }
+
+    async fn route_htlcs<'a>(
+        self: Box<Self>,
+        _task_group: &mut TaskGroup,
+    ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
+        unimplemented!("Unsupported: we dont currently support HTLC interception for LDK Node");
+    }
+
+    async fn complete_htlc(
+        &self,
+        _htlc: InterceptHtlcResponse,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        unimplemented!("Unsupported: we dont currently support HTLC interception for LDK Node");
+    }
+}
+
+#[async_trait]
+impl LightningTest for LdkLightningTest {
+    async fn invoice(
+        &self,
+        amount: Amount,
+        expiry_time: Option<u64>,
+    ) -> ln_gateway::Result<Invoice> {
+        let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
+        self.ldk_node_sender
+            .lock()
+            .await
+            .send(LdkMessage::InvoiceRequest {
+                amount_msat: amount.msats,
+                description: "LDK Description".to_string(),
+                expiry_secs: expiry_time.unwrap_or(600) as u32,
+                response_sender: sender,
+            })
+            .map_err(|e| LightningRpcError::FailedToGetInvoice {
+                failure_reason: format!("Failed to get invoice: {e:?}"),
+            })?;
+
+        let response = receiver
+            .recv()
+            .map_err(|e| LightningRpcError::FailedToGetInvoice {
+                failure_reason: format!("Failed to get invoice: {e:?}"),
+            })?;
+        match response {
+            LdkMessage::InvoiceResponse { invoice } => Ok(invoice),
+            _ => {
+                panic!("Received unexpected LdkMessage: {response:?}");
+            }
+        }
+    }
+
+    fn is_shared(&self) -> bool {
+        true
+    }
+
+    fn listening_address(&self) -> String {
+        self.listening_address.clone()
     }
 }

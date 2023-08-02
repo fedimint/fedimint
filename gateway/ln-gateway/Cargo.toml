@@ -56,6 +56,7 @@ fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"
 lightning = "0.0.113"
 lightning-invoice = "0.21.0"
+ldk-node = "0.1.0"
 prost = "0.11"
 rand = "0.8"
 reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }

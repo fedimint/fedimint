@@ -39,7 +39,7 @@ impl RealBitcoinTestNoLock {
 
 #[async_trait]
 impl BitcoinTest for RealBitcoinTestNoLock {
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send> {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
         unimplemented!(
             "You should never try to lock `RealBitcoinTestNoLock`. Lock `RealBitcoinTest` instead"
         )
@@ -165,7 +165,7 @@ pub struct RealBitcoinTestLocked {
 
 #[async_trait]
 impl BitcoinTest for RealBitcoinTest {
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send> {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
         Box::new(RealBitcoinTestLocked {
             inner: self.inner.clone(),
             _guard: REAL_BITCOIN_LOCK.lock().await,
@@ -209,7 +209,7 @@ impl BitcoinTest for RealBitcoinTest {
 
 #[async_trait]
 impl BitcoinTest for RealBitcoinTestLocked {
-    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send> {
+    async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
         panic!("Double-locking would lead to a hang");
     }
 

@@ -77,12 +77,12 @@ impl LightningTest for FakeLightningTest {
             .unwrap())
     }
 
-    async fn amount_sent(&self) -> Amount {
-        Amount::from_msats(*self.amount_sent.lock().unwrap())
-    }
-
     fn is_shared(&self) -> bool {
         false
+    }
+
+    fn listening_address(&self) -> String {
+        unimplemented!("FakeLightningTest does not listen on a port")
     }
 }
 
