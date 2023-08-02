@@ -1179,6 +1179,7 @@ async fn handle_command() -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let ready_file = PathBuf::from(env::var("FM_TEST_DIR")?).join("ready");
+
     match handle_command().await {
         Ok(r) => Ok(r),
         Err(e) => {
