@@ -480,14 +480,16 @@ impl Drop for Client {
         // client reference
         if client_count == 1 {
             info!("Last client reference dropped, shutting down client task group");
-            futures::executor::block_on(async {
-                let Some(tg) = self.inner.tg.lock().await.take() else {
-                    return;
-                };
+            tokio::task::block_in_place(move || {
+                futures::executor::block_on(async {
+                    let Some(tg) = self.inner.tg.lock().await.take() else {
+                        return;
+                    };
 
-                if let Err(e) = tg.shutdown_join_all(Some(TG_SHUTDOWN_JOIN_TIMEOUT)).await {
-                    error!("Error shutting down client task group: {e}");
-                }
+                    if let Err(e) = tg.shutdown_join_all(Some(TG_SHUTDOWN_JOIN_TIMEOUT)).await {
+                        error!("Error shutting down client task group: {e}");
+                    }
+                });
             });
         }
     }
