@@ -8,8 +8,8 @@ use bitcoin_hashes::hex::ToHex;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use serde_json::json;
 use tokio::sync::mpsc;
-use tower_http::auth::RequireAuthorizationLayer;
 use tower_http::cors::CorsLayer;
+use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::{error, instrument};
 
 use super::{
@@ -35,7 +35,7 @@ pub async fn run_webserver(
         .route("/connect-fed", post(connect_fed))
         .route("/backup", post(backup))
         .route("/restore", post(restore))
-        .layer(RequireAuthorizationLayer::bearer(&authkey));
+        .layer(ValidateRequestHeaderLayer::bearer(&authkey));
 
     let app = Router::new()
         .merge(routes)
