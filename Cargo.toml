@@ -85,8 +85,12 @@ threshold_crypto = { opt-level = 3 }
 
 [profile.ci]
 inherits = "dev"
-split-debuginfo = "packed"
-debug = 1
+# Minimize disk usage in CI to avoid running out of space
+incremental = false
+debug = 0
+strip = true
+# Increases compilation time/runtime, can be enabled for further size reduction
+# opt-level = "z"
 
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
