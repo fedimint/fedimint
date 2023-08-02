@@ -32,11 +32,11 @@ export FM_TEST_USE_REAL_DAEMONS=1
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
   >&2 echo "### Testing against bitcoind"
-  env RUST_BACKTRACE=1 cargo test -p ln-gateway -- --test-threads=$(($(nproc) * 2)) "$@"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-ln-tests -- --test-threads=$(($(nproc) * 2)) "$@"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-dummy-tests -- --test-threads=$(($(nproc) * 2)) "$@"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-mint-tests -- --test-threads=$(($(nproc) * 2)) "$@"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-wallet-tests -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p ln-gateway ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-ln-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-dummy-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-mint-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-wallet-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
   env RUST_BACKTRACE=1 cargo test -p fedimint-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
   >&2 echo "### Testing against bitcoind - complete"
 fi
@@ -47,8 +47,8 @@ export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:50001"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
   >&2 echo "### Testing against electrs"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-wallet-tests -- --test-threads=$(($(nproc) * 2)) "$@"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-wallet-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
   >&2 echo "### Testing against electrs - complete"
 fi
 
@@ -57,8 +57,8 @@ export FM_BITCOIN_RPC_KIND="esplora"
 export FM_BITCOIN_RPC_URL="http://127.0.0.1:50002"
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
   >&2 echo "### Testing against esplora"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-wallet-tests -- --test-threads=$(($(nproc) * 2)) "$@"
-  env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-wallet-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
+  env RUST_BACKTRACE=1 cargo test -p fedimint-tests wallet ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
   >&2 echo "### Testing against esplora - complete"
 fi
 
