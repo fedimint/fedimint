@@ -82,7 +82,7 @@ impl LightningTest for FakeLightningTest {
     }
 
     fn listening_address(&self) -> String {
-        unimplemented!("FakeLightningTest does not listen on a port")
+        "FakeListeningAddress".to_string()
     }
 }
 

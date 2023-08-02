@@ -416,12 +416,16 @@ impl LdkLightningTest {
             LightningRpcError::FailedToConnect
         })?;
 
-        while btc_amount.to_sat()
-            != node.total_onchain_balance_sats().map_err(|e| {
+        loop {
+            let onchain_amount = node.total_onchain_balance_sats().map_err(|e| {
                 error!("Failed to get LDK onchain balance: {e:?}");
                 LightningRpcError::FailedToConnect
-            })?
-        {
+            })?;
+
+            if btc_amount.to_sat() == onchain_amount {
+                break;
+            }
+
             fedimint_core::task::sleep(std::time::Duration::from_secs(1)).await;
 
             info!("LDK Node didn't find onchain balance, syncing wallet...");
@@ -661,7 +665,7 @@ impl ILnRpcClient for LdkLightningTest {
         match response {
             LdkMessage::PayInvoiceFailureResponse => {
                 return Err(LightningRpcError::FailedPayment {
-                    failure_reason: format!("LDK Node failed to pay invoice"),
+                    failure_reason: "LDK Node failed to pay invoice".to_string(),
                 });
             }
             LdkMessage::PayInvoiceSuccessResponse { preimage } => Ok(PayInvoiceResponse {
