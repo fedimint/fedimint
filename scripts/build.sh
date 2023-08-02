@@ -35,7 +35,7 @@ cd $SRC_DIR || exit 1
 # Note: Respect 'CARGO_PROFILE' that crane uses
 
 if [ -z "${SKIP_CARGO_BUILD:-}" ]; then
-  cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
+  cargo build --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 fi
 export PATH="$PWD/target/${CARGO_PROFILE:-debug}:$PATH"
 
