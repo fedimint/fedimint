@@ -57,6 +57,22 @@ impl Decodable for secp256k1_zkp::PublicKey {
     }
 }
 
+impl Encodable for secp256k1_zkp::SecretKey {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        self.secret_bytes().consensus_encode(writer)
+    }
+}
+
+impl Decodable for secp256k1_zkp::SecretKey {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        secp256k1_zkp::SecretKey::from_slice(&<[u8; 32]>::consensus_decode(d, modules)?)
+            .map_err(DecodeError::from_err)
+    }
+}
+
 impl Encodable for secp256k1_zkp::schnorr::Signature {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let bytes = &self[..];
