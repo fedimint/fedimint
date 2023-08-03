@@ -208,12 +208,7 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let handles = fed.run_consensus_apis().await;
 
             // user
-            let user_db = if env::var("FM_CLIENT_SQLITE") == Ok(s.clone()) {
-                let db_name = format!("client-{}", rng().next_u64());
-                Database::new(sqlite(dir.clone(), db_name).await, decoders.clone())
-            } else {
-                Database::new(rocks(dir.clone()), decoders.clone())
-            };
+            let user_db = Database::new(rocks(dir.clone()), decoders.clone());
             let user_cfg = UserClientConfig(client_config.clone());
             let user = Box::new(LegacyTestUser::new(
                 user_cfg,
@@ -408,13 +403,6 @@ async fn distributed_config(
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
     let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
     fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
-}
-
-async fn sqlite(dir: String, db_name: String) -> fedimint_sqlite::SqliteDb {
-    let connection_string = format!("sqlite://{dir}/{db_name}.db");
-    fedimint_sqlite::SqliteDb::open(connection_string.as_str())
-        .await
-        .unwrap()
 }
 
 pub struct FederationTest {
