@@ -22,10 +22,10 @@ fi
 # Avoid re-building workspace in parallel in all test derivations
 # Note: Respect 'CARGO_PROFILE' that crane uses
 >&2 echo "Pre-building workspace..."
-cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --all --all-targets
+cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 # Avoid re-building tests in parallel in all test derivations
 >&2 echo "Pre-building tests..."
-cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p fedimint-tests
+cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace
 
 function cli_test_reconnect() {
   set -eo pipefail # pipefail must be set manually again
