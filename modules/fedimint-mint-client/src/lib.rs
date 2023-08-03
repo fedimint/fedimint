@@ -15,7 +15,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context as AnyhowContext};
 use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
@@ -181,14 +181,6 @@ impl MintClientExt for Client {
                 .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
                 .into_inner(),
         );
-        if self
-            .operation_log()
-            .get_operation(operation_id)
-            .await
-            .is_some()
-        {
-            bail!("We already reissued these notes");
-        }
 
         let amount = notes.total_amount();
         let mint_input = mint.create_input_from_notes(operation_id, notes).await?;
@@ -212,7 +204,7 @@ impl MintClientExt for Client {
             tx,
         )
         .await
-        .expect("Transactions can only fail if the operation already exists, which we checked previously");
+        .context("We already reissued these notes")?;
 
         Ok(operation_id)
     }

@@ -547,6 +547,15 @@ impl Client {
 
     /// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
+    ///
+    /// ## Errors
+    /// The function will return an error if the operation with given id already
+    /// exists.
+    ///
+    /// ## Panics
+    /// The function will panic if the the database transaction collides with
+    /// other and fails with others too often, this should not happen except for
+    /// excessively concurrent scenarios.
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,
         operation_id: OperationId,
