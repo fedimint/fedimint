@@ -979,7 +979,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     fed.await_all_peers().await?;
 
     // test a peer missing out on epochs and needing to rejoin
-    fed.kill_server(0).await?;
+    fed.terminate_server(0).await?;
     fed.generate_epochs(10).await?;
 
     fed.start_server(process_mgr, 0).await?;
@@ -989,11 +989,11 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     bitcoind.mine_blocks(100).await?;
 
     // now test what happens if consensus needs to be restarted
-    fed.kill_server(1).await?;
+    fed.terminate_server(1).await?;
     bitcoind.mine_blocks(100).await?;
     fed.await_block_sync().await?;
-    fed.kill_server(2).await?;
-    fed.kill_server(3).await?;
+    fed.terminate_server(2).await?;
+    fed.terminate_server(3).await?;
 
     fed.start_server(process_mgr, 1).await?;
     fed.start_server(process_mgr, 2).await?;
@@ -1119,6 +1119,35 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     Ok((process_mgr, task_group))
 }
 
+async fn cleanup_on_exit<T>(
+    main_process: impl futures::Future<Output = Result<T>>,
+    task_group: TaskGroup,
+) -> anyhow::Result<()> {
+    // This select makes it possible to exit earlier if a signal is received before
+    // the main process is finished
+    tokio::select! {
+        _ = task_group.make_handle().make_shutdown_rx().await => {
+            info!("Received shutdown signal before finishing main process, exiting early");
+            Ok(())
+        }
+        result = main_process => {
+            match result {
+                Ok(v) => {
+                    info!("Main process finished successfully, will wait for shutdown signal");
+                    task_group.make_handle().make_shutdown_rx().await.await?;
+                    info!("Received shutdown signal, shutting down");
+                    drop(v); // execute destructors
+                    Ok(())
+                },
+                Err(e) => {
+                    warn!("Main process failed with {e:?}, will shutdown");
+                    Err(e)
+                }
+            }
+        }
+    }
+}
+
 async fn handle_command() -> Result<()> {
     let args = Args::parse();
     match args.command {
@@ -1131,18 +1160,24 @@ async fn handle_command() -> Result<()> {
         }
         Cmd::DevFed => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
-            dev_fed.fed.pegin(10_000).await?;
-            dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln).await?;
-            dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd).await?;
-            let _daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
-            task_group.make_handle().make_shutdown_rx().await.await?;
+            let main = async move {
+                let dev_fed = dev_fed(&process_mgr).await?;
+                dev_fed.fed.pegin(10_000).await?;
+                dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln).await?;
+                dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd).await?;
+                let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+                Ok::<_, anyhow::Error>(daemons)
+            };
+            cleanup_on_exit(main, task_group).await?;
         }
         Cmd::RunUi => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let fedimintds = run_ui(&process_mgr).await?;
-            let _daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
-            task_group.make_handle().make_shutdown_rx().await.await?;
+            let main = async move {
+                let fedimintds = run_ui(&process_mgr).await?;
+                let daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
+                Ok::<_, anyhow::Error>(daemons)
+            };
+            cleanup_on_exit(main, task_group).await?;
         }
         Cmd::LatencyTests => {
             let (process_mgr, _) = setup(args.common).await?;

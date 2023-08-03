@@ -1,39 +1,44 @@
 use std::ffi::OsStr;
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use fedimint_core::task;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
+use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
 use super::*;
 
-fn kill(child: &Child) {
+fn send_sigterm(child: &Child) {
     let _ = nix::sys::signal::kill(
         nix::unistd::Pid::from_raw(child.id().expect("pid should be present") as _),
         nix::sys::signal::Signal::SIGTERM,
     );
 }
 
+fn send_sigkill(child: &Child) {
+    let _ = nix::sys::signal::kill(
+        nix::unistd::Pid::from_raw(child.id().expect("pid should be present") as _),
+        nix::sys::signal::Signal::SIGKILL,
+    );
+}
+
 /// Kills process when all references to ProcessHandle are dropped.
 ///
 /// NOTE: drop order is significant make sure fields in struct are declared in
-/// correct order it is generallly clients, process handle, deps
+/// correct order it is generally clients, process handle, deps
 #[derive(Debug, Clone)]
-pub struct ProcessHandle(Arc<ProcessHandleInner>);
+pub struct ProcessHandle(Arc<Mutex<ProcessHandleInner>>);
 
 impl ProcessHandle {
-    pub async fn kill(self) -> Result<()> {
-        let arc_process_handle_inner = self.0;
-        let mut process_handle_inner = match Arc::try_unwrap(arc_process_handle_inner) {
-            Ok(process_handler_inner) => process_handler_inner,
-            Err(_) => return Err(anyhow!("Cannot kill process because of clones")),
-        };
-        let mut child = std::mem::take(&mut process_handle_inner.child).unwrap();
-        info!(LOG_DEVIMINT, "killing {}", process_handle_inner.name);
-        kill(&child);
-        child.wait().await?;
+    pub async fn terminate(&self) -> Result<()> {
+        let mut inner = self.0.lock().await;
+        if let Some(mut child) = inner.child.take() {
+            info!(LOG_DEVIMINT, "sending SIGTERM to {}", inner.name);
+            send_sigterm(&child);
+            child.wait().await?;
+        }
         Ok(())
     }
 }
@@ -47,8 +52,8 @@ pub struct ProcessHandleInner {
 impl Drop for ProcessHandleInner {
     fn drop(&mut self) {
         let Some(child) = &mut self.child else { return; };
-        info!(LOG_DEVIMINT, "killing {}", self.name);
-        kill(child);
+        info!(LOG_DEVIMINT, "sending SIGKILL to {}", self.name);
+        send_sigkill(child);
     }
 }
 
@@ -79,10 +84,11 @@ impl ProcessManager {
             .cmd
             .spawn()
             .with_context(|| format!("Could not spawn: {name}"))?;
-        Ok(ProcessHandle(Arc::new(ProcessHandleInner {
+        let handle = ProcessHandle(Arc::new(Mutex::new(ProcessHandleInner {
             name: name.to_owned(),
             child: Some(child),
-        })))
+        })));
+        Ok(handle)
     }
 }
 
