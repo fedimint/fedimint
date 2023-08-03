@@ -56,7 +56,7 @@ craneLib.overrideScope' (self: prev: {
   filterWorkspaceFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" ] src;
 
   # Like `filterWorkspaceFiles` but with `./scripts/` included
-  filterWorkspaceTestFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "devimint/src/cfg/.*" "scripts/.*" ] src;
+  filterWorkspaceTestFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "scripts/.*" ] src;
 
   cargo-llvm-cov = self.buildPackage rec {
     pname = "cargo-llvm-cov";
