@@ -329,42 +329,53 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 
-<span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::task;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::process::Child;
+<span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, warn};
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-<span class="kw">fn </span>kill(child: <span class="kw-2">&amp;</span>Child) {
+<span class="kw">fn </span>send_sigterm(child: <span class="kw-2">&amp;</span>Child) {
     <span class="kw">let _ </span>= nix::sys::signal::kill(
         nix::unistd::Pid::from_raw(child.id().expect(<span class="string">&quot;pid should be present&quot;</span>) <span class="kw">as _</span>),
         nix::sys::signal::Signal::SIGTERM,
     );
 }
 
+<span class="kw">fn </span>send_sigkill(child: <span class="kw-2">&amp;</span>Child) {
+    <span class="kw">let _ </span>= nix::sys::signal::kill(
+        nix::unistd::Pid::from_raw(child.id().expect(<span class="string">&quot;pid should be present&quot;</span>) <span class="kw">as _</span>),
+        nix::sys::signal::Signal::SIGKILL,
+    );
+}
+
 <span class="doccomment">/// Kills process when all references to ProcessHandle are dropped.
 ///
 /// NOTE: drop order is significant make sure fields in struct are declared in
-/// correct order it is generallly clients, process handle, deps
+/// correct order it is generally clients, process handle, deps
 </span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>ProcessHandle(Arc&lt;ProcessHandleInner&gt;);
+</span><span class="kw">pub struct </span>ProcessHandle(Arc&lt;Mutex&lt;ProcessHandleInner&gt;&gt;);
 
 <span class="kw">impl </span>ProcessHandle {
-    <span class="kw">pub async fn </span>kill(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>arc_process_handle_inner = <span class="self">self</span>.<span class="number">0</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>process_handle_inner = <span class="kw">match </span>Arc::try_unwrap(arc_process_handle_inner) {
-            <span class="prelude-val">Ok</span>(process_handler_inner) =&gt; process_handler_inner,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Cannot kill process because of clones&quot;</span>)),
-        };
-        <span class="kw">let </span><span class="kw-2">mut </span>child = std::mem::take(<span class="kw-2">&amp;mut </span>process_handle_inner.child).unwrap();
-        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;killing {}&quot;</span>, process_handle_inner.name);
-        kill(<span class="kw-2">&amp;</span>child);
-        child.wait().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>terminate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.<span class="number">0</span>.lock().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>child) = inner.child.take() {
+            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;sending SIGTERM to {}&quot;</span>, inner.name);
+            send_sigterm(<span class="kw-2">&amp;</span>child);
+            child.wait().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
         <span class="prelude-val">Ok</span>(())
     }
 }
@@ -378,8 +389,8 @@
 <span class="kw">impl </span>Drop <span class="kw">for </span>ProcessHandleInner {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="prelude-val">Some</span>(child) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.child <span class="kw">else </span>{ <span class="kw">return</span>; };
-        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;killing {}&quot;</span>, <span class="self">self</span>.name);
-        kill(child);
+        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;sending SIGKILL to {}&quot;</span>, <span class="self">self</span>.name);
+        send_sigkill(child);
     }
 }
 
@@ -410,10 +421,11 @@
             .cmd
             .spawn()
             .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Could not spawn: {name}&quot;</span>))<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ProcessHandle(Arc::new(ProcessHandleInner {
+        <span class="kw">let </span>handle = ProcessHandle(Arc::new(Mutex::new(ProcessHandleInner {
             name: name.to_owned(),
             child: <span class="prelude-val">Some</span>(child),
-        })))
+        })));
+        <span class="prelude-val">Ok</span>(handle)
     }
 }
 

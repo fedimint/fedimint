@@ -493,10 +493,9 @@
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 
-<span class="kw">use </span>anyhow::{anyhow, Context};
+<span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 <span class="kw">use </span>fedimint_core::api::ServerStatus;
@@ -643,7 +642,7 @@
 
     <span class="kw">pub async fn </span>start_server(<span class="kw-2">&amp;mut </span><span class="self">self</span>, process_mgr: <span class="kw-2">&amp;</span>ProcessManager, peer: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.members.contains_key(<span class="kw-2">&amp;</span>peer) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;fedimintd-{} already running&quot;</span>, peer));
+            <span class="macro">bail!</span>(<span class="string">&quot;fedimintd-{peer} already running&quot;</span>);
         }
         <span class="self">self</span>.members.insert(
             peer,
@@ -652,11 +651,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>kill_server(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>terminate_server(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, fedimintd)) = <span class="self">self</span>.members.remove_entry(<span class="kw-2">&amp;</span>peer_id) <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;fedimintd-{} does not exist&quot;</span>, peer_id));
+            <span class="macro">bail!</span>(<span class="string">&quot;fedimintd-{peer_id} does not exist&quot;</span>);
         };
-        fedimintd.kill().<span class="kw">await</span><span class="question-mark">?</span>;
+        fedimintd.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -807,10 +806,9 @@
         })
     }
 
-    <span class="kw">pub async fn </span>kill(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.process.kill().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
+    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.process.terminate().<span class="kw">await
+    </span>}
 }
 
 <span class="doccomment">/// Base port for devimint

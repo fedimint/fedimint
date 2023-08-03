@@ -641,8 +641,8 @@
             .to_string())
     }
 
-    <span class="kw">pub async fn </span>kill(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.process.kill().<span class="kw">await
+    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.process.terminate().<span class="kw">await
     </span>}
 }
 
@@ -730,8 +730,8 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>kill(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.process.kill().<span class="kw">await
+    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.process.terminate().<span class="kw">await
     </span>}
 }
 
