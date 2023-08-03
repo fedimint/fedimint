@@ -115,10 +115,10 @@ impl ConsensusApi {
 
             let cache = module.build_verification_cache(&[input.clone()]);
             let meta = module
-                .validate_input(
+                .process_input(
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
-                    &cache,
                     input,
+                    &cache,
                 )
                 .await?;
 

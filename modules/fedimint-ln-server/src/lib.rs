@@ -531,11 +531,11 @@ impl ServerModule for Lightning {
         LightningVerificationCache
     }
 
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        _verification_cache: &Self::VerificationCache,
-        input: &'a LightningInput,
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        input: &'b LightningInput,
+        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let account: ContractAccount = self
             .get_contract_account(dbtx, input.contract_id)
@@ -552,6 +552,7 @@ impl ServerModule for Lightning {
         }
 
         let consensus_height = self.consensus_block_height(dbtx).await;
+
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
                 if outgoing.timelock as u64 > consensus_height && !outgoing.cancelled {
@@ -594,6 +595,17 @@ impl ServerModule for Lightning {
             },
         };
 
+        let account_db_key = ContractKey(input.contract_id);
+
+        let mut contract_account = dbtx
+            .get_value(&account_db_key)
+            .await
+            .expect("Should fail validation if contract account doesn't exist");
+
+        contract_account.amount -= input.amount;
+
+        dbtx.insert_entry(&account_db_key, &contract_account).await;
+
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.amount,
@@ -601,25 +613,6 @@ impl ServerModule for Lightning {
             },
             pub_keys: vec![pub_key],
         })
-    }
-
-    async fn apply_input<'a, 'b, 'c>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
-        input: &'b LightningInput,
-        cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(dbtx, cache, input).await?;
-
-        let account_db_key = ContractKey(input.contract_id);
-        let mut contract_account = dbtx
-            .get_value(&account_db_key)
-            .await
-            .expect("Should fail validation if contract account doesn't exist");
-        contract_account.amount -= meta.amount.amount;
-        dbtx.insert_entry(&account_db_key, &contract_account).await;
-
-        Ok(meta)
     }
 
     async fn validate_output(

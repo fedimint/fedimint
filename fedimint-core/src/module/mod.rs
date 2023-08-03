@@ -830,23 +830,11 @@ pub trait ServerModule: Debug + Sized {
         inputs: impl Iterator<Item = &'a <Self::Common as ModuleCommon>::Input> + MaybeSend,
     ) -> Self::VerificationCache;
 
-    /// Validate a transaction input before submitting it to the unconfirmed
-    /// transaction pool. This function has no side effects and may be
-    /// called at any time. False positives due to outdated database state
-    /// are ok since they get filtered out after consensus has been reached on
-    /// them and merely generate a warning.
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        verification_cache: &Self::VerificationCache,
-        input: &'a <Self::Common as ModuleCommon>::Input,
-    ) -> Result<InputMeta, ModuleError>;
-
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
     /// no effect.
-    async fn apply_input<'a, 'b, 'c>(
+    async fn process_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,

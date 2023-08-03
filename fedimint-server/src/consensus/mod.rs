@@ -241,7 +241,7 @@ impl FedimintConsensus {
                     let meta = self
                         .modules
                         .get_expect(input.module_instance_id())
-                        .apply_input(
+                        .process_input(
                             &mut dbtx.with_module_prefix(input.module_instance_id()),
                             input,
                             caches.get_cache(input.module_instance_id()),

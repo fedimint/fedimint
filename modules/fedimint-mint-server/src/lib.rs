@@ -491,11 +491,11 @@ impl ServerModule for Mint {
         VerificationCache
     }
 
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        _verification_cache: &Self::VerificationCache,
-        input: &'a MintInput,
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        input: &'b MintInput,
+        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let iter = input.iter_items();
 
@@ -509,10 +509,13 @@ impl ServerModule for Mint {
             return Err(MintError::InvalidSignature).into_module_error_other();
         }
 
-        for (.., note) in input.iter_items() {
-            if dbtx.get_value(&NonceKey(note.0)).await.is_some() {
+        for (amount, note) in input.iter_items() {
+            if dbtx.insert_entry(&NonceKey(note.0), &()).await.is_some() {
                 return Err(MintError::SpentCoin).into_module_error_other();
             }
+
+            dbtx.insert_new_entry(&MintAuditItemKey::Redemption(NonceKey(note.0)), &amount)
+                .await;
         }
 
         Ok(InputMeta {
@@ -525,28 +528,6 @@ impl ServerModule for Mint {
                 .map(|(_, note)| *note.spend_key())
                 .collect(),
         })
-    }
-
-    async fn apply_input<'a, 'b, 'c>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
-        input: &'b MintInput,
-        cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(dbtx, cache, input).await?;
-
-        for (amount, note) in input.iter_items() {
-            let key = NonceKey(note.0);
-
-            if dbtx.insert_entry(&key, &()).await.is_some() {
-                return Err(MintError::SpentCoin).into_module_error_other();
-            }
-
-            dbtx.insert_new_entry(&MintAuditItemKey::Redemption(key), &amount)
-                .await;
-        }
-
-        Ok(meta)
     }
 
     async fn validate_output(

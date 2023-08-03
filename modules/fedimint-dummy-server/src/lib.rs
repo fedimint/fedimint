@@ -340,50 +340,40 @@ impl ServerModule for Dummy {
         DummyVerificationCache
     }
 
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        _verification_cache: &Self::VerificationCache,
-        input: &'a DummyInput,
-    ) -> Result<InputMeta, ModuleError> {
-        let current_funds = dbtx.get_value(&DummyFundsKeyV1(input.account)).await;
-        let enough_funds = input.amount <= current_funds.unwrap_or(Amount::ZERO);
-
-        // verify user has enough funds or is using the fed account
-        if enough_funds || fed_public_key() == input.account {
-            return Ok(InputMeta {
-                amount: TransactionItemAmount {
-                    amount: input.amount,
-                    fee: self.cfg.consensus.tx_fee,
-                },
-                // IMPORTANT: include the pubkey to validate the user signed this tx
-                pub_keys: vec![input.account],
-            });
-        }
-
-        Err(DummyError::NotEnoughFunds).into_module_error_other()
-    }
-
-    async fn apply_input<'a, 'b, 'c>(
+    async fn process_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DummyInput,
-        cache: &Self::VerificationCache,
+        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        // TODO: Boiler-plate code
-        let meta = self.validate_input(dbtx, cache, input).await?;
+        let current_funds = dbtx
+            .get_value(&DummyFundsKeyV1(input.account))
+            .await
+            .unwrap_or(Amount::ZERO);
 
-        let current_funds = dbtx.get_value(&DummyFundsKeyV1(input.account)).await;
+        // verify user has enough funds or is using the fed account
+        if input.amount > current_funds && fed_public_key() != input.account {
+            return Err(DummyError::NotEnoughFunds).into_module_error_other();
+        }
+
         // Subtract funds from normal user, or print funds for the fed
         let updated_funds = if fed_public_key() == input.account {
-            current_funds.unwrap_or(Amount::ZERO) + input.amount
+            current_funds + input.amount
         } else {
-            current_funds.unwrap_or(Amount::ZERO) - input.amount
+            current_funds - input.amount
         };
+
         dbtx.insert_entry(&DummyFundsKeyV1(input.account), &updated_funds)
             .await;
 
-        Ok(meta)
+        Ok(InputMeta {
+            amount: TransactionItemAmount {
+                amount: input.amount,
+                fee: self.cfg.consensus.tx_fee,
+            },
+            // IMPORTANT: include the pubkey to validate the user signed this tx
+            pub_keys: vec![input.account],
+        })
     }
 
     async fn validate_output(

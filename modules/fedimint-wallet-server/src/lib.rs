@@ -426,11 +426,11 @@ impl ServerModule for Wallet {
         WalletVerificationCache
     }
 
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        _verification_cache: &Self::VerificationCache,
-        input: &'a WalletInput,
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        input: &'b WalletInput,
+        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
@@ -445,23 +445,7 @@ impl ServerModule for Wallet {
             return Err(WalletError::PegInAlreadyClaimed).into_module_error_other();
         }
 
-        Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: fedimint_core::Amount::from_sats(input.tx_output().value),
-                fee: self.cfg.consensus.fee_consensus.peg_in_abs,
-            },
-            pub_keys: vec![*input.tweak_contract_key()],
-        })
-    }
-
-    async fn apply_input<'a, 'b, 'c>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
-        input: &'b WalletInput,
-        cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(dbtx, cache, input).await?;
-        debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
+        debug!(outpoint = %input.outpoint(), "Claiming peg-in");
 
         dbtx.insert_new_entry(
             &UTXOKey(input.outpoint()),
@@ -472,7 +456,13 @@ impl ServerModule for Wallet {
         )
         .await;
 
-        Ok(meta)
+        Ok(InputMeta {
+            amount: TransactionItemAmount {
+                amount: fedimint_core::Amount::from_sats(input.tx_output().value),
+                fee: self.cfg.consensus.fee_consensus.peg_in_abs,
+            },
+            pub_keys: vec![*input.tweak_contract_key()],
+        })
     }
 
     async fn validate_output(
