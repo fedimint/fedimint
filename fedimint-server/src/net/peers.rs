@@ -817,7 +817,9 @@ mod tests {
                     peers: peers_ref.clone(),
                 };
                 let connect = net_ref
-                    .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
+                    // FIXME: change this back to StreamReliability::MILDLY_UNRELIABLE after the
+                    // mock network is able make the failure happens to both peers
+                    .connector(cfg.identity, StreamReliability::FullyReliable)
                     .into_dyn();
                 ReconnectPeerConnections::<u64>::new(
                     cfg,
