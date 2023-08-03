@@ -55,7 +55,6 @@ mod faucet {
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 mod tests {
     use fedimint_client::derivable_secret::DerivableSecret;
-    use fedimint_core::task::TaskGroup;
     use fedimint_core::Amount;
     use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState, PayType};
     use futures::StreamExt;
@@ -72,8 +71,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn receive() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
-        let tg = TaskGroup::new();
-        client.start_executor(tg).await;
+        client.start_executor().await;
         let gws = client.fetch_registered_gateways().await?;
         let lnd_gw = gws
             .into_iter()
@@ -114,8 +112,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn receive_and_pay() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
-        let tg = TaskGroup::new();
-        client.start_executor(tg).await;
+        client.start_executor().await;
         let gws = client.fetch_registered_gateways().await?;
         let lnd_gw = gws
             .into_iter()

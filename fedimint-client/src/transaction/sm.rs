@@ -239,7 +239,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiRequestErased;
-    use fedimint_core::task::{sleep, TaskGroup};
+    use fedimint_core::task::sleep;
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
     use fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
@@ -439,8 +439,6 @@ mod tests {
             )]),
         );
 
-        let mut tg = TaskGroup::new();
-
         let mut executor_builder = Executor::<DynGlobalClientContext>::builder();
         executor_builder.with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
         let executor = executor_builder
@@ -456,7 +454,7 @@ mod tests {
         let dyn_context = DynGlobalClientContext::from(context.clone());
         let dyn_context_gen_clone = dyn_context.clone();
         executor
-            .start_executor(&mut tg, Arc::new(move |_, _| dyn_context_gen_clone.clone()))
+            .start_executor(Arc::new(move |_, _| dyn_context_gen_clone.clone()))
             .await;
 
         let operation_id = OperationId([0x42; 32]);

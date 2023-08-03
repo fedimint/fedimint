@@ -30,7 +30,7 @@ pub struct FederationTest {
     server_gen: ServerModuleGenRegistry,
     client_gen: ClientModuleGenRegistry,
     primary_client: ModuleInstanceId,
-    task: TaskGroup,
+    _task: TaskGroup,
 }
 
 impl FederationTest {
@@ -56,7 +56,7 @@ impl FederationTest {
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
         client_builder
-            .build::<PlainRootSecretStrategy>(self.task.make_subgroup().await)
+            .build::<PlainRootSecretStrategy>()
             .await
             .expect("Failed to build client")
     }
@@ -123,7 +123,7 @@ impl FederationTest {
             server_gen,
             client_gen,
             primary_client,
-            task,
+            _task: task,
         }
     }
 }

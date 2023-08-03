@@ -30,7 +30,7 @@ use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
-use fedimint_core::task::{self, TaskGroup};
+use fedimint_core::task::{self};
 use fedimint_core::{PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
@@ -319,10 +319,9 @@ impl Opts {
         &self,
         module_gens: &ClientModuleGenRegistry,
     ) -> CliResult<fedimint_client::Client> {
-        let tg = TaskGroup::new();
         let client_builder = self.build_client_ng_builder(module_gens).await?;
         client_builder
-            .build::<PlainRootSecretStrategy>(tg)
+            .build::<PlainRootSecretStrategy>()
             .await
             .map_err_cli_general()
     }
@@ -546,15 +545,13 @@ impl FedimintCli {
                 hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             }),
             Command::Client(ClientCmd::Restore { secret }) => {
-                let tg = TaskGroup::new();
                 let (client, metadata) = cli
                     .build_client_ng_builder(&self.module_gens)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
-                    .build_restoring_from_backup(
-                        tg,
-                        ClientSecret::<PlainRootSecretStrategy>::new(secret),
-                    )
+                    .build_restoring_from_backup(ClientSecret::<PlainRootSecretStrategy>::new(
+                        secret,
+                    ))
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
 
