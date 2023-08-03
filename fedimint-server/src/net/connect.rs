@@ -252,18 +252,20 @@ pub mod mock {
     use std::future::Future;
     use std::net::SocketAddr;
     use std::pin::Pin;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
 
     use anyhow::Error;
     use fedimint_core::{task, PeerId};
-    use futures::{FutureExt, SinkExt, Stream, StreamExt};
+    use futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
     use rand::Rng;
     use tokio::io::{
         AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
     };
     use tokio::sync::mpsc::Sender;
     use tokio::sync::Mutex;
+    use tokio_util::sync::CancellationToken;
     use url::Url;
 
     use crate::net::connect::{parse_host_port, ConnectResult, Connector};
@@ -271,6 +273,7 @@ pub mod mock {
 
     struct UnreliableDuplexStream {
         inner: DuplexStream,
+        broken: CancellationToken,
         read_generator: Option<UnreliabilityGenerator>,
         write_generator: Option<UnreliabilityGenerator>,
         flush_generator: Option<UnreliabilityGenerator>,
@@ -282,6 +285,7 @@ pub mod mock {
             match reliability {
                 StreamReliability::FullyReliable => Self {
                     inner,
+                    broken: CancellationToken::new(),
                     read_generator: None,
                     write_generator: None,
                     flush_generator: None,
@@ -298,6 +302,7 @@ pub mod mock {
                     shutdown_latency,
                 } => Self {
                     inner,
+                    broken: CancellationToken::new(),
                     read_generator: Some(UnreliabilityGenerator::new(
                         read_latency,
                         read_failure_rate,
@@ -316,6 +321,12 @@ pub mod mock {
                     )),
                 },
             }
+        }
+
+        fn poll_broken(&self, cx: &mut std::task::Context<'_>) -> bool {
+            let await_cancellation = self.broken.cancelled();
+            pin_mut!(await_cancellation);
+            await_cancellation.poll(cx).is_ready()
         }
     }
 
@@ -378,8 +389,18 @@ pub mod mock {
             cx: &mut std::task::Context<'_>,
             buf: &mut tokio::io::ReadBuf<'_>,
         ) -> std::task::Poll<std::io::Result<()>> {
+            if self.poll_broken(cx) {
+                return std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Stream is broken",
+                )));
+            }
+
             match self.read_generator.as_mut().map(|g| g.generate(cx)) {
-                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Ready(Err(e))) => {
+                    self.broken.cancel();
+                    std::task::Poll::Ready(Err(e))
+                }
                 Some(std::task::Poll::Pending) => std::task::Poll::Pending,
                 Some(std::task::Poll::Ready(Ok(()))) | None => {
                     Pin::new(&mut self.inner).poll_read(cx, buf)
@@ -394,8 +415,18 @@ pub mod mock {
             cx: &mut std::task::Context<'_>,
             buf: &[u8],
         ) -> std::task::Poll<Result<usize, std::io::Error>> {
+            if self.poll_broken(cx) {
+                return std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Stream is broken",
+                )));
+            }
+
             match self.write_generator.as_mut().map(|g| g.generate(cx)) {
-                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Ready(Err(e))) => {
+                    self.broken.cancel();
+                    std::task::Poll::Ready(Err(e))
+                }
                 Some(std::task::Poll::Pending) => std::task::Poll::Pending,
                 Some(std::task::Poll::Ready(Ok(()))) | None => {
                     Pin::new(&mut self.inner).poll_write(cx, buf)
@@ -407,8 +438,18 @@ pub mod mock {
             mut self: Pin<&mut Self>,
             cx: &mut std::task::Context<'_>,
         ) -> std::task::Poll<Result<(), std::io::Error>> {
+            if self.poll_broken(cx) {
+                return std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Stream is broken",
+                )));
+            }
+
             match self.flush_generator.as_mut().map(|g| g.generate(cx)) {
-                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Ready(Err(e))) => {
+                    self.broken.cancel();
+                    std::task::Poll::Ready(Err(e))
+                }
                 Some(std::task::Poll::Pending) => std::task::Poll::Pending,
                 Some(std::task::Poll::Ready(Ok(()))) | None => {
                     Pin::new(&mut self.inner).poll_flush(cx)
@@ -420,8 +461,18 @@ pub mod mock {
             mut self: Pin<&mut Self>,
             cx: &mut std::task::Context<'_>,
         ) -> std::task::Poll<Result<(), std::io::Error>> {
+            if self.poll_broken(cx) {
+                return std::task::Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Stream is broken",
+                )));
+            }
+
             match self.shutdown_generator.as_mut().map(|g| g.generate(cx)) {
-                Some(std::task::Poll::Ready(Err(e))) => std::task::Poll::Ready(Err(e)),
+                Some(std::task::Poll::Ready(Err(e))) => {
+                    self.broken.cancel();
+                    std::task::Poll::Ready(Err(e))
+                }
                 Some(std::task::Poll::Pending) => std::task::Poll::Pending,
                 Some(std::task::Poll::Ready(Ok(()))) | None => {
                     Pin::new(&mut self.inner).poll_shutdown(cx)
