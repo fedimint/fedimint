@@ -28,6 +28,8 @@ fi
 eval "$(devimint env)"
 >&2 echo "### Setting up tests - complete"
 
+env RUST_BACKTRACE=1 cargo test -p fedimint-ln-server ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --test-threads=$(($(nproc) * 2)) "$@"
+
 export FM_TEST_USE_REAL_DAEMONS=1
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
