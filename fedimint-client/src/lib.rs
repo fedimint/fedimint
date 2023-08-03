@@ -1358,9 +1358,7 @@ impl ClientBuilder {
                     ModuleKind::from_static_str("tx_submission"),
                     tx_submission_sm_decoder(),
                 );
-
-                // TODO: Should we reinitialize / update DB, providing the right client decoders
-                // let db = Database::new_from_box(db, decoders.clone());
+                let db = db.new_with_decoders(decoders.clone());
 
                 (config, decoders, db)
             }
