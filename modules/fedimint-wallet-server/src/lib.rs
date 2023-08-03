@@ -465,13 +465,13 @@ impl ServerModule for Wallet {
         })
     }
 
-    async fn validate_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &WalletOutput,
+    async fn process_output<'a, 'b>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        output: &'a WalletOutput,
+        out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let dummy_tweak = [0; 32];
-
         let fee_rate = self.consensus_fee_rate(dbtx).await;
         let tx = self
             .create_peg_out_tx(dbtx, output, &dummy_tweak)
@@ -482,27 +482,16 @@ impl ServerModule for Wallet {
             .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)
             .into_module_error_other()?;
 
-        Ok(TransactionItemAmount {
-            amount: output.amount().into(),
-            fee: self.cfg.consensus.fee_consensus.peg_out_abs,
-        })
-    }
-
-    async fn apply_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        output: &'a WalletOutput,
-        out_point: fedimint_core::OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx, output).await?;
         let change_tweak = self.consensus_nonce(dbtx).await;
-
         let mut tx = self
             .create_peg_out_tx(dbtx, output, &change_tweak)
             .await
             .expect("Should have been validated");
+
         self.offline_wallet().sign_psbt(&mut tx.psbt);
+
         let txid = tx.psbt.unsigned_tx.txid();
+
         info!(
             %txid,
             "Signing peg out",
@@ -548,7 +537,11 @@ impl ServerModule for Wallet {
             &WalletOutputOutcome(txid),
         )
         .await;
-        Ok(amount)
+
+        Ok(TransactionItemAmount {
+            amount: output.amount().into(),
+            fee: self.cfg.consensus.fee_consensus.peg_out_abs,
+        })
     }
 
     async fn output_status(

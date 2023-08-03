@@ -708,7 +708,7 @@ impl FederationTest {
                 .consensus
                 .modules
                 .get_expect(self.mint_id)
-                .apply_output(
+                .process_output(
                     &mut dbtx.with_module_prefix(self.mint_id),
                     &core::DynOutput::from_typed(self.mint_id, MintOutput(notes.clone())),
                     out_point,

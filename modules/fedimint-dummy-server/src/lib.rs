@@ -376,26 +376,12 @@ impl ServerModule for Dummy {
         })
     }
 
-    async fn validate_output(
-        &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &DummyOutput,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        Ok(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.consensus.tx_fee,
-        })
-    }
-
-    async fn apply_output<'a, 'b>(
+    async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         output: &'a DummyOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        // TODO: Boiler-plate code
-        let meta = self.validate_output(dbtx, output).await?;
-
         // Add output funds to the user's account
         let current_funds = dbtx.get_value(&DummyFundsKeyV1(output.account)).await;
         let updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;
@@ -407,7 +393,10 @@ impl ServerModule for Dummy {
         dbtx.insert_entry(&DummyOutcomeKey(out_point), &outcome)
             .await;
 
-        Ok(meta)
+        Ok(TransactionItemAmount {
+            amount: output.amount,
+            fee: self.cfg.consensus.tx_fee,
+        })
     }
 
     async fn output_status(

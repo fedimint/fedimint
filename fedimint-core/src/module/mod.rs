@@ -841,17 +841,6 @@ pub trait ServerModule: Debug + Sized {
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
-    /// Validate a transaction output before submitting it to the unconfirmed
-    /// transaction pool. This function has no side effects and may be
-    /// called at any time. False positives due to outdated database state
-    /// are ok since they get filtered out after consensus has been reached on
-    /// them and merely generate a warning.
-    async fn validate_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Result<TransactionItemAmount, ModuleError>;
-
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -860,7 +849,7 @@ pub trait ServerModule: Debug + Sized {
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    async fn apply_output<'a, 'b>(
+    async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,

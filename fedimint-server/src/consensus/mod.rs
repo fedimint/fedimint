@@ -88,8 +88,8 @@ pub struct FedimintConsensus {
 }
 
 #[derive(Debug)]
-struct VerificationCaches {
-    caches: HashMap<ModuleInstanceId, DynVerificationCache>,
+pub struct VerificationCaches {
+    pub caches: HashMap<ModuleInstanceId, DynVerificationCache>,
 }
 
 pub struct FundingVerifier {
@@ -99,7 +99,7 @@ pub struct FundingVerifier {
 }
 
 impl VerificationCaches {
-    fn get_cache(&self, module_key: ModuleInstanceId) -> &DynVerificationCache {
+    pub(crate) fn get_cache(&self, module_key: ModuleInstanceId) -> &DynVerificationCache {
         self.caches
             .get(&module_key)
             .expect("Verification caches were built for all modules")
@@ -258,7 +258,7 @@ impl FedimintConsensus {
                     let amount = self
                         .modules
                         .get_expect(output.module_instance_id())
-                        .apply_output(
+                        .process_output(
                             &mut dbtx.with_module_prefix(output.module_instance_id()),
                             output,
                             OutPoint { txid, out_idx },
@@ -514,8 +514,6 @@ impl FedimintConsensus {
             .into_iter()
             .into_group_map_by(|input| input.module_instance_id());
 
-        // TODO: should probably run in parallel, but currently only the mint does
-        // anything at all
         let caches = module_inputs
             .into_iter()
             .map(|(module_key, inputs)| {

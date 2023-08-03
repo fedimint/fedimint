@@ -26,6 +26,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
+use itertools::Itertools;
 use jsonrpsee::RpcModule;
 use secp256k1_zkp::SECP256K1;
 use tokio::sync::mpsc::error::SendError;
@@ -38,7 +39,7 @@ use crate::backup::ClientBackupSnapshot;
 use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::consensus::{ApiEvent, FundingVerifier};
+use crate::consensus::{ApiEvent, FundingVerifier, VerificationCaches};
 use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigSignatureKey, EpochHistoryKey,
     LastEpochKey,
@@ -103,39 +104,43 @@ impl ConsensusApi {
         let tx_hash = transaction.tx_hash();
         debug!(%tx_hash, "Received mint transaction");
 
-        let mut funding_verifier = FundingVerifier::default();
-
-        let mut pub_keys = Vec::new();
-
         // Create read-only DB tx so that the read state is consistent
         let mut dbtx = self.db.begin_transaction().await;
 
-        for input in &transaction.inputs {
-            let module = self.modules.get_expect(input.module_instance_id());
+        let txid = transaction.tx_hash();
+        let caches = self.build_verification_caches(transaction.clone());
 
-            let cache = module.build_verification_cache(&[input.clone()]);
-            let meta = module
+        let mut funding_verifier = FundingVerifier::default();
+        let mut public_keys = Vec::new();
+
+        for input in transaction.inputs.iter() {
+            let meta = self
+                .modules
+                .get_expect(input.module_instance_id())
                 .process_input(
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
                     input,
-                    &cache,
+                    caches.get_cache(input.module_instance_id()),
                 )
                 .await?;
 
-            pub_keys.push(meta.pub_keys);
             funding_verifier.add_input(meta.amount);
+            public_keys.push(meta.pub_keys);
         }
-        transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
-        for output in &transaction.outputs {
+        transaction.validate_signature(public_keys.into_iter().flatten())?;
+
+        for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
             let amount = self
                 .modules
                 .get_expect(output.module_instance_id())
-                .validate_output(
+                .process_output(
                     &mut dbtx.with_module_prefix(output.module_instance_id()),
                     output,
+                    OutPoint { txid, out_idx },
                 )
                 .await?;
+
             funding_verifier.add_output(amount);
         }
 
@@ -146,6 +151,23 @@ impl ConsensusApi {
             .await?;
 
         Ok(())
+    }
+
+    fn build_verification_caches(&self, transaction: Transaction) -> VerificationCaches {
+        let module_inputs = transaction
+            .inputs
+            .into_iter()
+            .into_group_map_by(|input| input.module_instance_id());
+
+        let caches = module_inputs
+            .into_iter()
+            .map(|(module_key, inputs)| {
+                let module = self.modules.get_expect(module_key);
+                (module_key, module.build_verification_cache(&inputs))
+            })
+            .collect();
+
+        VerificationCaches { caches }
     }
 
     pub async fn transaction_status(&self, txid: TransactionId) -> Option<TransactionStatus> {

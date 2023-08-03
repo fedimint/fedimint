@@ -615,12 +615,13 @@ impl ServerModule for Lightning {
         })
     }
 
-    async fn validate_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &LightningOutput,
+    async fn process_output<'a, 'b>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        output: &'a LightningOutput,
+        out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        match output {
+        let amount = match output {
             LightningOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
                 if let Contract::Incoming(incoming) = &contract.contract {
@@ -684,16 +685,7 @@ impl ServerModule for Lightning {
 
                 Ok(TransactionItemAmount::ZERO)
             }
-        }
-    }
-
-    async fn apply_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        output: &'a LightningOutput,
-        out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx, output).await?;
+        }?;
 
         match output {
             LightningOutput::Contract(contract) => {

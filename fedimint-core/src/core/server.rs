@@ -91,17 +91,6 @@ pub trait IServerModule: Debug {
         verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
-    /// Validate a transaction output before submitting it to the unconfirmed
-    /// transaction pool. This function has no side effects and may be
-    /// called at any time. False positives due to outdated database state
-    /// are ok since they get filtered out after consensus has been reached on
-    /// them and merely generate a warning.
-    async fn validate_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &DynOutput,
-    ) -> Result<TransactionItemAmount, ModuleError>;
-
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -110,7 +99,7 @@ pub trait IServerModule: Debug {
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    async fn apply_output<'a>(
+    async fn process_output<'a>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
         output: &DynOutput,
@@ -241,27 +230,6 @@ where
         .map(Into::into)
     }
 
-    /// Validate a transaction output before submitting it to the unconfirmed
-    /// transaction pool. This function has no side effects and may be
-    /// called at any time. False positives due to outdated database state
-    /// are ok since they get filtered out after consensus has been reached on
-    /// them and merely generate a warning.
-    async fn validate_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &DynOutput,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        <Self as ServerModule>::validate_output(
-            self,
-            dbtx,
-            output
-                .as_any()
-                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
-                .expect("incorrect output type passed to module plugin"),
-        )
-        .await
-    }
-
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -270,13 +238,13 @@ where
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    async fn apply_output<'a>(
+    async fn process_output<'a>(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        <Self as ServerModule>::apply_output(
+        <Self as ServerModule>::process_output(
             self,
             dbtx,
             output

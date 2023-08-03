@@ -530,10 +530,11 @@ impl ServerModule for Mint {
         })
     }
 
-    async fn validate_output(
-        &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &MintOutput,
+    async fn process_output<'a, 'b>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        output: &'a MintOutput,
+        out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let max_tier = self.cfg.private.tbs_sks.max_tier();
         if output.longest_tier_except(max_tier)
@@ -553,23 +554,8 @@ impl ServerModule for Mint {
                 None
             }
         }) {
-            Err(MintError::InvalidAmountTier(amount)).into_module_error_other()
-        } else {
-            Ok(TransactionItemAmount {
-                amount: output.total_amount(),
-                fee: self.cfg.consensus.fee_consensus.note_issuance_abs
-                    * (output.count_items() as u64),
-            })
+            return Err(MintError::InvalidAmountTier(amount)).into_module_error_other();
         }
-    }
-
-    async fn apply_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        output: &'a MintOutput,
-        out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx, output).await?;
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
@@ -585,7 +571,10 @@ impl ServerModule for Mint {
         )
         .await;
 
-        Ok(amount)
+        Ok(TransactionItemAmount {
+            amount: output.total_amount(),
+            fee: self.cfg.consensus.fee_consensus.note_issuance_abs * (output.count_items() as u64),
+        })
     }
 
     async fn output_status(
