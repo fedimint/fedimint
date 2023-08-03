@@ -800,6 +800,47 @@
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
 <a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -828,13 +869,14 @@
 <span class="kw">use </span>hbbft::NetworkInfo;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::ConfigGenParamsLocal;
-<span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{DkgRunner, ThresholdKeys};
+<span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{DkgRunner, PeerHandleOps, ThresholdKeys};
 <span class="kw">use </span><span class="kw">crate</span>::config::io::CODE_VERSION;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::NumPeers;
@@ -901,6 +943,8 @@
     <span class="doccomment">/// Secret key for TLS communication, required for peer authentication
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
     </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
+    <span class="doccomment">/// Secret key for the atomic broadcast to sign messages
+    </span><span class="kw">pub </span>broadcast_secret_key: SecretKey,
     <span class="doccomment">/// Secret key for contributing to threshold auth key
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>auth_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
@@ -920,6 +964,8 @@
     </span><span class="kw">pub </span>code_version: String,
     <span class="doccomment">/// Agreed on core consensus version
     </span><span class="kw">pub </span>version: CoreConsensusVersion,
+    <span class="doccomment">/// Public keys for the atomic broadcast to authenticate messages
+    </span><span class="kw">pub </span>broadcast_public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
     <span class="doccomment">/// Public keys authenticating members of the federation and the configs
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
     </span><span class="kw">pub </span>auth_pk_set: hbbft::crypto::PublicKeySet,
@@ -1019,9 +1065,12 @@
     }
     <span class="doccomment">/// Creates a new config from the results of a trusted or distributed key
     /// setup
+    </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>from(
         params: ConfigGenParams,
         identity: PeerId,
+        broadcast_public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
+        broadcast_secret_key: SecretKey,
         auth_keys: ThresholdKeys,
         epoch_keys: ThresholdKeys,
         hbbft_keys: ThresholdKeys,
@@ -1030,6 +1079,7 @@
         <span class="kw">let </span>private = ServerConfigPrivate {
             api_auth: params.local.api_auth.clone(),
             tls_key: params.local.our_private_key.clone(),
+            broadcast_secret_key,
             auth_sks: auth_keys.secret_key_share,
             hbbft_sks: hbbft_keys.secret_key_share,
             epoch_sks: epoch_keys.secret_key_share,
@@ -1048,6 +1098,7 @@
         <span class="kw">let </span>consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
             version: CORE_CONSENSUS_VERSION,
+            broadcast_public_keys,
             auth_pk_set: auth_keys.public_key_set,
             hbbft_pk_set: hbbft_keys.public_key_set,
             epoch_pk_set: epoch_keys.public_key_set,
@@ -1168,6 +1219,11 @@
         <span class="kw">let </span>private = <span class="self">self</span>.private.clone();
         <span class="kw">let </span>id = identity.to_usize();
 
+        <span class="kw">let </span>my_public_key = private.broadcast_secret_key.public_key(<span class="kw-2">&amp;</span>Secp256k1::new());
+
+        <span class="kw">if </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>my_public_key) != consensus.broadcast_public_keys.get(identity) {
+            <span class="macro">bail!</span>(<span class="string">&quot;Broadcast secret key doesn&#39;t match corresponding public key&quot;</span>);
+        }
         <span class="kw">if </span>private.epoch_sks.public_key_share() != consensus.epoch_pk_set.public_key_share(id) {
             <span class="macro">bail!</span>(<span class="string">&quot;Epoch private key doesn&#39;t match pubkey share&quot;</span>);
         }
@@ -1205,6 +1261,14 @@
         <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
 
+        <span class="kw">let </span><span class="kw-2">mut </span>broadcast_pks = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>broadcast_sks = BTreeMap::new();
+        <span class="kw">for </span>peer_id <span class="kw">in </span>peer0.peer_ids() {
+            <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+            broadcast_pks.insert(peer_id, broadcast_pk);
+            broadcast_sks.insert(peer_id, broadcast_sk);
+        }
+
         <span class="kw">let </span>netinfo = NetworkInfo::generate_map(peer0.peer_ids(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
         <span class="kw">let </span>epochinfo = NetworkInfo::generate_map(peer0.peer_ids(), <span class="kw-2">&amp;mut </span>rng)
@@ -1231,6 +1295,8 @@
                 <span class="kw">let </span>config = ServerConfig::from(
                     params[<span class="kw-2">&amp;</span>id].clone(),
                     id,
+                    broadcast_pks.clone(),
+                    <span class="kw-2">*</span>broadcast_sks.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;We created this entry&quot;</span>),
                     <span class="self">Self</span>::extract_keys(authinfo.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;peer exists&quot;</span>)),
                     <span class="self">Self</span>::extract_keys(epochinfo.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;peer exists&quot;</span>)),
                     <span class="self">Self</span>::extract_keys(netinfo.get(<span class="kw-2">&amp;</span>id).expect(<span class="string">&quot;peer exists&quot;</span>)),
@@ -1272,6 +1338,20 @@
 
         <span class="kw">let </span>peers = <span class="kw-2">&amp;</span>params.peer_ids();
         <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span>params.local.our_id;
+
+        <span class="kw">let </span>broadcast_keys_exchange = PeerHandle::new(
+            <span class="kw-2">&amp;</span>connections,
+            MODULE_INSTANCE_ID_GLOBAL,
+            <span class="kw-2">*</span>our_id,
+            peers.clone(),
+        );
+
+        <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+
+        <span class="kw">let </span>broadcast_public_keys = broadcast_keys_exchange
+            .exchange_pubkeys(<span class="string">&quot;broadcast&quot;</span>.to_string(), broadcast_pk)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="comment">// in case we are running by ourselves, avoid DKG
         </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
             <span class="kw">let </span>server =
@@ -1364,6 +1444,8 @@
         <span class="kw">let </span>server = ServerConfig::from(
             params.clone(),
             <span class="kw-2">*</span>our_id,
+            broadcast_public_keys,
+            broadcast_sk,
             auth_keys,
             epoch_keys,
             hbbft_keys,
