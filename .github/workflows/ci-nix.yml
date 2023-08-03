@@ -285,13 +285,13 @@ jobs:
       matrix:
         build:
           - flake-output: client-pkgs
-            bin: fedimint-cli
+            bins: ""
             deb: fedimint
           - flake-output: fedimint-pkgs
-            bin: fedimintd
-            deb: fedimintd
+            bins: fedimintd,fedimint-cli
+            deb: fedimint
           - flake-output: gateway-pkgs
-            bin: gateway-cli
+            bins: gateway-cli,gatewayd
             deb: fedimint-gateway
 
     runs-on: buildjet-4vcpu-ubuntu-2004
@@ -308,13 +308,33 @@ jobs:
         continue-on-error: true
 
       - name: Build ${{ matrix.build.flake-output }}
-        run: nix build -L .#${{ matrix.build.flake-output }}
+        run: |
+          nix build -L .#${{ matrix.build.flake-output }}
+          mkdir -p bins
+          bins="${{ matrix.build.bins }}"
+          for bin in ${bins//,/ } ; do
+            nix bundle .#$bin -o bins/$bin
+          done
 
-      - name: Check version ${{ matrix.build.bin }}
-        run: nix run .#${{ matrix.build.bin }} version-hash && echo "$GITHUB_SHA" && test "$(nix run .#${{ matrix.build.bin }} version-hash)" = "${GITHUB_SHA}"
+      - name: Check version ${{ matrix.build.bins }}
+        run: |
+          bins="${{ matrix.build.bins }}"
+          for bin in ${bins//,/ } ; do
+            nix run .#$bin version-hash && echo "$GITHUB_SHA" && test "$(nix run .#$bin version-hash)" = "${GITHUB_SHA}"
+          done
 
-      - name: Check sha256sum ${{ matrix.build.bin }}
-        run: nix build .#${{ matrix.build.bin }} && sha256sum "./result/bin/${{ matrix.build.bin }}"
+      - name: Check sha256sum ${{ matrix.build.bins }}
+        run: |
+          bins="${{ matrix.build.bins }}"
+          for bin in ${bins//,/ } ; do
+            nix build .#$bin && sha256sum "./result/bin/$bin"
+          done
+
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v3
+        with: 
+          name: "${{ matrix.build.flake-output}}-linux-x86_64"
+          path: "bins/**"
 
       - name: Build DEB package
         run: |
@@ -330,13 +350,13 @@ jobs:
           mkdir -p rpms
           cp -a ${{ matrix.build.deb }}.rpm/*.rpm ./rpms/
 
-      - name: Upload Artifact
+      - name: Upload DEB packages
         uses: actions/upload-artifact@v3
         with: 
           name: "deb-bundle"
           path: "debs/**.deb"
 
-      - name: Upload Artifact
+      - name: Upload RPM packages
         uses: actions/upload-artifact@v3
         with: 
           name: "rpm-bundle"
