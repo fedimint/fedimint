@@ -546,7 +546,7 @@ where
         mut connected: ConnectedPeerConnectionState<M>,
         maybe_msg: Option<UniqueMessage<M>>,
     ) -> PeerConnectionState<M> {
-        match connected
+        if let Err(e) = connected
             .connection
             .send(PeerMessage {
                 msg: maybe_msg,
@@ -554,10 +554,13 @@ where
             })
             .await
         {
-            Ok(()) => {
-                connected.next_ping = Instant::now() + PING_INTERVAL;
-                PeerConnectionState::Connected(connected)
-            }
+            return self.disconnect_err(e, 0);
+        }
+
+        connected.next_ping = Instant::now() + PING_INTERVAL;
+
+        match connected.connection.flush().await {
+            Ok(()) => PeerConnectionState::Connected(connected),
             Err(e) => self.disconnect_err(e, 0),
         }
     }
