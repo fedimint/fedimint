@@ -756,7 +756,10 @@ where
             status_query_receiver,
             last_received: None,
         };
-        let initial_state = common.disconnect(0);
+        let initial_state = PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
+            reconnect_at: Instant::now(),
+            failed_reconnect_counter: 0,
+        });
 
         let state_machine = PeerConnectionStateMachine {
             common,
