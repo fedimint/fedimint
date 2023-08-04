@@ -391,8 +391,8 @@ impl ServerModule for Lightning {
                     bail!("Already received a valid decryption share for this peer");
                 }
 
-                let account = self
-                    .get_contract_account(dbtx, contract_id)
+                let account = dbtx
+                    .get_value(&ContractKey(contract_id))
                     .await
                     .context("Contract account for this decryption share does not exist")?;
 
