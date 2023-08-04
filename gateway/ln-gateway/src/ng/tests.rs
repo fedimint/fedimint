@@ -188,7 +188,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
+async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     gateway_test(
         |gateway, other_lightning_client, fed, user_client| async move {
             let gateway = gateway.remove_client(&fed).await;
@@ -197,9 +197,9 @@ async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
             user_client.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
-            // Create test invalid invoice
+            // Create invoice that cannout be paid
             let invoice = other_lightning_client
-                .invalid_invoice(sats(250), None)
+                .unpayable_invoice(sats(250), None)
                 .unwrap();
 
             // User client pays test invoice
@@ -354,7 +354,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             assert_eq!(gateway.get_balance().await, sats(1000));
 
             // Create test invoice
-            let invoice = other_lightning_client.invalid_invoice(sats(250), None)?;
+            let invoice = other_lightning_client.unpayable_invoice(sats(250), None)?;
 
             // Create offer with a preimage that doesn't correspond to the payment hash of
             // the invoice

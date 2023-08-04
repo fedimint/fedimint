@@ -26,7 +26,10 @@ pub trait LightningTest: ILnRpcClient {
     ) -> ln_gateway::Result<Invoice>;
 
     /// Creates an invoice that is not payable
-    fn invalid_invoice(
+    ///
+    /// * Mocks use hard-coded invoice description to fail the payment
+    /// * Real fixtures won't be able to route to randomly generated node pubkey
+    fn unpayable_invoice(
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
@@ -38,6 +41,7 @@ pub trait LightningTest: ILnRpcClient {
         // `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         Ok(InvoiceBuilder::new(Currency::Regtest)
+            .payee_pub_key(kp.public_key())
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
             .payment_hash(sha256::Hash::hash(&Preimage([0; 32]).0))
             .current_timestamp()
