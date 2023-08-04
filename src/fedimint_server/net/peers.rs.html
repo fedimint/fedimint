@@ -879,6 +879,51 @@
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -898,7 +943,7 @@
 <span class="kw">use </span>fedimint_core::api::PeerConnectionStatus;
 <span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
-<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep_until, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;
 <span class="kw">use </span>futures::future::select_all;
@@ -916,6 +961,11 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
 <span class="kw">use </span><span class="kw">crate</span>::net::queue::{MessageId, MessageQueue, UniqueMessage};
+
+<span class="doccomment">/// Every how many seconds to send an empty message to our peer if we sent no
+/// messages during that time. This helps with reducing the amount of messages
+/// that need to be re-sent in case of very one-sided communication.
+</span><span class="kw">const </span>PING_INTERVAL: Duration = Duration::from_secs(<span class="number">10</span>);
 
 <span class="doccomment">/// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
@@ -953,7 +1003,7 @@
 /// it appears in the public interface.
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PeerMessage&lt;M&gt; {
-    msg: UniqueMessage&lt;M&gt;,
+    msg: <span class="prelude-ty">Option</span>&lt;UniqueMessage&lt;M&gt;&gt;,
     ack: <span class="prelude-ty">Option</span>&lt;MessageId&gt;,
 }
 
@@ -1070,6 +1120,7 @@
 
 <span class="kw">struct </span>ConnectedPeerConnectionState&lt;M&gt; {
     connection: AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;,
+    next_ping: Instant,
 }
 
 <span class="kw">enum </span>PeerConnectionState&lt;M&gt; {
@@ -1322,6 +1373,9 @@
             <span class="prelude-val">Some</span>(msg_res) = connected.connection.next() =&gt; {
                 <span class="self">self</span>.receive_message(connected, msg_res).<span class="kw">await
             </span>},
+            <span class="kw">_ </span>= sleep_until(connected.next_ping.into()) =&gt; {
+                <span class="self">self</span>.send_ping(connected).<span class="kw">await
+            </span>},
             <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">None</span>;
             },
@@ -1334,12 +1388,14 @@
         disconnect_count: u64,
     ) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="macro">info!</span>(target: LOG_NET_PEER,
+            our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
             peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %disconnect_count,
             resend_queue_len = <span class="self">self</span>.resend_queue.queue.len(),
-            <span class="string">&quot;Received incoming connection&quot;</span>);
+            <span class="string">&quot;Initializing new connection&quot;</span>);
         <span class="kw">match </span><span class="self">self</span>.resend_buffer_contents(<span class="kw-2">&amp;mut </span>new_connection).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(()) =&gt; PeerConnectionState::Connected(ConnectedPeerConnectionState {
                 connection: new_connection,
+                next_ping: Instant::now(),
             }),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(e, disconnect_count),
         }
@@ -1352,7 +1408,7 @@
         <span class="kw">for </span>msg <span class="kw">in </span><span class="self">self</span>.resend_queue.iter().cloned() {
             connection
                 .send(PeerMessage {
-                    msg,
+                    msg: <span class="prelude-val">Some</span>(msg),
                     ack: <span class="self">self</span>.last_received,
                 })
                 .<span class="kw">await</span><span class="question-mark">?
@@ -1370,6 +1426,7 @@
             <span class="macro">debug!</span>(
                 target: LOG_NET_PEER,
                 %disconnect_count,
+                our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
                 peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id,
                 delay_secs,
                 <span class="string">&quot;Scheduling reopening of connection&quot;
@@ -1385,26 +1442,50 @@
 
     <span class="kw">fn </span>disconnect_err(<span class="kw-2">&amp;</span><span class="self">self</span>, err: anyhow::Error, disconnect_count: u64) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="macro">debug!</span>(target: LOG_NET_PEER,
+            our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
             peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %err, %disconnect_count, <span class="string">&quot;Peer disconnected&quot;</span>);
         <span class="self">self</span>.disconnect(disconnect_count)
     }
 
     <span class="kw">async fn </span>send_message_connected(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>connected: ConnectedPeerConnectionState&lt;M&gt;,
+        connected: ConnectedPeerConnectionState&lt;M&gt;,
         msg: M,
     ) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="kw">let </span>umsg = <span class="self">self</span>.resend_queue.push(msg);
         <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>umsg.id, <span class="string">&quot;Sending outgoing message&quot;</span>);
 
-        <span class="kw">match </span>connected
+        <span class="self">self</span>.send_message_connected_inner(connected, <span class="prelude-val">Some</span>(umsg))
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>send_ping(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        connected: ConnectedPeerConnectionState&lt;M&gt;,
+    ) -&gt; PeerConnectionState&lt;M&gt; {
+        <span class="macro">trace!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">&quot;Sending ping&quot;</span>);
+        <span class="self">self</span>.send_message_connected_inner(connected, <span class="prelude-val">None</span>).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>send_message_connected_inner(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>connected: ConnectedPeerConnectionState&lt;M&gt;,
+        maybe_msg: <span class="prelude-ty">Option</span>&lt;UniqueMessage&lt;M&gt;&gt;,
+    ) -&gt; PeerConnectionState&lt;M&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = connected
             .connection
             .send(PeerMessage {
-                msg: umsg,
+                msg: maybe_msg,
                 ack: <span class="self">self</span>.last_received,
             })
             .<span class="kw">await
         </span>{
+            <span class="kw">return </span><span class="self">self</span>.disconnect_err(e, <span class="number">0</span>);
+        }
+
+        connected.next_ping = Instant::now() + PING_INTERVAL;
+
+        <span class="kw">match </span>connected.connection.flush().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(()) =&gt; PeerConnectionState::Connected(connected),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(e, <span class="number">0</span>),
         }
@@ -1429,37 +1510,43 @@
         msg_res: <span class="prelude-ty">Result</span>&lt;PeerMessage&lt;M&gt;, anyhow::Error&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="kw">let </span>PeerMessage { msg, ack } = msg_res<span class="question-mark">?</span>;
-        <span class="macro">trace!</span>(target: LOG_NET_PEER,peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received incoming message&quot;</span>);
 
-        <span class="kw">let </span>expected = <span class="self">self
-            </span>.last_received
-            .map(|last_id| last_id.increment())
-            .unwrap_or(msg.id);
-
-        <span class="kw">if </span>msg.id &lt; expected {
-            <span class="macro">info!</span>(target: LOG_NET_PEER,
-                <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received old message&quot;</span>);
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-        }
-
-        <span class="kw">if </span>msg.id &gt; expected {
-            <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received message from the future&quot;</span>);
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Received message from the future&quot;</span>));
-        }
-
-        <span class="macro">debug_assert_eq!</span>(expected, msg.id, <span class="string">&quot;someone removed the check above&quot;</span>);
-        <span class="self">self</span>.last_received = <span class="prelude-val">Some</span>(expected);
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(ack) = ack {
+        <span class="comment">// Process ACK no matter if we received a message or not
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(ack) = ack {
+            <span class="macro">trace!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="question-mark">?</span>ack, <span class="string">&quot;Received ACK for sent message&quot;</span>);
             <span class="self">self</span>.resend_queue.ack(ack);
         }
 
-        <span class="kw">if </span><span class="self">self</span>.incoming.send(msg.msg).<span class="kw">await</span>.is_err() {
-            <span class="comment">// ignore error - if the other side is not there,
-            // it means we&#39;re are probably shutting down
-            </span><span class="macro">debug!</span>(
-                target: LOG_NET_PEER,
-                <span class="string">&quot;Could not deliver message to recipient - probably shutting down&quot;
-            </span>);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(msg) = msg {
+            <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received incoming message&quot;</span>);
+
+            <span class="kw">let </span>expected = <span class="self">self
+                </span>.last_received
+                .map(|last_id| last_id.increment())
+                .unwrap_or(msg.id);
+
+            <span class="kw">if </span>msg.id &lt; expected {
+                <span class="macro">info!</span>(target: LOG_NET_PEER,
+                    <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received old message&quot;</span>);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+
+            <span class="kw">if </span>msg.id &gt; expected {
+                <span class="macro">warn!</span>(target: LOG_NET_PEER, <span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received message from the future&quot;</span>);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Received message from the future&quot;</span>));
+            }
+
+            <span class="self">self</span>.last_received = <span class="prelude-val">Some</span>(expected);
+
+            <span class="macro">debug_assert_eq!</span>(expected, msg.id, <span class="string">&quot;someone removed the check above&quot;</span>);
+            <span class="kw">if </span><span class="self">self</span>.incoming.send(msg.msg).<span class="kw">await</span>.is_err() {
+                <span class="comment">// ignore error - if the other side is not there,
+                // it means we&#39;re are probably shutting down
+                </span><span class="macro">debug!</span>(
+                    target: LOG_NET_PEER,
+                    <span class="string">&quot;Could not deliver message to recipient - probably shutting down&quot;
+                </span>);
+            }
         }
 
         <span class="prelude-val">Ok</span>(())
@@ -1542,7 +1629,7 @@
     }
 
     <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
-        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">&quot;Trying to reconnect&quot;</span>);
+        <span class="macro">debug!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">&quot;Trying to reconnect&quot;</span>);
         <span class="kw">let </span>addr = <span class="self">self</span>.peer_address.clone();
         <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr, <span class="self">self</span>.peer_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1732,7 +1819,10 @@
 
             <span class="kw">let </span>(<span class="kw-2">mut </span>peers_c, peer_status_client_c) =
                 build_peers(<span class="string">&quot;127.0.0.1:3000&quot;</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
-            <span class="kw">let </span>recv = timeout(peers_c.receive()).<span class="kw">await</span>.unwrap().unwrap();
+            <span class="kw">let </span>recv = timeout(peers_c.receive())
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;time out&quot;</span>)
+                .expect(<span class="string">&quot;stream closed&quot;</span>);
             <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">21</span>);
             <span class="kw">let </span>status = peer_status_client_c.get_all_status().<span class="kw">await</span>;
