@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":[["get_key_prefix_search_hex",""]],"struct":[["SqliteDb",""],["SqliteDbTransaction",""]]};

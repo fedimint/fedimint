@@ -27,7 +27,6 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_mint_server":["",[],["lib.rs"]],\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
 "fedimint_server":["",[["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug.rs","mod.rs","server.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["db.rs","lib.rs","multiplexed.rs"]],\
-"fedimint_sqlite":["",[],["lib.rs"]],\
 "fedimint_testing":["",[["btc",[],["mock.rs","mod.rs","real.rs"]],["ln",[],["mock.rs","mod.rs","real.rs"]]],["db.rs","federation.rs","fixtures.rs","gateway.rs","lib.rs"]],\
 "fedimint_wallet_client":["",[],["api.rs","db.rs","deposit.rs","lib.rs","withdraw.rs"]],\
 "fedimint_wallet_common":["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
