@@ -57,6 +57,10 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -85,7 +89,10 @@
     ) -&gt; ln_gateway::Result&lt;Invoice&gt;;
 
     <span class="doccomment">/// Creates an invoice that is not payable
-    </span><span class="kw">fn </span>invalid_invoice(
+    ///
+    /// * Mocks use hard-coded invoice description to fail the payment
+    /// * Real fixtures won&#39;t be able to route to randomly generated node pubkey
+    </span><span class="kw">fn </span>unpayable_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
@@ -97,6 +104,7 @@
         <span class="comment">// `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         </span><span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
+            .payee_pub_key(kp.public_key())
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
             .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>Preimage([<span class="number">0</span>; <span class="number">32</span>]).<span class="number">0</span>))
             .current_timestamp()
