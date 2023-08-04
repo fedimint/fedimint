@@ -256,7 +256,7 @@ pub mod mock {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use anyhow::Error;
+    use anyhow::{anyhow, Error};
     use fedimint_core::{task, PeerId};
     use futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
     use rand::Rng;
@@ -266,6 +266,7 @@ pub mod mock {
     use tokio::sync::mpsc::Sender;
     use tokio::sync::Mutex;
     use tokio_util::sync::CancellationToken;
+    use tracing::error;
     use url::Url;
 
     use crate::net::connect::{parse_host_port, ConnectResult, Connector};
@@ -633,7 +634,9 @@ pub mod mock {
         M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
     {
         async fn connect_framed(&self, destination: Url, _peer: PeerId) -> ConnectResult<M> {
-            let mut clients_lock = self.clients.lock().await;
+            let mut clients_lock = self.clients.try_lock().map_err(|e| {
+                anyhow!("Mock network mutex busy or poisoned, the network stack will re-try anyway: {e:?}")
+            })?;
             if let Some(client) = clients_lock.get_mut(&parse_host_port(destination)?) {
                 let (stream_our, stream_theirs) = tokio::io::duplex(43_689);
                 let mut stream_our = UnreliableDuplexStream::new(stream_our, self.reliability);
