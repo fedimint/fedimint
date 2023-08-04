@@ -537,8 +537,8 @@ impl ServerModule for Lightning {
         input: &'b LightningInput,
         _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let account: ContractAccount = self
-            .get_contract_account(dbtx, input.contract_id)
+        let mut account = dbtx
+            .get_value(&ContractKey(input.contract_id))
             .await
             .ok_or(LightningError::UnknownContract(input.contract_id))
             .into_module_error_other()?;
@@ -553,7 +553,7 @@ impl ServerModule for Lightning {
 
         let consensus_height = self.consensus_block_height(dbtx).await;
 
-        let pub_key = match account.contract {
+        let pub_key = match &account.contract {
             FundedContract::Outgoing(outgoing) => {
                 if outgoing.timelock as u64 > consensus_height && !outgoing.cancelled {
                     // If the timelock hasn't expired yet …
@@ -578,7 +578,7 @@ impl ServerModule for Lightning {
                     outgoing.user_key
                 }
             }
-            FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
+            FundedContract::Incoming(incoming) => match &incoming.contract.decrypted_preimage {
                 // Once the preimage has been decrypted …
                 DecryptedPreimage::Pending => {
                     return Err(LightningError::ContractNotReady).into_module_error_other();
@@ -595,16 +595,10 @@ impl ServerModule for Lightning {
             },
         };
 
-        let account_db_key = ContractKey(input.contract_id);
+        account.amount -= input.amount;
 
-        let mut contract_account = dbtx
-            .get_value(&account_db_key)
-            .await
-            .expect("Should fail validation if contract account doesn't exist");
-
-        contract_account.amount -= input.amount;
-
-        dbtx.insert_entry(&account_db_key, &contract_account).await;
+        dbtx.insert_entry(&ContractKey(input.contract_id), &account)
+            .await;
 
         Ok(InputMeta {
             amount: TransactionItemAmount {
