@@ -23,7 +23,6 @@ gateway/ @fedimint/lightning
 
 fedimint-rocksdb/    @fedimint/database
 fedimint-dbtool/     @fedimint/database
-fedimint-sqlite/     @fedimint/database
 fedimint-core/src/db @fedimint/database
 db/                  @fedimint/database
 **/db.rs             @fedimint/database

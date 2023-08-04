@@ -21,7 +21,6 @@ members = [
     "fedimint-metrics",
     "fedimint-rocksdb",
     "fedimint-server",
-    "fedimint-sqlite",
     "fedimint-testing",
     "fedimint-wasm-tests",
     "modules/fedimint-dummy-common",

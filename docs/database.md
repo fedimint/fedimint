@@ -52,7 +52,7 @@ be run to re-generate the database backup. `test_migrations` will need to be upd
 ### Interfaces
  - **ISingleUseDatabaseTransaction** - The interface that each adapter struct implements. The main difference with this interface is that commit_tx
 does not take self by move.
- - **IDatabaseTransaction** - The interface that each individual database must implement, such as `MemTransaction`, `RocksDbTransaction`, and `SqliteDbTransaction`.
+ - **IDatabaseTransaction** - The interface that each individual database must implement, such as `MemTransaction` and `RocksDbTransaction`.
 
 ### Structs
 #### Public
@@ -73,7 +73,6 @@ from accessing keys/values outside of its database namespace.
 #### Base Implementations
  - **MemTransaction** - Base implementation of a memory database transaction.
  - **RocksDbTransaction** - Base implementation of a RocksDb database transaction. Uses optimistic transaction internally.
- - **SqliteDbTransaction** - Base implementation of a Sqlite database transaction.
 
 ```mermaid
 classDiagram
@@ -86,7 +85,6 @@ classDiagram
     IsolatedDatabaseTransaction --|> NotifyingTransaction
     SingleUseDatabaseTransaction --|> RocksDbTransaction
     SingleUseDatabaseTransaction --|> MemTransaction
-    SingleUseDatabaseTransaction --|> SqliteDbTransaction
     class DatabaseTransaction{
       Box ISingleUseDatabaseTransaction tx
       ModuleDecoderRegistry decoders
@@ -128,8 +126,4 @@ classDiagram
     class MemTransaction{
         <<interface IDatabaseTransaction>>
         BTreeMap tx_data
-    }
-    class SqliteDbTransaction{
-        <<interface IDatabaseTransaction>>
-        Transaction tx
     }

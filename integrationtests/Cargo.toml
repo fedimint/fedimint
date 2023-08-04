@@ -32,7 +32,6 @@ fedimint-logging = { path = "../fedimint-logging", features = ["telemetry"] }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
-fedimint-sqlite = { path = "../fedimint-sqlite" }
 fedimint-testing = { path = "../fedimint-testing" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }

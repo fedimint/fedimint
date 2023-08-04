@@ -288,9 +288,6 @@ craneLib.overrideScope' (self: prev: {
     pkgs = {
       fedimint-client-legacy = { };
       fedimint-client = { };
-    } // lib.optionalAttrs (target == null || target.name != "wasm32-unknown-unknown") {
-      # broken on wasm32
-      fedimint-sqlite = { };
     };
   };
 
