@@ -441,20 +441,21 @@ impl ServerModule for Wallet {
             .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)
             .into_module_error_other()?;
 
-        if dbtx.get_value(&UTXOKey(input.outpoint())).await.is_some() {
-            return Err(WalletError::PegInAlreadyClaimed).into_module_error_other();
-        }
-
         debug!(outpoint = %input.outpoint(), "Claiming peg-in");
 
-        dbtx.insert_new_entry(
-            &UTXOKey(input.outpoint()),
-            &SpendableUTXO {
-                tweak: input.tweak_contract_key().serialize(),
-                amount: bitcoin::Amount::from_sat(input.tx_output().value),
-            },
-        )
-        .await;
+        if dbtx
+            .insert_entry(
+                &UTXOKey(input.outpoint()),
+                &SpendableUTXO {
+                    tweak: input.tweak_contract_key().serialize(),
+                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                },
+            )
+            .await
+            .is_some()
+        {
+            return Err(WalletError::PegInAlreadyClaimed).into_module_error_other();
+        }
 
         Ok(InputMeta {
             amount: TransactionItemAmount {
