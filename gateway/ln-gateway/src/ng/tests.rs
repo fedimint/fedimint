@@ -34,7 +34,6 @@ use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
-use tracing::info;
 use url::Url;
 
 fn fixtures() -> Fixtures {
@@ -190,11 +189,6 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_invalid_invoice() -> anyhow::Result<()> {
-    if Fixtures::is_real_test() {
-        info!("Skipping test meant to run only with mocks");
-        return Ok(());
-    }
-
     gateway_test(
         |gateway, other_lightning_client, fed, user_client| async move {
             let gateway = gateway.remove_client(&fed).await;
