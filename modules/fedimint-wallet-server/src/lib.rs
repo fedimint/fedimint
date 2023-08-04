@@ -472,22 +472,18 @@ impl ServerModule for Wallet {
         output: &'a WalletOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let dummy_tweak = [0; 32];
-        let fee_rate = self.consensus_fee_rate(dbtx).await;
-        let tx = self
-            .create_peg_out_tx(dbtx, output, &dummy_tweak)
+        let change_tweak = self.consensus_nonce(dbtx).await;
+
+        let mut tx = self
+            .create_peg_out_tx(dbtx, output, &change_tweak)
             .await
             .into_module_error_other()?;
+
+        let fee_rate = self.consensus_fee_rate(dbtx).await;
 
         self.offline_wallet()
             .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)
             .into_module_error_other()?;
-
-        let change_tweak = self.consensus_nonce(dbtx).await;
-        let mut tx = self
-            .create_peg_out_tx(dbtx, output, &change_tweak)
-            .await
-            .expect("Should have been validated");
 
         self.offline_wallet().sign_psbt(&mut tx.psbt);
 
@@ -531,8 +527,10 @@ impl ServerModule for Wallet {
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
             .await;
+
         dbtx.insert_new_entry(&PegOutTxSignatureCI(txid), &sigs)
             .await;
+
         dbtx.insert_new_entry(
             &PegOutBitcoinTransaction(out_point),
             &WalletOutputOutcome(txid),
