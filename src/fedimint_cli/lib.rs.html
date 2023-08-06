@@ -826,9 +826,6 @@
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
-<a href="#829" id="829">829</a>
-<a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -861,7 +858,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::query::EventuallyConsistent;
-<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>};
 <span class="kw">use </span>fedimint_core::{PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
@@ -1150,10 +1147,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_gens: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
     ) -&gt; CliResult&lt;fedimint_client::Client&gt; {
-        <span class="kw">let </span>tg = TaskGroup::new();
         <span class="kw">let </span>client_builder = <span class="self">self</span>.build_client_ng_builder(module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
         client_builder
-            .build::&lt;PlainRootSecretStrategy&gt;(tg)
+            .build::&lt;PlainRootSecretStrategy&gt;()
             .<span class="kw">await
             </span>.map_err_cli_general()
     }
@@ -1377,15 +1373,13 @@
                 hash: <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>).to_string(),
             }),
             Command::Client(ClientCmd::Restore { secret }) =&gt; {
-                <span class="kw">let </span>tg = TaskGroup::new();
                 <span class="kw">let </span>(client, metadata) = cli
                     .build_client_ng_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?
-                    </span>.build_restoring_from_backup(
-                        tg,
-                        ClientSecret::&lt;PlainRootSecretStrategy&gt;::new(secret),
-                    )
+                    </span>.build_restoring_from_backup(ClientSecret::&lt;PlainRootSecretStrategy&gt;::new(
+                        secret,
+                    ))
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
 

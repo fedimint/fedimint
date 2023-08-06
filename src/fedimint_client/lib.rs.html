@@ -1559,8 +1559,6 @@
 <a href="#1559" id="1559">1559</a>
 <a href="#1560" id="1560">1560</a>
 <a href="#1561" id="1561">1561</a>
-<a href="#1562" id="1562">1562</a>
-<a href="#1563" id="1563">1563</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1635,7 +1633,6 @@
 <span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>std::sync::atomic::AtomicUsize;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_stream::stream;
@@ -1669,7 +1666,6 @@
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
@@ -1692,8 +1688,6 @@
     TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
-
-<span class="kw">const </span>TG_SHUTDOWN_JOIN_TIMEOUT: Duration = Duration::from_millis(<span class="number">200</span>);
 
 <span class="doccomment">/// Client backup
 </span><span class="kw">pub mod </span>backup;
@@ -2030,7 +2024,12 @@
     }
 }
 
-<span class="kw">impl </span>Drop <span class="kw">for </span>Client {
+<span class="doccomment">/// We need a separate drop implementation for `Client` that triggers
+/// `Executor::stop_executor` even though the `Drop` implementation of
+/// `ExecutorInner` should already take care of that. The reason is that as long
+/// as the executor task is active there may be a cycle in the
+/// `Arc&lt;ClientInner&gt;`s such that at least one `Executor` never gets dropped.
+</span><span class="kw">impl </span>Drop <span class="kw">for </span>Client {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="comment">// Not sure if Ordering::SeqCst is strictly needed here, but better safe than
         // sorry.
@@ -2043,15 +2042,20 @@
         // client reference
         </span><span class="kw">if </span>client_count == <span class="number">1 </span>{
             <span class="macro">info!</span>(<span class="string">&quot;Last client reference dropped, shutting down client task group&quot;</span>);
-            futures::executor::block_on(<span class="kw">async </span>{
-                <span class="kw">let </span><span class="prelude-val">Some</span>(tg) = <span class="self">self</span>.inner.tg.lock().<span class="kw">await</span>.take() <span class="kw">else </span>{
-                    <span class="kw">return</span>;
-                };
+            <span class="kw">let </span>maybe_shutdown_confirmation = <span class="self">self</span>.inner.executor.stop_executor();
 
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tg.shutdown_join_all(<span class="prelude-val">Some</span>(TG_SHUTDOWN_JOIN_TIMEOUT)).<span class="kw">await </span>{
-                    <span class="macro">error!</span>(<span class="string">&quot;Error shutting down client task group: {e}&quot;</span>);
-                }
-            });
+            <span class="comment">// Just in case the shutdown does not take immediate effect we block here if
+            // possible
+            </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(shutdown_confirmation) = maybe_shutdown_confirmation {
+                tokio::task::block_in_place(<span class="kw">move </span>|| {
+                    futures::executor::block_on(<span class="kw">async </span>{
+                        <span class="kw">if </span>shutdown_confirmation.<span class="kw">await</span>.is_err() {
+                            <span class="macro">error!</span>(<span class="string">&quot;Error while awaiting client shutdown confirmation&quot;</span>);
+                        }
+                    });
+                });
+            }
         }
     }
 }
@@ -2071,13 +2075,11 @@
         ClientBuilder::default()
     }
 
-    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>tg: TaskGroup) {
+    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="self">self</span>.inner
             .executor
-            .start_executor(<span class="kw-2">&amp;mut </span>tg, <span class="self">self</span>.inner.context_gen())
+            .start_executor(<span class="self">self</span>.inner.context_gen())
             .<span class="kw">await</span>;
-
-        <span class="kw-2">*</span><span class="self">self</span>.inner.tg.lock().<span class="kw">await </span>= <span class="prelude-val">Some</span>(tg);
     }
 
     <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
@@ -2475,10 +2477,6 @@
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
-    <span class="doccomment">/// Task group used by this client and shut down when the client is dropped.
-    /// If a subgroup is used, dropping the parent task group stops the client&#39;s
-    /// background tasks.
-    </span>tg: Mutex&lt;<span class="prelude-ty">Option</span>&lt;TaskGroup&gt;&gt;,
     <span class="doccomment">/// Number of [`Client`] instances using this `ClientInner`.
     ///
     /// The `ClientInner` struct is both used for the client itself as well as
@@ -2817,7 +2815,6 @@
 
     <span class="kw">pub async fn </span>build_restoring_from_backup&lt;S&gt;(
         <span class="self">self</span>,
-        tg: TaskGroup,
         secret: ClientSecret&lt;S&gt;,
     ) -&gt; anyhow::Result&lt;(Client, Metadata)&gt;
     <span class="kw">where
@@ -2852,19 +2849,19 @@
         </span>set_client_root_secret(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>secret).<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
 
-        <span class="kw">let </span>client = <span class="self">self</span>.build::&lt;S&gt;(tg).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.build::&lt;S&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>metadata = client.restore_from_backup().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((client, metadata))
     }
 
     <span class="doccomment">/// Build a [`Client`] and start its executor
-    </span><span class="kw">pub async fn </span>build&lt;S&gt;(<span class="self">self</span>, tg: TaskGroup) -&gt; anyhow::Result&lt;Client&gt;
+    </span><span class="kw">pub async fn </span>build&lt;S&gt;(<span class="self">self</span>) -&gt; anyhow::Result&lt;Client&gt;
     <span class="kw">where
         </span>S: RootSecretStrategy,
     {
         <span class="kw">let </span>client = <span class="self">self</span>.build_stopped::&lt;S&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
-        client.start_executor(tg).<span class="kw">await</span>;
+        client.start_executor().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(client)
     }
 
@@ -2983,7 +2980,6 @@
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
-            tg: Mutex::new(<span class="prelude-val">None</span>),
             client_count: AtomicUsize::new(<span class="number">1</span>),
         });
 

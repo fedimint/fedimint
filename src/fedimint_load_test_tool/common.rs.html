@@ -337,11 +337,6 @@
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -359,7 +354,6 @@
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleGen;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
 <span class="kw">use </span>fedimint_mint_client::{
@@ -466,11 +460,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>build_client(
-    cfg: <span class="kw-2">&amp;</span>ClientConfig,
-    tg: TaskGroup,
-    rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
-) -&gt; anyhow::Result&lt;Client&gt; {
+<span class="kw">pub async fn </span>build_client(cfg: <span class="kw-2">&amp;</span>ClientConfig, rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;) -&gt; anyhow::Result&lt;Client&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientGen);
     client_builder.with_module(LightningClientGen);
@@ -482,7 +472,7 @@
     } <span class="kw">else </span>{
         client_builder.with_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
-    <span class="kw">let </span>client = client_builder.build::&lt;PlainRootSecretStrategy&gt;(tg).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client = client_builder.build::&lt;PlainRootSecretStrategy&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(client)
 }
 

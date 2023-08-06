@@ -485,8 +485,6 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -728,7 +726,7 @@
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-    <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+    <span class="kw">use </span>fedimint_core::task::sleep;
     <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
     <span class="kw">use </span>fedimint_core::util::BoxStream;
     <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
@@ -928,8 +926,6 @@
             )]),
         );
 
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-
         <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::&lt;DynGlobalClientContext&gt;::builder();
         executor_builder.with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
         <span class="kw">let </span>executor = executor_builder
@@ -945,7 +941,7 @@
         <span class="kw">let </span>dyn_context = DynGlobalClientContext::from(context.clone());
         <span class="kw">let </span>dyn_context_gen_clone = dyn_context.clone();
         executor
-            .start_executor(<span class="kw-2">&amp;mut </span>tg, Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| dyn_context_gen_clone.clone()))
+            .start_executor(Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| dyn_context_gen_clone.clone()))
             .<span class="kw">await</span>;
 
         <span class="kw">let </span>operation_id = OperationId([<span class="number">0x42</span>; <span class="number">32</span>]);

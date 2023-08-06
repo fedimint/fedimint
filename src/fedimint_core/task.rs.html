@@ -984,7 +984,7 @@
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">pub fn </span>spawn&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
     <span class="kw">where
         </span>F: Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;static</span>,
     {
@@ -1030,7 +1030,7 @@
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">pub fn </span>spawn&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
     <span class="kw">where
         </span><span class="comment">// No Send needed on wasm
         </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">&#39;static</span>,
