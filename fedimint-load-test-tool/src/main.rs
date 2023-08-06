@@ -16,7 +16,6 @@ use fedimint_client::Client;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::config::{load_from_file, ClientConfig};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{Amount, TieredMulti};
 use fedimint_mint_client::SpendableNote;
@@ -330,7 +329,6 @@ async fn run_load_test(
     invoice_amount: Amount,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let tg = TaskGroup::new();
     let db_path = archive_dir.as_ref().map(|p| p.join("db"));
     let coordinator_db = if let Some(db_path) = &db_path {
         tokio::fs::create_dir_all(db_path).await?;
@@ -338,13 +336,13 @@ async fn run_load_test(
     } else {
         None
     };
-    let coordinator = build_client(&cfg, tg.make_subgroup().await, coordinator_db.as_ref()).await?;
+    let coordinator = build_client(&cfg, coordinator_db.as_ref()).await?;
     let mut users_clients = Vec::with_capacity(users.into());
     for u in 0..users {
         let user_db = db_path
             .as_ref()
             .map(|db_path| db_path.join(format!("user_{u}.db")));
-        let client = build_client(&cfg, tg.make_subgroup().await, user_db.as_ref()).await?;
+        let client = build_client(&cfg, user_db.as_ref()).await?;
         if let Some(gateway_id) = &gateway_id {
             switch_default_gateway(&client, gateway_id).await?;
         }
@@ -526,8 +524,7 @@ async fn _test_connect_std_client(
     }
     let clients = (0..users)
         .map(|_| async {
-            let tg = TaskGroup::new();
-            let client = build_client(&cfg, tg, None).await?;
+            let client = build_client(&cfg, None).await?;
             Ok::<_, anyhow::Error>(client)
         })
         .collect::<Vec<_>>();

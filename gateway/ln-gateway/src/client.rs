@@ -9,7 +9,6 @@ use fedimint_client::ClientBuilder;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::task::TaskGroup;
 use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
 
@@ -45,7 +44,6 @@ impl StandardGatewayClientBuilder {
         config: FederationConfig,
         node_pub_key: secp256k1::PublicKey,
         lnrpc: Arc<dyn ILnRpcClient>,
-        tg: TaskGroup,
         old_client: Option<fedimint_client::Client>,
     ) -> Result<fedimint_client::Client> {
         let federation_id = config.config.federation_id;
@@ -75,7 +73,7 @@ impl StandardGatewayClientBuilder {
 
         client_builder
             // TODO: make this configurable?
-            .build::<PlainRootSecretStrategy>(tg)
+            .build::<PlainRootSecretStrategy>()
             .await
             .map_err(GatewayError::ClientStateMachineError)
     }

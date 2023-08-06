@@ -557,13 +557,7 @@ impl Gateway {
                 let old_client = self.clients.read().await.get(&federation_id).cloned();
                 let client = self
                     .client_builder
-                    .build(
-                        config.clone(),
-                        node_pub_key,
-                        self.lnrpc.clone(),
-                        self.task_group.make_subgroup().await,
-                        old_client,
-                    )
+                    .build(config.clone(), node_pub_key, self.lnrpc.clone(), old_client)
                     .await?;
 
                 // Registering each client happens in the background, since we're loading the
@@ -683,7 +677,6 @@ impl Gateway {
                 gw_client_cfg.clone(),
                 node_pub_key,
                 self.lnrpc.clone(),
-                self.task_group.make_subgroup().await,
                 old_client,
             )
             .await?;

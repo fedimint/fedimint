@@ -11,13 +11,13 @@ use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, Databa
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::spawn;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send_sync, task};
 use futures::future::select_all;
 use futures::stream::StreamExt;
 use tokio::select;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, error, info, trace, warn};
 
 use super::state::StateTransitionFunction;
@@ -60,6 +60,7 @@ struct ExecutorInner<GC> {
     context: Mutex<Option<ContextGen<GC>>>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
     notifier: Notifier<GC>,
+    shutdown_executor: Mutex<Option<oneshot::Sender<oneshot::Sender<()>>>>,
 }
 
 /// Builder to which module clients can be attached and used to build an
@@ -235,37 +236,83 @@ where
     ///
     /// ## Panics
     /// If called more than once.
-    pub async fn start_executor(&self, tg: &mut TaskGroup, context_gen: ContextGen<GC>) {
-        let replaced_old = self
+    pub async fn start_executor(&self, context_gen: ContextGen<GC>) {
+        let replaced_old_context_gen = self
             .inner
             .context
             .lock()
             .await
             .replace(context_gen.clone())
             .is_some();
-        assert!(!replaced_old, "start_executor was called previously");
+        assert!(
+            !replaced_old_context_gen,
+            "start_executor was called previously"
+        );
+
+        let (shutdown_sender, shutdown_receiver) =
+            tokio::sync::oneshot::channel::<tokio::sync::oneshot::Sender<()>>();
+
+        let replaced_old_shutdown_sender = self
+            .inner
+            .shutdown_executor
+            .lock()
+            .await
+            .replace(shutdown_sender)
+            .is_some();
+        assert!(
+            !replaced_old_shutdown_sender,
+            "start_executor was called previously"
+        );
 
         let task_runner_inner = self.inner.clone();
-        let _handle = tg
-            .spawn("state_machine_executor", move |handle| async move {
-                let shutdown_future = handle.make_shutdown_rx().await;
-                let executor_runner = task_runner_inner.run(context_gen);
-                select! {
-                    _ = shutdown_future => {
-                        info!("Shutting down state machine executor runner");
-                    },
-                    _ = executor_runner => {
-                        error!("State machine executor runner exited unexpectedly!");
-                    },
-                };
-            })
-            .await;
+        let _handle = spawn(async move {
+            let executor_runner = task_runner_inner.run(context_gen);
+            select! {
+                shutdown_happened_sender = shutdown_receiver => {
+                    match shutdown_happened_sender {
+                        Ok(shutdown_happened_sender) => {
+                            info!("Shutting down state machine executor runner due to shutdown signal");
+                            let _ = shutdown_happened_sender.send(());
+                        },
+                        Err(_) => {
+                            error!("Shutting down state machine executor runner because the shutdown signal channel was closed (the executor object was dropped)");
+                        }
+                    }
+                },
+                _ = executor_runner => {
+                    error!("State machine executor runner exited unexpectedly!");
+                },
+            };
+        });
+    }
+
+    /// Stops the background task that runs the state machines.
+    ///
+    /// If a shutdown signal was sent it returns a [`oneshot::Receiver`] that
+    /// will be signalled when the main loop of the background task has
+    /// exited. This can be useful to block until the executor has stopped
+    /// to avoid errors due to the async runtime shutting down while the
+    /// task is still running.
+    ///
+    /// If no shutdown signal was sent it returns `None`. This can happen if
+    /// `stop_executor` is called multiple times.
+    ///
+    /// ## Panics
+    /// If called in parallel with [`start_executor`](Self::start_executor).
+    pub fn stop_executor(&self) -> Option<oneshot::Receiver<()>> {
+        self.inner.stop_executor()
     }
 
     /// Returns a reference to the [`Notifier`] that can be used to subscribe to
     /// state transitions
     pub fn notifier(&self) -> &Notifier<GC> {
         &self.inner.notifier
+    }
+}
+
+impl<GC> Drop for ExecutorInner<GC> {
+    fn drop(&mut self) {
+        self.stop_executor();
     }
 }
 
@@ -501,6 +548,28 @@ where
     }
 }
 
+impl<GC> ExecutorInner<GC> {
+    /// See [`Executor::stop_executor`].
+    fn stop_executor(&self) -> Option<oneshot::Receiver<()>> {
+        let Some(shutdown_sender) = self.shutdown_executor
+            .try_lock()
+            .expect("Only locked during startup, no collisions should be possible")
+            .take() else {
+            debug!("Executor already stopped, ignoring stop request");
+            return None;
+        };
+
+        let (shutdown_confirmation_sender, shutdown_confirmation_receiver) =
+            oneshot::channel::<()>();
+
+        if shutdown_sender.send(shutdown_confirmation_sender).is_err() {
+            warn!("Failed to send shutdown signal to executor, already dead?");
+        }
+
+        Some(shutdown_confirmation_receiver)
+    }
+}
+
 impl<GC: GlobalContext> Debug for ExecutorInner<GC> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let (active, inactive) = futures::executor::block_on(async {
@@ -551,6 +620,7 @@ impl ExecutorBuilder {
             context: Mutex::new(None),
             module_contexts: self.module_contexts,
             notifier,
+            shutdown_executor: Default::default(),
         });
 
         debug!(
@@ -851,7 +921,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::task::{self, TaskGroup};
+    use fedimint_core::task::{self};
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 
@@ -957,7 +1027,7 @@ mod tests {
 
     impl Context for MockContext {}
 
-    async fn get_executor(tg: &mut TaskGroup) -> (Executor<()>, Sender<u64>, Database) {
+    async fn get_executor() -> (Executor<()>, Sender<u64>, Database) {
         let (broadcast, _) = tokio::sync::broadcast::channel(10);
 
         let mut decoder_builder = Decoder::builder();
@@ -978,7 +1048,7 @@ mod tests {
         let executor = executor_builder
             .build(db.clone(), Notifier::new(db.clone()))
             .await;
-        executor.start_executor(tg, Arc::new(|_, _| ())).await;
+        executor.start_executor(Arc::new(|_, _| ())).await;
 
         info!("Initialized test executor");
         (executor, broadcast, db)
@@ -990,8 +1060,7 @@ mod tests {
         const MOCK_INSTANCE_1: ModuleInstanceId = 42;
         const MOCK_INSTANCE_2: ModuleInstanceId = 21;
 
-        let mut task_group = TaskGroup::new();
-        let (executor, sender, _db) = get_executor(&mut task_group).await;
+        let (executor, sender, _db) = get_executor().await;
         executor
             .add_state_machines(vec![DynState::from_typed(
                 MOCK_INSTANCE_1,

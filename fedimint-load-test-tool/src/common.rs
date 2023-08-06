@@ -15,7 +15,6 @@ use fedimint_core::core::IntoDynInstance;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleGen;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary};
 use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
 use fedimint_mint_client::{
@@ -122,11 +121,7 @@ pub async fn await_spend_notes_finish(
     Ok(())
 }
 
-pub async fn build_client(
-    cfg: &ClientConfig,
-    tg: TaskGroup,
-    rocksdb: Option<&PathBuf>,
-) -> anyhow::Result<Client> {
+pub async fn build_client(cfg: &ClientConfig, rocksdb: Option<&PathBuf>) -> anyhow::Result<Client> {
     let mut client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientGen);
     client_builder.with_module(LightningClientGen);
@@ -138,7 +133,7 @@ pub async fn build_client(
     } else {
         client_builder.with_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
-    let client = client_builder.build::<PlainRootSecretStrategy>(tg).await?;
+    let client = client_builder.build::<PlainRootSecretStrategy>().await?;
     Ok(client)
 }
 

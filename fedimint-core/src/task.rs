@@ -383,7 +383,7 @@ mod imp {
 
     use super::*;
 
-    pub(crate) fn spawn<F>(future: F) -> Option<JoinHandle<()>>
+    pub fn spawn<F>(future: F) -> Option<JoinHandle<()>>
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -429,7 +429,7 @@ mod imp {
 
     use super::*;
 
-    pub(crate) fn spawn<F>(future: F) -> Option<JoinHandle<()>>
+    pub fn spawn<F>(future: F) -> Option<JoinHandle<()>>
     where
         // No Send needed on wasm
         F: Future<Output = ()> + 'static,

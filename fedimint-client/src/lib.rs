@@ -72,7 +72,6 @@ use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{anyhow, bail};
 use async_stream::stream;
@@ -106,7 +105,6 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
@@ -129,8 +127,6 @@ use crate::transaction::{
     TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
-
-const TG_SHUTDOWN_JOIN_TIMEOUT: Duration = Duration::from_millis(200);
 
 /// Client backup
 pub mod backup;
@@ -467,6 +463,11 @@ impl Clone for Client {
     }
 }
 
+/// We need a separate drop implementation for `Client` that triggers
+/// `Executor::stop_executor` even though the `Drop` implementation of
+/// `ExecutorInner` should already take care of that. The reason is that as long
+/// as the executor task is active there may be a cycle in the
+/// `Arc<ClientInner>`s such that at least one `Executor` never gets dropped.
 impl Drop for Client {
     fn drop(&mut self) {
         // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
@@ -480,15 +481,20 @@ impl Drop for Client {
         // client reference
         if client_count == 1 {
             info!("Last client reference dropped, shutting down client task group");
-            futures::executor::block_on(async {
-                let Some(tg) = self.inner.tg.lock().await.take() else {
-                    return;
-                };
+            let maybe_shutdown_confirmation = self.inner.executor.stop_executor();
 
-                if let Err(e) = tg.shutdown_join_all(Some(TG_SHUTDOWN_JOIN_TIMEOUT)).await {
-                    error!("Error shutting down client task group: {e}");
-                }
-            });
+            // Just in case the shutdown does not take immediate effect we block here if
+            // possible
+            #[cfg(not(target_family = "wasm"))]
+            if let Some(shutdown_confirmation) = maybe_shutdown_confirmation {
+                tokio::task::block_in_place(move || {
+                    futures::executor::block_on(async {
+                        if shutdown_confirmation.await.is_err() {
+                            error!("Error while awaiting client shutdown confirmation");
+                        }
+                    });
+                });
+            }
         }
     }
 }
@@ -508,13 +514,11 @@ impl Client {
         ClientBuilder::default()
     }
 
-    pub async fn start_executor(&self, mut tg: TaskGroup) {
+    pub async fn start_executor(&self) {
         self.inner
             .executor
-            .start_executor(&mut tg, self.inner.context_gen())
+            .start_executor(self.inner.context_gen())
             .await;
-
-        *self.inner.tg.lock().await = Some(tg);
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -912,10 +916,6 @@ struct ClientInner {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
-    /// Task group used by this client and shut down when the client is dropped.
-    /// If a subgroup is used, dropping the parent task group stops the client's
-    /// background tasks.
-    tg: Mutex<Option<TaskGroup>>,
     /// Number of [`Client`] instances using this `ClientInner`.
     ///
     /// The `ClientInner` struct is both used for the client itself as well as
@@ -1254,7 +1254,6 @@ impl ClientBuilder {
 
     pub async fn build_restoring_from_backup<S>(
         self,
-        tg: TaskGroup,
         secret: ClientSecret<S>,
     ) -> anyhow::Result<(Client, Metadata)>
     where
@@ -1289,19 +1288,19 @@ impl ClientBuilder {
         set_client_root_secret(&mut dbtx, &secret).await;
         dbtx.commit_tx().await;
 
-        let client = self.build::<S>(tg).await?;
+        let client = self.build::<S>().await?;
         let metadata = client.restore_from_backup().await?;
 
         Ok((client, metadata))
     }
 
     /// Build a [`Client`] and start its executor
-    pub async fn build<S>(self, tg: TaskGroup) -> anyhow::Result<Client>
+    pub async fn build<S>(self) -> anyhow::Result<Client>
     where
         S: RootSecretStrategy,
     {
         let client = self.build_stopped::<S>().await?;
-        client.start_executor(tg).await;
+        client.start_executor().await;
         Ok(client)
     }
 
@@ -1420,7 +1419,6 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
-            tg: Mutex::new(None),
             client_count: AtomicUsize::new(1),
         });
 
