@@ -599,6 +599,21 @@
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
 <a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
 </pre><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 
 </span><span class="kw">use </span>std::collections::VecDeque;
@@ -607,7 +622,7 @@
 <span class="kw">use </span>std::sync::atomic::AtomicBool;
 <span class="kw">use </span>std::sync::atomic::Ordering::SeqCst;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::{Duration, Instant};
+<span class="kw">use </span>std::time::{Duration, Instant, SystemTime};
 
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_logging::LOG_TASK;
@@ -620,11 +635,13 @@
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>tokio::sync::oneshot;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-</span><span class="kw">use </span>tokio::task::JoinHandle;
+</span><span class="kw">use </span>tokio::task::{JoinError, JoinHandle};
 <span class="kw">use </span>tracing::{error, info, warn};
 
 <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">type </span>JoinHandle&lt;T&gt; = futures::future::Ready&lt;anyhow::Result&lt;T&gt;&gt;;
+<span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+</span><span class="kw">type </span>JoinError = anyhow::Error;
 
 <span class="attr">#[derive(Debug, Error)]
 #[error(<span class="string">&quot;deadline has elapsed&quot;</span>)]
@@ -638,6 +655,7 @@
     <span class="attr">#[allow(clippy::type_complexity)]
     </span>on_shutdown: Mutex&lt;Vec&lt;Box&lt;<span class="kw">dyn </span>FnOnce() -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, ()&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;&gt;,
     join: Mutex&lt;VecDeque&lt;(String, JoinHandle&lt;()&gt;)&gt;&gt;,
+    subgroups: Mutex&lt;Vec&lt;TaskGroup&gt;&gt;,
 }
 
 <span class="kw">impl </span>TaskGroupInner {
@@ -697,6 +715,7 @@
     /// detect any panics in the tasks spawned by the subgroup.
     </span><span class="kw">pub async fn </span>make_subgroup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskGroup {
         <span class="kw">let </span>new_tg = <span class="self">Self</span>::new();
+        <span class="self">self</span>.inner.subgroups.lock().<span class="kw">await</span>.push(new_tg.clone());
         <span class="self">self</span>.make_handle()
             .on_shutdown({
                 <span class="kw">let </span>new_tg = <span class="self">self</span>.clone();
@@ -847,9 +866,29 @@
     }
 
     <span class="kw">pub async fn </span>join_all(<span class="self">self</span>, timeout: <span class="prelude-ty">Option</span>&lt;Duration&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+        <span class="kw">let </span>deadline = timeout.map(|timeout| now() + timeout);
         <span class="kw">let </span><span class="kw-2">mut </span>errors = <span class="macro">vec!</span>[];
 
-        <span class="kw">let </span>deadline = timeout.map(|timeout| now() + timeout);
+        <span class="self">self</span>.join_all_inner(deadline, <span class="kw-2">&amp;mut </span>errors).<span class="kw">await</span>;
+
+        <span class="kw">if </span>errors.is_empty() {
+            <span class="prelude-val">Ok</span>(())
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>num_errors = errors.len();
+            <span class="prelude-val">Err</span>(anyhow::Error::msg(<span class="macro">format!</span>(
+                <span class="string">&quot;{num_errors} tasks did not finish cleanly: {errors:?}&quot;
+            </span>)))
+        }
+    }
+
+    <span class="attr">#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), ::async_recursion::async_recursion)]
+    #[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, ::async_recursion::async_recursion(<span class="question-mark">?</span>Send))]
+    </span><span class="kw">pub async fn </span>join_all_inner(<span class="self">self</span>, deadline: <span class="prelude-ty">Option</span>&lt;SystemTime&gt;, errors: <span class="kw-2">&amp;mut </span>Vec&lt;JoinError&gt;) {
+        <span class="kw">for </span>subgroup <span class="kw">in </span><span class="self">self</span>.inner.subgroups.lock().<span class="kw">await</span>.clone() {
+            <span class="macro">info!</span>(target: LOG_TASK, <span class="string">&quot;Waiting for subgroup to finish&quot;</span>);
+            subgroup.join_all_inner(deadline, errors).<span class="kw">await</span>;
+            <span class="macro">info!</span>(target: LOG_TASK, <span class="string">&quot;Subgroup finished&quot;</span>);
+        }
 
         <span class="kw">while let </span><span class="prelude-val">Some</span>((name, join)) = <span class="self">self</span>.inner.join.lock().<span class="kw">await</span>.pop_front() {
             <span class="macro">info!</span>(target: LOG_TASK, task=%name, <span class="string">&quot;Waiting for task to finish&quot;</span>);
@@ -890,15 +929,6 @@
                     </span>)
                 }
             }
-        }
-
-        <span class="kw">if </span>errors.is_empty() {
-            <span class="prelude-val">Ok</span>(())
-        } <span class="kw">else </span>{
-            <span class="kw">let </span>num_errors = errors.len();
-            <span class="prelude-val">Err</span>(anyhow::Error::msg(<span class="macro">format!</span>(
-                <span class="string">&quot;{num_errors} tasks did not finish cleanly: {errors:?}&quot;
-            </span>)))
         }
     }
 }
@@ -944,7 +974,7 @@
     <span class="doccomment">/// Run `f` on shutdown.
     ///
     /// If TaskGroup is already shutting down, run the function immediately.
-    </span><span class="kw">pub async fn </span>on_shutdown(
+    </span><span class="kw">async fn </span>on_shutdown(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="comment">// f: FnOnce() -&gt; BoxFuture&lt;&#39;static, ()&gt; + Send + &#39;static
         </span>f: Box&lt;<span class="kw">dyn </span>FnOnce() -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, ()&gt; + Send + <span class="lifetime">&#39;static</span>&gt;,

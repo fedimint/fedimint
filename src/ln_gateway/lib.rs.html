@@ -820,15 +820,6 @@
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
-<a href="#829" id="829">829</a>
-<a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1090,16 +1081,14 @@
 
                                 <span class="macro">info!</span>(<span class="string">&quot;Successfully created Gateway&quot;</span>);
 
-                                <span class="kw">let </span>tx = run_webserver(<span class="self">self</span>.password.clone(), <span class="self">self</span>.listen, gateway)
+                                <span class="kw">let </span>task_group = run_webserver(<span class="self">self</span>.password.clone(), <span class="self">self</span>.listen, gateway)
                                     .<span class="kw">await
                                     </span>.expect(<span class="string">&quot;Failed to start webserver&quot;</span>);
                                 <span class="macro">info!</span>(<span class="string">&quot;Successfully started webserver&quot;</span>);
 
                                 Gateway::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).<span class="kw">await</span>;
                                 <span class="macro">warn!</span>(<span class="string">&quot;HTLC Stream Lightning connection broken. Stopping webserver...&quot;</span>);
-                                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tx.send(()).<span class="kw">await </span>{
-                                    <span class="macro">error!</span>(<span class="string">&quot;Error shutting down gatewayd webserver: {e:?}&quot;</span>);
-                                }
+                                task_group.shutdown().<span class="kw">await</span>;
                             }
                             <span class="prelude-val">Err</span>(e) =&gt; {
                                 <span class="macro">error!</span>(<span class="string">&quot;Failed to open HTLC stream. Waiting 5 seconds and trying again&quot;</span>);
@@ -1113,13 +1102,6 @@
             .<span class="kw">await</span>;
 
         <span class="kw">let </span>handle = task_group.make_handle();
-        handle
-            .on_shutdown(Box::new(|| {
-                Box::pin(<span class="kw">async move </span>{
-                    <span class="macro">info!</span>(<span class="string">&quot;Gatewayd received exit signal&quot;</span>);
-                })
-            }))
-            .<span class="kw">await</span>;
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(shutdown_receiver)
     }

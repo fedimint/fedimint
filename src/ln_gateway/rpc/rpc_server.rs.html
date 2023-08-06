@@ -145,18 +145,6 @@
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -164,9 +152,9 @@
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>serde_json::json;
-<span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tower_http::cors::CorsLayer;
 <span class="kw">use </span>tower_http::validate_request::ValidateRequestHeaderLayer;
 <span class="kw">use </span>tracing::{error, instrument};
@@ -181,7 +169,7 @@
     authkey: String,
     bind_addr: SocketAddr,
     <span class="kw-2">mut </span>gateway: Gateway,
-) -&gt; axum::response::Result&lt;mpsc::Sender&lt;()&gt;&gt; {
+) -&gt; axum::response::Result&lt;TaskGroup&gt; {
     <span class="comment">// Public routes on gateway webserver
     </span><span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice));
 
@@ -202,13 +190,15 @@
         .layer(Extension(gateway.clone()))
         .layer(CorsLayer::permissive());
 
-    <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = mpsc::channel::&lt;()&gt;(<span class="number">100</span>);
+    <span class="kw">let </span>task_group = gateway.task_group.make_subgroup().<span class="kw">await</span>;
+    <span class="kw">let </span>handle = task_group.make_handle();
+    <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx().<span class="kw">await</span>;
     <span class="kw">let </span>server = axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr).serve(app.into_make_service());
     gateway
         .task_group
         .spawn(<span class="string">&quot;Gateway Webserver&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="kw">let </span>graceful = server.with_graceful_shutdown(<span class="kw">async </span>{
-                rx.recv().<span class="kw">await</span>;
+                <span class="kw">let _ </span>= shutdown_rx.<span class="kw">await</span>;
             });
 
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{
@@ -217,21 +207,7 @@
         })
         .<span class="kw">await</span>;
 
-    <span class="kw">let </span>handle = gateway.task_group.make_handle();
-    <span class="kw">let </span>shutdown_tx = tx.clone();
-    handle
-        .on_shutdown(Box::new(|| {
-            Box::pin(<span class="kw">async move </span>{
-                <span class="comment">// Send shutdown signal to the webserver
-                </span><span class="kw">let </span>res = shutdown_tx.send(()).<span class="kw">await</span>;
-                <span class="kw">if </span>res.is_err() {
-                    <span class="macro">error!</span>(<span class="string">&quot;Error shutting down gatewayd webserver: {res:?}&quot;</span>);
-                }
-            })
-        }))
-        .<span class="kw">await</span>;
-
-    <span class="prelude-val">Ok</span>(tx)
+    <span class="prelude-val">Ok</span>(task_group)
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway

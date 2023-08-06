@@ -50,17 +50,6 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
-<a href="#53" id="53">53</a>
-<a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
-<a href="#56" id="56">56</a>
-<a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::http::StatusCode;
@@ -96,29 +85,18 @@
     <span class="kw">let </span>app = Router::new().route(<span class="string">&quot;/metrics&quot;</span>, get(get_metrics));
     <span class="kw">let </span>server = axum::Server::bind(bind_address).serve(app.into_make_service());
 
-    <span class="kw">let </span>(tx, rx) = oneshot::channel::&lt;()&gt;();
+    <span class="kw">let </span>handle = task_group.make_handle();
+    <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx().<span class="kw">await</span>;
     task_group
         .spawn(<span class="string">&quot;Metrics Api&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="kw">let </span>graceful = server.with_graceful_shutdown(<span class="kw">async </span>{
-                rx.<span class="kw">await</span>.ok();
+                shutdown_rx.<span class="kw">await</span>.ok();
             });
 
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{
                 <span class="macro">error!</span>(<span class="string">&quot;Error shutting down metrics api: {e:?}&quot;</span>);
             }
         })
-        .<span class="kw">await</span>;
-    <span class="kw">let </span>handle = task_group.make_handle();
-    handle
-        .on_shutdown(Box::new(|| {
-            Box::pin(<span class="kw">async move </span>{
-                <span class="comment">// Send shutdown signal to the webserver
-                </span><span class="kw">let </span>res = tx.send(());
-                <span class="kw">if </span>res.is_err() {
-                    <span class="macro">error!</span>(<span class="string">&quot;Error shutting down metrics api: {res:?}&quot;</span>);
-                }
-            })
-        }))
         .<span class="kw">await</span>;
     <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx().<span class="kw">await</span>;
 
