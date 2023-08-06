@@ -259,16 +259,14 @@ impl Gatewayd {
 
                                 info!("Successfully created Gateway");
 
-                                let tx = run_webserver(self.password.clone(), self.listen, gateway)
+                                let task_group = run_webserver(self.password.clone(), self.listen, gateway)
                                     .await
                                     .expect("Failed to start webserver");
                                 info!("Successfully started webserver");
 
                                 Gateway::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
                                 warn!("HTLC Stream Lightning connection broken. Stopping webserver...");
-                                if let Err(e) = tx.send(()).await {
-                                    error!("Error shutting down gatewayd webserver: {e:?}");
-                                }
+                                task_group.shutdown().await;
                             }
                             Err(e) => {
                                 error!("Failed to open HTLC stream. Waiting 5 seconds and trying again");
@@ -282,13 +280,6 @@ impl Gatewayd {
             .await;
 
         let handle = task_group.make_handle();
-        handle
-            .on_shutdown(Box::new(|| {
-                Box::pin(async move {
-                    info!("Gatewayd received exit signal");
-                })
-            }))
-            .await;
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
     }

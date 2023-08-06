@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use fedimint_core::time::now;
 use fedimint_logging::LOG_TASK;
@@ -19,11 +19,13 @@ use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::sync::oneshot;
 #[cfg(not(target_family = "wasm"))]
-use tokio::task::JoinHandle;
+use tokio::task::{JoinError, JoinHandle};
 use tracing::{error, info, warn};
 
 #[cfg(target_family = "wasm")]
 type JoinHandle<T> = futures::future::Ready<anyhow::Result<T>>;
+#[cfg(target_family = "wasm")]
+type JoinError = anyhow::Error;
 
 #[derive(Debug, Error)]
 #[error("deadline has elapsed")]
@@ -37,6 +39,7 @@ struct TaskGroupInner {
     #[allow(clippy::type_complexity)]
     on_shutdown: Mutex<Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send + 'static>>>,
     join: Mutex<VecDeque<(String, JoinHandle<()>)>>,
+    subgroups: Mutex<Vec<TaskGroup>>,
 }
 
 impl TaskGroupInner {
@@ -96,6 +99,7 @@ impl TaskGroup {
     /// detect any panics in the tasks spawned by the subgroup.
     pub async fn make_subgroup(&self) -> TaskGroup {
         let new_tg = Self::new();
+        self.inner.subgroups.lock().await.push(new_tg.clone());
         self.make_handle()
             .on_shutdown({
                 let new_tg = self.clone();
@@ -246,9 +250,29 @@ impl TaskGroup {
     }
 
     pub async fn join_all(self, timeout: Option<Duration>) -> Result<(), anyhow::Error> {
+        let deadline = timeout.map(|timeout| now() + timeout);
         let mut errors = vec![];
 
-        let deadline = timeout.map(|timeout| now() + timeout);
+        self.join_all_inner(deadline, &mut errors).await;
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            let num_errors = errors.len();
+            Err(anyhow::Error::msg(format!(
+                "{num_errors} tasks did not finish cleanly: {errors:?}"
+            )))
+        }
+    }
+
+    #[cfg_attr(not(target_family = "wasm"), ::async_recursion::async_recursion)]
+    #[cfg_attr(target_family = "wasm", ::async_recursion::async_recursion(?Send))]
+    pub async fn join_all_inner(self, deadline: Option<SystemTime>, errors: &mut Vec<JoinError>) {
+        for subgroup in self.inner.subgroups.lock().await.clone() {
+            info!(target: LOG_TASK, "Waiting for subgroup to finish");
+            subgroup.join_all_inner(deadline, errors).await;
+            info!(target: LOG_TASK, "Subgroup finished");
+        }
 
         while let Some((name, join)) = self.inner.join.lock().await.pop_front() {
             info!(target: LOG_TASK, task=%name, "Waiting for task to finish");
@@ -289,15 +313,6 @@ impl TaskGroup {
                     )
                 }
             }
-        }
-
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            let num_errors = errors.len();
-            Err(anyhow::Error::msg(format!(
-                "{num_errors} tasks did not finish cleanly: {errors:?}"
-            )))
         }
     }
 }
@@ -343,7 +358,7 @@ impl TaskHandle {
     /// Run `f` on shutdown.
     ///
     /// If TaskGroup is already shutting down, run the function immediately.
-    pub async fn on_shutdown(
+    async fn on_shutdown(
         &self,
         // f: FnOnce() -> BoxFuture<'static, ()> + Send + 'static
         f: Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send + 'static>,

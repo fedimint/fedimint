@@ -13,6 +13,7 @@ name = "fedimint_core"
 path = "src/lib.rs"
 
 [dependencies]
+async-recursion = "1.0.4"
 anyhow = "1.0.65"
 async-trait = "0.1.64"
 futures = "0.3.24"
