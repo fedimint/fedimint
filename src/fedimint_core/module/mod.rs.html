@@ -978,29 +978,6 @@
 <a href="#978" id="978">978</a>
 <a href="#979" id="979">979</a>
 <a href="#980" id="980">980</a>
-<a href="#981" id="981">981</a>
-<a href="#982" id="982">982</a>
-<a href="#983" id="983">983</a>
-<a href="#984" id="984">984</a>
-<a href="#985" id="985">985</a>
-<a href="#986" id="986">986</a>
-<a href="#987" id="987">987</a>
-<a href="#988" id="988">988</a>
-<a href="#989" id="989">989</a>
-<a href="#990" id="990">990</a>
-<a href="#991" id="991">991</a>
-<a href="#992" id="992">992</a>
-<a href="#993" id="993">993</a>
-<a href="#994" id="994">994</a>
-<a href="#995" id="995">995</a>
-<a href="#996" id="996">996</a>
-<a href="#997" id="997">997</a>
-<a href="#998" id="998">998</a>
-<a href="#999" id="999">999</a>
-<a href="#1000" id="1000">1000</a>
-<a href="#1001" id="1001">1001</a>
-<a href="#1002" id="1002">1002</a>
-<a href="#1003" id="1003">1003</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
@@ -1833,39 +1810,16 @@
         inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input&gt; + MaybeSend,
     ) -&gt; <span class="self">Self</span>::VerificationCache;
 
-    <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed
-    /// transaction pool. This function has no side effects and may be
-    /// called at any time. False positives due to outdated database state
-    /// are ok since they get filtered out after consensus has been reached on
-    /// them and merely generate a warning.
-    </span><span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
-
     <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
     /// no effect.
-    </span><span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+    </span><span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
-
-    <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed
-    /// transaction pool. This function has no side effects and may be
-    /// called at any time. False positives due to outdated database state
-    /// are ok since they get filtered out after consensus has been reached on
-    /// them and merely generate a warning.
-    </span><span class="kw">async fn </span>validate_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
@@ -1875,7 +1829,7 @@
     /// The supplied `out_point` identifies the operation (e.g. a peg-out or
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
-    </span><span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    </span><span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,

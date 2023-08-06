@@ -1059,36 +1059,6 @@
 <a href="#1059" id="1059">1059</a>
 <a href="#1060" id="1060">1060</a>
 <a href="#1061" id="1061">1061</a>
-<a href="#1062" id="1062">1062</a>
-<a href="#1063" id="1063">1063</a>
-<a href="#1064" id="1064">1064</a>
-<a href="#1065" id="1065">1065</a>
-<a href="#1066" id="1066">1066</a>
-<a href="#1067" id="1067">1067</a>
-<a href="#1068" id="1068">1068</a>
-<a href="#1069" id="1069">1069</a>
-<a href="#1070" id="1070">1070</a>
-<a href="#1071" id="1071">1071</a>
-<a href="#1072" id="1072">1072</a>
-<a href="#1073" id="1073">1073</a>
-<a href="#1074" id="1074">1074</a>
-<a href="#1075" id="1075">1075</a>
-<a href="#1076" id="1076">1076</a>
-<a href="#1077" id="1077">1077</a>
-<a href="#1078" id="1078">1078</a>
-<a href="#1079" id="1079">1079</a>
-<a href="#1080" id="1080">1080</a>
-<a href="#1081" id="1081">1081</a>
-<a href="#1082" id="1082">1082</a>
-<a href="#1083" id="1083">1083</a>
-<a href="#1084" id="1084">1084</a>
-<a href="#1085" id="1085">1085</a>
-<a href="#1086" id="1086">1086</a>
-<a href="#1087" id="1087">1087</a>
-<a href="#1088" id="1088">1088</a>
-<a href="#1089" id="1089">1089</a>
-<a href="#1090" id="1090">1090</a>
-<a href="#1091" id="1091">1091</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1582,11 +1552,11 @@
         VerificationCache
     }
 
-    <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintInput,
+    <span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>MintInput,
+        _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="kw">let </span>iter = input.iter_items();
 
@@ -1600,10 +1570,13 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature).into_module_error_other();
         }
 
-        <span class="kw">for </span>(.., note) <span class="kw">in </span>input.iter_items() {
-            <span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>NonceKey(note.<span class="number">0</span>)).<span class="kw">await</span>.is_some() {
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>input.iter_items() {
+            <span class="kw">if </span>dbtx.insert_entry(<span class="kw-2">&amp;</span>NonceKey(note.<span class="number">0</span>), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.is_some() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin).into_module_error_other();
             }
+
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(NonceKey(note.<span class="number">0</span>)), <span class="kw-2">&amp;</span>amount)
+                .<span class="kw">await</span>;
         }
 
         <span class="prelude-val">Ok</span>(InputMeta {
@@ -1618,32 +1591,11 @@
         })
     }
 
-    <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+    <span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>MintInput,
-        cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(dbtx, cache, input).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">for </span>(amount, note) <span class="kw">in </span>input.iter_items() {
-            <span class="kw">let </span>key = NonceKey(note.<span class="number">0</span>);
-
-            <span class="kw">if </span>dbtx.insert_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.is_some() {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin).into_module_error_other();
-            }
-
-            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(key), <span class="kw-2">&amp;</span>amount)
-                .<span class="kw">await</span>;
-        }
-
-        <span class="prelude-val">Ok</span>(meta)
-    }
-
-    <span class="kw">async fn </span>validate_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        output: <span class="kw-2">&amp;</span>MintOutput,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintOutput,
+        out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
         <span class="kw">let </span>max_tier = <span class="self">self</span>.cfg.private.tbs_sks.max_tier();
         <span class="kw">if </span>output.longest_tier_except(max_tier)
@@ -1663,23 +1615,8 @@
                 <span class="prelude-val">None
             </span>}
         }) {
-            <span class="prelude-val">Err</span>(MintError::InvalidAmountTier(amount)).into_module_error_other()
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(TransactionItemAmount {
-                amount: output.total_amount(),
-                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.note_issuance_abs
-                    * (output.count_items() <span class="kw">as </span>u64),
-            })
+            <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidAmountTier(amount)).into_module_error_other();
         }
-    }
-
-    <span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintOutput,
-        out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// TODO: move actual signing to worker thread
         // TODO: get rid of clone
@@ -1695,7 +1632,10 @@
         )
         .<span class="kw">await</span>;
 
-        <span class="prelude-val">Ok</span>(amount)
+        <span class="prelude-val">Ok</span>(TransactionItemAmount {
+            amount: output.total_amount(),
+            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.note_issuance_abs * (output.count_items() <span class="kw">as </span>u64),
+        })
     }
 
     <span class="kw">async fn </span>output_status(

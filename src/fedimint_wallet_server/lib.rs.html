@@ -1875,24 +1875,6 @@
 <a href="#1875" id="1875">1875</a>
 <a href="#1876" id="1876">1876</a>
 <a href="#1877" id="1877">1877</a>
-<a href="#1878" id="1878">1878</a>
-<a href="#1879" id="1879">1879</a>
-<a href="#1880" id="1880">1880</a>
-<a href="#1881" id="1881">1881</a>
-<a href="#1882" id="1882">1882</a>
-<a href="#1883" id="1883">1883</a>
-<a href="#1884" id="1884">1884</a>
-<a href="#1885" id="1885">1885</a>
-<a href="#1886" id="1886">1886</a>
-<a href="#1887" id="1887">1887</a>
-<a href="#1888" id="1888">1888</a>
-<a href="#1889" id="1889">1889</a>
-<a href="#1890" id="1890">1890</a>
-<a href="#1891" id="1891">1891</a>
-<a href="#1892" id="1892">1892</a>
-<a href="#1893" id="1893">1893</a>
-<a href="#1894" id="1894">1894</a>
-<a href="#1895" id="1895">1895</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2321,11 +2303,11 @@
         WalletVerificationCache
     }
 
-    <span class="kw">async fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        _verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>WalletInput,
+    <span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>WalletInput,
+        _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.block_is_known(dbtx, input.proof_block()).<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::UnknownPegInProofBlock(input.proof_block()))
@@ -2336,7 +2318,19 @@
             .verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.peg_in_descriptor)
             .into_module_error_other()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>UTXOKey(input.outpoint())).<span class="kw">await</span>.is_some() {
+        <span class="macro">debug!</span>(outpoint = %input.outpoint(), <span class="string">&quot;Claiming peg-in&quot;</span>);
+
+        <span class="kw">if </span>dbtx
+            .insert_entry(
+                <span class="kw-2">&amp;</span>UTXOKey(input.outpoint()),
+                <span class="kw-2">&amp;</span>SpendableUTXO {
+                    tweak: input.tweak_contract_key().serialize(),
+                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                },
+            )
+            .<span class="kw">await
+            </span>.is_some()
+        {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegInAlreadyClaimed).into_module_error_other();
         }
 
@@ -2349,65 +2343,29 @@
         })
     }
 
-    <span class="kw">async fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>WalletInput,
-        cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
-        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(dbtx, cache, input).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(outpoint = %input.outpoint(), amount = %meta.amount.amount, <span class="string">&quot;Claiming peg-in&quot;</span>);
-
-        dbtx.insert_new_entry(
-            <span class="kw-2">&amp;</span>UTXOKey(input.outpoint()),
-            <span class="kw-2">&amp;</span>SpendableUTXO {
-                tweak: input.tweak_contract_key().serialize(),
-                amount: bitcoin::Amount::from_sat(input.tx_output().value),
-            },
-        )
-        .<span class="kw">await</span>;
-
-        <span class="prelude-val">Ok</span>(meta)
-    }
-
-    <span class="kw">async fn </span>validate_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        output: <span class="kw-2">&amp;</span>WalletOutput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">let </span>dummy_tweak = [<span class="number">0</span>; <span class="number">32</span>];
-
-        <span class="kw">let </span>fee_rate = <span class="self">self</span>.consensus_fee_rate(dbtx).<span class="kw">await</span>;
-        <span class="kw">let </span>tx = <span class="self">self
-            </span>.create_peg_out_tx(dbtx, output, <span class="kw-2">&amp;</span>dummy_tweak)
-            .<span class="kw">await
-            </span>.into_module_error_other()<span class="question-mark">?</span>;
-
-        <span class="self">self</span>.offline_wallet()
-            .validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)
-            .into_module_error_other()<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(TransactionItemAmount {
-            amount: output.amount().into(),
-            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.peg_out_abs,
-        })
-    }
-
-    <span class="kw">async fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    <span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>WalletOutput,
-        out_point: fedimint_core::OutPoint,
+        out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
-        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(dbtx, output).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>change_tweak = <span class="self">self</span>.consensus_nonce(dbtx).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self
             </span>.create_peg_out_tx(dbtx, output, <span class="kw-2">&amp;</span>change_tweak)
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Should have been validated&quot;</span>);
+            </span>.into_module_error_other()<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>fee_rate = <span class="self">self</span>.consensus_fee_rate(dbtx).<span class="kw">await</span>;
+
+        <span class="self">self</span>.offline_wallet()
+            .validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)
+            .into_module_error_other()<span class="question-mark">?</span>;
+
         <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
+
         <span class="kw">let </span>txid = tx.psbt.unsigned_tx.txid();
+
         <span class="macro">info!</span>(
             %txid,
             <span class="string">&quot;Signing peg out&quot;</span>,
@@ -2446,14 +2404,20 @@
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>tx)
             .<span class="kw">await</span>;
+
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PegOutTxSignatureCI(txid), <span class="kw-2">&amp;</span>sigs)
             .<span class="kw">await</span>;
+
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point),
             <span class="kw-2">&amp;</span>WalletOutputOutcome(txid),
         )
         .<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(amount)
+
+        <span class="prelude-val">Ok</span>(TransactionItemAmount {
+            amount: output.amount().into(),
+            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.peg_out_abs,
+        })
     }
 
     <span class="kw">async fn </span>output_status(

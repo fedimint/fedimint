@@ -572,8 +572,6 @@
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -664,8 +662,8 @@
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">struct </span>VerificationCaches {
-    caches: HashMap&lt;ModuleInstanceId, DynVerificationCache&gt;,
+</span><span class="kw">pub struct </span>VerificationCaches {
+    <span class="kw">pub </span>caches: HashMap&lt;ModuleInstanceId, DynVerificationCache&gt;,
 }
 
 <span class="kw">pub struct </span>FundingVerifier {
@@ -675,7 +673,7 @@
 }
 
 <span class="kw">impl </span>VerificationCaches {
-    <span class="kw">fn </span>get_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>DynVerificationCache {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_cache(<span class="kw-2">&amp;</span><span class="self">self</span>, module_key: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>DynVerificationCache {
         <span class="self">self</span>.caches
             .get(<span class="kw-2">&amp;</span>module_key)
             .expect(<span class="string">&quot;Verification caches were built for all modules&quot;</span>)
@@ -818,7 +816,7 @@
                     <span class="kw">let </span>meta = <span class="self">self
                         </span>.modules
                         .get_expect(input.module_instance_id())
-                        .apply_input(
+                        .process_input(
                             <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(input.module_instance_id()),
                             input,
                             caches.get_cache(input.module_instance_id()),
@@ -835,7 +833,7 @@
                     <span class="kw">let </span>amount = <span class="self">self
                         </span>.modules
                         .get_expect(output.module_instance_id())
-                        .apply_output(
+                        .process_output(
                             <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
                             output,
                             OutPoint { txid, out_idx },
@@ -1091,9 +1089,7 @@
             .into_iter()
             .into_group_map_by(|input| input.module_instance_id());
 
-        <span class="comment">// TODO: should probably run in parallel, but currently only the mint does
-        // anything at all
-        </span><span class="kw">let </span>caches = module_inputs
+        <span class="kw">let </span>caches = module_inputs
             .into_iter()
             .map(|(module_key, inputs)| {
                 <span class="kw">let </span>module = <span class="self">self</span>.modules.get_expect(module_key);
