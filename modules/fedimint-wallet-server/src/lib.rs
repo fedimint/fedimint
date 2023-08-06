@@ -426,11 +426,11 @@ impl ServerModule for Wallet {
         WalletVerificationCache
     }
 
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        _verification_cache: &Self::VerificationCache,
-        input: &'a WalletInput,
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        input: &'b WalletInput,
+        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
@@ -441,7 +441,19 @@ impl ServerModule for Wallet {
             .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)
             .into_module_error_other()?;
 
-        if dbtx.get_value(&UTXOKey(input.outpoint())).await.is_some() {
+        debug!(outpoint = %input.outpoint(), "Claiming peg-in");
+
+        if dbtx
+            .insert_entry(
+                &UTXOKey(input.outpoint()),
+                &SpendableUTXO {
+                    tweak: input.tweak_contract_key().serialize(),
+                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                },
+            )
+            .await
+            .is_some()
+        {
             return Err(WalletError::PegInAlreadyClaimed).into_module_error_other();
         }
 
@@ -454,65 +466,29 @@ impl ServerModule for Wallet {
         })
     }
 
-    async fn apply_input<'a, 'b, 'c>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
-        input: &'b WalletInput,
-        cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(dbtx, cache, input).await?;
-        debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
-
-        dbtx.insert_new_entry(
-            &UTXOKey(input.outpoint()),
-            &SpendableUTXO {
-                tweak: input.tweak_contract_key().serialize(),
-                amount: bitcoin::Amount::from_sat(input.tx_output().value),
-            },
-        )
-        .await;
-
-        Ok(meta)
-    }
-
-    async fn validate_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &WalletOutput,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        let dummy_tweak = [0; 32];
-
-        let fee_rate = self.consensus_fee_rate(dbtx).await;
-        let tx = self
-            .create_peg_out_tx(dbtx, output, &dummy_tweak)
-            .await
-            .into_module_error_other()?;
-
-        self.offline_wallet()
-            .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)
-            .into_module_error_other()?;
-
-        Ok(TransactionItemAmount {
-            amount: output.amount().into(),
-            fee: self.cfg.consensus.fee_consensus.peg_out_abs,
-        })
-    }
-
-    async fn apply_output<'a, 'b>(
+    async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'b>,
         output: &'a WalletOutput,
-        out_point: fedimint_core::OutPoint,
+        out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx, output).await?;
         let change_tweak = self.consensus_nonce(dbtx).await;
 
         let mut tx = self
             .create_peg_out_tx(dbtx, output, &change_tweak)
             .await
-            .expect("Should have been validated");
+            .into_module_error_other()?;
+
+        let fee_rate = self.consensus_fee_rate(dbtx).await;
+
+        self.offline_wallet()
+            .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)
+            .into_module_error_other()?;
+
         self.offline_wallet().sign_psbt(&mut tx.psbt);
+
         let txid = tx.psbt.unsigned_tx.txid();
+
         info!(
             %txid,
             "Signing peg out",
@@ -551,14 +527,20 @@ impl ServerModule for Wallet {
 
         dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
             .await;
+
         dbtx.insert_new_entry(&PegOutTxSignatureCI(txid), &sigs)
             .await;
+
         dbtx.insert_new_entry(
             &PegOutBitcoinTransaction(out_point),
             &WalletOutputOutcome(txid),
         )
         .await;
-        Ok(amount)
+
+        Ok(TransactionItemAmount {
+            amount: output.amount().into(),
+            fee: self.cfg.consensus.fee_consensus.peg_out_abs,
+        })
     }
 
     async fn output_status(

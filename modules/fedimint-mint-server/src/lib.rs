@@ -491,11 +491,11 @@ impl ServerModule for Mint {
         VerificationCache
     }
 
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        _verification_cache: &Self::VerificationCache,
-        input: &'a MintInput,
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        input: &'b MintInput,
+        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let iter = input.iter_items();
 
@@ -509,10 +509,13 @@ impl ServerModule for Mint {
             return Err(MintError::InvalidSignature).into_module_error_other();
         }
 
-        for (.., note) in input.iter_items() {
-            if dbtx.get_value(&NonceKey(note.0)).await.is_some() {
+        for (amount, note) in input.iter_items() {
+            if dbtx.insert_entry(&NonceKey(note.0), &()).await.is_some() {
                 return Err(MintError::SpentCoin).into_module_error_other();
             }
+
+            dbtx.insert_new_entry(&MintAuditItemKey::Redemption(NonceKey(note.0)), &amount)
+                .await;
         }
 
         Ok(InputMeta {
@@ -527,32 +530,11 @@ impl ServerModule for Mint {
         })
     }
 
-    async fn apply_input<'a, 'b, 'c>(
+    async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
-        input: &'b MintInput,
-        cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(dbtx, cache, input).await?;
-
-        for (amount, note) in input.iter_items() {
-            let key = NonceKey(note.0);
-
-            if dbtx.insert_entry(&key, &()).await.is_some() {
-                return Err(MintError::SpentCoin).into_module_error_other();
-            }
-
-            dbtx.insert_new_entry(&MintAuditItemKey::Redemption(key), &amount)
-                .await;
-        }
-
-        Ok(meta)
-    }
-
-    async fn validate_output(
-        &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &MintOutput,
+        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        output: &'a MintOutput,
+        out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         let max_tier = self.cfg.private.tbs_sks.max_tier();
         if output.longest_tier_except(max_tier)
@@ -572,23 +554,8 @@ impl ServerModule for Mint {
                 None
             }
         }) {
-            Err(MintError::InvalidAmountTier(amount)).into_module_error_other()
-        } else {
-            Ok(TransactionItemAmount {
-                amount: output.total_amount(),
-                fee: self.cfg.consensus.fee_consensus.note_issuance_abs
-                    * (output.count_items() as u64),
-            })
+            return Err(MintError::InvalidAmountTier(amount)).into_module_error_other();
         }
-    }
-
-    async fn apply_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        output: &'a MintOutput,
-        out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx, output).await?;
 
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
@@ -604,7 +571,10 @@ impl ServerModule for Mint {
         )
         .await;
 
-        Ok(amount)
+        Ok(TransactionItemAmount {
+            amount: output.total_amount(),
+            fee: self.cfg.consensus.fee_consensus.note_issuance_abs * (output.count_items() as u64),
+        })
     }
 
     async fn output_status(

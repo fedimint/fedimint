@@ -391,8 +391,8 @@ impl ServerModule for Lightning {
                     bail!("Already received a valid decryption share for this peer");
                 }
 
-                let account = self
-                    .get_contract_account(dbtx, contract_id)
+                let account = dbtx
+                    .get_value(&ContractKey(contract_id))
                     .await
                     .context("Contract account for this decryption share does not exist")?;
 
@@ -531,14 +531,14 @@ impl ServerModule for Lightning {
         LightningVerificationCache
     }
 
-    async fn validate_input<'a, 'b>(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        _verification_cache: &Self::VerificationCache,
-        input: &'a LightningInput,
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        input: &'b LightningInput,
+        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
-        let account: ContractAccount = self
-            .get_contract_account(dbtx, input.contract_id)
+        let mut account = dbtx
+            .get_value(&ContractKey(input.contract_id))
             .await
             .ok_or(LightningError::UnknownContract(input.contract_id))
             .into_module_error_other()?;
@@ -552,7 +552,8 @@ impl ServerModule for Lightning {
         }
 
         let consensus_height = self.consensus_block_height(dbtx).await;
-        let pub_key = match account.contract {
+
+        let pub_key = match &account.contract {
             FundedContract::Outgoing(outgoing) => {
                 if outgoing.timelock as u64 > consensus_height && !outgoing.cancelled {
                     // If the timelock hasn't expired yet …
@@ -577,7 +578,7 @@ impl ServerModule for Lightning {
                     outgoing.user_key
                 }
             }
-            FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
+            FundedContract::Incoming(incoming) => match &incoming.contract.decrypted_preimage {
                 // Once the preimage has been decrypted …
                 DecryptedPreimage::Pending => {
                     return Err(LightningError::ContractNotReady).into_module_error_other();
@@ -594,6 +595,11 @@ impl ServerModule for Lightning {
             },
         };
 
+        account.amount -= input.amount;
+
+        dbtx.insert_entry(&ContractKey(input.contract_id), &account)
+            .await;
+
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount: input.amount,
@@ -603,29 +609,11 @@ impl ServerModule for Lightning {
         })
     }
 
-    async fn apply_input<'a, 'b, 'c>(
+    async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
-        input: &'b LightningInput,
-        cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, ModuleError> {
-        let meta = self.validate_input(dbtx, cache, input).await?;
-
-        let account_db_key = ContractKey(input.contract_id);
-        let mut contract_account = dbtx
-            .get_value(&account_db_key)
-            .await
-            .expect("Should fail validation if contract account doesn't exist");
-        contract_account.amount -= meta.amount.amount;
-        dbtx.insert_entry(&account_db_key, &contract_account).await;
-
-        Ok(meta)
-    }
-
-    async fn validate_output(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        output: &LightningOutput,
+        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        output: &'a LightningOutput,
+        out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
         match output {
             LightningOutput::Contract(contract) => {
@@ -648,79 +636,28 @@ impl ServerModule for Lightning {
                 }
 
                 if contract.amount == Amount::ZERO {
-                    Err(LightningError::ZeroOutput).into_module_error_other()
-                } else {
-                    Ok(TransactionItemAmount {
-                        amount: contract.amount,
-                        fee: self.cfg.consensus.fee_consensus.contract_output,
-                    })
+                    return Err(LightningError::ZeroOutput).into_module_error_other();
                 }
-            }
-            LightningOutput::Offer(offer) => {
-                if !offer.encrypted_preimage.0.verify() {
-                    Err(LightningError::InvalidEncryptedPreimage).into_module_error_other()
-                } else {
-                    Ok(TransactionItemAmount::ZERO)
-                }
-            }
-            LightningOutput::CancelOutgoing {
-                contract,
-                gateway_signature,
-            } => {
-                let contract_account = dbtx
-                    .get_value(&ContractKey(*contract))
-                    .await
-                    .ok_or(LightningError::UnknownContract(*contract))
-                    .into_module_error_other()?;
 
-                let outgoing_contract = match &contract_account.contract {
-                    FundedContract::Outgoing(contract) => contract,
-                    _ => {
-                        return Err(LightningError::NotOutgoingContract).into_module_error_other();
-                    }
-                };
-
-                secp256k1::global::SECP256K1
-                    .verify_schnorr(
-                        gateway_signature,
-                        &outgoing_contract.cancellation_message().into(),
-                        &outgoing_contract.gateway_key,
-                    )
-                    .map_err(|_| LightningError::InvalidCancellationSignature)
-                    .into_module_error_other()?;
-
-                Ok(TransactionItemAmount::ZERO)
-            }
-        }
-    }
-
-    async fn apply_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        output: &'a LightningOutput,
-        out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
-        let amount = self.validate_output(dbtx, output).await?;
-
-        match output {
-            LightningOutput::Contract(contract) => {
                 let contract_db_key = ContractKey(contract.contract.contract_id());
+
                 let updated_contract_account = dbtx
                     .get_value(&contract_db_key)
                     .await
                     .map(|mut value: ContractAccount| {
-                        value.amount += amount.amount;
+                        value.amount += contract.amount;
                         value
                     })
                     .unwrap_or_else(|| ContractAccount {
-                        amount: amount.amount,
+                        amount: contract.amount,
                         contract: contract.contract.clone().to_funded(out_point),
                     });
-                let previous = dbtx
+
+                if dbtx
                     .insert_entry(&contract_db_key, &updated_contract_account)
-                    .await;
-                let inserted = previous.is_none();
-                if inserted {
+                    .await
+                    .is_none()
+                {
                     match &updated_contract_account.contract {
                         FundedContract::Incoming(_) => {
                             LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS
@@ -756,26 +693,66 @@ impl ServerModule for Lightning {
                         .threshold_sec_key
                         .decrypt_share(&incoming.encrypted_preimage.0)
                         .expect("We checked for decryption share validity on contract creation");
+
                     dbtx.insert_new_entry(
                         &ProposeDecryptionShareKey(contract.contract.contract_id()),
                         &PreimageDecryptionShare(decryption_share),
                     )
                     .await;
+
                     dbtx.remove_entry(&OfferKey(offer.hash)).await;
                 }
+
+                Ok(TransactionItemAmount {
+                    amount: contract.amount,
+                    fee: self.cfg.consensus.fee_consensus.contract_output,
+                })
             }
             LightningOutput::Offer(offer) => {
+                if !offer.encrypted_preimage.0.verify() {
+                    return Err(LightningError::InvalidEncryptedPreimage).into_module_error_other();
+                }
+
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
                     &LightningOutputOutcome::Offer { id: offer.id() },
                 )
                 .await;
+
                 // TODO: sanity-check encrypted preimage size
                 dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
                     .await;
+
                 LN_INCOMING_OFFER.inc();
+
+                Ok(TransactionItemAmount::ZERO)
             }
-            LightningOutput::CancelOutgoing { contract, .. } => {
+            LightningOutput::CancelOutgoing {
+                contract,
+                gateway_signature,
+            } => {
+                let contract_account = dbtx
+                    .get_value(&ContractKey(*contract))
+                    .await
+                    .ok_or(LightningError::UnknownContract(*contract))
+                    .into_module_error_other()?;
+
+                let outgoing_contract = match &contract_account.contract {
+                    FundedContract::Outgoing(contract) => contract,
+                    _ => {
+                        return Err(LightningError::NotOutgoingContract).into_module_error_other();
+                    }
+                };
+
+                secp256k1::global::SECP256K1
+                    .verify_schnorr(
+                        gateway_signature,
+                        &outgoing_contract.cancellation_message().into(),
+                        &outgoing_contract.gateway_key,
+                    )
+                    .map_err(|_| LightningError::InvalidCancellationSignature)
+                    .into_module_error_other()?;
+
                 let updated_contract_account = {
                     let mut contract_account = dbtx
                         .get_value(&ContractKey(*contract))
@@ -802,11 +779,12 @@ impl ServerModule for Lightning {
                     &LightningOutputOutcome::CancelOutgoingContract { id: *contract },
                 )
                 .await;
+
                 LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.inc();
+
+                Ok(TransactionItemAmount::ZERO)
             }
         }
-
-        Ok(amount)
     }
 
     async fn output_status(
