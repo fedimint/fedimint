@@ -17,7 +17,7 @@ use fedimint_core::db::Database;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_wallet_client::WalletClientGen;
-use tracing::info;
+use tracing::{debug, info};
 
 pub mod util;
 pub mod vars;
@@ -152,11 +152,14 @@ impl Gatewayd {
             }
         })
         .await?;
-        poll("gateway connect-fed", || async {
-            Ok(cmd!(self, "connect-fed", connect_str.clone())
-                .run()
-                .await
-                .is_ok())
+        poll_max_retries("gateway connect-fed", 10, || async {
+            match cmd!(self, "connect-fed", connect_str.clone()).run().await {
+                Ok(_) => Ok(true),
+                Err(e) => {
+                    debug!("gateway-cli connect-fed failed {:?}", e);
+                    Ok(false)
+                }
+            }
         })
         .await?;
         Ok(())
