@@ -456,6 +456,8 @@
 <a href="#456" id="456">456</a>
 <a href="#457" id="457">457</a>
 <a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::path::Path;
@@ -601,11 +603,13 @@
             .out_string()
             .<span class="kw">await
             </span>.context(<span class="string">&quot;gateway-cln-extension not on path&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>btc_dir = utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_BTC_DIR);
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="string">&quot;lightningd&quot;</span>,
             <span class="string">&quot;--dev-fast-gossip&quot;</span>,
             <span class="string">&quot;--dev-bitcoind-poll=1&quot;</span>,
             <span class="macro">format!</span>(<span class="string">&quot;--lightning-dir={}&quot;</span>, utf8(cln_dir)),
+            <span class="macro">format!</span>(<span class="string">&quot;--bitcoin-datadir={btc_dir}&quot;</span>),
             <span class="string">&quot;--plugin={extension_path}&quot;
         </span>);
 
