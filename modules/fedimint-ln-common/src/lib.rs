@@ -246,7 +246,6 @@ plugin_types_trait_impl_common!(
 #[derive(Debug, Clone)]
 pub struct LightningClientContext {
     pub ln_decoder: Decoder,
-    pub outgoing_redeem_key: bitcoin::KeyPair,
 }
 
 impl Context for LightningClientContext {}

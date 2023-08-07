@@ -8,9 +8,9 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, ensure, format_err};
 use async_stream::stream;
-use bitcoin::{KeyPair, Network};
+use bitcoin::Network;
 use bitcoin_hashes::Hash;
-use db::LightningGatewayKey;
+use db::{LightningGatewayKey, NextOutgoingContractIndexKey};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -54,7 +54,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::db::NextContractIndexKey;
+use crate::db::NextIncomingContractIndexKey;
 use crate::pay::{
     GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
     LightningPayStateMachine, LightningPayStates,
@@ -247,6 +247,7 @@ impl LightningClientExt for Client {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let payment_hash = invoice.payment_hash();
         let operation_id = OperationId(payment_hash.into_inner());
+        let api = instance.api.clone();
 
         let is_internal_payment =
             invoice_has_internal_payment_markers(&invoice, self.get_internal_payment_markers()?)
@@ -257,24 +258,48 @@ impl LightningClientExt for Client {
                 )
                 .await;
 
-        let (pay_type, output, contract_id) = if is_internal_payment {
-            let (output, contract_id) = lightning
-                .create_incoming_output(operation_id, invoice.clone())
-                .await?;
-            (PayType::Internal(operation_id), output, contract_id)
-        } else {
-            let active_gateway = self.select_active_gateway().await?;
-            let (output, contract_id) = lightning
-                .create_outgoing_output(
-                    operation_id,
-                    instance.api,
-                    invoice.clone(),
-                    active_gateway,
-                    self.get_config().federation_id,
-                )
-                .await?;
-            (PayType::Lightning(operation_id), output, contract_id)
-        };
+        let (pay_type, output, contract_id) = self
+            .db()
+            .autocommit(
+                |dbtx| {
+                    Box::pin(async {
+                        let mut module_dbtx = dbtx.with_module_prefix(instance.id);
+                        let (pay_type, output, contract_id) = if is_internal_payment {
+                            let (output, contract_id) = lightning
+                                .create_incoming_output(
+                                    operation_id,
+                                    invoice.clone(),
+                                    &mut module_dbtx,
+                                )
+                                .await?;
+                            (PayType::Internal(operation_id), output, contract_id)
+                        } else {
+                            let active_gateway = self.select_active_gateway().await?;
+                            let (output, contract_id) = lightning
+                                .create_outgoing_output(
+                                    operation_id,
+                                    api.clone(),
+                                    invoice.clone(),
+                                    active_gateway,
+                                    self.get_config().federation_id,
+                                    &mut module_dbtx,
+                                )
+                                .await?;
+                            (PayType::Lightning(operation_id), output, contract_id)
+                        };
+
+                        Ok((pay_type, output, contract_id))
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow::anyhow!("Commit to DB failed: {last_error}")
+                }
+            })?;
 
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |txid, change_outpoint| LightningMeta::Pay {
@@ -314,11 +339,12 @@ impl LightningClientExt for Client {
             }
         };
 
-        self.db()
+        let (operation_id, invoice, output) = self
+            .db()
             .autocommit(
                 |dbtx| {
                     Box::pin(async {
-                        let (operation_id, invoice, output) = lightning
+                        lightning
                             .create_lightning_receive_output(
                                 amount,
                                 description.clone(),
@@ -330,33 +356,7 @@ impl LightningClientExt for Client {
                                 lightning.cfg.network,
                                 &mut dbtx.with_module_prefix(instance.id),
                             )
-                            .await?;
-                        let tx =
-                            TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-                        let operation_meta_gen = |txid, _| LightningMeta::Receive {
-                            out_point: OutPoint { txid, out_idx: 0 },
-                            invoice: invoice.clone(),
-                        };
-                        let txid = self
-                            .finalize_and_submit_transaction(
-                                operation_id,
-                                LightningCommonGen::KIND.as_str(),
-                                operation_meta_gen,
-                                tx,
-                            )
-                            .await?;
-
-                        // Wait for the transaction to be accepted by the federation, otherwise the
-                        // invoice will not be able to be paid
-                        self.transaction_updates(operation_id)
                             .await
-                            .await_tx_accepted(txid)
-                            .await
-                            .map_err(|e| {
-                                anyhow::anyhow!("Offer transaction was not accepted: {e:?}")
-                            })?;
-
-                        Ok((operation_id, invoice))
                     })
                 },
                 Some(100),
@@ -367,7 +367,31 @@ impl LightningClientExt for Client {
                 AutocommitError::CommitFailed { last_error, .. } => {
                     anyhow::anyhow!("Commit to DB failed: {last_error}")
                 }
-            })
+            })?;
+
+        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        let operation_meta_gen = |txid, _| LightningMeta::Receive {
+            out_point: OutPoint { txid, out_idx: 0 },
+            invoice: invoice.clone(),
+        };
+        let txid = self
+            .finalize_and_submit_transaction(
+                operation_id,
+                LightningCommonGen::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .await?;
+
+        // Wait for the transaction to be accepted by the federation, otherwise the
+        // invoice will not be able to be paid
+        self.transaction_updates(operation_id)
+            .await
+            .await_tx_accepted(txid)
+            .await
+            .map_err(|e| anyhow::anyhow!("Offer transaction was not accepted: {e:?}"))?;
+
+        Ok((operation_id, invoice))
     }
 
     async fn subscribe_ln_receive(
@@ -571,9 +595,6 @@ impl ClientModuleGen for LightningClientGen {
         Ok(LightningClientModule {
             cfg,
             notifier,
-            outgoing_redeem_key: module_root_secret
-                .child_key(LIGHTNING_OUTGOING_CHILD_ID)
-                .to_secp_key(&secp),
             secp,
             module_api,
             module_root_secret,
@@ -585,7 +606,6 @@ impl ClientModuleGen for LightningClientGen {
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<DynGlobalClientContext, LightningClientStateMachines>,
-    outgoing_redeem_key: KeyPair,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
     module_root_secret: DerivableSecret,
@@ -599,7 +619,6 @@ impl ClientModule for LightningClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
             ln_decoder: self.decoder(),
-            outgoing_redeem_key: self.outgoing_redeem_key,
         }
     }
 
@@ -652,6 +671,7 @@ impl LightningClientModule {
         invoice: Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> anyhow::Result<(
         ClientOutput<LightningOutput, LightningClientStateMachines>,
         ContractId,
@@ -688,7 +708,11 @@ impl LightningClientModule {
         let contract_amount_msat = invoice_amount_msat + base_fee + margin_fee;
         let contract_amount = Amount::from_msats(contract_amount_msat);
 
-        let user_sk = self.outgoing_redeem_key;
+        let user_sk = self
+            .module_root_secret
+            .child_key(LIGHTNING_OUTGOING_CHILD_ID)
+            .child_key(Self::get_next_outgoing_contract_child_id(dbtx).await)
+            .to_secp_key(&self.secp);
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
@@ -748,6 +772,7 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
         invoice: Invoice,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> anyhow::Result<(
         ClientOutput<LightningOutput, LightningClientStateMachines>,
         ContractId,
@@ -761,11 +786,21 @@ impl LightningClientModule {
                 })?,
         };
 
+        // Use the outgoing child id because this is an internal payment to
+        // another user in the same federation. Even though this function creates
+        // an incoming output, from the perspective of this client, this is an outgoing
+        // payment.
+        let redeem_key = self
+            .module_root_secret
+            .child_key(LIGHTNING_OUTGOING_CHILD_ID)
+            .child_key(Self::get_next_outgoing_contract_child_id(dbtx).await)
+            .to_secp_key(&self.secp);
+
         let (incoming_output, contract_id) = create_incoming_contract_output(
             &self.module_api,
             *payment_hash,
             invoice_amount,
-            self.outgoing_redeem_key,
+            redeem_key,
         )
         .await?;
 
@@ -777,6 +812,7 @@ impl LightningClientModule {
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
+                            redeem_key,
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     },
@@ -870,11 +906,27 @@ impl LightningClientModule {
         }
     }
 
+    async fn get_next_outgoing_contract_child_id(
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> ChildId {
+        let index = dbtx
+            .get_value(&NextOutgoingContractIndexKey)
+            .await
+            .unwrap_or(0);
+        dbtx.insert_entry(&NextOutgoingContractIndexKey, &(index + 1))
+            .await;
+        ChildId(index)
+    }
+
     async fn get_next_incoming_contract_child_id(
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> ChildId {
-        let index = dbtx.get_value(&NextContractIndexKey).await.unwrap_or(0);
-        dbtx.insert_entry(&NextContractIndexKey, &(index + 1)).await;
+        let index = dbtx
+            .get_value(&NextIncomingContractIndexKey)
+            .await
+            .unwrap_or(0);
+        dbtx.insert_entry(&NextIncomingContractIndexKey, &(index + 1))
+            .await;
         ChildId(index)
     }
 

@@ -374,7 +374,6 @@ impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
-            outgoing_redeem_key: ctx.redeem_key,
         }
     }
 }
@@ -484,11 +483,12 @@ impl GatewayClientModule {
         IncomingSmError,
     > {
         let operation_id = OperationId(htlc.payment_hash.into_inner());
+        let redeem_key = self.redeem_key;
         let (incoming_output, contract_id) = create_incoming_contract_output(
             &self.module_api,
             htlc.payment_hash,
             htlc.outgoing_amount_msat,
-            self.redeem_key,
+            redeem_key,
         )
         .await?;
 
@@ -500,6 +500,7 @@ impl GatewayClientModule {
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
+                            redeem_key,
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     }),

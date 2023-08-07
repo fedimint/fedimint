@@ -19,6 +19,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use lightning_invoice::Invoice;
+use secp256k1::KeyPair;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -62,6 +63,7 @@ pub enum IncomingSmStates {
 pub struct IncomingSmCommon {
     pub operation_id: OperationId,
     pub contract_id: ContractId,
+    pub redeem_key: KeyPair,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -82,7 +84,7 @@ impl State for IncomingStateMachine {
         match &self.state {
             IncomingSmStates::FundingOffer(state) => state.transitions(global_context, context),
             IncomingSmStates::DecryptingPreimage(state) => {
-                state.transitions(&self.common, global_context, context)
+                state.transitions(&self.common, global_context)
             }
             _ => {
                 vec![]
@@ -199,22 +201,18 @@ impl DecryptingPreimageState {
         &self,
         common: &IncomingSmCommon,
         global_context: &DynGlobalClientContext,
-        context: &LightningClientContext,
     ) -> Vec<StateTransition<IncomingStateMachine>> {
         let success_context = global_context.clone();
-        let gateway_context = context.clone();
 
         vec![StateTransition::new(
             Self::await_preimage_decryption(success_context.clone(), common.contract_id),
             move |dbtx, result, old_state| {
-                let gateway_context = gateway_context.clone();
                 let success_context = success_context.clone();
                 Box::pin(Self::transition_incoming_contract_funded(
                     result,
                     old_state,
                     dbtx,
                     success_context,
-                    gateway_context,
                 ))
             },
         )]
@@ -257,7 +255,6 @@ impl DecryptingPreimageState {
         old_state: IncomingStateMachine,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
-        context: LightningClientContext,
     ) -> IncomingStateMachine {
         assert!(matches!(
             old_state.state,
@@ -270,8 +267,7 @@ impl DecryptingPreimageState {
                 state: IncomingSmStates::Preimage(preimage),
             },
             Err(IncomingSmError::InvalidPreimage { contract }) => {
-                Self::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
-                    .await
+                Self::refund_incoming_contract(dbtx, global_context, old_state, contract).await
             }
             Err(e) => IncomingStateMachine {
                 common: old_state.common,
@@ -285,7 +281,6 @@ impl DecryptingPreimageState {
     async fn refund_incoming_contract(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
-        context: LightningClientContext,
         old_state: IncomingStateMachine,
         contract: Box<IncomingContractAccount>,
     ) -> IncomingStateMachine {
@@ -293,7 +288,7 @@ impl DecryptingPreimageState {
         let client_input = ClientInput::<LightningInput, IncomingStateMachine> {
             input: claim_input,
             state_machines: Arc::new(|_, _| vec![]),
-            keys: vec![context.outgoing_redeem_key],
+            keys: vec![old_state.common.redeem_key],
         };
 
         let (refund_txid, _) = global_context.claim_input(dbtx, client_input).await;
