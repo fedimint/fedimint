@@ -1836,13 +1836,13 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintMeta {
-    variant: MintMetaVariants,
-    amount: Amount,
-    extra_meta: serde_json::Value,
+    <span class="kw">pub </span>variant: MintMetaVariants,
+    <span class="kw">pub </span>amount: Amount,
+    <span class="kw">pub </span>extra_meta: serde_json::Value,
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">enum </span>MintMetaVariants {
+</span><span class="kw">pub enum </span>MintMetaVariants {
     Reissuance {
         out_point: OutPoint,
     },
