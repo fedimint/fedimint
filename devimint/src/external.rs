@@ -143,11 +143,13 @@ impl Lightningd {
             .out_string()
             .await
             .context("gateway-cln-extension not on path")?;
+        let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
         let cmd = cmd!(
             "lightningd",
             "--dev-fast-gossip",
             "--dev-bitcoind-poll=1",
             format!("--lightning-dir={}", utf8(cln_dir)),
+            format!("--bitcoin-datadir={btc_dir}"),
             "--plugin={extension_path}"
         );
 
