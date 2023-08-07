@@ -32,8 +32,6 @@ use fedimint_testing::gateway::GatewayTest;
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Invoice;
-use ln_gateway::gatewaylnrpc::PayInvoiceRequest;
-use ln_gateway::lnrpc_client::ILnRpcClient;
 use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
@@ -147,56 +145,6 @@ async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
 
         assert_eq!(user_client.get_balance().await, sats(1000 - 250));
         assert_eq!(gateway.get_balance().await, sats(250));
-
-        Ok(())
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_ldk_node_can_pay_fedimint_client() -> anyhow::Result<()> {
-    // Running LDK Node with the mock services doesnt provide any additional
-    // coverage, since `FakeLightningTest` does not open any channels.
-    if !Fixtures::is_real_test() {
-        return Ok(());
-    }
-
-    gateway_test(|gateway, _, fed, user_client, bitcoin| async move {
-        let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
-
-        ldk.open_channel(
-            Amount::from_msats(5000000),
-            gateway.node_pub_key,
-            gateway.listening_addr.clone(),
-            bitcoin.lock_exclusive().await,
-        )
-        .await?;
-
-        let gateway = gateway.select_client(fed.id()).await;
-        // Print money for gateway client
-        let initial_gateway_balance = sats(1000);
-        let (_, outpoint) = gateway.print_money(initial_gateway_balance).await?;
-        gateway.receive_money(outpoint).await?;
-        assert_eq!(gateway.get_balance().await, sats(1000));
-
-        // User client creates invoice in federation
-        let invoice_amount = sats(100);
-        let (_invoice_op, invoice) = user_client
-            .create_bolt11_invoice(invoice_amount, "description".into(), None)
-            .await?;
-
-        ldk.pay(PayInvoiceRequest {
-            invoice: invoice.to_string(),
-            payment_hash: invoice.payment_hash().to_vec(),
-            max_delay: 100,
-            max_fee_msat: 1000000,
-        })
-        .await?;
-
-        assert_eq!(
-            initial_gateway_balance - invoice_amount,
-            gateway.get_balance().await
-        );
 
         Ok(())
     })

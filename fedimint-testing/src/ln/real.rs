@@ -1,3 +1,4 @@
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -46,6 +47,16 @@ impl fmt::Debug for ClnLightningTest {
             .field("node_pub_key", &self.node_pub_key)
             .finish()
     }
+}
+
+fn find_unused_port() -> Option<u16> {
+    if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
+        // Retrieve the port that was actually bound to
+        if let Ok(local_addr) = listener.local_addr() {
+            return Some(local_addr.port());
+        }
+    }
+    None
 }
 
 #[async_trait]
@@ -388,9 +399,10 @@ impl LdkLightningTest {
     ) -> Result<LdkLightningTest, LightningRpcError> {
         let mut builder = Builder::new();
         builder.set_network(Network::Regtest);
-        // TODO: Set unique port
+        let unused_port = find_unused_port().expect("Could not find an unused port for LdkNode");
         builder.set_listening_address(
-            NetAddress::from_str("0.0.0.0:9091").expect("Couldnt parse listening address"),
+            NetAddress::from_str(format!("0.0.0.0:{unused_port}").as_str())
+                .expect("Couldnt parse listening address"),
         );
         builder.set_storage_dir_path(db_path.to_string_lossy().to_string());
         builder.set_esplora_server(DEFAULT_ESPLORA_SERVER.to_string());
@@ -441,7 +453,7 @@ impl LdkLightningTest {
             node_pub_key: pub_key,
             alias: format!("LDKNode-{}", rand::random::<u64>()),
             ldk_node_sender: Arc::new(Mutex::new(sender)),
-            listening_address: "127.0.0.1:9091".to_string(),
+            listening_address: format!("127.0.0.1:{unused_port}"),
         })
     }
 
