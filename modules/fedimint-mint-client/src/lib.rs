@@ -391,13 +391,13 @@ async fn mint_operation(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintMeta {
-    variant: MintMetaVariants,
-    amount: Amount,
-    extra_meta: serde_json::Value,
+    pub variant: MintMetaVariants,
+    pub amount: Amount,
+    pub extra_meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum MintMetaVariants {
+pub enum MintMetaVariants {
     Reissuance {
         out_point: OutPoint,
     },
