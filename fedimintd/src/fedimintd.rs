@@ -188,7 +188,7 @@ impl Fedimintd {
                     Ok(()) => {}
                     Err(error) => {
                         error!(?error, "Main task returned error, shutting down");
-                        task_group.shutdown().await;
+                        task_group.shutdown();
                     }
                 }
             })
@@ -296,9 +296,6 @@ async fn spawn_metrics_server(
 ) -> anyhow::Result<()> {
     let rx = fedimint_metrics::run_api_server(bind_address, &mut task_group).await?;
     info!("Metrics API listening on {bind_address}");
-    let res = rx.await;
-    if res.is_err() {
-        error!("Error shutting down metric api server: {res:?}");
-    }
+    rx.await;
     Ok(())
 }

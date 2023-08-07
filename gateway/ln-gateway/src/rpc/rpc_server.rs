@@ -51,7 +51,7 @@ pub async fn run_webserver(
         .task_group
         .spawn("Gateway Webserver", move |_| async move {
             let graceful = server.with_graceful_shutdown(async {
-                let _ = shutdown_rx.await;
+                shutdown_rx.await;
             });
 
             if let Err(e) = graceful.await {

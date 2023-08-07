@@ -101,7 +101,7 @@ impl FedimintServer {
         handler.stop().await;
 
         info!(target: LOG_CONSENSUS, "Shutting down tasks");
-        task_group.shutdown().await;
+        task_group.shutdown();
 
         Ok(())
     }
