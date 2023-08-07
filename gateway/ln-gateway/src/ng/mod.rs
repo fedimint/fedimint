@@ -214,12 +214,15 @@ impl GatewayClientExt for Client {
                                 }
                             }
                             GatewayPayStates::Canceled { txid, contract_id: _, error } => {
-                                if self.transaction_updates(operation_id).await.await_tx_accepted(txid).await.is_ok() {
-                                    yield GatewayExtPayStates::Canceled{ error };
-                                    return;
+                                match self.transaction_updates(operation_id).await.await_tx_accepted(txid).await {
+                                    Ok(()) => {
+                                        yield GatewayExtPayStates::Canceled{ error };
+                                        return;
+                                    }
+                                    Err(e) => {
+                                        yield GatewayExtPayStates::Fail { error, error_message: format!("Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}") };
+                                    }
                                 }
-
-                                yield GatewayExtPayStates::Fail { error, error_message: "Refund transaction was not accepted by the federation".to_string() };
                             }
                             GatewayPayStates::OfferDoesNotExist(contract_id) => {
                                 yield GatewayExtPayStates::OfferDoesNotExist { contract_id };
