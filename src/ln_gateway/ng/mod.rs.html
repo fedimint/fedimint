@@ -609,6 +609,9 @@
 <a href="#609" id="609">609</a>
 <a href="#610" id="610">610</a>
 <a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -825,12 +828,15 @@
                                 }
                             }
                             GatewayPayStates::Canceled { txid, contract_id: <span class="kw">_</span>, error } =&gt; {
-                                <span class="kw">if </span><span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await</span>.is_ok() {
-                                    <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
-                                    <span class="kw">return</span>;
+                                <span class="kw">match </span><span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
+                                    <span class="prelude-val">Ok</span>(()) =&gt; {
+                                        <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
+                                        <span class="kw">return</span>;
+                                    }
+                                    <span class="prelude-val">Err</span>(e) =&gt; {
+                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">&quot;Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}&quot;</span>) };
+                                    }
                                 }
-
-                                <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="string">&quot;Refund transaction was not accepted by the federation&quot;</span>.to_string() };
                             }
                             GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
                                 <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
