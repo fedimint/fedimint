@@ -2110,6 +2110,7 @@ dependencies = [
  "fedimint-wallet-client",
  "fedimint-wallet-common",
  "fedimint-wallet-server",
+ "futures",
  "tokio",
  "tracing",
 ]
