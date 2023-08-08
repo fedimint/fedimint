@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { version = "1.0.69", features = ["backtrace"] }
 axum = { version = "0.6.4", features = ["tracing"] }
-bitcoincore-rpc = "0.16.0"
+bitcoincore-rpc = "0.17.0"
 clap = { version = "4.1.6", features = ["derive", "env", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 cln-rpc = "0.1.1"
 fedimint-aead = { path = "../crypto/aead" }
