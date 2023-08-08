@@ -6,6 +6,7 @@ use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::task::sleep;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{task, TransactionId};
@@ -189,11 +190,16 @@ async fn trigger_created_submit(
     )
     .await;
 
-    context
-        .api()
-        .submit_transaction(tx)
-        .await
-        .map_err(|e| e.to_string())
+    // TODO: get rid of state machine created->created loop and only rely on this
+    // loop
+    loop {
+        match context.api().submit_transaction(tx.clone()).await {
+            Err(e) if e.is_retryable() => {
+                sleep(RESUBMISSION_INTERVAL).await;
+            }
+            res => return res.map_err(|e| e.to_string()),
+        }
+    }
 }
 
 async fn trigger_created_accepted(
