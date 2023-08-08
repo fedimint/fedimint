@@ -1082,7 +1082,7 @@
                 <span class="kw">for </span>(items, epoch, _prev_epoch_hash, rejected_txs) <span class="kw">in </span>epochs.drain(..) {
                     <span class="macro">info!</span>(
                         target: LOG_CONSENSUS,
-                        <span class="string">&quot;Processing items from missing epoch {}&quot;</span>, epoch
+                        <span class="string">&quot;Processing items from epoch {}&quot;</span>, epoch
                     );
                     <span class="kw">let </span>epoch = <span class="self">self
                         </span>.consensus
