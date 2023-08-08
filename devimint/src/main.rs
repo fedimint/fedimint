@@ -203,11 +203,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     fed.pegin_gateway(99_999, &gw_cln).await?;
 
-    let invite = fs::read_to_string(format!("{data_dir}/invite-code")).await?;
-    fs::remove_file(format!("{data_dir}/client.json")).await?;
-    cmd!(fed, "join-federation", invite.clone()).run().await?;
-
     let fed_id = fed.federation_id().await;
+    let invite = fed.invite_code()?;
     let invite_code = cmd!(fed, "dev", "decode-invite-code", invite.clone())
         .out_json()
         .await?;

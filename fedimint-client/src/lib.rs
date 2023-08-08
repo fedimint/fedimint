@@ -1476,7 +1476,14 @@ async fn get_config(
         .next()
         .await
     {
-        Some((_, config)) => Ok(config),
+        Some((_, config)) => {
+            // TODO: Enable after <https://github.com/fedimint/fedimint/pull/2855>
+            // assert!(
+            //     config_source.is_none(),
+            //     "Alternative config source provided but config was found in DB"
+            // );
+            Ok(config)
+        }
         None => {
             let config = match config_source
                 .clone()

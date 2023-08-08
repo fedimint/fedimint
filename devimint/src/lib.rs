@@ -140,20 +140,9 @@ impl Gatewayd {
     }
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
-        let connect_str = poll_value("invite code", || async {
-            match cmd!(fed, "dev", "invite-code").out_json().await {
-                Ok(info) => Ok(Some(
-                    info["invite_code"]
-                        .as_str()
-                        .context("invite_code must be string")?
-                        .to_owned(),
-                )),
-                Err(_) => Ok(None),
-            }
-        })
-        .await?;
+        let invite_code = fed.invite_code()?;
         poll_max_retries("gateway connect-fed", 10, || async {
-            match cmd!(self, "connect-fed", connect_str.clone()).run().await {
+            match cmd!(self, "connect-fed", invite_code.clone()).run().await {
                 Ok(_) => Ok(true),
                 Err(e) => {
                     debug!("gateway-cli connect-fed failed {:?}", e);
@@ -207,6 +196,10 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     )?;
     info!(LOG_DEVIMINT, "federation and gateways started");
     tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed))?;
+    // Initialize fedimint-cli
+    cmd!(fed, "join-federation", fed.invite_code()?)
+        .run()
+        .await?;
     fed.await_gateways_registered().await?;
     info!(LOG_DEVIMINT, "gateways registered");
     fed.use_gateway(&gw_cln).await?;
