@@ -74,7 +74,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, ensure};
 use async_stream::stream;
 use db::{CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix};
 use fedimint_core::api::{
@@ -1256,10 +1256,17 @@ impl ClientBuilder {
         self.module_inits.attach(module_init);
     }
 
-    /// Uses this invite code to connect to the federation
+    /// Instructs the client builder to use this `InviteCode` in building a
+    /// client. Use this configuration method as an alternative to
+    /// `with_config` builder option.
     ///
-    /// ## Panics
-    /// If there was a config or invite code added previously
+    /// ## Failure Conditions
+    ///
+    /// If a `ConfigSource` already exists in the builder, calling this method
+    /// fails. If a `ClientConfig` already exists in the database, calling
+    /// `ClientBuilder::build` fails.
+    /// - You can use `get_config_from_db` to check if a config exists in the
+    ///   database.
     pub fn with_invite_code(&mut self, invite_code: InviteCode) {
         let was_replaced = self
             .config_source
@@ -1271,12 +1278,17 @@ impl ClientBuilder {
         )
     }
 
-    /// FIXME: <https://github.com/fedimint/fedimint/issues/2769>
+    /// Instructs the client builder to use this `ClientConfig` in building a
+    /// client. Use this configuration method as an alternative to
+    /// `with_invite_code` builder option.
     ///
-    /// Uses this config to initialize the client
+    /// ## Failure Conditions
     ///
-    /// ## Panics
-    /// If there is a invite code or config added previously
+    /// If a `ConfigSource` already exists in the builder, calling this method
+    /// fails. If a `ClientConfig` already exists in the database, calling
+    /// `ClientBuilder::build` fails.
+    /// - You can use `get_config_from_db` to check if a config exists in the
+    ///   database.
     pub fn with_config(&mut self, config: ClientConfig) {
         let was_replaced = self
             .config_source
@@ -1525,19 +1537,12 @@ async fn get_config(
     db: &Database,
     config_source: Option<ConfigSource>,
 ) -> anyhow::Result<ClientConfig> {
-    let mut dbtx = db.begin_transaction().await;
-    let config_res = match dbtx
-        .find_by_prefix(&ClientConfigKeyPrefix)
-        .await
-        .next()
-        .await
-    {
-        Some((_, config)) => {
-            // TODO: Enable after <https://github.com/fedimint/fedimint/pull/2855>
-            // assert!(
-            //     config_source.is_none(),
-            //     "Alternative config source provided but config was found in DB"
-            // );
+    let config_res = match get_config_from_db(db).await {
+        Some(config) => {
+            ensure!(
+                config_source.is_none(),
+                "Alternative config source provided but config was found in DB"
+            );
             Ok(config)
         }
         None => {
@@ -1569,6 +1574,18 @@ async fn get_config(
     // some borrowck lifetime limitation thing
     #[allow(clippy::let_and_return)]
     config_res
+}
+
+pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
+    let mut dbtx = db.begin_transaction().await;
+    #[allow(clippy::let_and_return)]
+    let config = dbtx
+        .find_by_prefix(&ClientConfigKeyPrefix)
+        .await
+        .next()
+        .await
+        .map(|(_, config)| config);
+    config
 }
 
 /// Tries to download the client config from the federation,
