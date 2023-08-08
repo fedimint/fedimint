@@ -32,6 +32,9 @@ pub struct Elapsed;
 #[derive(Debug)]
 struct TaskGroupInner {
     on_shutdown_tx: watch::Sender<bool>,
+    // It is necessary to keep at least one `Receiver` around,
+    // otherwise shutdown writes are lost.
+    on_shutdown_rx: watch::Receiver<bool>,
     join: Mutex<VecDeque<(String, JoinHandle<()>)>>,
     // using blocking Mutex to avoid `async` in `shutdown`
     // it's OK as we don't ever need to yield
@@ -40,9 +43,10 @@ struct TaskGroupInner {
 
 impl Default for TaskGroupInner {
     fn default() -> Self {
-        let (on_shutdown_tx, _on_shutdown_rx) = watch::channel(false);
+        let (on_shutdown_tx, on_shutdown_rx) = watch::channel(false);
         Self {
             on_shutdown_tx,
+            on_shutdown_rx,
             join: Mutex::new(Default::default()),
             subgroups: std::sync::Mutex::new(vec![]),
         }
@@ -53,7 +57,9 @@ impl TaskGroupInner {
     pub fn shutdown(&self) {
         // Note: set the flag before starting to call shutdown handlers
         // to avoid confusion.
-        let _ = self.on_shutdown_tx.send(true);
+        self.on_shutdown_tx
+            .send(true)
+            .expect("We must have on_shutdown_rx around so this never fails");
 
         let subgroups = self.subgroups.lock().expect("locking failed").clone();
         for subgroup in subgroups {
@@ -356,7 +362,7 @@ impl TaskHandle {
     /// Tasks can use `select` on the return value to handle shutdown
     /// signal during otherwise blocking operation.
     pub async fn make_shutdown_rx(&self) -> TaskShutdownToken {
-        TaskShutdownToken::new(self.inner.on_shutdown_tx.subscribe())
+        TaskShutdownToken::new(self.inner.on_shutdown_rx.clone())
     }
 }
 
@@ -593,12 +599,53 @@ mod tests {
     use super::*;
 
     #[test_log::test(tokio::test)]
-    async fn test_task_group() -> anyhow::Result<()> {
+    async fn shutdown_task_group_after() -> anyhow::Result<()> {
         let mut tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             handle.make_shutdown_rx().await.await
         })
         .await;
+        sleep(Duration::from_millis(10)).await;
+        tg.shutdown_join_all(None).await?;
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn shutdown_task_group_before() -> anyhow::Result<()> {
+        let mut tg = TaskGroup::new();
+        tg.spawn("shutdown waiter", |handle| async move {
+            sleep(Duration::from_millis(10)).await;
+            handle.make_shutdown_rx().await.await
+        })
+        .await;
+        tg.shutdown_join_all(None).await?;
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn shutdown_task_subgroup_after() -> anyhow::Result<()> {
+        let tg = TaskGroup::new();
+        tg.make_subgroup()
+            .await
+            .spawn("shutdown waiter", |handle| async move {
+                handle.make_shutdown_rx().await.await
+            })
+            .await;
+        sleep(Duration::from_millis(10)).await;
+        tg.shutdown_join_all(None).await?;
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn shutdown_task_subgroup_before() -> anyhow::Result<()> {
+        let tg = TaskGroup::new();
+        tg.make_subgroup()
+            .await
+            .spawn("shutdown waiter", |handle| async move {
+                sleep(Duration::from_millis(10)).await;
+                handle.make_shutdown_rx().await.await
+            })
+            .await;
         tg.shutdown_join_all(None).await?;
         Ok(())
     }
