@@ -106,30 +106,55 @@
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
-<span class="kw">use </span>fedimint_core::PeerId;
-<span class="kw">use </span>secp256k1::hashes::sha256;
-<span class="kw">use </span>secp256k1::{schnorr, Message};
+<span class="kw">use </span>fedimint_core::{BitcoinHash, PeerId};
+<span class="kw">use </span>secp256k1_zkp::hashes::sha256;
+<span class="kw">use </span>secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
 
-<span class="kw">use </span><span class="kw">crate</span>::conversion;
+<span class="kw">use crate</span>::{consensus_hash_sha256, conversion};
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>Keychain {
     peer_id: PeerId,
-    public_keys: BTreeMap&lt;PeerId, secp256k1::XOnlyPublicKey&gt;,
-    keypair: secp256k1::KeyPair,
-    secp: secp256k1::Secp256k1&lt;secp256k1::All&gt;,
+    public_keys: BTreeMap&lt;PeerId, secp256k1_zkp::PublicKey&gt;,
+    keypair: KeyPair,
+    secp: Secp256k1&lt;All&gt;,
 }
 
 <span class="kw">impl </span>Keychain {
     <span class="kw">pub fn </span>new(
         peer_id: PeerId,
-        public_keys: BTreeMap&lt;PeerId, secp256k1::XOnlyPublicKey&gt;,
-        secret_key: secp256k1::SecretKey,
+        public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
+        secret_key: SecretKey,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
+        <span class="kw">let </span>secp = Secp256k1::new();
         <span class="kw">let </span>keypair = secret_key.keypair(<span class="kw-2">&amp;</span>secp);
 
         Keychain {
@@ -151,6 +176,23 @@
     <span class="kw">pub fn </span>threshold(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         (<span class="number">2 </span>* <span class="self">self</span>.peer_count()) / <span class="number">3 </span>+ <span class="number">1
     </span>}
+
+    <span class="kw">fn </span>tagged_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; Message {
+        <span class="kw">let </span>public_key_tag = consensus_hash_sha256(<span class="kw-2">&amp;</span><span class="self">self</span>.public_keys);
+        <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
+
+        engine
+            .write_all(public_key_tag.as_ref())
+            .expect(<span class="string">&quot;Writing to a hash engine can not fail&quot;</span>);
+
+        engine
+            .write_all(message)
+            .expect(<span class="string">&quot;Writing to a hash engine can not fail&quot;</span>);
+
+        <span class="kw">let </span>hash = sha256::Hash::from_engine(engine);
+
+        Message::from(hash)
+    }
 }
 
 <span class="kw">impl </span>aleph_bft::Index <span class="kw">for </span>Keychain {
@@ -168,10 +210,8 @@
     }
 
     <span class="kw">async fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self</span>::Signature {
-        <span class="kw">let </span>message = Message::from_hashed_data::&lt;sha256::Hash&gt;(message);
-
         <span class="self">self</span>.secp
-            .sign_schnorr(<span class="kw-2">&amp;</span>message, <span class="kw-2">&amp;</span><span class="self">self</span>.keypair)
+            .sign_schnorr(<span class="kw-2">&amp;</span><span class="self">self</span>.tagged_hash(message), <span class="kw-2">&amp;</span><span class="self">self</span>.keypair)
             .as_ref()
             .to_owned()
     }
@@ -186,9 +226,14 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(public_key) = <span class="self">self</span>.public_keys.get(<span class="kw-2">&amp;</span>peer_id) {
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(sig) = schnorr::Signature::from_slice(signature) {
-                <span class="kw">let </span>message = Message::from_hashed_data::&lt;sha256::Hash&gt;(message);
-
-                <span class="kw">return </span><span class="self">self</span>.secp.verify_schnorr(<span class="kw-2">&amp;</span>sig, <span class="kw-2">&amp;</span>message, public_key).is_ok();
+                <span class="kw">return </span><span class="self">self
+                    </span>.secp
+                    .verify_schnorr(
+                        <span class="kw-2">&amp;</span>sig,
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.tagged_hash(message),
+                        <span class="kw-2">&amp;</span>public_key.x_only_public_key().<span class="number">0</span>,
+                    )
+                    .is_ok();
             }
         }
 
@@ -210,8 +255,11 @@
     }
 
     <span class="kw">fn </span>is_complete(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: <span class="kw-2">&amp;</span>[u8], partial: <span class="kw-2">&amp;</span><span class="self">Self</span>::PartialMultisignature) -&gt; bool {
-        partial.iter().count() &gt;= <span class="self">self</span>.threshold()
-            &amp;&amp; partial.iter().all(|(i, sig)| <span class="self">self</span>.verify(msg, sig, i))
+        <span class="kw">if </span>partial.iter().count() &lt; <span class="self">self</span>.threshold() {
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        }
+
+        partial.iter().all(|(i, sgn)| <span class="self">self</span>.verify(msg, sgn, i))
     }
 }
 </code></pre></div>

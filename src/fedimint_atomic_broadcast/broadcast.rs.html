@@ -153,159 +153,199 @@
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
-
-<span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::task::sleep;
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::PeerId;
-<span class="kw">use </span>tokio::sync::{mpsc, oneshot, watch};
+<span class="kw">use </span>tokio::sync::{mpsc, oneshot};
+<span class="kw">use </span>tokio::task::JoinHandle;
 
 <span class="kw">use </span><span class="kw">crate</span>::keychain::Keychain;
-<span class="kw">use crate</span>::{db, session, Decision, Message, OrderedItem, Recipient, Shutdown, SignedBlock};
+<span class="kw">use crate</span>::{db, session, Decision, Message, OrderedItem, Recipient, SignedBlock};
 
-<span class="kw">async fn </span>relay_messages(
+<span class="kw">pub struct </span>AtomicBroadcast {
+    keychain: Keychain,
     db: Database,
-    incoming_message_receiver: async_channel::Receiver&lt;(Message, PeerId)&gt;,
+    mempool_item_receiver: async_channel::Receiver&lt;Vec&lt;u8&gt;&gt;,
     outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
-    network_data_sender: async_channel::Sender&lt;Vec&lt;u8&gt;&gt;,
-    signed_block_sender: async_channel::Sender&lt;SignedBlock&gt;,
-) {
-    <span class="kw">while let </span><span class="prelude-val">Ok</span>((message, peer_id)) = incoming_message_receiver.recv().<span class="kw">await </span>{
-        <span class="kw">match </span>message {
-            Message::NetworkData(network_data) =&gt; {
-                network_data_sender.send(network_data).<span class="kw">await</span>.ok();
-            }
-            Message::BlockRequest(index) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(signed_block) = db::load_block(<span class="kw-2">&amp;</span>db, index).<span class="kw">await </span>{
-                    outgoing_message_sender
-                        .send((Message::Block(signed_block), Recipient::Peer(peer_id)))
-                        .<span class="kw">await
-                        </span>.ok();
+    network_data_receiver: async_channel::Receiver&lt;Vec&lt;u8&gt;&gt;,
+    signed_block_receiver: async_channel::Receiver&lt;SignedBlock&gt;,
+    relay_handle: JoinHandle&lt;()&gt;,
+}
 
-                    <span class="macro">tracing::info!</span>(<span class="string">&quot;Served the block with index {} to peer {}&quot;</span>, index, peer_id);
+<span class="kw">impl </span>AtomicBroadcast {
+    <span class="doccomment">/// This function starts the atomic broadcast instance. A running instance
+    /// serves signed blocks to peers on request even if we do not run a
+    /// session.
+    </span><span class="kw">pub fn </span>new(
+        keychain: Keychain,
+        db: Database,
+        mempool_item_receiver: async_channel::Receiver&lt;Vec&lt;u8&gt;&gt;,
+        incoming_message_receiver: async_channel::Receiver&lt;(Message, PeerId)&gt;,
+        outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>(network_data_sender, network_data_receiver) = async_channel::bounded(<span class="number">256</span>);
+        <span class="kw">let </span>(signed_block_sender, signed_block_receiver) = async_channel::bounded(<span class="number">16</span>);
+
+        <span class="kw">let </span>db_clone = db.clone();
+        <span class="kw">let </span>sender_clone = outgoing_message_sender.clone();
+
+        <span class="kw">let </span>relay_handle = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">while let </span><span class="prelude-val">Ok</span>((message, peer_id)) = incoming_message_receiver.recv().<span class="kw">await </span>{
+                <span class="kw">match </span>message {
+                    Message::NetworkData(network_data) =&gt; {
+                        <span class="comment">// if we were to await a send the relay loop may get stuck if we are not
+                        // running a session
+                        </span>network_data_sender.try_send(network_data).ok();
+                    }
+                    Message::BlockRequest(index) =&gt; {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(signed_block) = db::load_block(<span class="kw-2">&amp;</span>db_clone, index).<span class="kw">await </span>{
+                            sender_clone
+                                .send((Message::Block(signed_block), Recipient::Peer(peer_id)))
+                                .<span class="kw">await
+                                </span>.ok();
+
+                            <span class="macro">tracing::info!</span>(
+                                <span class="string">&quot;Served the block with index {} to peer {}&quot;</span>,
+                                index,
+                                peer_id
+                            );
+                        }
+                    }
+                    Message::Block(signed_block) =&gt; {
+                        <span class="comment">// if we were to await a send the relay loop may get stuck if we are not
+                        // running a session
+                        </span>signed_block_sender.try_send(signed_block).ok();
+                    }
                 }
             }
-            Message::Block(signed_block) =&gt; {
-                signed_block_sender.send(signed_block).<span class="kw">await</span>.ok();
-            }
+
+            std::future::pending().<span class="kw">await
+        </span>});
+
+        <span class="self">Self </span>{
+            keychain,
+            db,
+            mempool_item_receiver,
+            outgoing_message_sender,
+            network_data_receiver,
+            signed_block_receiver,
+            relay_handle,
         }
     }
 
-    std::future::pending().<span class="kw">await
-</span>}
+    <span class="doccomment">/// The receiver returns a sequence of items which is a subsequence of
+    /// all items ordered in this session and a supersequence of the accepted
+    /// items. The end of a session is signaled by the return of Some(None)
+    /// while the return of None directly signals that the session has been
+    /// interrupted, either by a call to shutdown or by dropping a
+    /// decision_sender without sending a decision.
+    </span><span class="kw">pub async fn </span>run_session(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        index: u64,
+    ) -&gt; mpsc::Receiver&lt;<span class="prelude-ty">Option</span>&lt;(OrderedItem, oneshot::Sender&lt;Decision&gt;)&gt;&gt; {
+        <span class="kw">let </span>(ordered_item_sender, ordered_item_receiver) = mpsc::channel(<span class="number">256</span>);
 
-<span class="kw">async fn </span>process_signed_block(
-    signed_block: SignedBlock,
-    ordered_item_sender: mpsc::Sender&lt;(OrderedItem, u64, oneshot::Sender&lt;Decision&gt;)&gt;,
-) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>decision_receivers = <span class="macro">vec!</span>[];
-    <span class="kw">for </span>ordered_item <span class="kw">in </span>signed_block.block.items.into_iter() {
-        <span class="kw">let </span>(decision_sender, decision_receiver) = oneshot::channel();
-
-        ordered_item_sender
-            .send((ordered_item, signed_block.block.index, decision_sender))
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        decision_receivers.push(decision_receiver);
-    }
-
-    <span class="kw">for </span>decision_receiver <span class="kw">in </span>decision_receivers {
-        <span class="comment">// The threshold signed blocks items have to be accepted by Fedimint Consensus.
-        </span><span class="macro">assert!</span>(decision_receiver.<span class="kw">await</span><span class="question-mark">? </span>== Decision::Accept);
-    }
-
-    <span class="prelude-val">Ok</span>(())
-}
-
-<span class="attr">#[allow(clippy::too_many_arguments)]
-</span><span class="kw">pub async fn </span>run(
-    keychain: Keychain,
-    db: Database,
-    <span class="kw-2">mut </span>index: u64,
-    mempool_item_receiver: async_channel::Receiver&lt;Vec&lt;u8&gt;&gt;,
-    incoming_message_receiver: async_channel::Receiver&lt;(Message, PeerId)&gt;,
-    outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
-    ordered_item_sender: mpsc::Sender&lt;(OrderedItem, u64, oneshot::Sender&lt;Decision&gt;)&gt;,
-    clean_shutdown_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;(u64, Duration)&gt;&gt;,
-) -&gt; Shutdown {
-    <span class="kw">let </span>(network_data_sender, network_data_receiver) = async_channel::bounded(<span class="number">256</span>);
-    <span class="kw">let </span>(signed_block_sender, signed_block_receiver) = async_channel::bounded(<span class="number">16</span>);
-
-    <span class="kw">let </span>relay_handle = tokio::spawn(relay_messages(
-        db.clone(),
-        incoming_message_receiver,
-        outgoing_message_sender.clone(),
-        network_data_sender,
-        signed_block_sender,
-    ));
-
-    <span class="kw">loop </span>{
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(signed_block) = db::load_block(<span class="kw-2">&amp;</span>db, index).<span class="kw">await </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(signed_block) = db::load_block(<span class="kw-2">&amp;</span><span class="self">self</span>.db, index).<span class="kw">await </span>{
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Loaded block with index {}&quot;</span>, index);
-            <span class="kw">if </span>process_signed_block(signed_block, ordered_item_sender.clone())
-                .<span class="kw">await
-                </span>.is_err()
-            {
-                relay_handle.abort();
-                relay_handle.<span class="kw">await</span>.ok();
 
-                <span class="kw">return </span>Shutdown::MidSession(index);
-            }
+            tokio::spawn(<span class="kw">async move </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>decision_receivers = <span class="macro">vec!</span>[];
+
+                <span class="kw">for </span>ordered_item <span class="kw">in </span>signed_block.block.items.into_iter() {
+                    <span class="kw">let </span>(decision_sender, decision_receiver) = oneshot::channel();
+
+                    ordered_item_sender
+                        .send(<span class="prelude-val">Some</span>((ordered_item, decision_sender)))
+                        .<span class="kw">await
+                        </span>.ok();
+
+                    decision_receivers.push(decision_receiver);
+                }
+
+                <span class="comment">// signal that the session is complete
+                </span>ordered_item_sender.send(<span class="prelude-val">None</span>).<span class="kw">await</span>.ok();
+
+                <span class="kw">for </span>decision_receiver <span class="kw">in </span>decision_receivers {
+                    <span class="comment">// The items in a threshold signed block have to be accepted
+                    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(decision) = decision_receiver.<span class="kw">await </span>{
+                        <span class="macro">assert!</span>(decision == Decision::Accept)
+                    }
+                }
+            });
         } <span class="kw">else </span>{
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Run session with index {}&quot;</span>, index);
-            <span class="kw">let </span>(backup_loader, backup_saver) = db::open_session(db.clone(), index).<span class="kw">await</span>;
 
-            <span class="kw">let </span>session_result = session::run(
-                index,
-                keychain.clone(),
-                backup_loader,
-                backup_saver,
-                mempool_item_receiver.clone(),
-                network_data_receiver.clone(),
-                outgoing_message_sender.clone(),
-                ordered_item_sender.clone(),
-                signed_block_receiver.clone(),
-            );
+            <span class="kw">let </span>(backup_loader, backup_saver) = db::open_session(<span class="self">self</span>.db.clone(), index).<span class="kw">await</span>;
 
-            <span class="kw">match </span>session_result.<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(signed_block) =&gt; {
+            <span class="kw">let </span>keychain = <span class="self">self</span>.keychain.clone();
+            <span class="kw">let </span>db = <span class="self">self</span>.db.clone();
+            <span class="kw">let </span>mempool_item_receiver = <span class="self">self</span>.mempool_item_receiver.clone();
+            <span class="kw">let </span>network_data_receiver = <span class="self">self</span>.network_data_receiver.clone();
+            <span class="kw">let </span>outgoing_message_sender = <span class="self">self</span>.outgoing_message_sender.clone();
+            <span class="kw">let </span>signed_block_receiver = <span class="self">self</span>.signed_block_receiver.clone();
+
+            tokio::spawn(<span class="kw">async move </span>{
+                <span class="kw">let </span>session_result = session::run(
+                    index,
+                    keychain,
+                    backup_loader,
+                    backup_saver,
+                    mempool_item_receiver,
+                    network_data_receiver,
+                    outgoing_message_sender.clone(),
+                    ordered_item_sender.clone(),
+                    signed_block_receiver,
+                );
+
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(signed_block) = session_result.<span class="kw">await </span>{
                     <span class="macro">tracing::info!</span>(<span class="string">&quot;Completed session with index {}&quot;</span>, index);
+
                     db::complete_session(<span class="kw-2">&amp;</span>db, index, signed_block.clone()).<span class="kw">await</span>;
 
                     outgoing_message_sender
                         .send((Message::Block(signed_block), Recipient::Everyone))
                         .<span class="kw">await
                         </span>.ok();
-                }
-                <span class="prelude-val">Err</span>(..) =&gt; {
-                    relay_handle.abort();
-                    relay_handle.<span class="kw">await</span>.ok();
 
-                    <span class="kw">return </span>Shutdown::MidSession(index);
+                    <span class="comment">// signal that the session is complete. It is critical that we do so only after
+                    // we call db::complete_session.
+                    // Otherwise the broadcast may miss a signed block in its history if Fedimint
+                    // Consensus completes the session first and the system
+                    // crashes before the signed block is stable on disk.
+                    </span>ordered_item_sender.send(<span class="prelude-val">None</span>).<span class="kw">await</span>.ok();
+                } <span class="kw">else </span>{
+                    <span class="macro">tracing::warn!</span>(<span class="string">&quot;Session with index {} has been interrupted&quot;</span>, index);
                 }
-            };
+            });
         }
 
-        <span class="kw">let </span>clean_shutdown = clean_shutdown_receiver.borrow().to_owned();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((shutdown_index, shutdown_delay)) = clean_shutdown {
-            <span class="kw">if </span>index == shutdown_index {
-                <span class="macro">tracing::info!</span>(<span class="string">&quot;Initiate clean shutdown after index {}&quot;</span>, index);
+        ordered_item_receiver
+    }
 
-                <span class="comment">// prevents the relay loop from hanging if  the channels to become full
-                </span>network_data_receiver.close();
-                signed_block_receiver.close();
-
-                <span class="comment">// we delay the shutdown to allow lagging nodes to complete the session as well
-                </span>sleep(shutdown_delay).<span class="kw">await</span>;
-
-                relay_handle.abort();
-                relay_handle.<span class="kw">await</span>.ok();
-
-                <span class="kw">return </span>Shutdown::Clean(index);
-            }
-        }
-
-        index += <span class="number">1</span>;
+    <span class="doccomment">/// This function shuts down the serving of blocks and interrupts the
+    /// running session.
+    </span><span class="kw">pub async fn </span>shutdown(<span class="self">self</span>) {
+        <span class="self">self</span>.relay_handle.abort();
+        <span class="self">self</span>.relay_handle.<span class="kw">await</span>.ok();
     }
 }
 </code></pre></div>

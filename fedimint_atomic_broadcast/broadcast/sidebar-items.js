@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["process_signed_block",""],["relay_messages",""],["run",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["AtomicBroadcast",""]]};

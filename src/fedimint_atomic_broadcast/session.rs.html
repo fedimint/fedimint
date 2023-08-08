@@ -257,6 +257,9 @@
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -284,14 +287,14 @@
 /// - collect signatures until we reach the threshold or a signed block arrives
 </span><span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">pub async fn </span>run(
-    index: u64,
+    session_index: u64,
     keychain: Keychain,
     backup_loader: std::io::Cursor&lt;Vec&lt;u8&gt;&gt;,
     backup_saver: db::UnitSaver,
     item_receiver: Receiver&lt;Vec&lt;u8&gt;&gt;,
     network_data_receiver: Receiver&lt;Vec&lt;u8&gt;&gt;,
     outgoing_message_sender: Sender&lt;(Message, Recipient)&gt;,
-    ordered_item_sender: mpsc::Sender&lt;(OrderedItem, u64, oneshot::Sender&lt;Decision&gt;)&gt;,
+    ordered_item_sender: mpsc::Sender&lt;<span class="prelude-ty">Option</span>&lt;(OrderedItem, oneshot::Sender&lt;Decision&gt;)&gt;&gt;,
     signed_block_receiver: Receiver&lt;SignedBlock&gt;,
 ) -&gt; anyhow::Result&lt;SignedBlock&gt; {
     <span class="kw">const </span>MAX_ROUND: u16 = <span class="number">5000</span>;
@@ -303,7 +306,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>config = aleph_bft::default_config(
         keychain.peer_count().into(),
         keychain.peer_id().to_usize().into(),
-        index,
+        session_index,
     );
 
     <span class="comment">// In order to bound a sessions RAM consumption we need to bound its number of
@@ -354,7 +357,10 @@
             .cycle()
         {
             <span class="kw">if </span>outgoing_message_sender
-                .send((Message::BlockRequest(index), Recipient::Peer(peer_id)))
+                .send((
+                    Message::BlockRequest(session_index),
+                    Recipient::Peer(peer_id),
+                ))
                 .<span class="kw">await
                 </span>.is_err()
             {
@@ -369,8 +375,9 @@
     // the EXPONENTIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit
     // data
     </span><span class="kw">let </span>batches_per_block = EXPONENTIAL_SLOWDOWN_OFFSET * keychain.peer_count() / <span class="number">3</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>pending_items = <span class="macro">vec!</span>[];
     <span class="kw">let </span><span class="kw-2">mut </span>num_batches = <span class="number">0</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>pending_items = <span class="macro">vec!</span>[];
 
     <span class="comment">// we build a block out of the ordered batches until either we have processed
     // n_batches_per_block blocks or a signed block arrives from our peers
@@ -384,16 +391,16 @@
                         </span><span class="kw">let </span>peer_id = to_peer_id(node_index);
 
                         <span class="kw">for </span>item <span class="kw">in </span>items {
-                            <span class="kw">let </span>ordered_item = OrderedItem{item, peer_id};
+                            <span class="kw">let </span>ordered_item = OrderedItem{item, index: item_index, peer_id};
                             <span class="kw">let </span>(decision_sender, decision_receiver) = oneshot::channel();
 
-                            ordered_item_sender.send((
+                            ordered_item_sender.send(<span class="prelude-val">Some</span>((
                                 ordered_item.clone(),
-                                index,
                                 decision_sender
-                            )).<span class="kw">await</span><span class="question-mark">?</span>;
+                            ))).<span class="kw">await</span><span class="question-mark">?</span>;
 
                             pending_items.push((ordered_item, decision_receiver));
+                            item_index += <span class="number">1</span>;
                         }
 
                         num_batches += <span class="number">1</span>;
@@ -404,7 +411,7 @@
             signed_block = signed_block_receiver.recv() =&gt; {
                 <span class="kw">let </span>SignedBlock{block, signatures} = signed_block<span class="question-mark">?</span>;
 
-                <span class="kw">if </span>block.index == index
+                <span class="kw">if </span>block.index == session_index
                     &amp;&amp; signatures.len() == keychain.threshold()
                     &amp;&amp; signatures.iter().all(|(peer_id, sig)| {
                         keychain.verify(<span class="kw-2">&amp;</span>block.header(), sig, to_node_index(<span class="kw-2">*</span>peer_id))
@@ -425,11 +432,10 @@
                     <span class="kw">for </span>ordered_item <span class="kw">in </span>block.items.iter().skip(accepted_items.len()) {
                         <span class="kw">let </span>(decision_sender, decision_receiver) = oneshot::channel();
 
-                        ordered_item_sender.send((
+                        ordered_item_sender.send(<span class="prelude-val">Some</span>((
                             ordered_item.clone(),
-                            index,
                             decision_sender
-                        )).<span class="kw">await</span><span class="question-mark">?</span>;
+                        ))).<span class="kw">await</span><span class="question-mark">?</span>;
 
                         decision_receivers.push(decision_receiver);
                     }
@@ -463,7 +469,7 @@
 
     <span class="comment">// sign the block and send the signature to the data_provider to order it
     </span><span class="kw">let </span>block = Block {
-        index,
+        index: session_index,
         items: accepted_items,
     };
     <span class="kw">let </span>header = block.header();
@@ -489,7 +495,7 @@
             signed_block = signed_block_receiver.recv() =&gt; {
                 <span class="kw">let </span>SignedBlock{block, signatures}  = signed_block<span class="question-mark">?</span>;
 
-                <span class="kw">if </span>block.index == index
+                <span class="kw">if </span>block.index == session_index
                     &amp;&amp; signatures.len() == keychain.threshold()
                     &amp;&amp; signatures.iter().all(|(peer_id, sig)| {
                         keychain.verify(<span class="kw-2">&amp;</span>block.header(), sig, to_node_index(<span class="kw-2">*</span>peer_id))

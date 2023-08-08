@@ -104,8 +104,18 @@
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
-</pre><pre class="rust"><code><span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
-<span class="kw">use </span>bitcoin_hashes::Hash;
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+
+<span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>tokio::sync::watch;
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus_hash_sha256;
@@ -145,6 +155,7 @@
     keychain: Keychain,
     mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
     signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;[u8; <span class="number">64</span>]&gt;&gt;,
+    submitted_items: BTreeSet&lt;sha256::Hash&gt;,
     leftover_item: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
 }
 
@@ -158,6 +169,7 @@
             keychain,
             mempool_item_receiver,
             signature_receiver,
+            submitted_items: BTreeSet::new(),
             leftover_item: <span class="prelude-val">None</span>,
         }
     }
@@ -178,7 +190,9 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(item) = <span class="self">self</span>.leftover_item.take() {
             <span class="kw">if </span>item.len() &lt;= BYTE_LIMIT {
-                items.push(item);
+                <span class="kw">if </span><span class="self">self</span>.submitted_items.insert(consensus_hash_sha256(<span class="kw-2">&amp;</span>item)) {
+                    items.push(item);
+                }
             } <span class="kw">else </span>{
                 <span class="macro">tracing::error!</span>(<span class="string">&quot;Consensus item length is over BYTE_LIMIT&quot;</span>);
             }
@@ -191,7 +205,9 @@
 
             <span class="attr">#[allow(clippy::int_plus_one)]
             </span><span class="kw">if </span>items.len() + <span class="number">1 </span>&lt;= ITEM_LIMIT &amp;&amp; n_bytes + item.len() &lt;= BYTE_LIMIT {
-                items.push(item);
+                <span class="kw">if </span><span class="self">self</span>.submitted_items.insert(consensus_hash_sha256(<span class="kw-2">&amp;</span>item)) {
+                    items.push(item);
+                }
             } <span class="kw">else </span>{
                 <span class="self">self</span>.leftover_item = <span class="prelude-val">Some</span>(item);
                 <span class="kw">break</span>;
