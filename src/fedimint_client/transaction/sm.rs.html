@@ -485,6 +485,12 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -493,6 +499,7 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{task, TransactionId};
@@ -676,11 +683,16 @@
     )
     .<span class="kw">await</span>;
 
-    context
-        .api()
-        .submit_transaction(tx)
-        .<span class="kw">await
-        </span>.map_err(|e| e.to_string())
+    <span class="comment">// TODO: get rid of state machine created-&gt;created loop and only rely on this
+    // loop
+    </span><span class="kw">loop </span>{
+        <span class="kw">match </span>context.api().submit_transaction(tx.clone()).<span class="kw">await </span>{
+            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
+                sleep(RESUBMISSION_INTERVAL).<span class="kw">await</span>;
+            }
+            res =&gt; <span class="kw">return </span>res.map_err(|e| e.to_string()),
+        }
+    }
 }
 
 <span class="kw">async fn </span>trigger_created_accepted(
