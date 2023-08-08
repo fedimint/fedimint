@@ -206,6 +206,14 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -230,7 +238,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway::GatewayTest;
 <span class="kw">use </span><span class="kw">crate</span>::ln::mock::FakeLightningTest;
-<span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LndLightningTest};
+<span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LdkLightningTest, LndLightningTest};
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
 <span class="doccomment">/// A default timeout for things happening in tests
@@ -371,6 +379,14 @@
             }
             <span class="bool-val">false </span>=&gt; Box::new(FakeLightningTest::new()),
         }
+    }
+
+    <span class="doccomment">/// Spawns and returns a newly created LDK Node
+    </span><span class="kw">pub async fn </span>spawn_ldk(bitcoin: Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt;) -&gt; LdkLightningTest {
+        <span class="kw">let </span>db_dir = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;LDKNode-{}&quot;</span>, rand::random::&lt;u64&gt;())).<span class="number">0</span>;
+        LdkLightningTest::new(db_dir, bitcoin.clone())
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Error spawning LDK Node&quot;</span>)
     }
 
     <span class="doccomment">/// Get a server bitcoin RPC config

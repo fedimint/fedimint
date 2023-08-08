@@ -184,6 +184,10 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -223,6 +227,10 @@
     </span>FailedToRouteHtlcs { failure_reason: String },
     <span class="attr">#[error(<span class="string">&quot;Failed to complete HTLC: {failure_reason}&quot;</span>)]
     </span>FailedToCompleteHtlc { failure_reason: String },
+    <span class="attr">#[error(<span class="string">&quot;Failed to open channel: {failure_reason}&quot;</span>)]
+    </span>FailedToOpenChannel { failure_reason: String },
+    <span class="attr">#[error(<span class="string">&quot;Failed to get Invoice: {failure_reason}&quot;</span>)]
+    </span>FailedToGetInvoice { failure_reason: String },
 }
 
 <span class="attr">#[async_trait]

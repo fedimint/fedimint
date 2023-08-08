@@ -435,7 +435,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>FakeBitcoinTest {
-    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send&gt; {
+    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
         <span class="comment">// With  FakeBitcoinTest, every test spawns their own instance,
         // so not need to lock anything
         </span>Box::new(<span class="self">self</span>.clone())

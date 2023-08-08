@@ -217,13 +217,13 @@
             .unwrap())
     }
 
-    <span class="kw">async fn </span>amount_sent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        Amount::from_msats(<span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap())
-    }
-
     <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="bool-val">false
     </span>}
+
+    <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="string">&quot;FakeListeningAddress&quot;</span>.to_string()
+    }
 }
 
 <span class="attr">#[async_trait]

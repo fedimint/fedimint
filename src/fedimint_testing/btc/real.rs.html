@@ -281,7 +281,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTestNoLock {
-    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send&gt; {
+    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
         <span class="macro">unimplemented!</span>(
             <span class="string">&quot;You should never try to lock `RealBitcoinTestNoLock`. Lock `RealBitcoinTest` instead&quot;
         </span>)
@@ -403,7 +403,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTest {
-    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send&gt; {
+    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
         Box::new(RealBitcoinTestLocked {
             inner: <span class="self">self</span>.inner.clone(),
             _guard: REAL_BITCOIN_LOCK.lock().<span class="kw">await</span>,
@@ -447,7 +447,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTestLocked {
-    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send&gt; {
+    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;Double-locking would lead to a hang&quot;</span>);
     }
 
