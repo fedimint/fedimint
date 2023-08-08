@@ -402,7 +402,7 @@ impl ConsensusServer {
                 for (items, epoch, _prev_epoch_hash, rejected_txs) in epochs.drain(..) {
                     info!(
                         target: LOG_CONSENSUS,
-                        "Processing items from missing epoch {}", epoch
+                        "Processing items from epoch {}", epoch
                     );
                     let epoch = self
                         .consensus
