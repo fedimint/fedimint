@@ -1,27 +1,28 @@
 use std::collections::BTreeMap;
+use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
-use fedimint_core::PeerId;
-use secp256k1::hashes::sha256;
-use secp256k1::{schnorr, Message};
+use fedimint_core::{BitcoinHash, PeerId};
+use secp256k1_zkp::hashes::sha256;
+use secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
 
-use crate::conversion;
+use crate::{consensus_hash_sha256, conversion};
 
 #[derive(Clone, Debug)]
 pub struct Keychain {
     peer_id: PeerId,
-    public_keys: BTreeMap<PeerId, secp256k1::XOnlyPublicKey>,
-    keypair: secp256k1::KeyPair,
-    secp: secp256k1::Secp256k1<secp256k1::All>,
+    public_keys: BTreeMap<PeerId, secp256k1_zkp::PublicKey>,
+    keypair: KeyPair,
+    secp: Secp256k1<All>,
 }
 
 impl Keychain {
     pub fn new(
         peer_id: PeerId,
-        public_keys: BTreeMap<PeerId, secp256k1::XOnlyPublicKey>,
-        secret_key: secp256k1::SecretKey,
+        public_keys: BTreeMap<PeerId, PublicKey>,
+        secret_key: SecretKey,
     ) -> Self {
-        let secp = secp256k1::Secp256k1::new();
+        let secp = Secp256k1::new();
         let keypair = secret_key.keypair(&secp);
 
         Keychain {
@@ -43,6 +44,23 @@ impl Keychain {
     pub fn threshold(&self) -> usize {
         (2 * self.peer_count()) / 3 + 1
     }
+
+    fn tagged_hash(&self, message: &[u8]) -> Message {
+        let public_key_tag = consensus_hash_sha256(&self.public_keys);
+        let mut engine = sha256::HashEngine::default();
+
+        engine
+            .write_all(public_key_tag.as_ref())
+            .expect("Writing to a hash engine can not fail");
+
+        engine
+            .write_all(message)
+            .expect("Writing to a hash engine can not fail");
+
+        let hash = sha256::Hash::from_engine(engine);
+
+        Message::from(hash)
+    }
 }
 
 impl aleph_bft::Index for Keychain {
@@ -60,10 +78,8 @@ impl aleph_bft::Keychain for Keychain {
     }
 
     async fn sign(&self, message: &[u8]) -> Self::Signature {
-        let message = Message::from_hashed_data::<sha256::Hash>(message);
-
         self.secp
-            .sign_schnorr(&message, &self.keypair)
+            .sign_schnorr(&self.tagged_hash(message), &self.keypair)
             .as_ref()
             .to_owned()
     }
@@ -78,9 +94,14 @@ impl aleph_bft::Keychain for Keychain {
 
         if let Some(public_key) = self.public_keys.get(&peer_id) {
             if let Ok(sig) = schnorr::Signature::from_slice(signature) {
-                let message = Message::from_hashed_data::<sha256::Hash>(message);
-
-                return self.secp.verify_schnorr(&sig, &message, public_key).is_ok();
+                return self
+                    .secp
+                    .verify_schnorr(
+                        &sig,
+                        &self.tagged_hash(message),
+                        &public_key.x_only_public_key().0,
+                    )
+                    .is_ok();
             }
         }
 
@@ -102,7 +123,10 @@ impl aleph_bft::MultiKeychain for Keychain {
     }
 
     fn is_complete(&self, msg: &[u8], partial: &Self::PartialMultisignature) -> bool {
-        partial.iter().count() >= self.threshold()
-            && partial.iter().all(|(i, sig)| self.verify(msg, sig, i))
+        if partial.iter().count() < self.threshold() {
+            return false;
+        }
+
+        partial.iter().all(|(i, sgn)| self.verify(msg, sgn, i))
     }
 }

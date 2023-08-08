@@ -1,155 +1,175 @@
-use std::time::Duration;
-
 use fedimint_core::db::Database;
-use fedimint_core::task::sleep;
 use fedimint_core::PeerId;
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 use crate::keychain::Keychain;
-use crate::{db, session, Decision, Message, OrderedItem, Recipient, Shutdown, SignedBlock};
+use crate::{db, session, Decision, Message, OrderedItem, Recipient, SignedBlock};
 
-async fn relay_messages(
+pub struct AtomicBroadcast {
+    keychain: Keychain,
     db: Database,
-    incoming_message_receiver: async_channel::Receiver<(Message, PeerId)>,
+    mempool_item_receiver: async_channel::Receiver<Vec<u8>>,
     outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
-    network_data_sender: async_channel::Sender<Vec<u8>>,
-    signed_block_sender: async_channel::Sender<SignedBlock>,
-) {
-    while let Ok((message, peer_id)) = incoming_message_receiver.recv().await {
-        match message {
-            Message::NetworkData(network_data) => {
-                network_data_sender.send(network_data).await.ok();
-            }
-            Message::BlockRequest(index) => {
-                if let Some(signed_block) = db::load_block(&db, index).await {
-                    outgoing_message_sender
-                        .send((Message::Block(signed_block), Recipient::Peer(peer_id)))
-                        .await
-                        .ok();
+    network_data_receiver: async_channel::Receiver<Vec<u8>>,
+    signed_block_receiver: async_channel::Receiver<SignedBlock>,
+    relay_handle: JoinHandle<()>,
+}
 
-                    tracing::info!("Served the block with index {} to peer {}", index, peer_id);
+impl AtomicBroadcast {
+    /// This function starts the atomic broadcast instance. A running instance
+    /// serves signed blocks to peers on request even if we do not run a
+    /// session.
+    pub fn new(
+        keychain: Keychain,
+        db: Database,
+        mempool_item_receiver: async_channel::Receiver<Vec<u8>>,
+        incoming_message_receiver: async_channel::Receiver<(Message, PeerId)>,
+        outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
+    ) -> Self {
+        let (network_data_sender, network_data_receiver) = async_channel::bounded(256);
+        let (signed_block_sender, signed_block_receiver) = async_channel::bounded(16);
+
+        let db_clone = db.clone();
+        let sender_clone = outgoing_message_sender.clone();
+
+        let relay_handle = tokio::spawn(async move {
+            while let Ok((message, peer_id)) = incoming_message_receiver.recv().await {
+                match message {
+                    Message::NetworkData(network_data) => {
+                        // if we were to await a send the relay loop may get stuck if we are not
+                        // running a session
+                        network_data_sender.try_send(network_data).ok();
+                    }
+                    Message::BlockRequest(index) => {
+                        if let Some(signed_block) = db::load_block(&db_clone, index).await {
+                            sender_clone
+                                .send((Message::Block(signed_block), Recipient::Peer(peer_id)))
+                                .await
+                                .ok();
+
+                            tracing::info!(
+                                "Served the block with index {} to peer {}",
+                                index,
+                                peer_id
+                            );
+                        }
+                    }
+                    Message::Block(signed_block) => {
+                        // if we were to await a send the relay loop may get stuck if we are not
+                        // running a session
+                        signed_block_sender.try_send(signed_block).ok();
+                    }
                 }
             }
-            Message::Block(signed_block) => {
-                signed_block_sender.send(signed_block).await.ok();
-            }
+
+            std::future::pending().await
+        });
+
+        Self {
+            keychain,
+            db,
+            mempool_item_receiver,
+            outgoing_message_sender,
+            network_data_receiver,
+            signed_block_receiver,
+            relay_handle,
         }
     }
 
-    std::future::pending().await
-}
+    /// The receiver returns a sequence of items which is a subsequence of
+    /// all items ordered in this session and a supersequence of the accepted
+    /// items. The end of a session is signaled by the return of Some(None)
+    /// while the return of None directly signals that the session has been
+    /// interrupted, either by a call to shutdown or by dropping a
+    /// decision_sender without sending a decision.
+    pub async fn run_session(
+        &self,
+        index: u64,
+    ) -> mpsc::Receiver<Option<(OrderedItem, oneshot::Sender<Decision>)>> {
+        let (ordered_item_sender, ordered_item_receiver) = mpsc::channel(256);
 
-async fn process_signed_block(
-    signed_block: SignedBlock,
-    ordered_item_sender: mpsc::Sender<(OrderedItem, u64, oneshot::Sender<Decision>)>,
-) -> anyhow::Result<()> {
-    let mut decision_receivers = vec![];
-    for ordered_item in signed_block.block.items.into_iter() {
-        let (decision_sender, decision_receiver) = oneshot::channel();
-
-        ordered_item_sender
-            .send((ordered_item, signed_block.block.index, decision_sender))
-            .await?;
-
-        decision_receivers.push(decision_receiver);
-    }
-
-    for decision_receiver in decision_receivers {
-        // The threshold signed blocks items have to be accepted by Fedimint Consensus.
-        assert!(decision_receiver.await? == Decision::Accept);
-    }
-
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn run(
-    keychain: Keychain,
-    db: Database,
-    mut index: u64,
-    mempool_item_receiver: async_channel::Receiver<Vec<u8>>,
-    incoming_message_receiver: async_channel::Receiver<(Message, PeerId)>,
-    outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
-    ordered_item_sender: mpsc::Sender<(OrderedItem, u64, oneshot::Sender<Decision>)>,
-    clean_shutdown_receiver: watch::Receiver<Option<(u64, Duration)>>,
-) -> Shutdown {
-    let (network_data_sender, network_data_receiver) = async_channel::bounded(256);
-    let (signed_block_sender, signed_block_receiver) = async_channel::bounded(16);
-
-    let relay_handle = tokio::spawn(relay_messages(
-        db.clone(),
-        incoming_message_receiver,
-        outgoing_message_sender.clone(),
-        network_data_sender,
-        signed_block_sender,
-    ));
-
-    loop {
-        if let Some(signed_block) = db::load_block(&db, index).await {
+        if let Some(signed_block) = db::load_block(&self.db, index).await {
             tracing::info!("Loaded block with index {}", index);
-            if process_signed_block(signed_block, ordered_item_sender.clone())
-                .await
-                .is_err()
-            {
-                relay_handle.abort();
-                relay_handle.await.ok();
 
-                return Shutdown::MidSession(index);
-            }
+            tokio::spawn(async move {
+                let mut decision_receivers = vec![];
+
+                for ordered_item in signed_block.block.items.into_iter() {
+                    let (decision_sender, decision_receiver) = oneshot::channel();
+
+                    ordered_item_sender
+                        .send(Some((ordered_item, decision_sender)))
+                        .await
+                        .ok();
+
+                    decision_receivers.push(decision_receiver);
+                }
+
+                // signal that the session is complete
+                ordered_item_sender.send(None).await.ok();
+
+                for decision_receiver in decision_receivers {
+                    // The items in a threshold signed block have to be accepted
+                    if let Ok(decision) = decision_receiver.await {
+                        assert!(decision == Decision::Accept)
+                    }
+                }
+            });
         } else {
             tracing::info!("Run session with index {}", index);
-            let (backup_loader, backup_saver) = db::open_session(db.clone(), index).await;
 
-            let session_result = session::run(
-                index,
-                keychain.clone(),
-                backup_loader,
-                backup_saver,
-                mempool_item_receiver.clone(),
-                network_data_receiver.clone(),
-                outgoing_message_sender.clone(),
-                ordered_item_sender.clone(),
-                signed_block_receiver.clone(),
-            );
+            let (backup_loader, backup_saver) = db::open_session(self.db.clone(), index).await;
 
-            match session_result.await {
-                Ok(signed_block) => {
+            let keychain = self.keychain.clone();
+            let db = self.db.clone();
+            let mempool_item_receiver = self.mempool_item_receiver.clone();
+            let network_data_receiver = self.network_data_receiver.clone();
+            let outgoing_message_sender = self.outgoing_message_sender.clone();
+            let signed_block_receiver = self.signed_block_receiver.clone();
+
+            tokio::spawn(async move {
+                let session_result = session::run(
+                    index,
+                    keychain,
+                    backup_loader,
+                    backup_saver,
+                    mempool_item_receiver,
+                    network_data_receiver,
+                    outgoing_message_sender.clone(),
+                    ordered_item_sender.clone(),
+                    signed_block_receiver,
+                );
+
+                if let Ok(signed_block) = session_result.await {
                     tracing::info!("Completed session with index {}", index);
+
                     db::complete_session(&db, index, signed_block.clone()).await;
 
                     outgoing_message_sender
                         .send((Message::Block(signed_block), Recipient::Everyone))
                         .await
                         .ok();
-                }
-                Err(..) => {
-                    relay_handle.abort();
-                    relay_handle.await.ok();
 
-                    return Shutdown::MidSession(index);
+                    // signal that the session is complete. It is critical that we do so only after
+                    // we call db::complete_session.
+                    // Otherwise the broadcast may miss a signed block in its history if Fedimint
+                    // Consensus completes the session first and the system
+                    // crashes before the signed block is stable on disk.
+                    ordered_item_sender.send(None).await.ok();
+                } else {
+                    tracing::warn!("Session with index {} has been interrupted", index);
                 }
-            };
+            });
         }
 
-        let clean_shutdown = clean_shutdown_receiver.borrow().to_owned();
-        if let Some((shutdown_index, shutdown_delay)) = clean_shutdown {
-            if index == shutdown_index {
-                tracing::info!("Initiate clean shutdown after index {}", index);
+        ordered_item_receiver
+    }
 
-                // prevents the relay loop from hanging if  the channels to become full
-                network_data_receiver.close();
-                signed_block_receiver.close();
-
-                // we delay the shutdown to allow lagging nodes to complete the session as well
-                sleep(shutdown_delay).await;
-
-                relay_handle.abort();
-                relay_handle.await.ok();
-
-                return Shutdown::Clean(index);
-            }
-        }
-
-        index += 1;
+    /// This function shuts down the serving of blocks and interrupts the
+    /// running session.
+    pub async fn shutdown(self) {
+        self.relay_handle.abort();
+        self.relay_handle.await.ok();
     }
 }
