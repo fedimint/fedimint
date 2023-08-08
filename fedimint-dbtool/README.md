@@ -11,10 +11,10 @@ the federation first.
 
 ## Usage
 ```
-$ dbtool --help
+$ fedimint-dbtool --help
 Tool to inspect and manipulate rocksdb databases. All binary arguments (keys, values) have to be hex encoded
 
-Usage: dbtool <DATABASE> <COMMAND>
+Usage: fedimint-dbtool <DATABASE> <COMMAND>
 
 Commands:
   list    List all key-value pairs where the key begins with `prefix`
@@ -36,13 +36,13 @@ Other than the `list` command, the `delete` command only works on single keys. T
 standard unix tools to build that functionality:
 
 ```bash
-dbtool <DATABASE> list <PREFIX> | cut -d ' ' -f 1 | xargs -n 1 -- dbtool <DATABASE> delete
+fedimint-dbtool <DATABASE> list <PREFIX> | cut -d ' ' -f 1 | xargs -n 1 -- fedimint-dbtool <DATABASE> delete
 ```
 
-* `cut` selects a column from the space-separated output of `dbtool`
+* `cut` selects a column from the space-separated output of `fedimint-dbtool`
   * `-d ' '` sets its delimiter to space
   * `-f 1` selects the first column
-* `xargs` calls `dbtool delete <key>` for each line of input
+* `xargs` calls `fedimint-dbtool delete <key>` for each line of input
   * `-n 1` specifies that only one element will be passed to the specified command at a time
 
 ## Hex encoding
@@ -71,25 +71,25 @@ just mprocs
 
 Dump the entire database of server-0
 ```shell
-dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass
+fedimint-dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass
 ```
 
 Dump the consensus db entries of server-0
 ```shell
-dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass consensus
+fedimint-dbtool $FM_DATA_DIR/server-0/database dump -- $FM_DATA_DIR/server-0 pass consensus
 ```
 
 Dump the blocks from the wallet module of server-1
 ```shell
-dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass consensus blockhash
+fedimint-dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass consensus blockhash
 ```
 
 Dump the used notes from the mint module and the accepted transactions from consensus
 ```shell
-dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass consensus,mint notenonce,acceptedtransaction
+fedimint-dbtool $FM_DATA_DIR/server-1/database dump -- $FM_DATA_DIR/server-1 pass consensus,mint notenonce,acceptedtransaction
 ```
 
 Dump the entire client database (client password can be anything since it doesn't require decryption)
 ```shell
-dbtool $FM_DATA_DIR/client.db dump $FM_DATA_DIR clientpass client
+fedimint-dbtool $FM_DATA_DIR/client.db dump $FM_DATA_DIR clientpass client
 ```

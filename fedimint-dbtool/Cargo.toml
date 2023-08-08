@@ -7,7 +7,7 @@ edition = "2021"
 
 [[bin]]
 path = "src/main.rs"
-name = "dbtool"
+name = "fedimint-dbtool"
 
 [dependencies]
 anyhow = "1.0.68"
