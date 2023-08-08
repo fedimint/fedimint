@@ -192,12 +192,12 @@ async fn await_btc_transaction_confirmed(
         // Wait for confirmation
         let consensus_height = match global_context
             .module_api()
-            .fetch_consensus_block_height()
+            .fetch_consensus_block_count()
             .await
         {
-            Ok(consensus_height) => consensus_height,
+            Ok(consensus_block_count) => consensus_block_count,
             Err(e) => {
-                warn!("Failed to fetch consensus height from federation: {e}");
+                warn!("Failed to fetch consensus block count from federation: {e}");
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
                 continue;
             }

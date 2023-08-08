@@ -225,9 +225,9 @@ impl Federation {
             .0
             .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)?;
         let finality_delay = wallet_cfg.finality_delay;
-        let btc_height = self.bitcoind.client().get_blockchain_info()?.blocks;
-        let expected = btc_height - (finality_delay as u64);
-        cmd!(self, "dev", "wait-block-height", expected)
+        let bitcoind_block_count = self.bitcoind.client().get_blockchain_info()?.blocks;
+        let expected = bitcoind_block_count - (finality_delay as u64);
+        cmd!(self, "dev", "wait-block-count", expected)
             .run()
             .await?;
         Ok(())
@@ -250,7 +250,7 @@ impl Federation {
             self,
             "dev",
             "api",
-            "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_height"
+            "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
         )
         .run()
         .await?;

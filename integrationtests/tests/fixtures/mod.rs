@@ -217,7 +217,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 peers,
                 user_db,
             ));
-            user.client.await_consensus_block_height(0).await?;
+            // just for readiness
+            user.client.await_consensus_block_count(0).await?;
 
             Fixtures {
                 fed,
@@ -276,7 +277,8 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 peers,
                 user_db,
             ));
-            user.client.await_consensus_block_height(0).await?;
+            // just for readiness
+            user.client.await_consensus_block_count(0).await?;
 
             // Always be prepared to fund bitcoin wallet
             factory.bitcoin.prepare_funding_wallet().await;
@@ -466,7 +468,7 @@ impl FederationTest {
                     ConsensusItem::Module(module) if module.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET => {
                         let wallet_item = module.as_any().downcast_ref::<<<Wallet as ServerModule>::Common as ModuleCommon>::ConsensusItem>().expect("test should use fixed module instances");
                         match wallet_item {
-                            WalletConsensusItem::BlockHeight(_) => true,
+                            WalletConsensusItem::BlockCount(_) => true,
                             WalletConsensusItem::Feerate(_) => true,
                             WalletConsensusItem::PegOutSignature(_) => false
                         }

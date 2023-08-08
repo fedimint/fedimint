@@ -170,9 +170,9 @@ impl ILegacyWalletClient for LegacyTestUser<UserClientConfig> {
         self.client.rbf_tx(rbf).await.map_err(other)
     }
 
-    async fn await_consensus_block_height(&self, block_height: u64) -> LegacyClientResult<u64> {
+    async fn await_consensus_block_count(&self, block_count: u64) -> LegacyClientResult<u64> {
         self.client
-            .await_consensus_block_height(block_height)
+            .await_consensus_block_count(block_count)
             .await
             .map_err(other)
     }

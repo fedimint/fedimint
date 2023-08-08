@@ -276,13 +276,7 @@ impl ConsensusServer {
         self.start_consensus().await;
 
         while !task_handle.is_shutting_down() {
-            let outcomes = if let Ok(v) = self.run_consensus_epoch(None, &mut rng).await {
-                v
-            } else {
-                // `None` is supposed to mean the process is shutting down
-                debug_assert!(task_handle.is_shutting_down());
-                break;
-            };
+            let outcomes = self.run_consensus_epoch(None, &mut rng).await?;
 
             for outcome in outcomes {
                 info!(

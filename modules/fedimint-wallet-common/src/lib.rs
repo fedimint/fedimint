@@ -38,8 +38,8 @@ pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
     Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
 )]
 pub enum WalletConsensusItem {
-    BlockHeight(u32), /* FIXME: use block hash instead, but needs more complicated
-                       * * verification logic */
+    BlockCount(u32), /* FIXME: use block hash instead, but needs more complicated
+                      * * verification logic */
     Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
 }
@@ -47,8 +47,8 @@ pub enum WalletConsensusItem {
 impl std::fmt::Display for WalletConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WalletConsensusItem::BlockHeight(height) => {
-                write!(f, "Wallet Block Height {height}")
+            WalletConsensusItem::BlockCount(count) => {
+                write!(f, "Wallet Block Count {count}")
             }
             WalletConsensusItem::Feerate(feerate) => {
                 write!(

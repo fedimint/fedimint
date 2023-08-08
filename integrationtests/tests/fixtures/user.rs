@@ -126,11 +126,11 @@ pub trait ILegacyWalletClient {
     /// Helps prevent transactions from getting stuck in the mempool
     async fn rbf_peg_out_tx(&self, rbf: Rbf) -> LegacyClientResult<OutPoint>;
 
-    /// Awaits for the federation's consensus block height to reach a target
+    /// Awaits for the federation's consensus block count to reach a target
     ///
-    /// The consensus block height will be below the actual block height to
+    /// The consensus block count will be below the actual block count to
     /// account for finality delay
-    async fn await_consensus_block_height(&self, block_height: u64) -> LegacyClientResult<u64>;
+    async fn await_consensus_block_count(&self, block_count: u64) -> LegacyClientResult<u64>;
 }
 
 #[async_trait]

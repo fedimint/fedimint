@@ -400,14 +400,14 @@ impl LightningPayRefundable {
     async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
         // TODO: Remove polling
         loop {
-            let consensus_block_height = global_context
+            let consensus_block_count = global_context
                 .module_api()
-                .fetch_consensus_block_height()
+                .fetch_consensus_block_count()
                 .await
                 .map_err(|e| anyhow::anyhow!("ApiError: {e:?}"));
 
-            if let Ok(Some(current_block_height)) = consensus_block_height {
-                if timelock as u64 <= current_block_height {
+            if let Ok(Some(current_block_count)) = consensus_block_count {
+                if (timelock as u64) < current_block_count {
                     return;
                 }
             }

@@ -641,11 +641,11 @@ impl LightningClientModule {
             invoice_currency
         );
 
-        let consensus_height = api
-            .fetch_consensus_block_height()
+        let consensus_count = api
+            .fetch_consensus_block_count()
             .await?
-            .ok_or(format_err!("Cannot get consensus block height"))?;
-        let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
+            .ok_or(format_err!("Cannot get consensus block count"))?;
+        let absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
 
         // Compute amount to lock in the outgoing contract
         let invoice_amount_msat = invoice

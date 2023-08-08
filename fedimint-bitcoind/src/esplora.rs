@@ -53,9 +53,9 @@ impl IBitcoindRpc for EsploraClient {
         Ok(network)
     }
 
-    async fn get_block_height(&self) -> anyhow::Result<u64> {
+    async fn get_block_count(&self) -> anyhow::Result<u64> {
         match self.0.get_height().await {
-            Ok(height) => Ok(height as u64),
+            Ok(height) => Ok(height as u64 + 1),
             Err(e) => Err(e.into()),
         }
     }

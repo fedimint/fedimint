@@ -49,7 +49,7 @@ impl IBitcoindRpc for BitcoinClient {
         })
     }
 
-    async fn get_block_height(&self) -> anyhow::Result<u64> {
+    async fn get_block_count(&self) -> anyhow::Result<u64> {
         block_in_place(|| self.0.get_block_count()).map_err(anyhow::Error::from)
     }
 

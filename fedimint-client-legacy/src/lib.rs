@@ -727,20 +727,20 @@ impl<T: AsRef<ClientConfig> + Clone + MaybeSend> Client<T> {
         self.reissue(notes_to_reissue, rng).await
     }
 
-    pub async fn await_consensus_block_height(
+    pub async fn await_consensus_block_count(
         &self,
-        block_height: u64,
+        block_count: u64,
     ) -> std::result::Result<u64, task::Elapsed> {
         task::timeout(Duration::from_secs(30), async {
-            self.await_consensus_block_height_inner(block_height).await
+            self.await_consensus_block_count_inner(block_count).await
         })
         .await
     }
 
-    async fn await_consensus_block_height_inner(&self, block_height: u64) -> u64 {
+    async fn await_consensus_block_count_inner(&self, requested_count: u64) -> u64 {
         loop {
-            match self.context.api.fetch_consensus_block_height().await {
-                Ok(height) if height >= block_height => return height,
+            match self.context.api.fetch_consensus_block_count().await {
+                Ok(current_count) if requested_count <= current_count => return current_count,
                 _ => sleep(Duration::from_millis(100)).await,
             }
         }
@@ -860,8 +860,8 @@ impl Client<UserClientConfig> {
         let mut dbtx = self.context.db.begin_transaction().await;
         let mut tx = TransactionBuilder::default();
 
-        let consensus_height = self.context.api.fetch_consensus_block_height().await?;
-        let absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
+        let consensus_count = self.context.api.fetch_consensus_block_count().await?;
+        let absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
 
         let contract = self
             .ln_client()
@@ -1240,11 +1240,11 @@ impl Client<GatewayClientConfig> {
             return Err(ClientError::Underfunded(invoice_amount, account.amount));
         }
 
-        let consensus_block_height = self.context.api.fetch_consensus_block_height().await?;
-        // Calculate max delay taking into account current consensus block height and
+        let consensus_block_count = self.context.api.fetch_consensus_block_count().await?;
+        // Calculate max delay taking into account current consensus block count and
         // our safety margin.
         let max_delay = (account.contract.timelock as u64)
-            .checked_sub(consensus_block_height)
+            .checked_sub(consensus_block_count.saturating_sub(1))
             .and_then(|delta| delta.checked_sub(self.config.timelock_delta))
             .ok_or(ClientError::TimeoutTooClose)?;
 

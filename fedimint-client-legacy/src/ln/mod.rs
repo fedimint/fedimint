@@ -152,13 +152,13 @@ impl LnClient {
         }
 
         // … otherwise we have to wait till the timeout hits
-        let consensus_block_height = self
+        let consensus_block_count = self
             .context
             .api
-            .fetch_consensus_block_height()
+            .fetch_consensus_block_count()
             .await
             .map_err(LnClientError::ApiError)?;
-        if contract.contract.timelock as u64 <= consensus_block_height {
+        if (contract.contract.timelock as u64) < consensus_block_count {
             return Ok(true);
         }
 
@@ -183,9 +183,10 @@ impl LnClient {
             _ => Err(LnClientError::WrongAccountType),
         }
     }
+
     pub async fn refundable_outgoing_contracts(
         &self,
-        block_height: u64,
+        block_count: u64,
     ) -> Vec<OutgoingContractData> {
         // TODO: unify block height type
         self.context
@@ -197,7 +198,7 @@ impl LnClient {
             .filter_map(|(_, outgoing_data)| async {
                 let cancelled = outgoing_data.contract_account.contract.cancelled;
                 let timed_out =
-                    outgoing_data.contract_account.contract.timelock as u64 <= block_height;
+                    (outgoing_data.contract_account.contract.timelock as u64) < block_count;
                 if cancelled || timed_out {
                     Some(outgoing_data)
                 } else {

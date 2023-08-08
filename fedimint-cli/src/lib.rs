@@ -60,7 +60,7 @@ enum CliOutput {
         value: Value,
     },
 
-    WaitBlockHeight {
+    WaitBlockCount {
         reached: u64,
     },
 
@@ -401,8 +401,8 @@ enum DevCmd {
     /// Config enabling client to establish websocket connection to federation
     InviteCode,
 
-    /// Wait for the fed to reach a consensus block height
-    WaitBlockHeight { height: u64 },
+    /// Wait for the fed to reach a consensus block count
+    WaitBlockCount { count: u64 },
 
     /// Decode connection info into its JSON representation
     DecodeInviteCode { invite_code: InviteCode },
@@ -655,7 +655,7 @@ impl FedimintCli {
 
                 Ok(CliOutput::InviteCode { invite_code })
             }
-            Command::Dev(DevCmd::WaitBlockHeight { height: target }) => {
+            Command::Dev(DevCmd::WaitBlockCount { count: target }) => {
                 task::timeout(Duration::from_secs(30), async move {
                     let client = cli.build_client_ng(&self.module_gens).await?;
                     loop {
@@ -664,10 +664,10 @@ impl FedimintCli {
                         let count = client
                             .api()
                             .with_module(instance.id)
-                            .fetch_consensus_block_height()
+                            .fetch_consensus_block_count()
                             .await?;
                         if count >= target {
-                            break Ok(CliOutput::WaitBlockHeight { reached: count });
+                            break Ok(CliOutput::WaitBlockCount { reached: count });
                         }
                         task::sleep(Duration::from_millis(100)).await;
                     }
