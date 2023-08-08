@@ -16,7 +16,7 @@ This uses a tool called [mprocs](https://github.com/pvolok/mprocs) to spawn work
 
 ![screenshot of the federation running in mprocs](mprocs.png)
 
-### Using the client
+### Using the `fedimint-cli client`
 
 Note as you run commands the mint nodes will output logging information which you can adjust by setting the [RUST_LOG](https://docs.rs/env_logger/latest/env_logger/) env variable.
 
@@ -44,7 +44,7 @@ $ fedimint-cli info
 ```
 
 The `spend` subcommand allows sending notes to another client. This will select the smallest possible set of the client's notes that represents a given amount.
-The notes are base64 encoded into a note and printed as the `note` field.
+The notes are base64 encoded and printed as the `note` field.
 
 ```shell
 $ fedimint-cli spend 100000
@@ -83,9 +83,69 @@ $ fedimint-cli reissue BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
 }
 ```
 
+### On-Chain Deposit and Withdrawal
+
+#### Deposit
+
+Check you current ecash balance:
+
+```shell
+$ fedimint-cli info
+
+{
+  "denominations_msat": {
+    "1": 2,
+    "1024": 3,
+    "1048576": 3,
+    "128": 3,
+    "131072": 2,
+    "16": 2,
+    "16384": 2,
+    "2": 3,
+    "2048": 2,
+    "2097152": 2,
+    "256": 2,
+    "262144": 2,
+    "32": 2,
+    "32768": 3,
+    "4": 2,
+    "4096": 3,
+    "512": 3,
+    "524288": 3,
+    "64": 2,
+    "65536": 2,
+    "8": 2,
+    "8192": 2
+  },
+  "total_msat": 10000000
+}
+```
+
+To deposit into a Fedimint, you must generate a new deposit address, funds sent to it can later be claimed
+
+```shell
+$ fedimint-cli deposit-address
+{
+  "address": "bcrt1qzwpac0pfk8vvdye6anyhtvm359485d3hezpvwfhheqdz4yv9yx6qsn2u06",
+  "operation_id": "d156b6c420353113c9ad1f72652c0975e18dc8a589d5d026ea5c9caa673df693"
+}
+```
+
+Save the `operation_id` somewhere accessible, we'll need that later to claim our ecash notes. The `operation_id` is a key that associates a client with the relevant [transaction](`https://github.com/fedimint/fedimint/blob/0f6096b3bb5961a1697e4591b4d2526629b13c2d/fedimint-core/src/transaction.rs#L19`).
+Use the `"address"` field with whatever on-chain capable wallet you use. When using the development environment, you can use `bitcoin-cli sendtoaddress bcrt1qzwpac0pfk8vvdye6anyhtvm359485d3hezpvwfhheqdz4yv9yx6qsn2u06 <amount>` to send bitcoin. Then `bitcoin-cli -regtest -generate 10` to mine some blocks.
+
+Now use `await-deposit` to claim your ecash. Your ecash balance should be increased by the amount sent. Use `fedmint-cli info` to check the balance has increased by `<amount>`.
+
+```shell
+$ fedimint-cli await-deposit d156b6c420353113c9ad1f72652c0975e18dc8a589d5d026ea5c9caa673df693
+null
+```
+
+
 ### Using the Gateway
 
-The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The mprocs setup scripts also give it some ecash. To check its balance, we use the [`gateway-cli`](../gateway/cli) utility. In the mprocs environment there are 2 lightning gateways -- one for Core Lightning and one for LND -- so we add `gateway-cln` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the Core Lightinng gateway, run `gateway-cln info`, copy the federation id and then:
+The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The mprocs setup scripts also give it some ecash. To check its balance, we use the [`gateway-cli`](../gateway/cli) utility. In the mprocs environment there are 2 lightning gateways -- one for Core Lightning and one for LND -- so we add `gateway-cln` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the Core Lighting gateway, run `gateway-cln info`, copy the federation id and then:
+
 
 ```shell
 $ gateway-cln balance --federation-id <FEDERATION-ID>
