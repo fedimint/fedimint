@@ -26,7 +26,8 @@ mkdir -p "$FM_TEST_DIR"
 touch "$FM_PID_FILE"
 
 # Symlink $FM_TEST_DIR to local gitignored target/ directory so they're easier to find
-rm target/devimint &> /dev/null || true
+rm -f target/devimint
+mkdir -p target
 ln -s $FM_TEST_DIR target/devimint
 
 # Builds the rust executables and sets environment variables
