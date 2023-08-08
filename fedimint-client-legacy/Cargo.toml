@@ -56,7 +56,7 @@ threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 jsonrpsee-ws-client = { version = "0.18.0", features = ["webpki-tls"], default-features = false }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = { version = "0.18.0" }
+jsonrpsee-wasm-client = { version = "0.19.0" }
 ring = { version = "0.16.20", features = ["wasm32_unknown_unknown_js", "wasm32_c"] }
 
 [dev-dependencies]
