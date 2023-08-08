@@ -1,8 +1,8 @@
 //! Implements the client API through which users interact with the federation
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
-use std::time::{Duration, Instant, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
@@ -264,21 +264,57 @@ impl ConsensusApi {
     }
 
     pub async fn get_consensus_status(&self) -> ApiResult<ConsensusStatus> {
-        let our_last_contribution = self.get_epoch_count().await;
+        let peers_connection_status = self.peer_status_channels.get_all_status().await;
         let latest_contribution_by_peer = self.latest_contribution_by_peer.read().await.clone();
-        let peers_connection_status: HashMap<PeerId, anyhow::Result<PeerConnectionStatus>> =
-            self.peer_status_channels.get_all_status().await;
-        // How much time we consider a contribution recent for a "grace time".
-        // For instance, even if a peer isn't connected right now, if it contributed
-        // recently then we won't flag it.
-        const MAX_DURATION_FOR_RECENT_CONTRIBUTION: Duration = Duration::from_secs(60);
+        let epoch_count = self.get_epoch_count().await;
 
-        Ok(calculate_consensus_status(
-            latest_contribution_by_peer,
-            our_last_contribution,
-            peers_connection_status,
-            MAX_DURATION_FOR_RECENT_CONTRIBUTION,
-        ))
+        let status_by_peer = peers_connection_status
+            .into_iter()
+            .map(|(peer, connection_status)| {
+                let last_contribution = latest_contribution_by_peer.get(&peer).cloned();
+                let flagged = last_contribution.unwrap_or(0) + 1 < epoch_count;
+                let connection_status = match connection_status {
+                    Ok(status) => status,
+                    Err(e) => {
+                        debug!(target: LOG_NET_API, %peer, "Unable to get peer connection status: {e}");
+                        PeerConnectionStatus::Disconnected
+                    }
+                };
+
+                let consensus_status = PeerConsensusStatus {
+                    last_contribution,
+                    flagged,
+                    connection_status,
+                };
+
+                (peer, consensus_status)
+            })
+            .collect::<HashMap<PeerId, PeerConsensusStatus>>();
+
+        let peers_flagged = status_by_peer
+            .values()
+            .filter(|status| status.flagged)
+            .count() as u64;
+
+        let peers_online = status_by_peer
+            .values()
+            .filter(|status| status.connection_status == PeerConnectionStatus::Connected)
+            .count() as u64;
+
+        let peers_offline = status_by_peer
+            .values()
+            .filter(|status| status.connection_status == PeerConnectionStatus::Disconnected)
+            .count() as u64;
+
+        Ok(ConsensusStatus {
+            // the naming is in preparation for aleph bft since we will switch to
+            // the session count here and want to keep the public API stable
+            session_count: epoch_count,
+            peers_online,
+            peers_offline,
+            peers_flagged,
+            status_by_peer,
+        })
     }
 
     async fn handle_backup_request(
@@ -317,76 +353,6 @@ impl ConsensusApi {
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
-    }
-}
-
-fn calculate_consensus_status(
-    latest_contribution_by_peer: LatestContributionByPeer,
-    our_last_contribution: u64,
-    peers_connection_status: HashMap<PeerId, anyhow::Result<PeerConnectionStatus>>,
-    max_duration_for_recent_contribution: Duration,
-) -> ConsensusStatus {
-    let mut peers = peers_connection_status
-        .keys()
-        .copied()
-        .collect::<HashSet<_>>();
-    peers.extend(latest_contribution_by_peer.keys().copied());
-    let peer_consensus_status = peers
-        .into_iter()
-        .map(|peer| {
-            let mut consensus_status = PeerConsensusStatus::default();
-            let has_recent_contribution;
-            if let Some(contribution) = latest_contribution_by_peer.get(&peer) {
-                let is_behind_us = contribution.value < our_last_contribution;
-                has_recent_contribution =
-                    contribution.time.elapsed().unwrap() <= max_duration_for_recent_contribution;
-                consensus_status.flagged = is_behind_us && !has_recent_contribution;
-                consensus_status.last_contribution = Some(contribution.value);
-                let unix_timestamp = contribution
-                    .time
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
-                consensus_status.last_contribution_timestamp_seconds = Some(unix_timestamp);
-            } else {
-                has_recent_contribution = false;
-                consensus_status.flagged = true;
-            }
-            match peers_connection_status.get(&peer) {
-                Some(Err(e)) => {
-                    debug!(target: LOG_NET_API, %peer, "Unable to get peer connection status: {e}");
-                    consensus_status.flagged |= !has_recent_contribution;
-                    consensus_status.connection_status = PeerConnectionStatus::Disconnected;
-                }
-                Some(Ok(PeerConnectionStatus::Disconnected)) | None => {
-                    consensus_status.flagged |= !has_recent_contribution;
-                    consensus_status.connection_status = PeerConnectionStatus::Disconnected;
-                }
-                Some(Ok(PeerConnectionStatus::Connected)) => {
-                    consensus_status.connection_status = PeerConnectionStatus::Connected;
-                }
-            };
-            (peer, consensus_status)
-        })
-        .collect::<HashMap<_, _>>();
-    let peers_flagged = peer_consensus_status
-        .iter()
-        .filter(|(_, status)| status.flagged)
-        .count() as u64;
-    let peers_online = peer_consensus_status
-        .iter()
-        .filter(|(_, status)| status.connection_status == PeerConnectionStatus::Connected)
-        .count() as u64;
-    let peers_offline = peer_consensus_status
-        .iter()
-        .filter(|(_, status)| status.connection_status == PeerConnectionStatus::Disconnected)
-        .count() as u64;
-    ConsensusStatus {
-        last_contribution: our_last_contribution,
-        peers_online,
-        peers_offline,
-        peers_flagged,
-        status_by_peer: peer_consensus_status,
     }
 }
 
@@ -613,125 +579,11 @@ impl<T: Clone> ExpiringCache<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
 
-    use fedimint_core::api::ConsensusContribution;
     use fedimint_core::task;
-    use fedimint_core::time::now;
 
-    use super::*;
-    #[test]
-    fn test_server_status_all_ok() {
-        let now = now();
-        let our_last_contribution = 1;
-        let latest_contribution_by_peer = HashMap::from([
-            (
-                PeerId::from(0),
-                ConsensusContribution {
-                    value: 1,
-                    time: now,
-                },
-            ),
-            (
-                PeerId::from(1),
-                ConsensusContribution {
-                    value: 2,
-                    time: now,
-                },
-            ),
-        ]);
-        let peers_connection_status = HashMap::from([
-            (PeerId::from(0), Ok(PeerConnectionStatus::Connected)),
-            (PeerId::from(1), Ok(PeerConnectionStatus::Connected)),
-        ]);
-        let max_duration_for_recent_contribution = Duration::from_secs(5);
-        let result = calculate_consensus_status(
-            latest_contribution_by_peer,
-            our_last_contribution,
-            peers_connection_status,
-            max_duration_for_recent_contribution,
-        );
-        assert_eq!(result.peers_online, 2);
-        assert_eq!(result.peers_offline, 0);
-        assert_eq!(result.peers_flagged, 0);
-        assert!(result.status_by_peer.values().all(|p| !p.flagged));
-    }
-
-    #[test]
-    fn test_server_status_some_issues_not_flagged() {
-        let now = now();
-        let our_last_contribution = 3;
-        let latest_contribution_by_peer = HashMap::from([
-            (
-                PeerId::from(0),
-                ConsensusContribution {
-                    value: 2, // behind us
-                    time: now,
-                },
-            ),
-            (
-                PeerId::from(1),
-                ConsensusContribution {
-                    value: 3,
-                    time: now,
-                },
-            ),
-        ]);
-        let peers_connection_status = HashMap::from([
-            (PeerId::from(0), Ok(PeerConnectionStatus::Connected)),
-            (PeerId::from(1), Ok(PeerConnectionStatus::Disconnected)), // offline
-        ]);
-        // we have some "grace time", recent contributions keep the peer from being
-        // flagged
-        let max_duration_for_recent_contribution = Duration::from_secs(5);
-        let result = calculate_consensus_status(
-            latest_contribution_by_peer,
-            our_last_contribution,
-            peers_connection_status,
-            max_duration_for_recent_contribution,
-        );
-        assert_eq!(result.peers_online, 1);
-        assert_eq!(result.peers_offline, 1);
-        assert_eq!(result.peers_flagged, 0);
-        assert!(result.status_by_peer.values().all(|p| !p.flagged));
-    }
-
-    #[test]
-    fn test_server_status_some_issues_flagged() {
-        let now = now();
-        let our_last_contribution = 3;
-        let latest_contribution_by_peer = HashMap::from([
-            (
-                PeerId::from(0),
-                ConsensusContribution {
-                    value: 2, // behind us
-                    time: now,
-                },
-            ),
-            (
-                PeerId::from(1),
-                ConsensusContribution {
-                    value: 3,
-                    time: now,
-                },
-            ),
-        ]);
-        let peers_connection_status = HashMap::from([
-            (PeerId::from(0), Ok(PeerConnectionStatus::Connected)),
-            (PeerId::from(1), Ok(PeerConnectionStatus::Disconnected)), // offline
-        ]);
-        // no "grace time", if a peer has some issue its recent contributions won't help
-        let max_duration_for_recent_contribution = Duration::from_secs(0);
-        let result = calculate_consensus_status(
-            latest_contribution_by_peer,
-            our_last_contribution,
-            peers_connection_status,
-            max_duration_for_recent_contribution,
-        );
-        assert_eq!(result.peers_online, 1);
-        assert_eq!(result.peers_offline, 1);
-        assert_eq!(result.peers_flagged, 2);
-        assert!(result.status_by_peer.values().all(|p| p.flagged));
-    }
+    use crate::net::api::ExpiringCache;
 
     #[tokio::test]
     async fn test_expiring_cache() {

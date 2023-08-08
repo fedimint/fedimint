@@ -6,7 +6,7 @@ use std::ops::Add;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::{cmp, result};
 
 use anyhow::{anyhow, ensure};
@@ -968,10 +968,7 @@ impl<C: JsonRpcClient> WsFederationApi<C> {}
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConsensusStatus {
-    /// The last contribution that this server has made to the consensus, it's
-    /// equivalent to [`PeerConsensusStatus::last_contribution`] and
-    /// [`ConsensusContribution::value`]
-    pub last_contribution: u64,
+    pub session_count: u64,
     pub status_by_peer: HashMap<PeerId, PeerConsensusStatus>,
     pub peers_online: u64,
     pub peers_offline: u64,
@@ -983,11 +980,9 @@ pub struct ConsensusStatus {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerConsensusStatus {
     pub last_contribution: Option<u64>,
-    pub last_contribution_timestamp_seconds: Option<u64>,
     pub connection_status: PeerConnectionStatus,
-    /// Indicates that this peer needs attention from the operator. For instance
-    /// it may be suffering too many disconnections or it hasn't contributed for
-    /// the consensus in a long time
+    /// Indicates that this peer needs attention from the operator since
+    /// it has not contributed to the consensus in a long time
     pub flagged: bool,
 }
 
@@ -996,16 +991,6 @@ pub enum PeerConnectionStatus {
     #[default]
     Disconnected,
     Connected,
-}
-
-/// Tracks the consensus contribution for a peer
-#[derive(Debug, Clone, Copy)]
-pub struct ConsensusContribution {
-    /// Using HBBFT this is the epoch count. In general it should be an
-    /// increasing number
-    pub value: u64,
-    /// When the contribution was received
-    pub time: SystemTime,
 }
 
 /// The state of the server returned via APIs

@@ -4,9 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
-use fedimint_core::api::{
-    ConsensusContribution, DynGlobalApi, GlobalFederationApi, WsFederationApi,
-};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsFederationApi};
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::{apply_migrations, Database};
@@ -71,7 +69,7 @@ enum EpochTriggerEvent {
     RunEpochRequest,
 }
 
-pub(crate) type LatestContributionByPeer = HashMap<PeerId, ConsensusContribution>;
+pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
 
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
@@ -607,22 +605,19 @@ impl ConsensusServer {
     async fn rejoin_at_epoch(&mut self, epoch: u64, peer: PeerId) {
         let peers = self.rejoin_at_epoch.entry(epoch).or_default();
         peers.insert(peer);
-        let contribution = ConsensusContribution {
-            // this is equivalent to epoch count, so + 1 here as usual
-            value: epoch + 1,
-            time: fedimint_core::time::now(),
-        };
+
         self.latest_contribution_by_peer
             .write()
             .await
             .entry(peer)
             .and_modify(|c| {
                 // only update if epoch count is higher
-                if contribution.value > c.value {
-                    *c = contribution;
+                if epoch + 1 > *c {
+                    *c = epoch + 1
                 }
             })
-            .or_insert(contribution);
+            .or_insert(epoch + 1);
+
         let threshold = self.cfg.local.p2p_endpoints.threshold();
 
         if peers.len() >= threshold && self.hbbft.epoch() < epoch {
