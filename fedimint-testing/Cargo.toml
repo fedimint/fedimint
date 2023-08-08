@@ -27,6 +27,7 @@ fedimint-logging = { path = "../fedimint-logging" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 lazy_static = "1.4.0"
 ln-gateway = { path = "../gateway/ln-gateway" }
+ldk-node = { git = "https://github.com/lightningdevkit/ldk-node" }
 futures = "0.3"
 lightning = "0.0.113"
 lightning-invoice = "0.21.0"

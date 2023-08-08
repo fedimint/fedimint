@@ -37,6 +37,10 @@ pub enum LightningRpcError {
     FailedToRouteHtlcs { failure_reason: String },
     #[error("Failed to complete HTLC: {failure_reason}")]
     FailedToCompleteHtlc { failure_reason: String },
+    #[error("Failed to open channel: {failure_reason}")]
+    FailedToOpenChannel { failure_reason: String },
+    #[error("Failed to get Invoice: {failure_reason}")]
+    FailedToGetInvoice { failure_reason: String },
 }
 
 #[async_trait]

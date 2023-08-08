@@ -25,11 +25,13 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use fedimint_ln_server::LightningGen;
+use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::GatewayTest;
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
+use lightning_invoice::Invoice;
 use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
@@ -48,6 +50,7 @@ async fn gateway_test<B>(
             Box<dyn LightningTest>,
             FederationTest,
             Client, // User Client
+            Arc<dyn BitcoinTest>,
         ) -> B
         + Copy,
 ) -> anyhow::Result<()>
@@ -60,12 +63,13 @@ where
     let lnd2 = fixtures.lnd().await;
     let cln2 = fixtures.cln().await;
 
-    for (node, other_node) in vec![(lnd1, cln1), (cln2, lnd2)] {
+    for (gateway_ln, other_node) in vec![(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
         let user_client = fed.new_client().await;
-        let mut gateway = fixtures.new_gateway(node).await;
+        let mut gateway = fixtures.new_gateway(gateway_ln).await;
         gateway.connect_fed(&fed).await;
-        f(gateway, other_node, fed, user_client).await?;
+        let bitcoin = fixtures.bitcoin();
+        f(gateway, other_node, fed, user_client, bitcoin).await?;
     }
     Ok(())
 }
@@ -74,10 +78,83 @@ pub fn sha256(data: &[u8]) -> sha256::Hash {
     bitcoin::hashes::sha256::Hash::hash(data)
 }
 
+async fn pay_valid_invoice(
+    invoice: Invoice,
+    user_client: &Client,
+    gateway: &Client,
+) -> anyhow::Result<()> {
+    // User client pays test invoice
+    let (pay_type, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+    match pay_type {
+        PayType::Lightning(pay_op) => {
+            let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
+            assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+            let funded = pay_sub.ok().await?;
+            assert_matches!(funded, LnPayState::Funded);
+
+            let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
+            let mut gw_pay_sub = gateway
+                .gateway_subscribe_ln_pay(gw_pay_op)
+                .await?
+                .into_stream();
+            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
+            if let GatewayExtPayStates::Success {
+                preimage: _,
+                outpoint: gw_outpoint,
+            } = gw_pay_sub.ok().await?
+            {
+                gateway.receive_money(gw_outpoint).await?;
+            } else {
+                panic!("Gateway pay state machine was not successful");
+            }
+        }
+        _ => panic!("Expected Lightning payment!"),
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
+    // Running LDK Node with the mock services doesnt provide any additional
+    // coverage, since `FakeLightningTest` does not open any channels.
+    if !Fixtures::is_real_test() {
+        return Ok(());
+    }
+
+    gateway_test(|gateway, _, fed, user_client, bitcoin| async move {
+        let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
+
+        ldk.open_channel(
+            Amount::from_msats(5000000),
+            gateway.node_pub_key,
+            gateway.listening_addr.clone(),
+            bitcoin.lock_exclusive().await,
+        )
+        .await?;
+
+        let gateway = gateway.remove_client(&fed).await;
+        // Print money for user_client
+        let (_, outpoint) = user_client.print_money(sats(1000)).await?;
+        user_client.receive_money(outpoint).await?;
+        assert_eq!(user_client.get_balance().await, sats(1000));
+
+        // Create test invoice
+        let invoice = ldk.invoice(sats(250), None).await?;
+        pay_valid_invoice(invoice, &user_client, &gateway).await?;
+
+        assert_eq!(user_client.get_balance().await, sats(1000 - 250));
+        assert_eq!(gateway.get_balance().await, sats(250));
+
+        Ok(())
+    })
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
     gateway_test(
-        |gateway, other_lightning_client, fed, user_client| async move {
+        |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for user_client
             let (_, outpoint) = user_client.print_money(sats(1000)).await?;
@@ -87,34 +164,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             // Create test invoice
             let invoice = other_lightning_client.invoice(sats(250), None).await?;
 
-            // User client pays test invoice
-            let (pay_type, contract_id) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
-            match pay_type {
-                PayType::Lightning(pay_op) => {
-                    let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
-                    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
-                    let funded = pay_sub.ok().await?;
-                    assert_matches!(funded, LnPayState::Funded);
-
-                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
-                    let mut gw_pay_sub = gateway
-                        .gateway_subscribe_ln_pay(gw_pay_op)
-                        .await?
-                        .into_stream();
-                    assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
-                    assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
-                    if let GatewayExtPayStates::Success {
-                        preimage: _,
-                        outpoint: gw_outpoint,
-                    } = gw_pay_sub.ok().await?
-                    {
-                        gateway.receive_money(gw_outpoint).await?;
-                    } else {
-                        panic!("Gateway pay state machine was not successful");
-                    }
-                }
-                _ => panic!("Expected Lightning payment!"),
-            }
+            pay_valid_invoice(invoice, &user_client, &gateway).await?;
 
             assert_eq!(user_client.get_balance().await, sats(1000 - 250));
             assert_eq!(gateway.get_balance().await, sats(250));
@@ -128,7 +178,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     gateway_test(
-        |gateway, other_lightning_client, fed, user_client| async move {
+        |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for user_client
             let (_, outpoint) = user_client.print_money(sats(1000)).await?;
@@ -190,7 +240,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     gateway_test(
-        |gateway, other_lightning_client, fed, user_client| async move {
+        |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for user client
             let (_, outpoint) = user_client.print_money(sats(1000)).await?;
@@ -234,7 +284,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
-    gateway_test(|gateway, _, fed, user_client| async move {
+    gateway_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
@@ -280,7 +330,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<()> {
-    gateway_test(|gateway, _, fed, _| async move {
+    gateway_test(|gateway, _, fed, _, _| async move {
         let gateway = gateway.remove_client(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
@@ -313,7 +363,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
-    gateway_test(|gateway, _, fed, user_client| async move {
+    gateway_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client(&fed).await;
         // User client creates invoice in federation
         let (_invoice_op, invoice) = user_client
@@ -345,7 +395,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()> {
     gateway_test(
-        |gateway, other_lightning_client, fed, user_client| async move {
+        |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for gateway client
             let initial_gateway_balance = sats(1000);
@@ -484,7 +534,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     gateway_test(
-        |gateway, other_lightning_client, fed, user_client| async move {
+        |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             let invoice = other_lightning_client
                 .invoice(sats(1000), 1.into())

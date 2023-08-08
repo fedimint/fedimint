@@ -55,9 +55,8 @@ pub trait LightningTest: ILnRpcClient {
             .unwrap())
     }
 
-    /// Returns the amount that the gateway LN node has sent
-    async fn amount_sent(&self) -> Amount;
-
     /// Is this a LN instance shared with other tests
     fn is_shared(&self) -> bool;
+
+    fn listening_address(&self) -> String;
 }

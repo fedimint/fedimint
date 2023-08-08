@@ -22,7 +22,7 @@ use crate::btc::BitcoinTest;
 use crate::federation::FederationTest;
 use crate::gateway::GatewayTest;
 use crate::ln::mock::FakeLightningTest;
-use crate::ln::real::{ClnLightningTest, LndLightningTest};
+use crate::ln::real::{ClnLightningTest, LdkLightningTest, LndLightningTest};
 use crate::ln::LightningTest;
 
 /// A default timeout for things happening in tests
@@ -163,6 +163,14 @@ impl Fixtures {
             }
             false => Box::new(FakeLightningTest::new()),
         }
+    }
+
+    /// Spawns and returns a newly created LDK Node
+    pub async fn spawn_ldk(bitcoin: Arc<dyn BitcoinTest>) -> LdkLightningTest {
+        let db_dir = test_dir(&format!("LDKNode-{}", rand::random::<u64>())).0;
+        LdkLightningTest::new(db_dir, bitcoin.clone())
+            .await
+            .expect("Error spawning LDK Node")
     }
 
     /// Get a server bitcoin RPC config
