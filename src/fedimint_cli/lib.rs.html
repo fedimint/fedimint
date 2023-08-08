@@ -888,7 +888,7 @@
         value: Value,
     },
 
-    WaitBlockHeight {
+    WaitBlockCount {
         reached: u64,
     },
 
@@ -1229,8 +1229,8 @@
     <span class="doccomment">/// Config enabling client to establish websocket connection to federation
     </span>InviteCode,
 
-    <span class="doccomment">/// Wait for the fed to reach a consensus block height
-    </span>WaitBlockHeight { height: u64 },
+    <span class="doccomment">/// Wait for the fed to reach a consensus block count
+    </span>WaitBlockCount { count: u64 },
 
     <span class="doccomment">/// Decode connection info into its JSON representation
     </span>DecodeInviteCode { invite_code: InviteCode },
@@ -1483,7 +1483,7 @@
 
                 <span class="prelude-val">Ok</span>(CliOutput::InviteCode { invite_code })
             }
-            Command::Dev(DevCmd::WaitBlockHeight { height: target }) =&gt; {
+            Command::Dev(DevCmd::WaitBlockCount { count: target }) =&gt; {
                 task::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async move </span>{
                     <span class="kw">let </span>client = cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">loop </span>{
@@ -1492,10 +1492,10 @@
                         <span class="kw">let </span>count = client
                             .api()
                             .with_module(instance.id)
-                            .fetch_consensus_block_height()
+                            .fetch_consensus_block_count()
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">if </span>count &gt;= target {
-                            <span class="kw">break </span><span class="prelude-val">Ok</span>(CliOutput::WaitBlockHeight { reached: count });
+                            <span class="kw">break </span><span class="prelude-val">Ok</span>(CliOutput::WaitBlockCount { reached: count });
                         }
                         task::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
                     }

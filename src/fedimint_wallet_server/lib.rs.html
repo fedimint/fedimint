@@ -1875,6 +1875,8 @@
 <a href="#1875" id="1875">1875</a>
 <a href="#1876" id="1876">1876</a>
 <a href="#1877" id="1877">1877</a>
+<a href="#1878" id="1878">1878</a>
+<a href="#1879" id="1879">1879</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1892,7 +1894,7 @@
 };
 <span class="kw">use </span>common::config::WalletConfigConsensus;
 <span class="kw">use </span>common::db::{
-    BlockHeightVoteKey, BlockHeightVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
     PegOutNonceKey,
 };
 <span class="kw">use </span>common::{
@@ -2142,14 +2144,14 @@
                     </span>);
                 }
 
-                DbKeyPrefix::BlockHeightVote =&gt; {
+                DbKeyPrefix::BlockCountVote =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         dbtx,
-                        BlockHeightVotePrefix,
-                        BlockHeightVoteKey,
+                        BlockCountVotePrefix,
+                        BlockCountVoteKey,
                         u32,
                         wallet,
-                        <span class="string">&quot;Block Height Votes&quot;
+                        <span class="string">&quot;Block Count Votes&quot;
                     </span>);
                 }
 
@@ -2198,13 +2200,13 @@
             .collect::&lt;Vec&lt;WalletConsensusItem&gt;&gt;()
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>block_height_proposal = <span class="self">self
-            </span>.block_height()
+        <span class="kw">let </span>block_count_proposal = <span class="self">self
+            </span>.block_count()
             .<span class="kw">await
             </span>.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
 
-        <span class="kw">if </span>block_height_proposal != <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await </span>{
-            items.push(WalletConsensusItem::BlockHeight(block_height_proposal));
+        <span class="kw">if </span>block_count_proposal != <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
+            items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
         <span class="kw">let </span>fee_rate_proposal = <span class="self">self</span>.fee_rate().<span class="kw">await</span>;
@@ -2225,33 +2227,35 @@
         <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_item, <span class="string">&quot;Received consensus proposals&quot;</span>);
 
         <span class="kw">match </span>consensus_item {
-            WalletConsensusItem::BlockHeight(block_height) =&gt; {
+            WalletConsensusItem::BlockCount(block_count) =&gt; {
                 <span class="kw">let </span>current_vote = dbtx
-                    .get_value(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id))
+                    .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer_id))
                     .<span class="kw">await
                     </span>.unwrap_or(<span class="number">0</span>);
 
-                <span class="kw">if </span>block_height &lt; current_vote {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Block height vote decreased&quot;</span>);
+                <span class="kw">if </span>block_count &lt; current_vote {
+                    <span class="macro">bail!</span>(<span class="string">&quot;Block count vote decreased&quot;</span>);
                 }
 
-                <span class="kw">if </span>block_height == current_vote {
+                <span class="kw">if </span>block_count == current_vote {
                     <span class="macro">bail!</span>(<span class="string">&quot;Block height vote is redundant&quot;</span>);
                 }
 
-                <span class="kw">let </span>old_consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
+                <span class="kw">let </span>old_consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
-                dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id), <span class="kw-2">&amp;</span>block_height)
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer_id), <span class="kw-2">&amp;</span>block_count)
                     .<span class="kw">await</span>;
 
-                <span class="kw">let </span>new_consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
+                <span class="kw">let </span>new_consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
-                <span class="comment">// only sync from the first non-default consensus block height
-                </span><span class="kw">if </span>new_consensus_height &gt; old_consensus_height &amp;&amp; old_consensus_height &gt; <span class="number">0 </span>{
+                <span class="comment">// only sync from the first non-default consensus block count
+                </span><span class="kw">if </span>new_consensus_block_count &gt; old_consensus_block_count
+                    &amp;&amp; old_consensus_block_count &gt; <span class="number">0
+                </span>{
                     <span class="self">self</span>.sync_up_to_consensus_height(
                         dbtx,
-                        old_consensus_height,
-                        new_consensus_height,
+                        old_consensus_block_count,
+                        new_consensus_block_count,
                     )
                     .<span class="kw">await</span>;
                 }
@@ -2449,9 +2453,9 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;block_height&quot;</span>,
+                <span class="string">&quot;block_count&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; u32 {
-                    <span class="prelude-val">Ok</span>(module.consensus_block_height(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
+                    <span class="prelude-val">Ok</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
@@ -2531,7 +2535,7 @@
             ));
         }
 
-        <span class="kw">match </span>bitcoind_rpc.get_block_height().<span class="kw">await </span>{
+        <span class="kw">match </span>bitcoind_rpc.get_block_count().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(height) =&gt; <span class="macro">info!</span>(height, <span class="string">&quot;Connected to bitcoind&quot;</span>),
             <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">warn!</span>(<span class="string">&quot;Bitcoin node is not ready or configured properly. Modules relying on it may not function correctly: {:?}&quot;</span>, err),
         }
@@ -2657,9 +2661,9 @@
         })
     }
 
-    <span class="kw">pub async fn </span>block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+    <span class="kw">pub async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
         <span class="self">self</span>.btc_rpc
-            .get_block_height()
+            .get_block_count()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>) <span class="kw">as </span>u32
     }
@@ -2672,25 +2676,25 @@
             .unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee)
     }
 
-    <span class="kw">pub async fn </span>consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u32 {
+    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u32 {
         <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.total();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>heights = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>BlockHeightVotePrefix)
+        <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
             .<span class="kw">await
-            </span>.map(|(.., height)| height)
+            </span>.map(|(.., count)| count)
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
 
-        <span class="macro">assert!</span>(heights.len() &lt;= peer_count);
+        <span class="macro">assert!</span>(counts.len() &lt;= peer_count);
 
-        <span class="kw">while </span>heights.len() &lt; peer_count {
-            heights.push(<span class="number">0</span>);
+        <span class="kw">while </span>counts.len() &lt; peer_count {
+            counts.push(<span class="number">0</span>);
         }
 
-        heights.sort_unstable();
+        counts.sort_unstable();
 
-        heights[peer_count / <span class="number">2</span>]
+        counts[peer_count / <span class="number">2</span>]
     }
 
     <span class="kw">pub async fn </span>consensus_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Feerate {
@@ -3426,7 +3430,7 @@
     <span class="kw">use </span>fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
     <span class="kw">use </span>fedimint_wallet_common::db::{
-        BlockHashKey, BlockHashKeyPrefix, BlockHeightVoteKey, BlockHeightVotePrefix, DbKeyPrefix,
+        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
         FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
         PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
         PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
@@ -3466,7 +3470,7 @@
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PegOutNonceKey, <span class="kw-2">&amp;</span><span class="number">1</span>).<span class="kw">await</span>;
 
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>BlockHeightVoteKey(PeerId::from(<span class="number">0</span>)), <span class="kw-2">&amp;</span><span class="number">1</span>)
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>BlockCountVoteKey(PeerId::from(<span class="number">0</span>)), <span class="kw-2">&amp;</span><span class="number">1</span>)
             .<span class="kw">await</span>;
 
         dbtx.insert_new_entry(
@@ -3716,9 +3720,9 @@
                                 <span class="string">&quot;validate_migrations was not able to read any UTXOs&quot;
                             </span>);
                         }
-                        DbKeyPrefix::BlockHeightVote =&gt; {
+                        DbKeyPrefix::BlockCountVote =&gt; {
                             <span class="kw">let </span>heights = dbtx
-                                .find_by_prefix(<span class="kw-2">&amp;</span>BlockHeightVotePrefix)
+                                .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
                                 .<span class="kw">await
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;

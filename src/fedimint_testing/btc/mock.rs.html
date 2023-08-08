@@ -550,8 +550,8 @@
         <span class="prelude-val">Ok</span>(Network::Regtest)
     }
 
-    <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcResult&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>((<span class="self">self</span>.blocks.lock().unwrap().len() <span class="kw">as </span>u64) - <span class="number">1</span>)
+    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcResult&lt;u64&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.blocks.lock().unwrap().len() <span class="kw">as </span>u64)
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BitcoinRpcResult&lt;BlockHash&gt; {

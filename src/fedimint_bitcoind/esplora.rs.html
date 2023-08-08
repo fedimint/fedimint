@@ -175,9 +175,9 @@
         <span class="prelude-val">Ok</span>(network)
     }
 
-    <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
+    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
         <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.get_height().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(height) =&gt; <span class="prelude-val">Ok</span>(height <span class="kw">as </span>u64),
+            <span class="prelude-val">Ok</span>(height) =&gt; <span class="prelude-val">Ok</span>(height <span class="kw">as </span>u64 + <span class="number">1</span>),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e.into()),
         }
     }

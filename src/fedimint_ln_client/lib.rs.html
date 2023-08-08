@@ -1670,11 +1670,11 @@
             invoice_currency
         );
 
-        <span class="kw">let </span>consensus_height = api
-            .fetch_consensus_block_height()
+        <span class="kw">let </span>consensus_count = api
+            .fetch_consensus_block_count()
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;Cannot get consensus block height&quot;</span>))<span class="question-mark">?</span>;
-        <span class="kw">let </span>absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
+            </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">&quot;Cannot get consensus block count&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - <span class="number">1</span>;
 
         <span class="comment">// Compute amount to lock in the outgoing contract
         </span><span class="kw">let </span>invoice_amount_msat = invoice

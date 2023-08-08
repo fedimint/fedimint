@@ -1287,7 +1287,7 @@
 };
 <span class="kw">use </span>fedimint_ln_common::db::{
     AgreedDecryptionShareContractIdPrefix, AgreedDecryptionShareKey,
-    AgreedDecryptionShareKeyPrefix, BlockHeightVoteKey, BlockHeightVotePrefix, ContractKey,
+    AgreedDecryptionShareKeyPrefix, BlockCountVoteKey, BlockCountVotePrefix, ContractKey,
     ContractKeyPrefix, ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix,
     LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
     ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
@@ -1548,14 +1548,14 @@
                         <span class="string">&quot;Proposed Decryption Shares&quot;
                     </span>);
                 }
-                DbKeyPrefix::BlockHeightVote =&gt; {
+                DbKeyPrefix::BlockCountVote =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         dbtx,
-                        BlockHeightVotePrefix,
-                        BlockHeightVoteKey,
+                        BlockCountVotePrefix,
+                        BlockCountVoteKey,
                         u64,
                         lightning,
-                        <span class="string">&quot;Block Height Votes&quot;
+                        <span class="string">&quot;Block Count Votes&quot;
                     </span>);
                 }
             }
@@ -1616,10 +1616,10 @@
             .collect()
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>block_height_vote = <span class="self">self</span>.block_height().<span class="kw">await</span>;
+        <span class="kw">let </span>block_count_vote = <span class="self">self</span>.block_count().<span class="kw">await</span>;
 
-        <span class="kw">if </span>block_height_vote != <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await </span>{
-            items.push(LightningConsensusItem::BlockHeight(block_height_vote));
+        <span class="kw">if </span>block_count_vote != <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
+            items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
         ConsensusProposal::new_auto_trigger(items)
@@ -1755,21 +1755,21 @@
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point), <span class="kw-2">&amp;</span>outcome)
                     .<span class="kw">await</span>;
             }
-            LightningConsensusItem::BlockHeight(block_height) =&gt; {
+            LightningConsensusItem::BlockCount(block_count) =&gt; {
                 <span class="kw">let </span>current_vote = dbtx
-                    .get_value(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id))
+                    .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer_id))
                     .<span class="kw">await
                     </span>.unwrap_or(<span class="number">0</span>);
 
-                <span class="kw">if </span>block_height &lt; current_vote {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Block height vote decreased&quot;</span>);
+                <span class="kw">if </span>block_count &lt; current_vote {
+                    <span class="macro">bail!</span>(<span class="string">&quot;Block count vote decreased&quot;</span>);
                 }
 
-                <span class="kw">if </span>block_height == current_vote {
+                <span class="kw">if </span>block_count == current_vote {
                     <span class="macro">bail!</span>(<span class="string">&quot;Block height vote is redundant&quot;</span>);
                 }
 
-                dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockHeightVoteKey(peer_id), <span class="kw-2">&amp;</span>block_height)
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer_id), <span class="kw-2">&amp;</span>block_count)
                     .<span class="kw">await</span>;
             }
         }
@@ -1804,11 +1804,11 @@
             .into_module_error_other();
         }
 
-        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_block_height(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
         <span class="kw">let </span>pub_key = <span class="kw">match </span><span class="kw-2">&amp;</span>account.contract {
             FundedContract::Outgoing(outgoing) =&gt; {
-                <span class="kw">if </span>outgoing.timelock <span class="kw">as </span>u64 &gt; consensus_height &amp;&amp; !outgoing.cancelled {
+                <span class="kw">if </span>outgoing.timelock <span class="kw">as </span>u64 + <span class="number">1 </span>&gt; consensus_block_count &amp;&amp; !outgoing.cancelled {
                     <span class="comment">// If the timelock hasn&#39;t expired yet …
                     </span><span class="kw">let </span>preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         <span class="kw-2">&amp;</span>input
@@ -2057,9 +2057,9 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;block_height&quot;</span>,
+                <span class="string">&quot;block_count&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(module.consensus_block_height(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>))
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
@@ -2117,32 +2117,32 @@
         <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })
     }
 
-    <span class="kw">pub async fn </span>block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+    <span class="kw">pub async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
         <span class="self">self</span>.btc_rpc
-            .get_block_height()
+            .get_block_count()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>)
     }
 
-    <span class="kw">pub async fn </span>consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
+    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
         <span class="kw">let </span>peer_count = <span class="number">3 </span>* (<span class="self">self</span>.cfg.consensus.threshold() / <span class="number">2</span>) + <span class="number">1</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>heights = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>BlockHeightVotePrefix)
+        <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
             .<span class="kw">await
-            </span>.map(|(.., height)| height)
+            </span>.map(|(.., count)| count)
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
 
-        <span class="macro">assert!</span>(heights.len() &lt;= peer_count);
+        <span class="macro">assert!</span>(counts.len() &lt;= peer_count);
 
-        <span class="kw">while </span>heights.len() &lt; peer_count {
-            heights.push(<span class="number">0</span>);
+        <span class="kw">while </span>counts.len() &lt; peer_count {
+            counts.push(<span class="number">0</span>);
         }
 
-        heights.sort_unstable();
+        counts.sort_unstable();
 
-        heights[peer_count / <span class="number">2</span>]
+        counts[peer_count / <span class="number">2</span>]
     }
 
     <span class="kw">fn </span>validate_decryption_share(
@@ -2491,7 +2491,7 @@
                             <span class="string">&quot;validate_migrations was not able to read any ProposeDecryptionShares&quot;
                         </span>);
                         }
-                        DbKeyPrefix::BlockHeightVote =&gt; {}
+                        DbKeyPrefix::BlockCountVote =&gt; {}
                     }
                 }
             },

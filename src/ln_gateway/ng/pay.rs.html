@@ -664,16 +664,16 @@
                 contract,
             };
 
-            <span class="kw">let </span>consensus_block_height = global_context
+            <span class="kw">let </span>consensus_block_count = global_context
                 .module_api()
-                .fetch_consensus_block_height()
+                .fetch_consensus_block_count()
                 .<span class="kw">await
                 </span>.map_err(|<span class="kw">_</span>| OutgoingPaymentError::InvalidOutgoingContract {
                     error: OutgoingContractError::TimeoutTooClose,
                     contract: outgoing_contract_account.clone(),
                 })<span class="question-mark">?</span>;
 
-            <span class="kw">if </span>consensus_block_height.is_none() {
+            <span class="kw">if </span>consensus_block_count.is_none() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError::InvalidOutgoingContract {
                     error: OutgoingContractError::MissingContractData,
                     contract: outgoing_contract_account.clone(),
@@ -684,7 +684,7 @@
                 <span class="kw-2">&amp;</span>outgoing_contract_account,
                 context.redeem_key,
                 context.timelock_delta,
-                consensus_block_height.unwrap(),
+                consensus_block_count.unwrap(),
             )
             .<span class="kw">await
             </span>.map_err(|e| OutgoingPaymentError::InvalidOutgoingContract {
@@ -789,7 +789,7 @@
         account: <span class="kw-2">&amp;</span>OutgoingContractAccount,
         redeem_key: bitcoin::KeyPair,
         timelock_delta: u64,
-        consensus_block_height: u64,
+        consensus_block_count: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters, OutgoingContractError&gt; {
         <span class="kw">let </span>our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key).<span class="number">0</span>;
 
@@ -816,7 +816,7 @@
         }
 
         <span class="kw">let </span>max_delay = (account.contract.timelock <span class="kw">as </span>u64)
-            .checked_sub(consensus_block_height)
+            .checked_sub(consensus_block_count.saturating_sub(<span class="number">1</span>))
             .and_then(|delta| delta.checked_sub(timelock_delta));
         <span class="kw">if </span>max_delay.is_none() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingContractError::TimeoutTooClose);

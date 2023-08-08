@@ -371,8 +371,8 @@
     Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
 )]
 </span><span class="kw">pub enum </span>WalletConsensusItem {
-    BlockHeight(u32), <span class="comment">/* FIXME: use block hash instead, but needs more complicated
-                       * * verification logic */
+    BlockCount(u32), <span class="comment">/* FIXME: use block hash instead, but needs more complicated
+                      * * verification logic */
     </span>Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
 }
@@ -380,8 +380,8 @@
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletConsensusItem {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
-            WalletConsensusItem::BlockHeight(height) =&gt; {
-                <span class="macro">write!</span>(f, <span class="string">&quot;Wallet Block Height {height}&quot;</span>)
+            WalletConsensusItem::BlockCount(count) =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">&quot;Wallet Block Count {count}&quot;</span>)
             }
             WalletConsensusItem::Feerate(feerate) =&gt; {
                 <span class="macro">write!</span>(

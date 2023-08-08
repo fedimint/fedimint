@@ -340,6 +340,7 @@
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -494,13 +495,13 @@
         }
 
         <span class="comment">// … otherwise we have to wait till the timeout hits
-        </span><span class="kw">let </span>consensus_block_height = <span class="self">self
+        </span><span class="kw">let </span>consensus_block_count = <span class="self">self
             </span>.context
             .api
-            .fetch_consensus_block_height()
+            .fetch_consensus_block_count()
             .<span class="kw">await
             </span>.map_err(LnClientError::ApiError)<span class="question-mark">?</span>;
-        <span class="kw">if </span>contract.contract.timelock <span class="kw">as </span>u64 &lt;= consensus_block_height {
+        <span class="kw">if </span>(contract.contract.timelock <span class="kw">as </span>u64) &lt; consensus_block_count {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">true</span>);
         }
 
@@ -525,9 +526,10 @@
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(LnClientError::WrongAccountType),
         }
     }
+
     <span class="kw">pub async fn </span>refundable_outgoing_contracts(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        block_height: u64,
+        block_count: u64,
     ) -&gt; Vec&lt;OutgoingContractData&gt; {
         <span class="comment">// TODO: unify block height type
         </span><span class="self">self</span>.context
@@ -539,7 +541,7 @@
             </span>.filter_map(|(<span class="kw">_</span>, outgoing_data)| <span class="kw">async </span>{
                 <span class="kw">let </span>cancelled = outgoing_data.contract_account.contract.cancelled;
                 <span class="kw">let </span>timed_out =
-                    outgoing_data.contract_account.contract.timelock <span class="kw">as </span>u64 &lt;= block_height;
+                    (outgoing_data.contract_account.contract.timelock <span class="kw">as </span>u64) &lt; block_count;
                 <span class="kw">if </span>cancelled || timed_out {
                     <span class="prelude-val">Some</span>(outgoing_data)
                 } <span class="kw">else </span>{

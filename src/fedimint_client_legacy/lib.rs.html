@@ -2459,20 +2459,20 @@
         <span class="self">self</span>.reissue(notes_to_reissue, rng).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>await_consensus_block_height(
+    <span class="kw">pub async fn </span>await_consensus_block_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        block_height: u64,
+        block_count: u64,
     ) -&gt; std::result::Result&lt;u64, task::Elapsed&gt; {
         task::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
-            <span class="self">self</span>.await_consensus_block_height_inner(block_height).<span class="kw">await
+            <span class="self">self</span>.await_consensus_block_count_inner(block_count).<span class="kw">await
         </span>})
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>await_consensus_block_height_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) -&gt; u64 {
+    <span class="kw">async fn </span>await_consensus_block_count_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, requested_count: u64) -&gt; u64 {
         <span class="kw">loop </span>{
-            <span class="kw">match </span><span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(height) <span class="kw">if </span>height &gt;= block_height =&gt; <span class="kw">return </span>height,
+            <span class="kw">match </span><span class="self">self</span>.context.api.fetch_consensus_block_count().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(current_count) <span class="kw">if </span>requested_count &lt;= current_count =&gt; <span class="kw">return </span>current_count,
                 <span class="kw">_ </span>=&gt; sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>,
             }
         }
@@ -2592,8 +2592,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.context.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let </span>consensus_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>absolute_timelock = consensus_height + OUTGOING_LN_CONTRACT_TIMELOCK;
+        <span class="kw">let </span>consensus_count = <span class="self">self</span>.context.api.fetch_consensus_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - <span class="number">1</span>;
 
         <span class="kw">let </span>contract = <span class="self">self
             </span>.ln_client()
@@ -2972,11 +2972,11 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::Underfunded(invoice_amount, account.amount));
         }
 
-        <span class="kw">let </span>consensus_block_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// Calculate max delay taking into account current consensus block height and
+        <span class="kw">let </span>consensus_block_count = <span class="self">self</span>.context.api.fetch_consensus_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// Calculate max delay taking into account current consensus block count and
         // our safety margin.
         </span><span class="kw">let </span>max_delay = (account.contract.timelock <span class="kw">as </span>u64)
-            .checked_sub(consensus_block_height)
+            .checked_sub(consensus_block_count.saturating_sub(<span class="number">1</span>))
             .and_then(|delta| delta.checked_sub(<span class="self">self</span>.config.timelock_delta))
             .ok_or(ClientError::TimeoutTooClose)<span class="question-mark">?</span>;
 

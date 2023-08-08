@@ -240,10 +240,6 @@
 <a href="#240" id="240">240</a>
 <a href="#241" id="241">241</a>
 <a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
-<a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -298,18 +294,14 @@
             .expect(<span class="self">Self</span>::ERROR)
             .last()
         {
-            <span class="kw">let </span>block = <span class="self">self
+            <span class="kw">let </span>last_mined_block = <span class="self">self
                 </span>.client
                 .get_block_header_info(block_hash)
                 .expect(<span class="string">&quot;rpc failed&quot;</span>);
             <span class="comment">// waits for the rpc client to catch up to bitcoind
-            </span><span class="kw">loop </span>{
-                <span class="kw">let </span>height = <span class="self">self</span>.rpc.get_block_height().<span class="kw">await</span>.expect(<span class="string">&quot;rpc failed&quot;</span>);
-
-                <span class="kw">if </span>height &gt;= block.height <span class="kw">as </span>u64 {
-                    <span class="kw">break</span>;
-                }
-            }
+            </span><span class="kw">while </span><span class="self">self</span>.rpc.get_block_count().<span class="kw">await</span>.expect(<span class="string">&quot;rpc failed&quot;</span>)
+                &lt; last_mined_block.height <span class="kw">as </span>u64
+            {}
         };
     }
 

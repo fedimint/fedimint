@@ -169,8 +169,8 @@
         })
     }
 
-    <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.block_headers_subscribe_raw())<span class="question-mark">?</span>.height <span class="kw">as </span>u64)
+    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
+        <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.block_headers_subscribe_raw())<span class="question-mark">?</span>.height <span class="kw">as </span>u64 + <span class="number">1</span>)
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; anyhow::Result&lt;BlockHash&gt; {

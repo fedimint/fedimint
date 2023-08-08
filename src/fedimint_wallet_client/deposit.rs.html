@@ -513,12 +513,12 @@
         // Wait for confirmation
         </span><span class="kw">let </span>consensus_height = <span class="kw">match </span>global_context
             .module_api()
-            .fetch_consensus_block_height()
+            .fetch_consensus_block_count()
             .<span class="kw">await
         </span>{
-            <span class="prelude-val">Ok</span>(consensus_height) =&gt; consensus_height,
+            <span class="prelude-val">Ok</span>(consensus_block_count) =&gt; consensus_block_count,
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch consensus height from federation: {e}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch consensus block count from federation: {e}&quot;</span>);
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
                 <span class="kw">continue</span>;
             }

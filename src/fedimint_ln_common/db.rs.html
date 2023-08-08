@@ -139,9 +139,6 @@
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -161,7 +158,7 @@
     AgreedDecryptionShare = <span class="number">0x43</span>,
     ContractUpdate = <span class="number">0x44</span>,
     LightningGateway = <span class="number">0x45</span>,
-    BlockHeightVote = <span class="number">0x46</span>,
+    BlockCountVote = <span class="number">0x46</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -271,20 +268,17 @@
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>BlockHeightVoteKey(<span class="kw">pub </span>PeerId);
+</span><span class="kw">pub struct </span>BlockCountVoteKey(<span class="kw">pub </span>PeerId);
 
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>BlockHeightVotePrefix;
+</span><span class="kw">pub struct </span>BlockCountVotePrefix;
 
 <span class="macro">impl_db_record!</span>(
-    key = BlockHeightVoteKey,
+    key = BlockCountVoteKey,
     value = u64,
-    db_prefix = DbKeyPrefix::BlockHeightVote
+    db_prefix = DbKeyPrefix::BlockCountVote
 );
 
-<span class="macro">impl_db_lookup!</span>(
-    key = BlockHeightVoteKey,
-    query_prefix = BlockHeightVotePrefix
-);
+<span class="macro">impl_db_lookup!</span>(key = BlockCountVoteKey, query_prefix = BlockCountVotePrefix);
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

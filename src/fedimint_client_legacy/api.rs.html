@@ -312,7 +312,7 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>WalletFederationApi {
-    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
+    <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
     <span class="kw">async fn </span>fetch_peg_out_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>Address,
@@ -325,11 +325,11 @@
 <span class="kw">where
     </span>T: IFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
+    <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .request_with_strategy(
                 EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
-                <span class="string">&quot;block_height&quot;</span>.to_string(),
+                <span class="string">&quot;block_count&quot;</span>.to_string(),
                 ApiRequestErased::default(),
             )
             .<span class="kw">await

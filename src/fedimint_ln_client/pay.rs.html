@@ -893,14 +893,14 @@
     <span class="kw">async fn </span>await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
         <span class="comment">// TODO: Remove polling
         </span><span class="kw">loop </span>{
-            <span class="kw">let </span>consensus_block_height = global_context
+            <span class="kw">let </span>consensus_block_count = global_context
                 .module_api()
-                .fetch_consensus_block_height()
+                .fetch_consensus_block_count()
                 .<span class="kw">await
                 </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;ApiError: {e:?}&quot;</span>));
 
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(current_block_height)) = consensus_block_height {
-                <span class="kw">if </span>timelock <span class="kw">as </span>u64 &lt;= current_block_height {
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(current_block_count)) = consensus_block_count {
+                <span class="kw">if </span>(timelock <span class="kw">as </span>u64) &lt; current_block_count {
                     <span class="kw">return</span>;
                 }
             }

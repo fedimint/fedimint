@@ -650,7 +650,7 @@
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>LightningConsensusItem {
     DecryptPreimage(ContractId, PreimageDecryptionShare),
-    BlockHeight(u64),
+    BlockCount(u64),
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningConsensusItem {
@@ -659,7 +659,7 @@
             LightningConsensusItem::DecryptPreimage(contract_id, <span class="kw">_</span>) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;LN Decryption Share for contract {contract_id}&quot;</span>)
             }
-            LightningConsensusItem::BlockHeight(height) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;LN block height {height}&quot;</span>),
+            LightningConsensusItem::BlockCount(count) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;LN block count {count}&quot;</span>),
         }
     }
 }
