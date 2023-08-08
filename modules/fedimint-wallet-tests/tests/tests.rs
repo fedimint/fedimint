@@ -1,14 +1,18 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
-use fedimint_core::sats;
-use fedimint_core::util::NextOrPending;
+use fedimint_client::Client;
+use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::{sats, Amount, Feerate};
 use fedimint_dummy_client::DummyClientGen;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
-use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
+use fedimint_testing::btc::BitcoinTest;
+use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::{DepositState, WalletClientExt, WalletClientGen, WithdrawState};
 use fedimint_wallet_common::config::WalletGenParams;
+use fedimint_wallet_common::PegOutFees;
 use fedimint_wallet_server::WalletGen;
+use futures::stream::StreamExt;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -23,16 +27,14 @@ fn bsats(satoshi: u64) -> bitcoin::Amount {
 
 const PEG_IN_AMOUNT_SATS: u64 = 5000;
 const PEG_OUT_AMOUNT_SATS: u64 = 1000;
+const PEG_IN_TIMEOUT: Duration = Duration::from_secs(30);
 
-#[tokio::test(flavor = "multi_thread")]
-async fn on_chain_peg_in_and_peg_out() -> anyhow::Result<()> {
-    let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
-    let client = fed.new_client().await;
-    let bitcoin = fixtures.bitcoin();
-    let finality_delay = 10;
-    bitcoin.mine_blocks(finality_delay).await;
-    let valid_until = SystemTime::now() + TIMEOUT;
+async fn peg_in<'a>(
+    client: &'a Client,
+    bitcoin: &dyn BitcoinTest,
+    finality_delay: u64,
+) -> anyhow::Result<BoxStream<'a, Amount>> {
+    let valid_until = SystemTime::now() + PEG_IN_TIMEOUT;
 
     let mut balance_sub = client.subscribe_balance_changes().await;
     assert_eq!(balance_sub.ok().await?, sats(0));
@@ -52,6 +54,21 @@ async fn on_chain_peg_in_and_peg_out() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, DepositState::Claimed);
     assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
+
+    Ok(balance_sub)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
@@ -75,5 +92,43 @@ async fn on_chain_peg_in_and_peg_out() -> anyhow::Result<()> {
 
     let received = bitcoin.mine_block_and_get_received(&address).await;
     assert_eq!(received, peg_out.into());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_out_fail_refund() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+
+    // Peg-out test, requires block to recognize change UTXOs
+    let address = bitcoin.get_new_address().await;
+    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
+
+    // Set invalid fees
+    let fees = PegOutFees {
+        fee_rate: Feerate { sats_per_kvb: 0 },
+        total_weight: 0,
+    };
+    let op = client.withdraw(address.clone(), peg_out, fees).await?;
+    assert_eq!(
+        balance_sub.next().await.unwrap(),
+        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS)
+    );
+
+    let sub = client.subscribe_withdraw_updates(op).await?;
+    let mut sub = sub.into_stream();
+    assert_eq!(sub.ok().await?, WithdrawState::Created);
+    assert!(matches!(sub.ok().await?, WithdrawState::Failed(_)));
+
+    // Check that we get our money back if the peg-out fails
+    assert_eq!(balance_sub.next().await.unwrap(), sats(PEG_IN_AMOUNT_SATS));
+    assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
+
     Ok(())
 }
