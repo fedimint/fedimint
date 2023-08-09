@@ -51,6 +51,29 @@ impl<GC> Notifier<GC> {
             _pd: Default::default(),
         }
     }
+
+    /// Create a [`NotifierSender`] handle that lets the owner trigger
+    /// notifications without having to hold a full `Notifier`.
+    pub fn sender(&self) -> NotifierSender<GC> {
+        NotifierSender {
+            sender: self.broadcast.clone(),
+        }
+    }
+}
+
+/// Notifier send handle that can be shared to places where we don't need an
+/// entire [`Notifier`] but still need to trigger notifications. The main use
+/// case is triggering notifications when a DB transaction was committed
+/// successfully.
+pub struct NotifierSender<GC> {
+    sender: tokio::sync::broadcast::Sender<DynState<GC>>,
+}
+
+impl<GC> NotifierSender<GC> {
+    /// Notify all subscribers of a state transition
+    pub fn notify(&self, state: DynState<GC>) {
+        let _res = self.sender.send(state);
+    }
 }
 
 /// State transition notifier for a specific module instance that can only

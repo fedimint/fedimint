@@ -162,8 +162,13 @@ where
                 bail!("State is already terminal, adding it to the executor doesn't make sense.")
             }
 
-            dbtx.insert_entry(&ActiveStateKey::from_state(state), &ActiveState::new())
-                .await;
+            dbtx.insert_entry(
+                &ActiveStateKey::from_state(state.clone()),
+                &ActiveState::new(),
+            )
+            .await;
+            let notify_sender = self.inner.notifier.sender();
+            dbtx.on_commit(move || notify_sender.notify(state));
         }
 
         Ok(())
