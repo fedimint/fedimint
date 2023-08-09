@@ -339,6 +339,40 @@ impl Database {
     }
 }
 
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOps<'a>: 'a + MaybeSend {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    /// Returns an stream of key-value pairs with keys that start with
+    /// `key_prefix`. No particular ordering is guaranteed.
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
+
+    /// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>>;
+
+    /// Delete keys matching prefix
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
+
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
+
+    /// Create a savepoint during the transaction that can be rolled back to
+    /// using rollback_tx_to_savepoint. Rolling back to the savepoint will
+    /// atomically remove the writes that were applied since the savepoint
+    /// was created.
+    ///
+    /// Warning: Avoid using this in fedimint client code as not all database
+    /// transaction implementations will support setting a savepoint during
+    /// a transaction.
+    async fn set_tx_savepoint(&mut self) -> Result<()>;
+}
+
 /// Fedimint requires that the database implementation implement Snapshot
 /// Isolation. Snapshot Isolation is a database isolation level that guarantees
 /// consistent reads from the time that the snapshot was created (at transaction
@@ -371,52 +405,8 @@ impl Database {
 /// Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
 /// | Prevented           | Prevented      | Prevented   |
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
-
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
-
-    /// Returns an stream of key-value pairs with keys that start with
-    /// `key_prefix`. No particular ordering is guaranteed.
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
-
-    /// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>>;
-
-    /// Default implementation is a combination of [`Self::raw_find_by_prefix`]
-    /// + loop over [`Self::raw_remove_entry`]
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        let keys = self
-            .raw_find_by_prefix(key_prefix)
-            .await?
-            .map(|kv| kv.0)
-            .collect::<Vec<_>>()
-            .await;
-        for key in keys {
-            self.raw_remove_entry(key.as_slice()).await?;
-        }
-        Ok(())
-    }
-
+pub trait IDatabaseTransaction<'a>: 'a + MaybeSend + IDatabaseTransactionOps<'a> {
     async fn commit_tx(self) -> Result<()>;
-
-    async fn rollback_tx_to_savepoint(&mut self);
-
-    /// Create a savepoint during the transaction that can be rolled back to
-    /// using rollback_tx_to_savepoint. Rolling back to the savepoint will
-    /// atomically remove the writes that were applied since the savepoint
-    /// was created.
-    ///
-    /// Warning: Avoid using this in fedimint client code as not all database
-    /// transaction implementations will support setting a savepoint during
-    /// a transaction.
-    async fn set_tx_savepoint(&mut self);
-
     fn add_notification_key(&mut self, _key: &[u8]) -> Result<()> {
         anyhow::bail!("add_notification_key called without NotifyingTransaction")
     }
@@ -428,28 +418,8 @@ pub trait IDatabaseTransaction<'a>: 'a + MaybeSend {
 /// `ISingleUseDatabaseTransaction` without needing to make additional
 /// allocations.
 #[apply(async_trait_maybe_send!)]
-pub trait ISingleUseDatabaseTransaction<'a>: 'a + MaybeSend {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
-
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
-
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
-
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>>;
-
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
-
+pub trait ISingleUseDatabaseTransaction<'a>: 'a + MaybeSend + IDatabaseTransactionOps<'a> {
     async fn commit_tx(&mut self) -> Result<()>;
-
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
-
-    async fn set_tx_savepoint(&mut self) -> Result<()>;
-
     fn add_notification_key(&mut self, _key: &[u8]) -> Result<()>;
 }
 
@@ -467,7 +437,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> SingleUseDatabaseTransaction<
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction<'a>
+impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
     for SingleUseDatabaseTransaction<'a, Tx>
 {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -521,20 +491,12 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction
             .await
     }
 
-    async fn commit_tx(&mut self) -> Result<()> {
-        self.0
-            .take()
-            .context("Cannot commit an already committed transaction")?
-            .commit_tx()
-            .await
-    }
-
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         self.0
             .as_mut()
             .context("Cannot rollback to a savepoint on an already consumed transaction")?
             .rollback_tx_to_savepoint()
-            .await;
+            .await?;
         Ok(())
     }
 
@@ -543,8 +505,21 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction
             .as_mut()
             .context("Cannot set a tx savepoint on an already consumed transaction")?
             .set_tx_savepoint()
-            .await;
+            .await?;
         Ok(())
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction<'a>
+    for SingleUseDatabaseTransaction<'a, Tx>
+{
+    async fn commit_tx(&mut self) -> Result<()> {
+        self.0
+            .take()
+            .context("Cannot commit an already committed transaction")?
+            .commit_tx()
+            .await
     }
 
     fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
@@ -602,7 +577,7 @@ impl<'a> CommittableIsolatedDatabaseTransaction<'a> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransaction<'a> {
+impl<'a> IDatabaseTransactionOps<'a> for CommittableIsolatedDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.raw_insert_bytes(key, value).await
@@ -646,10 +621,6 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransa
         isolated.raw_remove_by_prefix(key_prefix).await
     }
 
-    async fn commit_tx(&mut self) -> Result<()> {
-        self.dbtx.commit_tx().await
-    }
-
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.rollback_tx_to_savepoint().await
@@ -658,6 +629,13 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransa
     async fn set_tx_savepoint(&mut self) -> Result<()> {
         let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
         isolated.set_tx_savepoint().await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransaction<'a> {
+    async fn commit_tx(&mut self) -> Result<()> {
+        self.dbtx.commit_tx().await
     }
 
     fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
@@ -945,8 +923,7 @@ impl<'isolated, 'parent: 'isolated, T: MaybeSend + Encodable>
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
-    ISingleUseDatabaseTransaction<'isolated>
+impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated> IDatabaseTransactionOps<'isolated>
     for IsolatedDatabaseTransaction<'isolated, 'parent, T>
 {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -1000,10 +977,6 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
         self.inner_tx.raw_remove_by_prefix(&key_with_prefix).await
     }
 
-    async fn commit_tx(&mut self) -> Result<()> {
-        panic!("DatabaseTransaction inside modules cannot be committed");
-    }
-
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         self.inner_tx.rollback_tx_to_savepoint().await
     }
@@ -1011,7 +984,16 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
     async fn set_tx_savepoint(&mut self) -> Result<()> {
         self.inner_tx.set_tx_savepoint().await
     }
+}
 
+#[apply(async_trait_maybe_send!)]
+impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
+    ISingleUseDatabaseTransaction<'isolated>
+    for IsolatedDatabaseTransaction<'isolated, 'parent, T>
+{
+    async fn commit_tx(&mut self) -> Result<()> {
+        panic!("DatabaseTransaction inside modules cannot be committed");
+    }
     fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
         let mut key_with_module = self.prefix.clone();
         key_with_module.extend_from_slice(key);
@@ -2242,8 +2224,8 @@ mod test_utils {
         use async_trait::async_trait;
 
         use crate::db::{
-            AutocommitError, IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction,
-            SingleUseDatabaseTransaction,
+            AutocommitError, IDatabase, IDatabaseTransaction, IDatabaseTransactionOps,
+            ISingleUseDatabaseTransaction, SingleUseDatabaseTransaction,
         };
         use crate::ModuleDecoderRegistry;
 
@@ -2262,7 +2244,7 @@ mod test_utils {
         struct FakeTransaction<'a>(PhantomData<&'a ()>);
 
         #[async_trait]
-        impl<'a> IDatabaseTransaction<'a> for FakeTransaction<'a> {
+        impl<'a> IDatabaseTransactionOps<'a> for FakeTransaction<'a> {
             async fn raw_insert_bytes(
                 &mut self,
                 _key: &[u8],
@@ -2286,6 +2268,10 @@ mod test_utils {
                 unimplemented!()
             }
 
+            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> anyhow::Result<()> {
+                unimplemented!()
+            }
+
             async fn raw_find_by_prefix_sorted_descending(
                 &mut self,
                 _key_prefix: &[u8],
@@ -2293,16 +2279,19 @@ mod test_utils {
                 unimplemented!()
             }
 
+            async fn rollback_tx_to_savepoint(&mut self) -> anyhow::Result<()> {
+                unimplemented!()
+            }
+
+            async fn set_tx_savepoint(&mut self) -> anyhow::Result<()> {
+                unimplemented!()
+            }
+        }
+
+        #[async_trait]
+        impl<'a> IDatabaseTransaction<'a> for FakeTransaction<'a> {
             async fn commit_tx(self) -> anyhow::Result<()> {
                 Err(anyhow!("Can't commit!"))
-            }
-
-            async fn rollback_tx_to_savepoint(&mut self) {
-                unimplemented!()
-            }
-
-            async fn set_tx_savepoint(&mut self) {
-                unimplemented!()
             }
         }
 
