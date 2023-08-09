@@ -37,7 +37,7 @@ use fedimint_core::core::{
 };
 use fedimint_core::db::Database;
 use fedimint_core::module::CommonModuleGen;
-use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
+use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
 use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
@@ -60,7 +60,7 @@ use rpc::FederationInfo;
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 use url::Url;
 
@@ -209,7 +209,7 @@ impl Gatewayd {
 
         let mut tg = TaskGroup::new();
         let rx = self.start_gateway(&mut tg, client_builder, db).await?;
-        rx.await?;
+        rx.await;
         info!("Gatewayd exiting...");
         Ok(())
     }
@@ -219,7 +219,7 @@ impl Gatewayd {
         task_group: &mut TaskGroup,
         client_builder: StandardGatewayClientBuilder,
         database: Database,
-    ) -> Result<oneshot::Receiver<()>> {
+    ) -> Result<TaskShutdownToken> {
         let mut tg = task_group.make_subgroup().await;
         task_group
             .spawn(
@@ -266,7 +266,7 @@ impl Gatewayd {
 
                                 Gateway::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).await;
                                 warn!("HTLC Stream Lightning connection broken. Stopping webserver...");
-                                task_group.shutdown().await;
+                                task_group.shutdown();
                             }
                             Err(e) => {
                                 error!("Failed to open HTLC stream. Waiting 5 seconds and trying again");

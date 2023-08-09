@@ -1134,7 +1134,7 @@ async fn cleanup_on_exit<T>(
             match result {
                 Ok(v) => {
                     info!("Main process finished successfully, will wait for shutdown signal");
-                    task_group.make_handle().make_shutdown_rx().await.await?;
+                    task_group.make_handle().make_shutdown_rx().await.await;
                     info!("Received shutdown signal, shutting down");
                     drop(v); // execute destructors
                     Ok(())
@@ -1156,7 +1156,7 @@ async fn handle_command() -> Result<()> {
             let _daemons =
                 write_ready_file(&process_mgr.globals, external_daemons(&process_mgr).await)
                     .await?;
-            task_group.make_handle().make_shutdown_rx().await.await?;
+            task_group.make_handle().make_shutdown_rx().await.await;
         }
         Cmd::DevFed => {
             let (process_mgr, task_group) = setup(args.common).await?;

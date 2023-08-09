@@ -904,7 +904,7 @@ mod tests {
             assert!(status.values().all(|s| s.is_ok()));
         }
 
-        task_group.shutdown().await;
+        task_group.shutdown();
         task_group.join_all(None).await.unwrap();
     }
 
