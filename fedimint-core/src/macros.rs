@@ -45,44 +45,6 @@ macro_rules! dyn_newtype_define {
 }
 
 #[macro_export]
-macro_rules! dyn_newtype_define_with_instance_id{
-    (   $(#[$outer:meta])*
-        $vis:vis $name:ident<$lifetime:lifetime>(Box<$trait:ident>)
-    ) => {
-        $crate::_dyn_newtype_define_with_instance_id_inner!{
-            $(#[$outer])*
-            $vis $name<$lifetime>(Box<$trait>)
-        }
-        $crate::_dyn_newtype_impl_deref_mut!($name<$lifetime>);
-    };
-    (   $(#[$outer:meta])*
-        $vis:vis $name:ident(Box<$trait:ident>)
-    ) => {
-        $crate::_dyn_newtype_define_with_instance_id_inner!{
-            $(#[$outer])*
-            $vis $name(Box<$trait>)
-        }
-        $crate::_dyn_newtype_impl_deref_mut!($name);
-    };
-    (   $(#[$outer:meta])*
-        $vis:vis $name:ident<$lifetime:lifetime>(Arc<$trait:ident>)
-    ) => {
-        $crate::_dyn_newtype_define_with_instance_id_inner!{
-            $(#[$outer])*
-            $vis $name<$lifetime>(Arc<$trait>)
-        }
-    };
-    (   $(#[$outer:meta])*
-        $vis:vis $name:ident(Arc<$trait:ident>)
-    ) => {
-        $crate::_dyn_newtype_define_with_instance_id_inner!{
-            $(#[$outer])*
-            $vis $name(Arc<$trait>)
-        }
-    };
-}
-
-#[macro_export]
 macro_rules! _dyn_newtype_define_inner {
     (   $(#[$outer:meta])*
         $vis:vis $name:ident($container:ident<$trait:ident>)
@@ -135,6 +97,44 @@ macro_rules! _dyn_newtype_define_inner {
             fn from(i: I) -> Self {
                 Self($container::new(i))
             }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! dyn_newtype_define_with_instance_id{
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident<$lifetime:lifetime>(Box<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name<$lifetime>(Box<$trait>)
+        }
+        $crate::_dyn_newtype_impl_deref_mut!($name<$lifetime>);
+    };
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident(Box<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name(Box<$trait>)
+        }
+        $crate::_dyn_newtype_impl_deref_mut!($name);
+    };
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident<$lifetime:lifetime>(Arc<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name<$lifetime>(Arc<$trait>)
+        }
+    };
+    (   $(#[$outer:meta])*
+        $vis:vis $name:ident(Arc<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_with_instance_id_inner!{
+            $(#[$outer])*
+            $vis $name(Arc<$trait>)
         }
     };
 }
