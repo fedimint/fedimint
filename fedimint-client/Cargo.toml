@@ -42,3 +42,6 @@ ring = { version = "0.16.20", features = ["wasm32_unknown_unknown_js", "wasm32_c
 
 [dev-dependencies]
 tracing-test = "0.2.4"
+
+[build-dependencies]
+fedimint-build = { path = "../fedimint-build" }
