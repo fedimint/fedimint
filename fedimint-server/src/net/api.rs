@@ -7,8 +7,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::{
-    ConsensusStatus, InviteCode, PeerConnectionStatus, PeerConsensusStatus, ServerStatus,
-    StatusResponse,
+    FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::ClientBackupKey;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse};
@@ -82,7 +81,7 @@ pub struct ConsensusApi {
     pub api_sender: Sender<ApiEvent>,
     pub peer_status_channels: PeerStatusChannels,
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
-    pub consensus_status_cache: ExpiringCache<ApiResult<ConsensusStatus>>,
+    pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,
     pub supported_api_versions: SupportedApiVersionsSummary,
 }
 
@@ -285,7 +284,7 @@ impl ConsensusApi {
             .map_err(|_| ApiError::server_error("Unable send event".to_string()))
     }
 
-    pub async fn get_consensus_status(&self) -> ApiResult<ConsensusStatus> {
+    pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
         let peers_connection_status = self.peer_status_channels.get_all_status().await;
         let latest_contribution_by_peer = self.latest_contribution_by_peer.read().await.clone();
         let epoch_count = self.get_epoch_count().await;
@@ -303,7 +302,7 @@ impl ConsensusApi {
                     }
                 };
 
-                let consensus_status = PeerConsensusStatus {
+                let consensus_status = PeerStatus {
                     last_contribution,
                     flagged,
                     connection_status,
@@ -311,7 +310,7 @@ impl ConsensusApi {
 
                 (peer, consensus_status)
             })
-            .collect::<HashMap<PeerId, PeerConsensusStatus>>();
+            .collect::<HashMap<PeerId, PeerStatus>>();
 
         let peers_flagged = status_by_peer
             .values()
@@ -328,7 +327,7 @@ impl ConsensusApi {
             .filter(|status| status.connection_status == PeerConnectionStatus::Disconnected)
             .count() as u64;
 
-        Ok(ConsensusStatus {
+        Ok(FederationStatus {
             // the naming is in preparation for aleph bft since we will switch to
             // the session count here and want to keep the public API stable
             session_count: epoch_count,
@@ -526,11 +525,11 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 let consensus_status = fedimint
                     .consensus_status_cache
-                    .get(|| fedimint.get_consensus_status())
+                    .get(|| fedimint.get_federation_status())
                     .await?;
                 Ok(StatusResponse {
                     server: ServerStatus::ConsensusRunning,
-                    consensus: Some(consensus_status)
+                    federation: Some(consensus_status)
                 })
             }
         },
