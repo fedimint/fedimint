@@ -1269,21 +1269,6 @@
 <a href="#1269" id="1269">1269</a>
 <a href="#1270" id="1270">1270</a>
 <a href="#1271" id="1271">1271</a>
-<a href="#1272" id="1272">1272</a>
-<a href="#1273" id="1273">1273</a>
-<a href="#1274" id="1274">1274</a>
-<a href="#1275" id="1275">1275</a>
-<a href="#1276" id="1276">1276</a>
-<a href="#1277" id="1277">1277</a>
-<a href="#1278" id="1278">1278</a>
-<a href="#1279" id="1279">1279</a>
-<a href="#1280" id="1280">1280</a>
-<a href="#1281" id="1281">1281</a>
-<a href="#1282" id="1282">1282</a>
-<a href="#1283" id="1283">1283</a>
-<a href="#1284" id="1284">1284</a>
-<a href="#1285" id="1285">1285</a>
-<a href="#1286" id="1286">1286</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1292,7 +1277,7 @@
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::{Duration, SystemTime};
+<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::{anyhow, ensure};
@@ -2254,10 +2239,7 @@
 <span class="doccomment">/// The status of a server, including how it views its peers
 </span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>ConsensusStatus {
-    <span class="doccomment">/// The last contribution that this server has made to the consensus, it&#39;s
-    /// equivalent to [`PeerConsensusStatus::last_contribution`] and
-    /// [`ConsensusContribution::value`]
-    </span><span class="kw">pub </span>last_contribution: u64,
+    <span class="kw">pub </span>session_count: u64,
     <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, PeerConsensusStatus&gt;,
     <span class="kw">pub </span>peers_online: u64,
     <span class="kw">pub </span>peers_offline: u64,
@@ -2269,11 +2251,9 @@
 <span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>PeerConsensusStatus {
     <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    <span class="kw">pub </span>last_contribution_timestamp_seconds: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="kw">pub </span>connection_status: PeerConnectionStatus,
-    <span class="doccomment">/// Indicates that this peer needs attention from the operator. For instance
-    /// it may be suffering too many disconnections or it hasn&#39;t contributed for
-    /// the consensus in a long time
+    <span class="doccomment">/// Indicates that this peer needs attention from the operator since
+    /// it has not contributed to the consensus in a long time
     </span><span class="kw">pub </span>flagged: bool,
 }
 
@@ -2282,16 +2262,6 @@
     <span class="attr">#[default]
     </span>Disconnected,
     Connected,
-}
-
-<span class="doccomment">/// Tracks the consensus contribution for a peer
-</span><span class="attr">#[derive(Debug, Clone, Copy)]
-</span><span class="kw">pub struct </span>ConsensusContribution {
-    <span class="doccomment">/// Using HBBFT this is the epoch count. In general it should be an
-    /// increasing number
-    </span><span class="kw">pub </span>value: u64,
-    <span class="doccomment">/// When the contribution was received
-    </span><span class="kw">pub </span>time: SystemTime,
 }
 
 <span class="doccomment">/// The state of the server returned via APIs
