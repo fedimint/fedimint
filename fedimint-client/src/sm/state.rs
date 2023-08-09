@@ -10,7 +10,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxFuture;
-use fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send, maybe_add_send_sync};
+use fedimint_core::{maybe_add_send, maybe_add_send_sync, module_plugin_dyn_newtype_define};
 
 use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId};
 
@@ -66,7 +66,7 @@ pub trait IContext: Debug {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
 }
 
-dyn_newtype_define_with_instance_id! {
+module_plugin_dyn_newtype_define! {
     /// A shared context for a module client state machine
     #[derive(Clone)]
     pub DynContext(Arc<IContext>)

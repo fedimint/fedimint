@@ -20,7 +20,10 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dyn_newtype_define_with_instance_id, dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id,
+    erased_eq_no_instance_id, module_plugin_dyn_newtype_clone_passhthrough,
+    module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_display_passthrough,
+    module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough,
+    module_plugin_static_trait_define,
 };
 
 pub mod client;
@@ -89,68 +92,6 @@ impl From<&'static str> for ModuleKind {
     }
 }
 
-/// Implement `Encodable` and `Decodable` for a "module dyn newtype"
-///
-/// "Module dyn newtype" is just a "dyn newtype" used by general purpose
-/// Fedimint code to abstract away details of mint modules.
-#[macro_export]
-macro_rules! module_dyn_newtype_impl_encode_decode {
-    ($name:ident) => {
-        impl Encodable for $name {
-            fn consensus_encode<W: std::io::Write>(
-                &self,
-                writer: &mut W,
-            ) -> Result<usize, std::io::Error> {
-                let mut written = self.module_instance_id.consensus_encode(writer)?;
-
-                let mut buf = Vec::with_capacity(512);
-                let buf_written = self.inner.consensus_encode_dyn(&mut buf)?;
-                assert_eq!(buf.len(), buf_written);
-
-                written += buf.consensus_encode(writer)?;
-
-                Ok(written)
-            }
-        }
-
-        impl Decodable for $name {
-            fn consensus_decode<R: std::io::Read>(
-                reader: &mut R,
-                modules: &$crate::module::registry::ModuleDecoderRegistry,
-            ) -> Result<Self, fedimint_core::encoding::DecodeError> {
-                let module_instance_id =
-                    fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
-                let val = match modules.get(module_instance_id) {
-                    Some(decoder) => {
-                        let total_len_u64 = u64::consensus_decode(reader, modules)?;
-                        let mut reader = reader.take(total_len_u64);
-                        let v = decoder.decode(&mut reader, module_instance_id, modules)?;
-
-                        if reader.limit() != 0 {
-                            return Err(fedimint_core::encoding::DecodeError::new_custom(
-                                anyhow::anyhow!(
-                                    "Dyn type did not consume all bytes during decoding"
-                                ),
-                            ));
-                        }
-
-                        v
-                    }
-                    None => $name::from_typed(
-                        module_instance_id,
-                        $crate::core::DynUnknown(Vec::<u8>::consensus_decode(
-                            reader,
-                            &Default::default(),
-                        )?),
-                    ),
-                };
-
-                Ok(val)
-            }
-        }
-    };
-}
-
 /// A type used by when decoding dyn-types, when the module is missing
 ///
 /// This allows parsing and handling of dyn-types of modules which
@@ -162,252 +103,6 @@ impl fmt::Display for DynUnknown {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0.consensus_encode_to_hex().expect("can't fail"))
     }
-}
-
-/// Define a "plugin" trait
-///
-/// "Plugin trait" is a trait that a developer of a mint module
-/// needs to implement when implementing mint module. It uses associated
-/// types with trait bonds to guide the developer.
-///
-/// Blanket implementations are used to convert the "plugin trait",
-/// incompatible with `dyn Trait` into "module types" and corresponding
-/// "module dyn newtypes", erasing the exact type and used in a common
-/// Fedimint code.
-#[macro_export]
-macro_rules! module_plugin_trait_define{
-    (   $(#[$outer:meta])*
-        $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
-    ) => {
-        pub trait $plugin_ty:
-            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance<DynType = $newtype_ty> + Send + Sync + 'static
-        {
-            $($extra_methods)*
-        }
-
-        impl $module_ty for ::fedimint_core::core::DynUnknown {
-            fn as_any(&self) -> &(dyn Any + Send + Sync) {
-                self
-            }
-
-            fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $newtype_ty {
-                $newtype_ty::from_typed(instance_id, <Self as Clone>::clone(self))
-            }
-
-            fn dyn_hash(&self) -> u64 {
-                use std::hash::Hash;
-                let mut s = std::collections::hash_map::DefaultHasher::new();
-                self.hash(&mut s);
-                std::hash::Hasher::finish(&s)
-            }
-
-            $($extra_impls)*
-        }
-
-        impl<T> $module_ty for T
-        where
-            T: $plugin_ty + DynEncodable + 'static + Send + Sync,
-        {
-            fn as_any(&self) -> &(dyn Any + Send + Sync) {
-                self
-            }
-
-            fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $newtype_ty {
-                $newtype_ty::from_typed(instance_id, <Self as Clone>::clone(self))
-            }
-
-            fn dyn_hash(&self) -> u64 {
-                let mut s = std::collections::hash_map::DefaultHasher::new();
-                self.hash(&mut s);
-                std::hash::Hasher::finish(&s)
-            }
-
-            $($extra_impls)*
-        }
-
-        impl std::hash::Hash for $newtype_ty {
-            fn hash<H>(&self, state: &mut H)
-            where
-                H: std::hash::Hasher
-            {
-                self.module_instance_id.hash(state);
-                self.inner.dyn_hash().hash(state);
-            }
-        }
-    };
-}
-
-/// Implements the necessary traits for all configuration related types of a
-/// `FederationServer` module.
-#[macro_export]
-macro_rules! plugin_types_trait_impl_config {
-    ($common_gen:ty, $gen:ty, $gen_local:ty, $gen_consensus:ty, $cfg:ty, $cfg_local:ty, $cfg_private:ty, $cfg_consensus:ty, $cfg_client:ty) => {
-        impl fedimint_core::config::ModuleGenParams for $gen {
-            type Local = $gen_local;
-            type Consensus = $gen_consensus;
-
-            fn from_parts(local: Self::Local, consensus: Self::Consensus) -> Self {
-                Self { local, consensus }
-            }
-
-            fn to_parts(self) -> (Self::Local, Self::Consensus) {
-                (self.local, self.consensus)
-            }
-        }
-
-        impl fedimint_core::config::TypedServerModuleConsensusConfig for $cfg_consensus {
-            fn kind(&self) -> fedimint_core::core::ModuleKind {
-                <$common_gen as fedimint_core::module::CommonModuleGen>::KIND
-            }
-
-            fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-                <$common_gen as fedimint_core::module::CommonModuleGen>::CONSENSUS_VERSION
-            }
-        }
-
-        impl fedimint_core::config::TypedServerModuleConfig for $cfg {
-            type Local = $cfg_local;
-            type Private = $cfg_private;
-            type Consensus = $cfg_consensus;
-
-            fn from_parts(
-                local: Self::Local,
-                private: Self::Private,
-                consensus: Self::Consensus,
-            ) -> Self {
-                Self {
-                    local,
-                    private,
-                    consensus,
-                }
-            }
-
-            fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
-                (
-                    <$common_gen as fedimint_core::module::CommonModuleGen>::KIND,
-                    self.local,
-                    self.private,
-                    self.consensus,
-                )
-            }
-        }
-    };
-}
-
-/// Implements the necessary traits for all associated types of a
-/// `FederationServer` module.
-#[macro_export]
-macro_rules! plugin_types_trait_impl_common {
-    ($types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty) => {
-        impl fedimint_core::module::ModuleCommon for $types {
-            type ClientConfig = $client_config;
-            type Input = $input;
-            type Output = $output;
-            type OutputOutcome = $outcome;
-            type ConsensusItem = $ci;
-        }
-
-        impl fedimint_core::core::ClientConfig for $client_config {}
-
-        impl fedimint_core::core::IntoDynInstance for $client_config {
-            type DynType = fedimint_core::core::DynClientConfig;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynClientConfig::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::core::Input for $input {}
-
-        impl fedimint_core::core::IntoDynInstance for $input {
-            type DynType = fedimint_core::core::DynInput;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynInput::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::core::Output for $output {}
-
-        impl fedimint_core::core::IntoDynInstance for $output {
-            type DynType = fedimint_core::core::DynOutput;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynOutput::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::core::OutputOutcome for $outcome {}
-
-        impl fedimint_core::core::IntoDynInstance for $outcome {
-            type DynType = fedimint_core::core::DynOutputOutcome;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynOutputOutcome::from_typed(instance_id, self)
-            }
-        }
-
-        impl fedimint_core::core::ModuleConsensusItem for $ci {}
-
-        impl fedimint_core::core::IntoDynInstance for $ci {
-            type DynType = fedimint_core::core::DynModuleConsensusItem;
-
-            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-                fedimint_core::core::DynModuleConsensusItem::from_typed(instance_id, self)
-            }
-        }
-    };
-}
-
-macro_rules! erased_eq_no_instance_id {
-    ($newtype:ty) => {
-        fn erased_eq_no_instance_id(&self, other: &$newtype) -> bool {
-            let other: &Self = other
-                .as_any()
-                .downcast_ref()
-                .expect("Type is ensured in previous step");
-
-            self == other
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! newtype_impl_eq_passthrough_with_instance_id {
-    ($newtype:ty) => {
-        impl PartialEq for $newtype {
-            fn eq(&self, other: &Self) -> bool {
-                if self.module_instance_id != other.module_instance_id {
-                    return false;
-                }
-                self.erased_eq_no_instance_id(other)
-            }
-        }
-
-        impl Eq for $newtype {}
-    };
-}
-
-/// Implements the `Display` trait for dyn newtypes whose traits implement
-/// `Display`
-macro_rules! newtype_impl_display_passthrough {
-    ($newtype:ty) => {
-        impl std::fmt::Display for $newtype {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Display::fmt(&self.inner, f)
-            }
-        }
-    };
-}
-
-macro_rules! newtype_impl_display_passthrough_with_instance_id {
-    ($newtype:ty) => {
-        impl std::fmt::Display for $newtype {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_fmt(format_args!("{}-{}", self.module_instance_id, self.inner))
-            }
-        }
-    };
 }
 
 /// A type that has a `Dyn*`, type erased version of itself
@@ -523,7 +218,7 @@ pub trait IClientConfig: Debug + Display + DynEncodable {
     fn erased_eq_no_instance_id(&self, other: &DynClientConfig) -> bool;
 }
 
-module_plugin_trait_define! {
+module_plugin_static_trait_define! {
     DynClientConfig, ClientConfig, IClientConfig,
     { }
     {
@@ -531,17 +226,17 @@ module_plugin_trait_define! {
     }
 }
 
-dyn_newtype_define_with_instance_id! {
+module_plugin_dyn_newtype_define! {
     /// An owned, immutable input to a [`Transaction`](fedimint_core::transaction::Transaction)
     pub DynClientConfig(Box<IClientConfig>)
 }
-module_dyn_newtype_impl_encode_decode!(DynClientConfig);
+module_plugin_dyn_newtype_encode_decode!(DynClientConfig);
 
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynClientConfig);
+module_plugin_dyn_newtype_clone_passhthrough!(DynClientConfig);
 
-newtype_impl_eq_passthrough_with_instance_id!(DynClientConfig);
+module_plugin_dyn_newtype_eq_passthrough!(DynClientConfig);
 
-newtype_impl_display_passthrough_with_instance_id!(DynClientConfig);
+module_plugin_dyn_newtype_display_passthrough!(DynClientConfig);
 
 /// Something that can be an [`DynInput`] in a
 /// [`Transaction`](fedimint_core::transaction::Transaction)
@@ -554,7 +249,7 @@ pub trait IInput: Debug + Display + DynEncodable {
     fn erased_eq_no_instance_id(&self, other: &DynInput) -> bool;
 }
 
-module_plugin_trait_define! {
+module_plugin_static_trait_define! {
     DynInput, Input, IInput,
     { }
     {
@@ -562,17 +257,17 @@ module_plugin_trait_define! {
     }
 }
 
-dyn_newtype_define_with_instance_id! {
+module_plugin_dyn_newtype_define! {
     /// An owned, immutable input to a [`Transaction`](fedimint_core::transaction::Transaction)
     pub DynInput(Box<IInput>)
 }
-module_dyn_newtype_impl_encode_decode!(DynInput);
+module_plugin_dyn_newtype_encode_decode!(DynInput);
 
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynInput);
+module_plugin_dyn_newtype_clone_passhthrough!(DynInput);
 
-newtype_impl_eq_passthrough_with_instance_id!(DynInput);
+module_plugin_dyn_newtype_eq_passthrough!(DynInput);
 
-newtype_impl_display_passthrough_with_instance_id!(DynInput);
+module_plugin_dyn_newtype_display_passthrough!(DynInput);
 
 /// Something that can be an [`DynOutput`] in a
 /// [`Transaction`](fedimint_core::transaction::Transaction)
@@ -585,24 +280,24 @@ pub trait IOutput: Debug + Display + DynEncodable {
     fn erased_eq_no_instance_id(&self, other: &DynOutput) -> bool;
 }
 
-dyn_newtype_define_with_instance_id! {
+module_plugin_dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction)
     pub DynOutput(Box<IOutput>)
 }
-module_plugin_trait_define! {
+module_plugin_static_trait_define! {
     DynOutput, Output, IOutput,
     { }
     {
         erased_eq_no_instance_id!(DynOutput);
     }
 }
-module_dyn_newtype_impl_encode_decode!(DynOutput);
+module_plugin_dyn_newtype_encode_decode!(DynOutput);
 
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutput);
+module_plugin_dyn_newtype_clone_passhthrough!(DynOutput);
 
-newtype_impl_eq_passthrough_with_instance_id!(DynOutput);
+module_plugin_dyn_newtype_eq_passthrough!(DynOutput);
 
-newtype_impl_display_passthrough_with_instance_id!(DynOutput);
+module_plugin_dyn_newtype_display_passthrough!(DynOutput);
 
 pub enum FinalizationError {
     SomethingWentWrong,
@@ -615,23 +310,21 @@ pub trait IOutputOutcome: Debug + Display + DynEncodable {
     fn erased_eq_no_instance_id(&self, other: &DynOutputOutcome) -> bool;
 }
 
-dyn_newtype_define_with_instance_id! {
+module_plugin_dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction) before it was finalized
     pub DynOutputOutcome(Box<IOutputOutcome>)
 }
-module_plugin_trait_define! {
+module_plugin_static_trait_define! {
     DynOutputOutcome, OutputOutcome, IOutputOutcome,
     { }
     {
         erased_eq_no_instance_id!(DynOutputOutcome);
     }
 }
-module_dyn_newtype_impl_encode_decode!(DynOutputOutcome);
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynOutputOutcome);
-
-newtype_impl_eq_passthrough_with_instance_id!(DynOutputOutcome);
-
-newtype_impl_display_passthrough!(DynOutputOutcome);
+module_plugin_dyn_newtype_encode_decode!(DynOutputOutcome);
+module_plugin_dyn_newtype_clone_passhthrough!(DynOutputOutcome);
+module_plugin_dyn_newtype_eq_passthrough!(DynOutputOutcome);
+module_plugin_dyn_newtype_display_passthrough!(DynOutputOutcome);
 
 pub trait IModuleConsensusItem: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
@@ -641,21 +334,21 @@ pub trait IModuleConsensusItem: Debug + Display + DynEncodable {
     fn erased_eq_no_instance_id(&self, other: &DynModuleConsensusItem) -> bool;
 }
 
-dyn_newtype_define_with_instance_id! {
+module_plugin_dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`](fedimint_core::transaction::Transaction) before it was finalized
     pub DynModuleConsensusItem(Box<IModuleConsensusItem>)
 }
-module_plugin_trait_define! {
+module_plugin_static_trait_define! {
     DynModuleConsensusItem, ModuleConsensusItem, IModuleConsensusItem,
     { }
     {
         erased_eq_no_instance_id!(DynModuleConsensusItem);
     }
 }
-module_dyn_newtype_impl_encode_decode!(DynModuleConsensusItem);
+module_plugin_dyn_newtype_encode_decode!(DynModuleConsensusItem);
 
-dyn_newtype_impl_dyn_clone_passhthrough_with_instance_id!(DynModuleConsensusItem);
+module_plugin_dyn_newtype_clone_passhthrough!(DynModuleConsensusItem);
 
-newtype_impl_eq_passthrough_with_instance_id!(DynModuleConsensusItem);
+module_plugin_dyn_newtype_eq_passthrough!(DynModuleConsensusItem);
 
-newtype_impl_display_passthrough!(DynModuleConsensusItem);
+module_plugin_dyn_newtype_display_passthrough!(DynModuleConsensusItem);
