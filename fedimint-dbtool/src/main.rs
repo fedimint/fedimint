@@ -5,8 +5,13 @@ use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
+use fedimint_core::config::ServerModuleGenRegistry;
 use fedimint_core::db::IDatabase;
+use fedimint_core::module::DynServerModuleGen;
+use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
+use fedimint_mint_server::MintGen;
+use fedimint_wallet_server::WalletGen;
 use futures::StreamExt;
 
 use crate::dump::DatabaseDump;
@@ -17,6 +22,12 @@ mod dump;
 struct Options {
     #[clap(long)]
     database: String,
+
+    #[clap(long, hide = true)]
+    /// Run dbtool like it doesn't know about any module kind. This is a
+    /// internal option for testing.
+    no_modules: bool,
+
     #[command(subcommand)]
     command: DbCommand,
 }
@@ -129,9 +140,25 @@ async fn main() -> Result<()> {
                 None => Vec::new(),
             };
 
-            let mut dbdump =
-                DatabaseDump::new(cfg_dir, options.database, password, modules, prefix_names);
-            dbdump.dump_database().await;
+            let module_gens = ServerModuleGenRegistry::from(if options.no_modules {
+                vec![]
+            } else {
+                vec![
+                    DynServerModuleGen::from(WalletGen),
+                    DynServerModuleGen::from(MintGen),
+                    DynServerModuleGen::from(LightningGen),
+                ]
+            });
+
+            let mut dbdump = DatabaseDump::new(
+                cfg_dir,
+                options.database,
+                password,
+                module_gens,
+                modules,
+                prefix_names,
+            );
+            dbdump.dump_database().await?;
         }
     }
 

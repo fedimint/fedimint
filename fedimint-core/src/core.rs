@@ -120,27 +120,48 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             ) -> Result<Self, fedimint_core::encoding::DecodeError> {
                 let module_instance_id =
                     fedimint_core::core::ModuleInstanceId::consensus_decode(reader, modules)?;
-                let total_len_u64 = u64::consensus_decode(reader, modules)?;
-                let mut reader = reader.take(total_len_u64);
-                let val = modules
-                    .get(module_instance_id)
-                    .ok_or_else(|| {
-                        fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
-                            "Module decoder not available: {module_instance_id}"
-                        ))
-                    })?
-                    .decode(&mut reader, module_instance_id, modules)?;
+                let val = match modules.get(module_instance_id) {
+                    Some(decoder) => {
+                        let total_len_u64 = u64::consensus_decode(reader, modules)?;
+                        let mut reader = reader.take(total_len_u64);
+                        let v = decoder.decode(&mut reader, module_instance_id, modules)?;
 
-                if reader.limit() != 0 {
-                    return Err(fedimint_core::encoding::DecodeError::new_custom(
-                        anyhow::anyhow!("Dyn type did not consume all bytes during decoding"),
-                    ));
-                }
+                        if reader.limit() != 0 {
+                            return Err(fedimint_core::encoding::DecodeError::new_custom(
+                                anyhow::anyhow!(
+                                    "Dyn type did not consume all bytes during decoding"
+                                ),
+                            ));
+                        }
+
+                        v
+                    }
+                    None => $name::from_typed(
+                        module_instance_id,
+                        $crate::core::DynUnknown(Vec::<u8>::consensus_decode(
+                            reader,
+                            &Default::default(),
+                        )?),
+                    ),
+                };
 
                 Ok(val)
             }
         }
     };
+}
+
+/// A type used by when decoding dyn-types, when the module is missing
+///
+/// This allows parsing and handling of dyn-types of modules which
+/// are not available.
+#[derive(Encodable, Decodable, Debug, Hash, PartialEq, Clone)]
+pub struct DynUnknown(Vec<u8>);
+
+impl fmt::Display for DynUnknown {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0.consensus_encode_to_hex().expect("can't fail"))
+    }
 }
 
 /// Define a "plugin" trait
@@ -162,6 +183,25 @@ macro_rules! module_plugin_trait_define{
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance<DynType = $newtype_ty> + Send + Sync + 'static
         {
             $($extra_methods)*
+        }
+
+        impl $module_ty for ::fedimint_core::core::DynUnknown {
+            fn as_any(&self) -> &(dyn Any + Send + Sync) {
+                self
+            }
+
+            fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $newtype_ty {
+                $newtype_ty::from_typed(instance_id, <Self as Clone>::clone(self))
+            }
+
+            fn dyn_hash(&self) -> u64 {
+                use std::hash::Hash;
+                let mut s = std::collections::hash_map::DefaultHasher::new();
+                self.hash(&mut s);
+                std::hash::Hasher::finish(&s)
+            }
+
+            $($extra_impls)*
         }
 
         impl<T> $module_ty for T
@@ -322,7 +362,7 @@ macro_rules! plugin_types_trait_impl_common {
 macro_rules! erased_eq_no_instance_id {
     ($newtype:ty) => {
         fn erased_eq_no_instance_id(&self, other: &$newtype) -> bool {
-            let other: &T = other
+            let other: &Self = other
                 .as_any()
                 .downcast_ref()
                 .expect("Type is ensured in previous step");
