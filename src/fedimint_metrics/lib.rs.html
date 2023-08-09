@@ -49,19 +49,17 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
-<a href="#52" id="52">52</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::routing::get;
 <span class="kw">use </span>axum::Router;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskShutdownToken};
 <span class="kw">pub use </span>lazy_static::lazy_static;
 <span class="kw">pub use </span>prometheus::{
     <span class="self">self</span>, histogram_opts, opts, register_histogram, register_int_counter, Encoder, Histogram,
     IntCounter, TextEncoder,
 };
-<span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tracing::error;
 
 <span class="kw">async fn </span>get_metrics() -&gt; (StatusCode, String) {
@@ -81,7 +79,7 @@
 <span class="kw">pub async fn </span>run_api_server(
     bind_address: <span class="kw-2">&amp;</span>SocketAddr,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-) -&gt; anyhow::Result&lt;oneshot::Receiver&lt;()&gt;&gt; {
+) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
     <span class="kw">let </span>app = Router::new().route(<span class="string">&quot;/metrics&quot;</span>, get(get_metrics));
     <span class="kw">let </span>server = axum::Server::bind(bind_address).serve(app.into_make_service());
 
@@ -90,7 +88,7 @@
     task_group
         .spawn(<span class="string">&quot;Metrics Api&quot;</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
             <span class="kw">let </span>graceful = server.with_graceful_shutdown(<span class="kw">async </span>{
-                shutdown_rx.<span class="kw">await</span>.ok();
+                shutdown_rx.<span class="kw">await</span>;
             });
 
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = graceful.<span class="kw">await </span>{

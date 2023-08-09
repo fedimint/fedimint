@@ -859,7 +859,7 @@
 };
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::CommonModuleGen;
-<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::contracts::Preimage;
@@ -882,7 +882,7 @@
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::sync::{oneshot, Mutex};
+<span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 <span class="kw">use </span>url::Url;
 
@@ -1031,7 +1031,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
         <span class="kw">let </span>rx = <span class="self">self</span>.start_gateway(<span class="kw-2">&amp;mut </span>tg, client_builder, db).<span class="kw">await</span><span class="question-mark">?</span>;
-        rx.<span class="kw">await</span><span class="question-mark">?</span>;
+        rx.<span class="kw">await</span>;
         <span class="macro">info!</span>(<span class="string">&quot;Gatewayd exiting...&quot;</span>);
         <span class="prelude-val">Ok</span>(())
     }
@@ -1041,7 +1041,7 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         client_builder: StandardGatewayClientBuilder,
         database: Database,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;oneshot::Receiver&lt;()&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TaskShutdownToken&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>tg = task_group.make_subgroup().<span class="kw">await</span>;
         task_group
             .spawn(
@@ -1088,7 +1088,7 @@
 
                                 Gateway::handle_htlc_stream(stream, ln_client, handle.clone(), scid_to_federation.clone(), clients.clone()).<span class="kw">await</span>;
                                 <span class="macro">warn!</span>(<span class="string">&quot;HTLC Stream Lightning connection broken. Stopping webserver...&quot;</span>);
-                                task_group.shutdown().<span class="kw">await</span>;
+                                task_group.shutdown();
                             }
                             <span class="prelude-val">Err</span>(e) =&gt; {
                                 <span class="macro">error!</span>(<span class="string">&quot;Failed to open HTLC stream. Waiting 5 seconds and trying again&quot;</span>);

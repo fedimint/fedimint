@@ -1830,7 +1830,7 @@
             <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
         }
 
-        task_group.shutdown().<span class="kw">await</span>;
+        task_group.shutdown();
         task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
     }
 

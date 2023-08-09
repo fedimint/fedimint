@@ -406,7 +406,7 @@
         handler.stop().<span class="kw">await</span>;
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Shutting down tasks&quot;</span>);
-        task_group.shutdown().<span class="kw">await</span>;
+        task_group.shutdown();
 
         <span class="prelude-val">Ok</span>(())
     }

@@ -299,9 +299,6 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -492,7 +489,7 @@
                     <span class="prelude-val">Ok</span>(()) =&gt; {}
                     <span class="prelude-val">Err</span>(error) =&gt; {
                         <span class="macro">error!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Main task returned error, shutting down&quot;</span>);
-                        task_group.shutdown().<span class="kw">await</span>;
+                        task_group.shutdown();
                     }
                 }
             })
@@ -600,10 +597,7 @@
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>rx = fedimint_metrics::run_api_server(bind_address, <span class="kw-2">&amp;mut </span>task_group).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(<span class="string">&quot;Metrics API listening on {bind_address}&quot;</span>);
-    <span class="kw">let </span>res = rx.<span class="kw">await</span>;
-    <span class="kw">if </span>res.is_err() {
-        <span class="macro">error!</span>(<span class="string">&quot;Error shutting down metric api server: {res:?}&quot;</span>);
-    }
+    rx.<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
