@@ -83,26 +83,6 @@ pub trait DatabaseValue: Sized + Debug {
 
 pub type PrefixStream<'a> = Pin<Box<maybe_add_send!(dyn Stream<Item = (Vec<u8>, Vec<u8>)> + 'a)>>;
 
-#[apply(async_trait_maybe_send!)]
-pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>>;
-}
-
-#[derive(Clone, Debug)]
-pub struct Database {
-    inner_db: Arc<DatabaseInner<dyn IDatabase>>,
-    module_instance_id: Option<ModuleInstanceId>,
-}
-
-// NOTE: `Db` is used instead of just `dyn IDatabase`
-// because it will impossible to construct otherwise
-#[derive(Debug)]
-struct DatabaseInner<Db: IDatabase + ?Sized> {
-    notifications: Notifications,
-    module_decoders: ModuleDecoderRegistry,
-    db: Box<Db>,
-}
-
 /// Error returned when the autocommit function fails
 #[derive(Debug, Error)]
 pub enum AutocommitError<E> {
@@ -125,6 +105,26 @@ pub enum AutocommitError<E> {
         /// Error returned by the closure
         error: E,
     },
+}
+
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>>;
+}
+
+#[derive(Clone, Debug)]
+pub struct Database {
+    inner_db: Arc<DatabaseInner<dyn IDatabase>>,
+    module_instance_id: Option<ModuleInstanceId>,
+}
+
+// NOTE: `Db` is used instead of just `dyn IDatabase`
+// because it will impossible to construct otherwise
+#[derive(Debug)]
+struct DatabaseInner<Db: IDatabase + ?Sized> {
+    notifications: Notifications,
+    module_decoders: ModuleDecoderRegistry,
+    db: Box<Db>,
 }
 
 impl Database {
