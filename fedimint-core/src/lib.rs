@@ -35,6 +35,7 @@ pub mod encoding;
 pub mod epoch;
 pub mod fmt_utils;
 pub mod hex;
+#[macro_use]
 pub mod macros;
 pub mod module;
 pub mod net;
