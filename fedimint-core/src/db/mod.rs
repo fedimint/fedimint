@@ -719,6 +719,10 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         }
     }
 
+    pub async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        self.isolated_tx.raw_find_by_prefix(key_prefix).await
+    }
+
     #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
     pub async fn find_by_prefix<KP>(
         &mut self,

@@ -16,6 +16,7 @@ use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
+use fedimint_logging::LOG_CORE;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -23,6 +24,7 @@ use tbs::{serde_impl, Scalar};
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
+use tracing::warn;
 use url::Url;
 
 use crate::core::DynClientConfig;
@@ -454,19 +456,47 @@ impl<M> ModuleGenRegistry<M>
 where
     M: AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static>,
 {
+    #[deprecated(
+        note = "You probably want `available_decoders` to support missing module kinds. If you really want a strict behavior, use `decoders_strict`"
+    )]
     pub fn decoders<'a>(
         &self,
-        module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+        modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
     ) -> anyhow::Result<ModuleDecoderRegistry> {
-        let mut modules = BTreeMap::new();
-        for (id, kind) in module_kinds {
+        self.decoders_strict(modules)
+    }
+
+    /// Get decoders for `modules` and fail if any is unsupported
+    pub fn decoders_strict<'a>(
+        &self,
+        modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+    ) -> anyhow::Result<ModuleDecoderRegistry> {
+        let mut decoders = BTreeMap::new();
+        for (id, kind) in modules {
             let Some(init) = self.0.get(kind) else {
                 anyhow::bail!("Detected configuration for unsupported module id: {id}, kind: {kind}")
             };
 
-            modules.insert(id, (kind.clone(), init.as_ref().decoder()));
+            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
-        Ok(ModuleDecoderRegistry::from(modules))
+        Ok(ModuleDecoderRegistry::from(decoders))
+    }
+
+    /// Get decoders for `modules` and skip unsupported ones
+    pub fn available_decoders<'a>(
+        &self,
+        modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+    ) -> anyhow::Result<ModuleDecoderRegistry> {
+        let mut decoders = BTreeMap::new();
+        for (id, kind) in modules {
+            let Some(init) = self.0.get(kind) else {
+                warn!(target: LOG_CORE, "Unsupported module id: {id}, kind: {kind}");
+                continue;
+            };
+
+            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
+        }
+        Ok(ModuleDecoderRegistry::from(decoders))
     }
 }
 

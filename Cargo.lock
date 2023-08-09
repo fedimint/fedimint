@@ -1472,6 +1472,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

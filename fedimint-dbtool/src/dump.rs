@@ -11,17 +11,13 @@ use fedimint_core::db::notifications::Notifications;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::SerdeSignatureShare;
-use fedimint_core::module::DynServerModuleGen;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
-use fedimint_ln_server::LightningGen;
-use fedimint_mint_server::MintGen;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::db as ConsensusRange;
-use fedimint_wallet_server::WalletGen;
 use futures::StreamExt;
 use strum::IntoEnumIterator;
 
@@ -53,6 +49,7 @@ impl<'a> DatabaseDump<'a> {
         cfg_dir: PathBuf,
         data_dir: String,
         password: String,
+        module_gens: ServerModuleGenRegistry,
         modules: Vec<String>,
         prefixes: Vec<String>,
     ) -> DatabaseDump<'a> {
@@ -82,14 +79,10 @@ impl<'a> DatabaseDump<'a> {
             };
         }
 
-        let module_inits = ServerModuleGenRegistry::from(vec![
-            DynServerModuleGen::from(WalletGen),
-            DynServerModuleGen::from(MintGen),
-            DynServerModuleGen::from(LightningGen),
-        ]);
-
         let cfg = read_server_config(&password, cfg_dir).unwrap();
-        let decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
+        let decoders = module_gens
+            .available_decoders(cfg.iter_module_instances())
+            .unwrap();
         let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
 
         DatabaseDump {
@@ -98,7 +91,7 @@ impl<'a> DatabaseDump<'a> {
             modules,
             prefixes,
             cfg: Some(cfg),
-            module_inits,
+            module_inits: module_gens,
         }
     }
 }
@@ -112,7 +105,7 @@ impl<'a> DatabaseDump<'a> {
 
     /// Iterates through all the specified ranges in the database and retrieves
     /// the data for each range. Prints serialized contents at the end.
-    pub async fn dump_database(&mut self) {
+    pub async fn dump_database(&mut self) -> anyhow::Result<()> {
         if self.modules.is_empty() || self.modules.contains(&"consensus".to_string()) {
             self.retrieve_consensus_data().await;
         }
@@ -122,30 +115,61 @@ impl<'a> DatabaseDump<'a> {
             for (module_id, module_cfg) in &cfg.consensus.modules {
                 let kind = &module_cfg.kind;
 
-                let Some(init) = self.module_inits.get(kind) else {
-                    panic!("Detected configuration for unsupported module id: {module_id}, kind: {kind}")
-                };
-
                 if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
                     continue;
                 }
-
                 let mut isolated_dbtx = self.read_only.with_module_prefix(*module_id);
-                let mut module_serialized = init
-                    .dump_database(&mut isolated_dbtx, self.prefixes.clone())
-                    .await
-                    .collect::<BTreeMap<String, _>>();
 
-                let db_version = isolated_dbtx.get_value(&DatabaseVersionKey).await;
-                if let Some(db_version) = db_version {
-                    module_serialized.insert("Version".to_string(), Box::new(db_version));
-                } else {
-                    module_serialized
-                        .insert("Version".to_string(), Box::new("Not Specified".to_string()));
+                match self.module_inits.get(kind) {
+                    None => {
+                        tracing::warn!(module_id, %kind, "Detected configuration for unsupported module");
+
+                        let mut module_serialized = BTreeMap::new();
+                        let filtered_prefixes = (0u8..=255).filter(|f| {
+                            self.prefixes.is_empty()
+                                || self.prefixes.contains(&f.to_string().to_lowercase())
+                        });
+
+                        let isolated_dbtx = &mut isolated_dbtx;
+
+                        for prefix in filtered_prefixes {
+                            let db_items = isolated_dbtx
+                                .raw_find_by_prefix(&[prefix])
+                                .await?
+                                .map(|(k, v)| {
+                                    (
+                                        k.consensus_encode_to_hex().expect("can't fail"),
+                                        Box::new(v.consensus_encode_to_hex().expect("can't fail")),
+                                    )
+                                })
+                                .collect::<BTreeMap<String, Box<_>>>()
+                                .await;
+
+                            module_serialized.extend(db_items);
+                        }
+                        self.serialized
+                            .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
+                    }
+                    Some(init) => {
+                        let mut module_serialized = init
+                            .dump_database(&mut isolated_dbtx, self.prefixes.clone())
+                            .await
+                            .collect::<BTreeMap<String, _>>();
+
+                        let db_version = isolated_dbtx.get_value(&DatabaseVersionKey).await;
+                        if let Some(db_version) = db_version {
+                            module_serialized.insert("Version".to_string(), Box::new(db_version));
+                        } else {
+                            module_serialized.insert(
+                                "Version".to_string(),
+                                Box::new("Not Specified".to_string()),
+                            );
+                        }
+
+                        self.serialized
+                            .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
+                    }
                 }
-
-                self.serialized
-                    .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
             }
         }
 
@@ -159,6 +183,8 @@ impl<'a> DatabaseDump<'a> {
         }
 
         self.print_database();
+
+        Ok(())
     }
 
     /// Iterates through each of the prefixes within the consensus range and
