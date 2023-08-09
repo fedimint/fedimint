@@ -7,7 +7,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use tokio::sync::futures::Notified;
 use tokio::sync::Notify;
 
-use super::{ISingleUseDatabaseTransaction, PrefixStream, Result};
+use super::{IDatabaseTransactionOps, ISingleUseDatabaseTransaction, PrefixStream, Result};
 
 /// Number of buckets used for `Notifications`.
 const NOTIFY_BUCKETS: usize = 32;
@@ -126,7 +126,7 @@ impl<'a> NotifyingTransaction<'a> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> ISingleUseDatabaseTransaction<'a> for NotifyingTransaction<'a> {
+impl<'a> IDatabaseTransactionOps<'a> for NotifyingTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         self.dbtx.raw_insert_bytes(key, value).await
     }
@@ -156,6 +156,17 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for NotifyingTransaction<'a> {
         self.dbtx.raw_remove_by_prefix(key_prefix).await
     }
 
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.dbtx.rollback_tx_to_savepoint().await
+    }
+
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.dbtx.set_tx_savepoint().await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<'a> ISingleUseDatabaseTransaction<'a> for NotifyingTransaction<'a> {
     async fn commit_tx(&mut self) -> Result<()> {
         self.dbtx.commit_tx().await?;
         self.notifications.submit_queue(
@@ -165,15 +176,6 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for NotifyingTransaction<'a> {
         );
         Ok(())
     }
-
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        self.dbtx.rollback_tx_to_savepoint().await
-    }
-
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
-        self.dbtx.set_tx_savepoint().await
-    }
-
     fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
         self.notify_queue
             .as_mut()
