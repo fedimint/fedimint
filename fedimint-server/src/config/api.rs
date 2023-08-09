@@ -662,7 +662,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                 let server = config.server_status().await;
                 Ok(StatusResponse {
                     server,
-                    consensus: None
+                    federation: None
                 })
             }
         },
