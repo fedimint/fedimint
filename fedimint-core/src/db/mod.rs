@@ -1030,6 +1030,7 @@ pub struct DatabaseTransaction<'a> {
     tx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
     decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
+    on_commit_hooks: Vec<Box<maybe_add_send!(dyn FnOnce())>>,
 }
 
 #[instrument(level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
@@ -1057,6 +1058,7 @@ impl<'parent> DatabaseTransaction<'parent> {
                 is_committed: false,
                 has_writes: false,
             },
+            on_commit_hooks: vec![],
         }
     }
 
@@ -1092,18 +1094,27 @@ impl<'parent> DatabaseTransaction<'parent> {
             tx: Box::new(single_use),
             decoders,
             commit_tracker,
+            on_commit_hooks: vec![],
         }
     }
 
     pub async fn commit_tx_result(mut self) -> Result<()> {
         self.commit_tracker.is_committed = true;
-        return self.tx.commit_tx().await;
+        let commit_result = self.tx.commit_tx().await;
+
+        // Run commit hooks in case commit was successful
+        if commit_result.is_ok() {
+            for hook in self.on_commit_hooks {
+                hook();
+            }
+        }
+
+        commit_result
     }
 
     pub async fn commit_tx(mut self) {
         self.commit_tracker.is_committed = true;
-        self.tx
-            .commit_tx()
+        self.commit_tx_result()
             .await
             .expect("Unrecoverable error occurred while committing to the database.");
     }
@@ -1270,6 +1281,12 @@ impl<'parent> DatabaseTransaction<'parent> {
     #[instrument(level = "debug", skip_all, ret)]
     pub async fn set_tx_savepoint(&mut self) -> Result<()> {
         self.tx.set_tx_savepoint().await
+    }
+
+    /// Register a hook that will be run after commit succeeds.
+    #[instrument(level = "debug", skip_all, ret)]
+    pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
+        self.on_commit_hooks.push(Box::new(f));
     }
 }
 
