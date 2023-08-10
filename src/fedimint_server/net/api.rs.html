@@ -634,7 +634,6 @@
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
 <a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -644,8 +643,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::api::{
-    ConsensusStatus, InviteCode, PeerConnectionStatus, PeerConsensusStatus, ServerStatus,
-    StatusResponse,
+    FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse};
@@ -719,7 +717,7 @@
     </span><span class="kw">pub </span>api_sender: Sender&lt;ApiEvent&gt;,
     <span class="kw">pub </span>peer_status_channels: PeerStatusChannels,
     <span class="kw">pub </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
-    <span class="kw">pub </span>consensus_status_cache: ExpiringCache&lt;ApiResult&lt;ConsensusStatus&gt;&gt;,
+    <span class="kw">pub </span>consensus_status_cache: ExpiringCache&lt;ApiResult&lt;FederationStatus&gt;&gt;,
     <span class="kw">pub </span>supported_api_versions: SupportedApiVersionsSummary,
 }
 
@@ -922,7 +920,7 @@
             </span>.map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable send event&quot;</span>.to_string()))
     }
 
-    <span class="kw">pub async fn </span>get_consensus_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConsensusStatus&gt; {
+    <span class="kw">pub async fn </span>get_federation_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;FederationStatus&gt; {
         <span class="kw">let </span>peers_connection_status = <span class="self">self</span>.peer_status_channels.get_all_status().<span class="kw">await</span>;
         <span class="kw">let </span>latest_contribution_by_peer = <span class="self">self</span>.latest_contribution_by_peer.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>epoch_count = <span class="self">self</span>.get_epoch_count().<span class="kw">await</span>;
@@ -940,7 +938,7 @@
                     }
                 };
 
-                <span class="kw">let </span>consensus_status = PeerConsensusStatus {
+                <span class="kw">let </span>consensus_status = PeerStatus {
                     last_contribution,
                     flagged,
                     connection_status,
@@ -948,7 +946,7 @@
 
                 (peer, consensus_status)
             })
-            .collect::&lt;HashMap&lt;PeerId, PeerConsensusStatus&gt;&gt;();
+            .collect::&lt;HashMap&lt;PeerId, PeerStatus&gt;&gt;();
 
         <span class="kw">let </span>peers_flagged = status_by_peer
             .values()
@@ -965,7 +963,7 @@
             .filter(|status| status.connection_status == PeerConnectionStatus::Disconnected)
             .count() <span class="kw">as </span>u64;
 
-        <span class="prelude-val">Ok</span>(ConsensusStatus {
+        <span class="prelude-val">Ok</span>(FederationStatus {
             <span class="comment">// the naming is in preparation for aleph bft since we will switch to
             // the session count here and want to keep the public API stable
             </span>session_count: epoch_count,
@@ -1163,11 +1161,11 @@
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; StatusResponse {
                 <span class="kw">let </span>consensus_status = fedimint
                     .consensus_status_cache
-                    .get(|| fedimint.get_consensus_status())
+                    .get(|| fedimint.get_federation_status())
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(StatusResponse {
                     server: ServerStatus::ConsensusRunning,
-                    consensus: <span class="prelude-val">Some</span>(consensus_status)
+                    federation: <span class="prelude-val">Some</span>(consensus_status)
                 })
             }
         },

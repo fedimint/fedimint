@@ -2238,9 +2238,9 @@
 
 <span class="doccomment">/// The status of a server, including how it views its peers
 </span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-</span><span class="kw">pub struct </span>ConsensusStatus {
+</span><span class="kw">pub struct </span>FederationStatus {
     <span class="kw">pub </span>session_count: u64,
-    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, PeerConsensusStatus&gt;,
+    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, PeerStatus&gt;,
     <span class="kw">pub </span>peers_online: u64,
     <span class="kw">pub </span>peers_offline: u64,
     <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
@@ -2249,7 +2249,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>PeerConsensusStatus {
+</span><span class="kw">pub struct </span>PeerStatus {
     <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="kw">pub </span>connection_status: PeerConnectionStatus,
     <span class="doccomment">/// Indicates that this peer needs attention from the operator since
@@ -2289,7 +2289,7 @@
 <span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>StatusResponse {
     <span class="kw">pub </span>server: ServerStatus,
-    <span class="kw">pub </span>consensus: <span class="prelude-ty">Option</span>&lt;ConsensusStatus&gt;,
+    <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;FederationStatus&gt;,
 }
 
 <span class="attr">#[cfg(test)]
