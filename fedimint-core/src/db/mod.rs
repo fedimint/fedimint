@@ -114,24 +114,25 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
 
 #[derive(Clone, Debug)]
 pub struct Database {
-    inner_db: Arc<DatabaseInner<dyn IDatabase>>,
+    inner_db: Arc<DatabaseInner>,
     module_instance_id: Option<ModuleInstanceId>,
 }
 
-// NOTE: `Db` is used instead of just `dyn IDatabase`
-// because it will impossible to construct otherwise
 #[derive(Debug)]
-struct DatabaseInner<Db: IDatabase + ?Sized> {
+struct DatabaseInner {
     notifications: Notifications,
     module_decoders: ModuleDecoderRegistry,
-    db: Box<Db>,
+    db: Box<dyn IDatabase + 'static>,
 }
 
 impl Database {
     /// Creates a new Fedimint database from any object implementing
     /// [`IDatabase`]. For more flexibility see also [`Database::new_from_box`].
-    pub fn new(db: impl IDatabase + 'static, module_decoders: ModuleDecoderRegistry) -> Self {
-        let inner = DatabaseInner::<dyn IDatabase> {
+    pub fn new(
+        db: impl IDatabase + MaybeSend + 'static,
+        module_decoders: ModuleDecoderRegistry,
+    ) -> Self {
+        let inner = DatabaseInner {
             db: Box::new(db),
             notifications: Notifications::new(),
             module_decoders,
@@ -147,7 +148,10 @@ impl Database {
     /// the caller to have a dynamic database backend that can choose
     /// implementations at runtime, while not needing to bind decoders that
     /// might only be available later.
-    pub fn new_from_box(db: Box<dyn IDatabase>, module_decoders: ModuleDecoderRegistry) -> Self {
+    pub fn new_from_box(
+        db: Box<dyn IDatabase + 'static>,
+        module_decoders: ModuleDecoderRegistry,
+    ) -> Self {
         let inner = DatabaseInner {
             db,
             notifications: Notifications::new(),
