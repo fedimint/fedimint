@@ -1120,8 +1120,8 @@ impl<'a> StatelessWallet<'a> {
         // Validate added fees are above the min relay tx fee
         // BIP-0125 requires 1 sat/vb for RBF by default (same as normal txs)
         let fees = match output {
-            WalletOutput::PegOut(pegout) => pegout.fees.clone(),
-            WalletOutput::Rbf(rbf) => rbf.fees.clone(),
+            WalletOutput::PegOut(pegout) => pegout.fees,
+            WalletOutput::Rbf(rbf) => rbf.fees,
         };
         if fees.fee_rate.sats_per_kvb < DEFAULT_MIN_RELAY_TX_FEE as u64 {
             return Err(WalletError::BelowMinRelayFee);
