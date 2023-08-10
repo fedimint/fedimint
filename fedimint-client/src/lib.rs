@@ -753,7 +753,9 @@ impl Client {
     /// changes.
     pub async fn subscribe_balance_changes(&self) -> BoxStream<'_, Amount> {
         let mut balance_changes = self.primary_module().subscribe_balance_changes().await;
+        let initial_balance = self.get_balance().await;
         Box::pin(stream! {
+            yield initial_balance;
             while let Some(()) = balance_changes.next().await {
                 let mut dbtx = self.db().begin_transaction().await;
                 let balance = self
