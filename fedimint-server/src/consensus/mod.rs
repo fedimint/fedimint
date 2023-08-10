@@ -214,6 +214,10 @@ impl FedimintConsensus {
         consensus_item: ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
+        // We rely on decoding rejecting any unknown module instance ids to avoid
+        // peer-triggered panic here
+        self.decoders().assert_reject_mode();
+
         match consensus_item {
             ConsensusItem::Module(module_item) => {
                 let moduletx = &mut dbtx.with_module_prefix(module_item.module_instance_id());

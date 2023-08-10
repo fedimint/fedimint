@@ -327,13 +327,22 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
 
                         v
                     }
-                    None => $name::from_typed(
-                        module_instance_id,
-                        $crate::core::DynUnknown(Vec::<u8>::consensus_decode(
-                            reader,
-                            &Default::default(),
-                        )?),
-                    ),
+                    None => match modules.decoding_mode() {
+                        $crate::module::registry::DecodingMode::Reject => {
+                            return Err(fedimint_core::encoding::DecodeError::new_custom(
+                                anyhow::anyhow!(
+                                    "Module decoder not available: {module_instance_id}"
+                                ),
+                            ));
+                        }
+                        $crate::module::registry::DecodingMode::Fallback => $name::from_typed(
+                            module_instance_id,
+                            $crate::core::DynUnknown(Vec::<u8>::consensus_decode(
+                                reader,
+                                &Default::default(),
+                            )?),
+                        ),
+                    },
                 };
 
                 Ok(val)

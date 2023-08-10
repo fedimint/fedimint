@@ -30,8 +30,7 @@ use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::EventuallyConsistent;
-use fedimint_core::task::{self};
-use fedimint_core::{PeerId, TieredMulti};
+use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_client::{MintClientExt, MintClientGen, SpendableNote};
@@ -313,6 +312,7 @@ impl Opts {
                 })
             },
         ))
+        .with_fallback()
     }
 
     async fn build_client_ng(

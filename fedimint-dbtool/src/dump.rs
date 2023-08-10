@@ -82,7 +82,8 @@ impl<'a> DatabaseDump<'a> {
         let cfg = read_server_config(&password, cfg_dir).unwrap();
         let decoders = module_gens
             .available_decoders(cfg.iter_module_instances())
-            .unwrap();
+            .unwrap()
+            .with_fallback();
         let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
 
         DatabaseDump {
