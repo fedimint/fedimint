@@ -51,8 +51,8 @@ use crate::query::{
     CurrentConsensus, DiscoverApiVersionSet, EventuallyConsistent, QueryStep, QueryStrategy,
     UnionResponsesSingle, VerifiableResponse,
 };
-use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction};
+use crate::{serde_as_encodable_hex, task};
 
 pub type MemberResult<T> = result::Result<T, MemberError>;
 
@@ -679,8 +679,10 @@ pub struct InviteCode {
 const CONFIG_DOWNLOAD_TOKEN_BYTES: usize = 12;
 
 /// Allows a client to download the config
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 pub struct ClientConfigDownloadToken(pub [u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
+
+serde_as_encodable_hex!(ClientConfigDownloadToken);
 
 /// We can represent client invite code as a bech32 string for compactness and
 /// error-checking

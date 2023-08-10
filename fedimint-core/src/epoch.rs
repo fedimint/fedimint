@@ -10,8 +10,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
-use crate::timing;
 use crate::transaction::Transaction;
+use crate::{serde_as_encodable_hex, timing};
 
 /// All the items that may be produced during a consensus epoch
 #[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
@@ -35,11 +35,15 @@ pub struct ConsensusUpgrade;
 
 pub type SerdeConsensusItem = SerdeModuleEncoding<ConsensusItem>;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SerdeSignatureShare(pub SignatureShare);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+serde_as_encodable_hex!(SerdeSignatureShare);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SerdeSignature(pub Signature);
+
+serde_as_encodable_hex!(SerdeSignature);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct SignedEpochOutcome {
