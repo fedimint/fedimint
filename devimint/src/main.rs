@@ -318,6 +318,20 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     fed.pegin(CLIENT_START_AMOUNT / 1000).await?;
 
+    // Check log contains deposit
+    let operation = cmd!(fed, "list-operations")
+        .out_json()
+        .await?
+        .get("operations")
+        .expect("Output didn't contain operation log")
+        .as_array()
+        .unwrap()
+        .first()
+        .unwrap()
+        .to_owned();
+    assert_eq!(operation["operation_kind"].as_str().unwrap(), "wallet");
+    assert_eq!(operation["outcome"].as_str().unwrap(), "Claimed");
+
     info!("Testing backup&restore");
     // TODO: make sure there are no in-progress operations involved
     // This test can't tolerate "spend", but not "reissue"d coins currently,

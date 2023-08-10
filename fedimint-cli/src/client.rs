@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail};
 use bitcoin::secp256k1;
@@ -25,6 +25,8 @@ use fedimint_wallet_client::{WalletClientExt, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use time::format_description::well_known::iso8601;
+use time::OffsetDateTime;
 use tracing::info;
 
 use crate::{metadata_from_clap_cli, LnInvoiceResponse};
@@ -118,6 +120,10 @@ pub enum ClientCmd {
     },
     /// Print the secret key of the client
     PrintSecret,
+    ListOperations {
+        #[clap(long, default_value = "10")]
+        limit: usize,
+    },
 }
 
 pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
@@ -347,6 +353,50 @@ pub async fn handle_ng_command(
 
             Ok(json!({
                 "secret": hex_secret,
+            }))
+        }
+        ClientCmd::ListOperations { limit } => {
+            #[derive(Serialize)]
+            struct OperationOutput {
+                id: OperationId,
+                creation_time: String,
+                operation_kind: String,
+                operation_meta: serde_json::Value,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                outcome: Option<serde_json::Value>,
+            }
+
+            const ISO8601_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
+                .set_formatted_components(iso8601::FormattedComponents::DateTime)
+                .encode();
+            let operations = client
+                .operation_log()
+                .list_operations(limit, None)
+                .await
+                .into_iter()
+                .map(|(k, v)| {
+                    let creation_time = OffsetDateTime::from_unix_timestamp(
+                        k.creation_time
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Couldn't convert time from SystemTime to timestamp")
+                            .as_secs() as i64,
+                    )
+                    .expect("Couldn't convert time from SystemTime to OffsetDateTime")
+                    .format(&iso8601::Iso8601::<ISO8601_CONFIG>)
+                    .expect("Couldn't format OffsetDateTime as ISO8601");
+
+                    OperationOutput {
+                        id: k.operation_id,
+                        creation_time,
+                        operation_kind: v.operation_type().to_owned(),
+                        operation_meta: v.meta(),
+                        outcome: v.outcome(),
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            Ok(json!({
+                "operations": operations,
             }))
         }
         ClientCmd::Withdraw { amount, address } => {
