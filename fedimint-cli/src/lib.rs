@@ -29,7 +29,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::query::EventuallyConsistent;
+use fedimint_core::query::CurrentConsensus;
 use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
@@ -631,7 +631,7 @@ impl FedimintCli {
                         .map_err_cli_general()?,
                     None => ws_api
                         .request_with_strategy(
-                            EventuallyConsistent::new(ws_api.peers().len()),
+                            CurrentConsensus::full_participation(ws_api.peers().len()),
                             method,
                             params,
                         )

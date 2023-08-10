@@ -7,7 +7,6 @@ use anyhow::format_err;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
-use tracing::debug;
 
 use crate::api::{self, ApiVersionSet, MemberError};
 use crate::module::{
@@ -42,14 +41,14 @@ impl<R> VerifiableResponse<R> {
     ///   `required` agree
     /// * `verifier`: Function that verifies the data with the public key
     pub fn new(
-        required: usize,
+        total_peers: usize,
         allow_consensus_fallback: bool,
         verifier: impl Fn(&R) -> bool + MaybeSend + MaybeSync + 'static,
     ) -> Self {
         Self {
             verifier: Box::new(verifier),
             allow_consensus_fallback,
-            current: CurrentConsensus::new(required),
+            current: CurrentConsensus::new(total_peers),
         }
     }
 }
@@ -80,16 +79,19 @@ pub struct UnionResponses<R> {
     responses: HashSet<PeerId>,
     existing_results: Vec<R>,
     current: CurrentConsensus<Vec<R>>,
-    required: usize,
+    threshold: usize,
 }
 
 impl<R> UnionResponses<R> {
-    pub fn new(required: usize) -> Self {
+    pub fn new(total_peers: usize) -> Self {
+        let max_evil = (total_peers - 1) / 3;
+        let threshold = total_peers - max_evil;
+
         Self {
             responses: HashSet::new(),
             existing_results: vec![],
-            current: CurrentConsensus::new(required),
-            required,
+            current: CurrentConsensus::new(total_peers),
+            threshold,
         }
     }
 }
@@ -105,7 +107,7 @@ impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
 
             self.responses.insert(peer);
 
-            if self.responses.len() >= self.required {
+            if self.responses.len() >= self.threshold {
                 QueryStep::Success(mem::take(&mut self.existing_results))
             } else {
                 QueryStep::Continue
@@ -125,16 +127,19 @@ pub struct UnionResponsesSingle<R> {
     responses: HashSet<PeerId>,
     existing_results: Vec<R>,
     current: CurrentConsensus<Vec<R>>,
-    required: usize,
+    threshold: usize,
 }
 
 impl<R> UnionResponsesSingle<R> {
-    pub fn new(required: usize) -> Self {
+    pub fn new(total_peers: usize) -> Self {
+        let max_evil = (total_peers - 1) / 3;
+        let threshold = total_peers - max_evil;
+
         Self {
             responses: HashSet::new(),
             existing_results: vec![],
-            current: CurrentConsensus::new(required),
-            required,
+            current: CurrentConsensus::new(total_peers),
+            threshold,
         }
     }
 }
@@ -149,7 +154,7 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R>
 
                 self.responses.insert(peer);
 
-                if self.responses.len() >= self.required {
+                if self.responses.len() >= self.threshold {
                     QueryStep::Success(mem::take(&mut self.existing_results))
                 } else {
                     QueryStep::Continue
@@ -163,59 +168,37 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R>
     }
 }
 
-/// Returns when `required` responses are equal, retrying after every `required`
-/// responses
-// FIXME: should be replaced by queries for specific epochs in case we cannot
-// get enough responses FIXME: for any single epoch
-pub struct EventuallyConsistent<R> {
-    responses: BTreeSet<PeerId>,
-    current: CurrentConsensus<R>,
-    required: usize,
-}
-
-impl<R> EventuallyConsistent<R> {
-    pub fn new(required: usize) -> Self {
-        Self {
-            responses: BTreeSet::new(),
-            current: CurrentConsensus::new(required),
-            required,
-        }
-    }
-}
-
-impl<R: Eq + Clone + Debug> QueryStrategy<R> for EventuallyConsistent<R> {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
-        self.responses.insert(peer);
-
-        match self.current.process(peer, result) {
-            QueryStep::Continue if self.responses.len() >= self.required => {
-                let result = QueryStep::RetryMembers(self.responses.clone());
-                self.responses.clear();
-                result
-            }
-            result => result,
-        }
-    }
-}
-
 /// Returns when `required` responses are equal
 pub struct CurrentConsensus<R> {
-    /// Previously received responses/results
-    ///
-    /// Since we don't expect a lot of different responses,
-    /// it's easier to store them in `Vec` and do a linear search
-    /// than required `R: Ord` or `R: Hash`.
-    pub existing_results: Vec<(R, HashSet<PeerId>)>,
-    pub errors: BTreeMap<PeerId, MemberError>,
-    required: usize,
+    /// Previously received responses/errors
+    responses: BTreeMap<PeerId, R>,
+    errors: BTreeMap<PeerId, MemberError>,
+    responded_peers: BTreeSet<PeerId>,
+    threshold: usize,
+    max_evil: usize,
 }
 
 impl<R> CurrentConsensus<R> {
-    pub fn new(required: usize) -> Self {
+    pub fn new(total_peers: usize) -> Self {
+        let max_evil = (total_peers - 1) / 3;
+        let threshold = total_peers - max_evil;
+
         Self {
-            existing_results: vec![],
+            responses: BTreeMap::new(),
             errors: BTreeMap::new(),
-            required,
+            responded_peers: BTreeSet::new(),
+            threshold,
+            max_evil,
+        }
+    }
+
+    pub fn full_participation(total_peers: usize) -> Self {
+        Self {
+            responses: BTreeMap::new(),
+            errors: BTreeMap::new(),
+            responded_peers: BTreeSet::new(),
+            threshold: total_peers,
+            max_evil: 0,
         }
     }
 }
@@ -223,40 +206,39 @@ impl<R> CurrentConsensus<R> {
 impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
     fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
         match result {
-            Ok(result) => {
-                if let Some((prev_result, peers)) = self
-                    .existing_results
-                    .iter_mut()
-                    .find(|(prev_result, _)| prev_result == &result)
-                {
-                    if peers.contains(&peer) {
-                        debug!(prev = ?prev_result, new = ?result, peer = %peer, "Ignoring duplicate response from peer");
-                    } else {
-                        peers.insert(peer);
-                    }
-                } else {
-                    self.existing_results.push((result, HashSet::from([peer])));
-                }
+            Ok(response) => {
+                self.responses.insert(peer, response);
+                self.responded_peers.insert(peer);
             }
             Err(error) => {
                 self.errors.insert(peer, error);
+
+                if self.errors.len() > self.max_evil {
+                    return QueryStep::Failure {
+                        general: None,
+                        members: mem::take(&mut self.errors),
+                    };
+                }
             }
         }
 
-        for (result, peers) in &self.existing_results {
-            if peers.len() >= self.required {
-                return QueryStep::Success(result.clone());
+        if let Some(response) = self
+            .responses
+            .values()
+            .max_by_key(|response| self.responses.values().filter(|r| r == response).count())
+        {
+            let count = self.responses.values().filter(|r| r == &response).count();
+
+            if count >= self.threshold {
+                return QueryStep::Success(response.clone());
             }
         }
 
-        if self.errors.len() >= self.required {
-            return QueryStep::Failure {
-                general: None,
-                members: mem::take(&mut self.errors),
-            };
+        if self.responded_peers.len() >= self.threshold {
+            QueryStep::RetryMembers(mem::take(&mut self.responded_peers))
+        } else {
+            QueryStep::Continue
         }
-
-        QueryStep::Continue
     }
 }
 

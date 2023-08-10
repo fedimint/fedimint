@@ -48,8 +48,8 @@ use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::outcome::TransactionStatus;
 use crate::query::{
-    CurrentConsensus, DiscoverApiVersionSet, EventuallyConsistent, QueryStep, QueryStrategy,
-    UnionResponsesSingle, VerifiableResponse,
+    CurrentConsensus, DiscoverApiVersionSet, QueryStep, QueryStrategy, UnionResponsesSingle,
+    VerifiableResponse,
 };
 use crate::transaction::{SerdeTransaction, Transaction};
 use crate::{serde_as_encodable_hex, task};
@@ -311,23 +311,7 @@ pub trait FederationApiExt: IFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().one_honest()),
-            method,
-            params,
-        )
-        .await
-    }
-
-    async fn request_eventually_consistent<Ret>(
-        &self,
-        method: String,
-        params: ApiRequestErased,
-    ) -> FederationResult<Ret>
-    where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
-    {
-        self.request_with_strategy(
-            EventuallyConsistent::new(self.all_members().one_honest()),
+            CurrentConsensus::new(self.all_members().total()),
             method,
             params,
         )
@@ -520,7 +504,7 @@ where
         let qs = ValidHistoryWrapper {
             decoders,
             strategy: VerifiableResponse::new(
-                self.all_members().one_honest(),
+                self.all_members().total(),
                 true,
                 move |epoch: &SignedEpochOutcome| epoch.verify_sig(&epoch_pk).is_ok(),
             ),
@@ -535,11 +519,8 @@ where
     }
 
     async fn fetch_epoch_count(&self) -> FederationResult<u64> {
-        self.request_eventually_consistent(
-            "fetch_epoch_count".to_owned(),
-            ApiRequestErased::default(),
-        )
-        .await
+        self.request_current_consensus("fetch_epoch_count".to_owned(), ApiRequestErased::default())
+            .await
     }
 
     async fn fetch_output_outcome<R>(
@@ -602,7 +583,7 @@ where
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().threshold()),
+            CurrentConsensus::new(self.all_members().total()),
             "backup".to_owned(),
             ApiRequestErased::new(request),
         )
@@ -616,7 +597,7 @@ where
         Ok(self
             .request_with_strategy(
                 UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(
-                    self.all_members().threshold(),
+                    self.all_members().total(),
                 ),
                 "recover".to_owned(),
                 ApiRequestErased::new(id),
