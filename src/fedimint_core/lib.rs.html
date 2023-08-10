@@ -398,6 +398,7 @@
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_core;
 
@@ -435,7 +436,8 @@
 <span class="kw">pub mod </span>epoch;
 <span class="kw">pub mod </span>fmt_utils;
 <span class="kw">pub mod </span>hex;
-<span class="kw">pub mod </span>macros;
+<span class="attr">#[macro_use]
+</span><span class="kw">pub mod </span>macros;
 <span class="kw">pub mod </span>module;
 <span class="kw">pub mod </span>net;
 <span class="kw">pub mod </span>outcome;

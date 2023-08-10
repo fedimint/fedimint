@@ -2500,6 +2500,10 @@
 <a href="#2500" id="2500">2500</a>
 <a href="#2501" id="2501">2501</a>
 <a href="#2502" id="2502">2502</a>
+<a href="#2503" id="2503">2503</a>
+<a href="#2504" id="2504">2504</a>
+<a href="#2505" id="2505">2505</a>
+<a href="#2506" id="2506">2506</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3220,6 +3224,10 @@
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
         }
     }
+
+    <span class="kw">pub async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+        <span class="self">self</span>.isolated_tx.raw_find_by_prefix(key_prefix).<span class="kw">await
+    </span>}
 
     <span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, fields(key = <span class="question-mark">?</span>key_prefix))]
     </span><span class="kw">pub async fn </span>find_by_prefix&lt;KP&gt;(

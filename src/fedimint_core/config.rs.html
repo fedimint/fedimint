@@ -837,6 +837,36 @@
 <a href="#837" id="837">837</a>
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -855,6 +885,7 @@
 <span class="kw">use </span>fedimint_core::epoch::SerdeSignature;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
+<span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::ser::SerializeMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -862,6 +893,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
+<span class="kw">use </span>tracing::warn;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
@@ -1293,19 +1325,47 @@
 <span class="kw">where
     </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
 {
-    <span class="kw">pub fn </span>decoders&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="attr">#[deprecated(
+        note = <span class="string">&quot;You probably want `available_decoders` to support missing module kinds. If you really want a strict behavior, use `decoders_strict`&quot;
+    </span>)]
+    </span><span class="kw">pub fn </span>decoders&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleKind)&gt;,
+        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleKind)&gt;,
     ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
-        <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
+        <span class="self">self</span>.decoders_strict(modules)
+    }
+
+    <span class="doccomment">/// Get decoders for `modules` and fail if any is unsupported
+    </span><span class="kw">pub fn </span>decoders_strict&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleKind)&gt;,
+    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>decoders = BTreeMap::new();
+        <span class="kw">for </span>(id, kind) <span class="kw">in </span>modules {
             <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.<span class="number">0</span>.get(kind) <span class="kw">else </span>{
                 <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {id}, kind: {kind}&quot;</span>)
             };
 
-            modules.insert(id, (kind.clone(), init.as_ref().decoder()));
+            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
-        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(modules))
+        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(decoders))
+    }
+
+    <span class="doccomment">/// Get decoders for `modules` and skip unsupported ones
+    </span><span class="kw">pub fn </span>available_decoders&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleKind)&gt;,
+    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>decoders = BTreeMap::new();
+        <span class="kw">for </span>(id, kind) <span class="kw">in </span>modules {
+            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.<span class="number">0</span>.get(kind) <span class="kw">else </span>{
+                <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">&quot;Unsupported module id: {id}, kind: {kind}&quot;</span>);
+                <span class="kw">continue</span>;
+            };
+
+            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
+        }
+        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(decoders))
     }
 }
 

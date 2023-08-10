@@ -858,8 +858,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::query::EventuallyConsistent;
-<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>};
-<span class="kw">use </span>fedimint_core::{PeerId, TieredMulti};
+<span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientGen, SpendableNote};
@@ -1141,6 +1140,7 @@
                 })
             },
         ))
+        .with_fallback()
     }
 
     <span class="kw">async fn </span>build_client_ng(

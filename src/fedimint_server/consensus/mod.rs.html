@@ -572,6 +572,10 @@
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -788,6 +792,10 @@
         consensus_item: ConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="comment">// We rely on decoding rejecting any unknown module instance ids to avoid
+        // peer-triggered panic here
+        </span><span class="self">self</span>.decoders().assert_reject_mode();
+
         <span class="kw">match </span>consensus_item {
             ConsensusItem::Module(module_item) =&gt; {
                 <span class="kw">let </span>moduletx = <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_item.module_instance_id());

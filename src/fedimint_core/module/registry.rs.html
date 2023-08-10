@@ -103,6 +103,72 @@
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::anyhow;
@@ -112,54 +178,92 @@
 <span class="kw">use </span><span class="kw">crate</span>::server::DynServerModule;
 
 <span class="doccomment">/// Module Registry hold module-specific data `M` by the `ModuleInstanceId`
-</span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>ModuleRegistry&lt;M&gt;(BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;);
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>ModuleRegistry&lt;M, State = ()&gt; {
+    inner: BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;,
+    <span class="comment">// It is sometimes useful for registries to have some state to modify
+    // their behavior.
+    </span>state: State,
+}
 
-<span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
+<span class="kw">impl</span>&lt;M, State&gt; Clone <span class="kw">for </span>ModuleRegistry&lt;M, State&gt;
+<span class="kw">where
+    </span>State: Clone,
+    M: Clone,
+{
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            inner: <span class="self">self</span>.inner.clone(),
+            state: <span class="self">self</span>.state.clone(),
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;M, State&gt; Default <span class="kw">for </span>ModuleRegistry&lt;M, State&gt;
+<span class="kw">where
+    </span>State: Default,
+{
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        ModuleRegistry(BTreeMap::new())
+        ModuleRegistry {
+            inner: BTreeMap::new(),
+            state: Default::default(),
+        }
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; From&lt;BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
+<span class="kw">impl</span>&lt;M, State&gt; From&lt;BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;&gt; <span class="kw">for </span>ModuleRegistry&lt;M, State&gt;
+<span class="kw">where
+    </span>State: Default,
+{
     <span class="kw">fn </span>from(value: BTreeMap&lt;ModuleInstanceId, (ModuleKind, M)&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(value)
+        <span class="self">Self </span>{
+            inner: value,
+            state: Default::default(),
+        }
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; FromIterator&lt;(ModuleInstanceId, ModuleKind, M)&gt; <span class="kw">for </span>ModuleRegistry&lt;M&gt; {
+<span class="kw">impl</span>&lt;M, State&gt; FromIterator&lt;(ModuleInstanceId, ModuleKind, M)&gt; <span class="kw">for </span>ModuleRegistry&lt;M, State&gt;
+<span class="kw">where
+    </span>State: Default,
+{
     <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (ModuleInstanceId, ModuleKind, M)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(iter)
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; ModuleRegistry&lt;M&gt; {
+<span class="kw">impl</span>&lt;M, State&gt; ModuleRegistry&lt;M, State&gt; {
     <span class="doccomment">/// Create [`Self`] from an iterator of pairs
-    </span><span class="kw">pub fn </span>new(iter: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleInstanceId, ModuleKind, M)&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(
-            iter.into_iter()
+    </span><span class="kw">pub fn </span>new(iter: <span class="kw">impl </span>IntoIterator&lt;Item = (ModuleInstanceId, ModuleKind, M)&gt;) -&gt; <span class="self">Self
+    </span><span class="kw">where
+        </span>State: Default,
+    {
+        <span class="self">Self </span>{
+            inner: iter
+                .into_iter()
                 .map(|(id, kind, module)| (id, (kind, module)))
                 .collect(),
-        )
+            state: Default::default(),
+        }
     }
 
     <span class="doccomment">/// Return an iterator over all module data
     </span><span class="kw">pub fn </span>iter_modules(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.iter().map(|(id, (kind, m))| (<span class="kw-2">*</span>id, kind, m))
+        <span class="self">self</span>.inner.iter().map(|(id, (kind, m))| (<span class="kw-2">*</span>id, kind, m))
     }
 
     <span class="doccomment">/// Get module data by instance id
     </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>M&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>id).map(|m| <span class="kw-2">&amp;</span>m.<span class="number">1</span>)
+        <span class="self">self</span>.inner.get(<span class="kw-2">&amp;</span>id).map(|m| <span class="kw-2">&amp;</span>m.<span class="number">1</span>)
     }
 
     <span class="doccomment">/// Get module data by instance id, including [`ModuleKind`]
     </span><span class="kw">pub fn </span>get_with_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(ModuleKind, M)&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>id)
+        <span class="self">self</span>.inner.get(<span class="kw-2">&amp;</span>id)
     }
 }
 
-<span class="kw">impl</span>&lt;M: std::fmt::Debug&gt; ModuleRegistry&lt;M&gt; {
+<span class="kw">impl</span>&lt;M: std::fmt::Debug, State&gt; ModuleRegistry&lt;M, State&gt; {
     <span class="doccomment">/// Return the module data belonging to the module identified by the
     /// supplied `module_id`
     ///
@@ -167,13 +271,13 @@
     /// If the module isn&#39;t in the registry
     </span><span class="kw">pub fn </span>get_expect(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span>M {
         <span class="kw-2">&amp;</span><span class="self">self
-            </span>.<span class="number">0
-            </span>.get(<span class="kw-2">&amp;</span>id)
+            </span>.inner
+            .get(<span class="kw-2">&amp;</span>id)
             .ok_or_else(|| {
                 <span class="macro">anyhow!</span>(
                     <span class="string">&quot;Instance ID not found: got {}, expected one of {:?}&quot;</span>,
                     id,
-                    <span class="self">self</span>.<span class="number">0</span>.keys().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                    <span class="self">self</span>.inner.keys().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                 )
             })
             .expect(<span class="string">&quot;Only existing instance should be fetched&quot;</span>)
@@ -184,7 +288,7 @@
     </span><span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ModuleInstanceId, kind: ModuleKind, module: M) {
         <span class="comment">// FIXME: return result
         </span><span class="macro">assert!</span>(
-            <span class="self">self</span>.<span class="number">0</span>.insert(id, (kind, module)).is_none(),
+            <span class="self">self</span>.inner.insert(id, (kind, module)).is_none(),
             <span class="string">&quot;Module was already registered!&quot;
         </span>)
     }
@@ -198,15 +302,43 @@
     </span><span class="kw">pub fn </span>decoder_registry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="comment">// TODO: cache decoders
         </span>ModuleDecoderRegistry::from_iter(
-            <span class="self">self</span>.<span class="number">0
-                </span>.iter()
+            <span class="self">self</span>.inner
+                .iter()
                 .map(|(<span class="kw-2">&amp;</span>id, (kind, module))| (id, kind.clone(), module.decoder())),
         )
     }
 }
 
+<span class="attr">#[derive(Default, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+</span><span class="kw">pub enum </span>DecodingMode {
+    <span class="doccomment">/// Reject unknown module instance ids
+    </span><span class="attr">#[default]
+    </span>Reject,
+    <span class="doccomment">/// Fallback to decoding unknown module instance ids as
+    /// [`crate::core::DynUnknown`]
+    </span>Fallback,
+}
+
 <span class="doccomment">/// Collection of decoders belonging to modules, typically obtained from a
 /// `ModuleRegistry`
-</span><span class="kw">pub type </span>ModuleDecoderRegistry = ModuleRegistry&lt;Decoder&gt;;
+</span><span class="kw">pub type </span>ModuleDecoderRegistry = ModuleRegistry&lt;Decoder, DecodingMode&gt;;
+
+<span class="kw">impl </span>ModuleDecoderRegistry {
+    <span class="kw">pub fn </span>with_fallback(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            state: DecodingMode::Fallback,
+            ..<span class="self">self
+        </span>}
+    }
+
+    <span class="kw">pub fn </span>decoding_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DecodingMode {
+        <span class="self">self</span>.state
+    }
+
+    <span class="doccomment">/// Panic if the [`Self::decoding_mode`] is not `Reject`
+    </span><span class="kw">pub fn </span>assert_reject_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">assert_eq!</span>(<span class="self">self</span>.state, DecodingMode::Reject);
+    }
+}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

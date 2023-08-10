@@ -432,6 +432,33 @@
 <a href="#432" id="432">432</a>
 <a href="#433" id="433">433</a>
 <a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -445,17 +472,13 @@
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::SerdeSignatureShare;
-<span class="kw">use </span>fedimint_core::module::DynServerModuleGen;
 <span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
-<span class="kw">use </span>fedimint_ln_server::LightningGen;
-<span class="kw">use </span>fedimint_mint_server::MintGen;
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
 <span class="kw">use </span>fedimint_server::db <span class="kw">as </span>ConsensusRange;
-<span class="kw">use </span>fedimint_wallet_server::WalletGen;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>strum::IntoEnumIterator;
 
@@ -487,6 +510,7 @@
         cfg_dir: PathBuf,
         data_dir: String,
         password: String,
+        module_gens: ServerModuleGenRegistry,
         modules: Vec&lt;String&gt;,
         prefixes: Vec&lt;String&gt;,
     ) -&gt; DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt; {
@@ -516,14 +540,11 @@
             };
         }
 
-        <span class="kw">let </span>module_inits = ServerModuleGenRegistry::from(<span class="macro">vec!</span>[
-            DynServerModuleGen::from(WalletGen),
-            DynServerModuleGen::from(MintGen),
-            DynServerModuleGen::from(LightningGen),
-        ]);
-
         <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).unwrap();
-        <span class="kw">let </span>decoders = module_inits.decoders(cfg.iter_module_instances()).unwrap();
+        <span class="kw">let </span>decoders = module_gens
+            .available_decoders(cfg.iter_module_instances())
+            .unwrap()
+            .with_fallback();
         <span class="kw">let </span>dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
 
         DatabaseDump {
@@ -532,7 +553,7 @@
             modules,
             prefixes,
             cfg: <span class="prelude-val">Some</span>(cfg),
-            module_inits,
+            module_inits: module_gens,
         }
     }
 }
@@ -546,7 +567,7 @@
 
     <span class="doccomment">/// Iterates through all the specified ranges in the database and retrieves
     /// the data for each range. Prints serialized contents at the end.
-    </span><span class="kw">pub async fn </span>dump_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    </span><span class="kw">pub async fn </span>dump_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.modules.is_empty() || <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;consensus&quot;</span>.to_string()) {
             <span class="self">self</span>.retrieve_consensus_data().<span class="kw">await</span>;
         }
@@ -556,30 +577,61 @@
             <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
                 <span class="kw">let </span>kind = <span class="kw-2">&amp;</span>module_cfg.kind;
 
-                <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.module_inits.get(kind) <span class="kw">else </span>{
-                    <span class="macro">panic!</span>(<span class="string">&quot;Detected configuration for unsupported module id: {module_id}, kind: {kind}&quot;</span>)
-                };
-
                 <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; !<span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span>kind.to_string()) {
                     <span class="kw">continue</span>;
                 }
-
                 <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = <span class="self">self</span>.read_only.with_module_prefix(<span class="kw-2">*</span>module_id);
-                <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = init
-                    .dump_database(<span class="kw-2">&amp;mut </span>isolated_dbtx, <span class="self">self</span>.prefixes.clone())
-                    .<span class="kw">await
-                    </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
 
-                <span class="kw">let </span>db_version = isolated_dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span>;
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(db_version) = db_version {
-                    module_serialized.insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(db_version));
-                } <span class="kw">else </span>{
-                    module_serialized
-                        .insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(<span class="string">&quot;Not Specified&quot;</span>.to_string()));
+                <span class="kw">match </span><span class="self">self</span>.module_inits.get(kind) {
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">tracing::warn!</span>(module_id, %kind, <span class="string">&quot;Detected configuration for unsupported module&quot;</span>);
+
+                        <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = BTreeMap::new();
+                        <span class="kw">let </span>filtered_prefixes = (<span class="number">0u8</span>..=<span class="number">255</span>).filter(|f| {
+                            <span class="self">self</span>.prefixes.is_empty()
+                                || <span class="self">self</span>.prefixes.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+                        });
+
+                        <span class="kw">let </span>isolated_dbtx = <span class="kw-2">&amp;mut </span>isolated_dbtx;
+
+                        <span class="kw">for </span>prefix <span class="kw">in </span>filtered_prefixes {
+                            <span class="kw">let </span>db_items = isolated_dbtx
+                                .raw_find_by_prefix(<span class="kw-2">&amp;</span>[prefix])
+                                .<span class="kw">await</span><span class="question-mark">?
+                                </span>.map(|(k, v)| {
+                                    (
+                                        k.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>),
+                                        Box::new(v.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>)),
+                                    )
+                                })
+                                .collect::&lt;BTreeMap&lt;String, Box&lt;<span class="kw">_</span>&gt;&gt;&gt;()
+                                .<span class="kw">await</span>;
+
+                            module_serialized.extend(db_items);
+                        }
+                        <span class="self">self</span>.serialized
+                            .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
+                    }
+                    <span class="prelude-val">Some</span>(init) =&gt; {
+                        <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = init
+                            .dump_database(<span class="kw-2">&amp;mut </span>isolated_dbtx, <span class="self">self</span>.prefixes.clone())
+                            .<span class="kw">await
+                            </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
+
+                        <span class="kw">let </span>db_version = isolated_dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span>;
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(db_version) = db_version {
+                            module_serialized.insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(db_version));
+                        } <span class="kw">else </span>{
+                            module_serialized.insert(
+                                <span class="string">&quot;Version&quot;</span>.to_string(),
+                                Box::new(<span class="string">&quot;Not Specified&quot;</span>.to_string()),
+                            );
+                        }
+
+                        <span class="self">self</span>.serialized
+                            .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
+                    }
                 }
-
-                <span class="self">self</span>.serialized
-                    .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
             }
         }
 
@@ -593,6 +645,8 @@
         }
 
         <span class="self">self</span>.print_database();
+
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Iterates through each of the prefixes within the consensus range and

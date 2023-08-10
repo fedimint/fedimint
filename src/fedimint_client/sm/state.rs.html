@@ -450,7 +450,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
-<span class="kw">use </span>fedimint_core::{dyn_newtype_define_with_instance_id, maybe_add_send, maybe_add_send_sync};
+<span class="kw">use </span>fedimint_core::{maybe_add_send, maybe_add_send_sync, module_plugin_dyn_newtype_define};
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId};
 
@@ -506,7 +506,7 @@
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any));
 }
 
-<span class="macro">dyn_newtype_define_with_instance_id! </span>{
+<span class="macro">module_plugin_dyn_newtype_define! </span>{
     <span class="doccomment">/// A shared context for a module client state machine
     </span><span class="attr">#[derive(Clone)]
     </span><span class="kw">pub </span>DynContext(Arc&lt;IContext&gt;)
