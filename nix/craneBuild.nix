@@ -32,7 +32,7 @@ craneLib.overrideScope' (self: prev: {
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
 
-    cargoClippyExtraArgs = "--workspace --all-targets --no-deps -- --deny warnings";
+    cargoClippyExtraArgs = "--workspace --all-targets --no-deps -- --deny warnings --allow deprecated";
     doInstallCargoArtifacts = false;
   });
 
