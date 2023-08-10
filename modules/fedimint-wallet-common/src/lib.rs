@@ -72,6 +72,7 @@ pub struct PegOutSignatureItem {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct SpendableUTXO {
+    #[serde(with = "::fedimint_core::encoding::as_hex")]
     pub tweak: [u8; 32],
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
