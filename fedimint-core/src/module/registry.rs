@@ -7,54 +7,92 @@ use crate::core::{Decoder, ModuleKind};
 use crate::server::DynServerModule;
 
 /// Module Registry hold module-specific data `M` by the `ModuleInstanceId`
-#[derive(Debug, Clone)]
-pub struct ModuleRegistry<M>(BTreeMap<ModuleInstanceId, (ModuleKind, M)>);
+#[derive(Debug)]
+pub struct ModuleRegistry<M, State = ()> {
+    inner: BTreeMap<ModuleInstanceId, (ModuleKind, M)>,
+    // It is sometimes useful for registries to have some state to modify
+    // their behavior.
+    state: State,
+}
 
-impl<M> Default for ModuleRegistry<M> {
+impl<M, State> Clone for ModuleRegistry<M, State>
+where
+    State: Clone,
+    M: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            state: self.state.clone(),
+        }
+    }
+}
+
+impl<M, State> Default for ModuleRegistry<M, State>
+where
+    State: Default,
+{
     fn default() -> Self {
-        ModuleRegistry(BTreeMap::new())
+        ModuleRegistry {
+            inner: BTreeMap::new(),
+            state: Default::default(),
+        }
     }
 }
 
-impl<M> From<BTreeMap<ModuleInstanceId, (ModuleKind, M)>> for ModuleRegistry<M> {
+impl<M, State> From<BTreeMap<ModuleInstanceId, (ModuleKind, M)>> for ModuleRegistry<M, State>
+where
+    State: Default,
+{
     fn from(value: BTreeMap<ModuleInstanceId, (ModuleKind, M)>) -> Self {
-        Self(value)
+        Self {
+            inner: value,
+            state: Default::default(),
+        }
     }
 }
 
-impl<M> FromIterator<(ModuleInstanceId, ModuleKind, M)> for ModuleRegistry<M> {
+impl<M, State> FromIterator<(ModuleInstanceId, ModuleKind, M)> for ModuleRegistry<M, State>
+where
+    State: Default,
+{
     fn from_iter<T: IntoIterator<Item = (ModuleInstanceId, ModuleKind, M)>>(iter: T) -> Self {
         Self::new(iter)
     }
 }
 
-impl<M> ModuleRegistry<M> {
+impl<M, State> ModuleRegistry<M, State> {
     /// Create [`Self`] from an iterator of pairs
-    pub fn new(iter: impl IntoIterator<Item = (ModuleInstanceId, ModuleKind, M)>) -> Self {
-        Self(
-            iter.into_iter()
+    pub fn new(iter: impl IntoIterator<Item = (ModuleInstanceId, ModuleKind, M)>) -> Self
+    where
+        State: Default,
+    {
+        Self {
+            inner: iter
+                .into_iter()
                 .map(|(id, kind, module)| (id, (kind, module)))
                 .collect(),
-        )
+            state: Default::default(),
+        }
     }
 
     /// Return an iterator over all module data
     pub fn iter_modules(&self) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind, &M)> {
-        self.0.iter().map(|(id, (kind, m))| (*id, kind, m))
+        self.inner.iter().map(|(id, (kind, m))| (*id, kind, m))
     }
 
     /// Get module data by instance id
     pub fn get(&self, id: ModuleInstanceId) -> Option<&M> {
-        self.0.get(&id).map(|m| &m.1)
+        self.inner.get(&id).map(|m| &m.1)
     }
 
     /// Get module data by instance id, including [`ModuleKind`]
     pub fn get_with_kind(&self, id: ModuleInstanceId) -> Option<&(ModuleKind, M)> {
-        self.0.get(&id)
+        self.inner.get(&id)
     }
 }
 
-impl<M: std::fmt::Debug> ModuleRegistry<M> {
+impl<M: std::fmt::Debug, State> ModuleRegistry<M, State> {
     /// Return the module data belonging to the module identified by the
     /// supplied `module_id`
     ///
@@ -62,13 +100,13 @@ impl<M: std::fmt::Debug> ModuleRegistry<M> {
     /// If the module isn't in the registry
     pub fn get_expect(&self, id: ModuleInstanceId) -> &M {
         &self
-            .0
+            .inner
             .get(&id)
             .ok_or_else(|| {
                 anyhow!(
                     "Instance ID not found: got {}, expected one of {:?}",
                     id,
-                    self.0.keys().collect::<Vec<_>>()
+                    self.inner.keys().collect::<Vec<_>>()
                 )
             })
             .expect("Only existing instance should be fetched")
@@ -79,7 +117,7 @@ impl<M: std::fmt::Debug> ModuleRegistry<M> {
     pub fn register_module(&mut self, id: ModuleInstanceId, kind: ModuleKind, module: M) {
         // FIXME: return result
         assert!(
-            self.0.insert(id, (kind, module)).is_none(),
+            self.inner.insert(id, (kind, module)).is_none(),
             "Module was already registered!"
         )
     }
@@ -93,13 +131,41 @@ impl ServerModuleRegistry {
     pub fn decoder_registry(&self) -> ModuleDecoderRegistry {
         // TODO: cache decoders
         ModuleDecoderRegistry::from_iter(
-            self.0
+            self.inner
                 .iter()
                 .map(|(&id, (kind, module))| (id, kind.clone(), module.decoder())),
         )
     }
 }
 
+#[derive(Default, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum DecodingMode {
+    /// Reject unknown module instance ids
+    #[default]
+    Reject,
+    /// Fallback to decoding unknown module instance ids as
+    /// [`crate::core::DynUnknown`]
+    Fallback,
+}
+
 /// Collection of decoders belonging to modules, typically obtained from a
 /// `ModuleRegistry`
-pub type ModuleDecoderRegistry = ModuleRegistry<Decoder>;
+pub type ModuleDecoderRegistry = ModuleRegistry<Decoder, DecodingMode>;
+
+impl ModuleDecoderRegistry {
+    pub fn with_fallback(self) -> Self {
+        Self {
+            state: DecodingMode::Fallback,
+            ..self
+        }
+    }
+
+    pub fn decoding_mode(&self) -> DecodingMode {
+        self.state
+    }
+
+    /// Panic if the [`Self::decoding_mode`] is not `Reject`
+    pub fn assert_reject_mode(&self) {
+        assert_eq!(self.state, DecodingMode::Reject);
+    }
+}
