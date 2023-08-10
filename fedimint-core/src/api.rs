@@ -967,9 +967,9 @@ impl<C: JsonRpcClient> WsFederationApi<C> {}
 
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ConsensusStatus {
+pub struct FederationStatus {
     pub session_count: u64,
-    pub status_by_peer: HashMap<PeerId, PeerConsensusStatus>,
+    pub status_by_peer: HashMap<PeerId, PeerStatus>,
     pub peers_online: u64,
     pub peers_offline: u64,
     /// This should always be 0 if everything is okay, so a monitoring tool
@@ -978,7 +978,7 @@ pub struct ConsensusStatus {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PeerConsensusStatus {
+pub struct PeerStatus {
     pub last_contribution: Option<u64>,
     pub connection_status: PeerConnectionStatus,
     /// Indicates that this peer needs attention from the operator since
@@ -1018,7 +1018,7 @@ pub enum ServerStatus {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StatusResponse {
     pub server: ServerStatus,
-    pub consensus: Option<ConsensusStatus>,
+    pub federation: Option<FederationStatus>,
 }
 
 #[cfg(test)]
