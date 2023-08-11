@@ -308,14 +308,19 @@ impl GatewayLightning for ClnRpcService {
 
             let channel = match channels_response {
                 cln_rpc::Response::ListChannels(channels) => {
-                    let Some(channel) = channels.channels.into_iter().find(|chan| chan.destination == node_info.0) else {
+                    let Some(channel) = channels
+                        .channels
+                        .into_iter()
+                        .find(|chan| chan.destination == node_info.0)
+                    else {
                         warn!(?scid, "Channel not found in graph");
                         continue;
                     };
                     Ok(channel)
                 }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
-            }.map_err(|err| tonic::Status::internal(err.to_string()))?;
+            }
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
             let route_hint_hop = RouteHintHop {
                 src_node_id: peer_id.serialize().to_vec(),

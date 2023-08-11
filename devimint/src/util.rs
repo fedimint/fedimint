@@ -51,7 +51,9 @@ pub struct ProcessHandleInner {
 
 impl Drop for ProcessHandleInner {
     fn drop(&mut self) {
-        let Some(child) = &mut self.child else { return; };
+        let Some(child) = &mut self.child else {
+            return;
+        };
         info!(LOG_DEVIMINT, "sending SIGKILL to {}", self.name);
         send_sigkill(child);
     }

@@ -474,7 +474,9 @@ where
         let mut decoders = BTreeMap::new();
         for (id, kind) in modules {
             let Some(init) = self.0.get(kind) else {
-                anyhow::bail!("Detected configuration for unsupported module id: {id}, kind: {kind}")
+                anyhow::bail!(
+                    "Detected configuration for unsupported module id: {id}, kind: {kind}"
+                )
             };
 
             decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
