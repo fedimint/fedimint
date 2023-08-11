@@ -61,7 +61,7 @@ where
 
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
         self.request_with_strategy(
-            UnionResponses::new(self.all_members().threshold()),
+            UnionResponses::new(self.all_members().total()),
             "list_gateways".to_string(),
             ApiRequestErased::default(),
         )
@@ -70,7 +70,7 @@ where
 
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().threshold()),
+            CurrentConsensus::new(self.all_members().total()),
             "register_gateway".to_string(),
             ApiRequestErased::new(gateway),
         )
