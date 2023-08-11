@@ -1,20 +1,18 @@
 use anyhow::Result;
 use fedimint_client::secret::PlainRootSecretStrategy;
-use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
+use fedimint_core::api::InviteCode;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
 use fedimint_wallet_client::WalletClientGen;
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::Client> {
-    let client = WsFederationApi::from_invite_code(&[invite_code.clone()]);
-    let cfg = client.download_client_config(invite_code).await?;
     let mut builder = fedimint_client::ClientBuilder::default();
     builder.with_module(LightningClientGen);
     builder.with_module(MintClientGen);
     builder.with_module(WalletClientGen::default());
     builder.with_primary_module(1);
-    builder.with_config(cfg);
+    builder.with_invite_code(invite_code.clone());
     builder.with_database(MemDatabase::default());
     builder.build_stopped::<PlainRootSecretStrategy>().await
 }

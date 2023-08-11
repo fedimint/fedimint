@@ -203,11 +203,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     fed.pegin_gateway(99_999, &gw_cln).await?;
 
-    let invite = fs::read_to_string(format!("{data_dir}/invite-code")).await?;
-    fs::remove_file(format!("{data_dir}/client.json")).await?;
-    cmd!(fed, "join-federation", invite.clone()).run().await?;
-
     let fed_id = fed.federation_id().await;
+    let invite = fed.invite_code()?;
     let invite_code = cmd!(fed, "dev", "decode-invite-code", invite.clone())
         .out_json()
         .await?;
@@ -667,6 +664,7 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     let data_dir = env::var("FM_DATA_DIR")?;
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed.fed.pegin(10_000).await?;
+    let invite_code = dev_fed.fed.invite_code()?;
     let output = cmd!(
         "fedimint-load-test-tool",
         "--archive-dir",
@@ -677,7 +675,9 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
         "--notes-per-user",
         "1",
         "--generate-invoice-with",
-        "cln-lightning-cli"
+        "cln-lightning-cli",
+        "--invite-code",
+        invite_code.clone()
     )
     .out_string()
     .await?;
