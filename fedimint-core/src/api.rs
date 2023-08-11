@@ -219,7 +219,6 @@ pub trait FederationApiExt: IFederationApi {
         }
 
         let mut member_delay_ms = BTreeMap::new();
-        let mut member_errors = BTreeMap::new();
 
         // Delegates the response handling to the `QueryStrategy` with an exponential
         // back-off with every new set of requests
@@ -243,10 +242,8 @@ pub trait FederationApiExt: IFederationApi {
                         "Taking strategy step to the response after member response"
                     );
                     match strategy_step {
-                        QueryStep::RetryMembers(peers) => {
+                        QueryStep::Retry(peers) => {
                             for retry_peer in peers {
-                                member_errors.remove(&retry_peer);
-
                                 let mut delay_ms =
                                     member_delay_ms.get(&retry_peer).copied().unwrap_or(10);
                                 delay_ms = cmp::min(max_delay_ms, delay_ms * 2);
@@ -274,29 +271,15 @@ pub trait FederationApiExt: IFederationApi {
                                 }));
                             }
                         }
-                        QueryStep::FailMembers(failed) => {
-                            for (failed_peer, error) in failed {
-                                member_errors.insert(failed_peer, error);
-                            }
-                        }
                         QueryStep::Continue => {}
                         QueryStep::Failure { general, members } => {
-                            for (failed_peer, error) in members {
-                                member_errors.insert(failed_peer, error);
-                            }
-                            return Err(FederationError {
-                                general,
-                                members: member_errors,
-                            });
+                            return Err(FederationError { general, members })
                         }
                         QueryStep::Success(response) => return Ok(response),
                     }
                 }
                 None => {
-                    return Err(FederationError {
-                        general: None,
-                        members: BTreeMap::new(),
-                    })
+                    panic!("Query strategy ran out of peers to query without returning a result");
                 }
             }
         }
@@ -490,8 +473,7 @@ where
                         .map_err(|e| MemberError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
                 });
                 match self.strategy.process(peer, response) {
-                    QueryStep::RetryMembers(r) => QueryStep::RetryMembers(r),
-                    QueryStep::FailMembers(failed) => QueryStep::FailMembers(failed),
+                    QueryStep::Retry(r) => QueryStep::Retry(r),
                     QueryStep::Continue => QueryStep::Continue,
                     QueryStep::Success(res) => QueryStep::Success(res),
                     QueryStep::Failure { general, members } => {

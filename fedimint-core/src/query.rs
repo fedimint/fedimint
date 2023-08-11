@@ -13,18 +13,6 @@ use crate::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 
-/// Returns a result from the first responding peer
-pub struct TrustAllPeers;
-
-impl<R> QueryStrategy<R> for TrustAllPeers {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
-        match result {
-            Ok(o) => QueryStep::Success(o),
-            Err(e) => QueryStep::FailMembers(BTreeMap::from([(peer, e)])),
-        }
-    }
-}
-
 /// Returns first response with a valid signature
 pub struct VerifiableResponse<R> {
     verifier: Box<maybe_add_send_sync!(dyn Fn(&R) -> bool)>,
@@ -235,7 +223,7 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
         }
 
         if self.responded_peers.len() >= self.threshold {
-            QueryStep::RetryMembers(mem::take(&mut self.responded_peers))
+            QueryStep::Retry(mem::take(&mut self.responded_peers))
         } else {
             QueryStep::Continue
         }
@@ -276,7 +264,7 @@ impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
                 QueryStep::Continue
             }
             // we rely on retries and timeouts to detect a deadline passing
-            Err(_e) => QueryStep::RetryMembers(BTreeSet::from([peer_id])),
+            Err(_e) => QueryStep::Retry(BTreeSet::from([peer_id])),
         };
 
         if self.deadline <= now() {
@@ -513,8 +501,7 @@ impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVe
                     },
                 }
             }
-            QueryStep::RetryMembers(v) => QueryStep::RetryMembers(v),
-            QueryStep::FailMembers(v) => QueryStep::FailMembers(v),
+            QueryStep::Retry(v) => QueryStep::Retry(v),
             QueryStep::Continue => QueryStep::Continue,
             QueryStep::Failure { general, members } => QueryStep::Failure { general, members },
         }
@@ -537,9 +524,7 @@ pub trait QueryStrategy<IR, OR = IR> {
 #[derive(Debug)]
 pub enum QueryStep<R> {
     /// Retry request to this peer
-    RetryMembers(BTreeSet<PeerId>),
-    /// Fail these members and remember their errors
-    FailMembers(BTreeMap<PeerId, MemberError>),
+    Retry(BTreeSet<PeerId>),
     /// Do nothing yet, keep waiting for requests
     Continue,
     /// Return the successful result
