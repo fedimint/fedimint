@@ -2508,6 +2508,23 @@
 <a href="#2508" id="2508">2508</a>
 <a href="#2509" id="2509">2509</a>
 <a href="#2510" id="2510">2510</a>
+<a href="#2511" id="2511">2511</a>
+<a href="#2512" id="2512">2512</a>
+<a href="#2513" id="2513">2513</a>
+<a href="#2514" id="2514">2514</a>
+<a href="#2515" id="2515">2515</a>
+<a href="#2516" id="2516">2516</a>
+<a href="#2517" id="2517">2517</a>
+<a href="#2518" id="2518">2518</a>
+<a href="#2519" id="2519">2519</a>
+<a href="#2520" id="2520">2520</a>
+<a href="#2521" id="2521">2521</a>
+<a href="#2522" id="2522">2522</a>
+<a href="#2523" id="2523">2523</a>
+<a href="#2524" id="2524">2524</a>
+<a href="#2525" id="2525">2525</a>
+<a href="#2526" id="2526">2526</a>
+<a href="#2527" id="2527">2527</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3530,6 +3547,7 @@
     tx: Box&lt;<span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
     decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
+    on_commit_hooks: Vec&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>FnOnce())&gt;&gt;,
 }
 
 <span class="attr">#[instrument(level = <span class="string">&quot;trace&quot;</span>, skip_all, fields(value_type = std::any::type_name::&lt;V&gt;()), err)]
@@ -3557,6 +3575,7 @@
                 is_committed: <span class="bool-val">false</span>,
                 has_writes: <span class="bool-val">false</span>,
             },
+            on_commit_hooks: <span class="macro">vec!</span>[],
         }
     }
 
@@ -3592,18 +3611,27 @@
             tx: Box::new(single_use),
             decoders,
             commit_tracker,
+            on_commit_hooks: <span class="macro">vec!</span>[],
         }
     }
 
     <span class="kw">pub async fn </span>commit_tx_result(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.commit_tracker.is_committed = <span class="bool-val">true</span>;
-        <span class="kw">return </span><span class="self">self</span>.tx.commit_tx().<span class="kw">await</span>;
+        <span class="kw">let </span>commit_result = <span class="self">self</span>.tx.commit_tx().<span class="kw">await</span>;
+
+        <span class="comment">// Run commit hooks in case commit was successful
+        </span><span class="kw">if </span>commit_result.is_ok() {
+            <span class="kw">for </span>hook <span class="kw">in </span><span class="self">self</span>.on_commit_hooks {
+                hook();
+            }
+        }
+
+        commit_result
     }
 
     <span class="kw">pub async fn </span>commit_tx(<span class="kw-2">mut </span><span class="self">self</span>) {
         <span class="self">self</span>.commit_tracker.is_committed = <span class="bool-val">true</span>;
-        <span class="self">self</span>.tx
-            .commit_tx()
+        <span class="self">self</span>.commit_tx_result()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Unrecoverable error occurred while committing to the database.&quot;</span>);
     }
@@ -3771,6 +3799,12 @@
     </span><span class="kw">pub async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.tx.set_tx_savepoint().<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Register a hook that will be run after commit succeeds.
+    </span><span class="attr">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all, ret)]
+    </span><span class="kw">pub fn </span>on_commit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: <span class="macro">maybe_add_send!</span>(<span class="kw">impl </span>FnOnce() + <span class="lifetime">&#39;static</span>)) {
+        <span class="self">self</span>.on_commit_hooks.push(Box::new(f));
+    }
 }
 
 <span class="kw">impl</span>&lt;T&gt; DatabaseKeyPrefix <span class="kw">for </span>T

@@ -2999,8 +2999,8 @@
         <span class="comment">// Validate added fees are above the min relay tx fee
         // BIP-0125 requires 1 sat/vb for RBF by default (same as normal txs)
         </span><span class="kw">let </span>fees = <span class="kw">match </span>output {
-            WalletOutput::PegOut(pegout) =&gt; pegout.fees.clone(),
-            WalletOutput::Rbf(rbf) =&gt; rbf.fees.clone(),
+            WalletOutput::PegOut(pegout) =&gt; pegout.fees,
+            WalletOutput::Rbf(rbf) =&gt; rbf.fees,
         };
         <span class="kw">if </span>fees.fee_rate.sats_per_kvb &lt; DEFAULT_MIN_RELAY_TX_FEE <span class="kw">as </span>u64 {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::BelowMinRelayFee);

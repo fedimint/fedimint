@@ -1559,6 +1559,8 @@
 <a href="#1559" id="1559">1559</a>
 <a href="#1560" id="1560">1560</a>
 <a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
+<a href="#1563" id="1563">1563</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2314,7 +2316,9 @@
     /// changes.
     </span><span class="kw">pub async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;_</span>, Amount&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>balance_changes = <span class="self">self</span>.primary_module().subscribe_balance_changes().<span class="kw">await</span>;
+        <span class="kw">let </span>initial_balance = <span class="self">self</span>.get_balance().<span class="kw">await</span>;
         Box::pin(<span class="macro">stream! </span>{
+            <span class="kw">yield </span>initial_balance;
             <span class="kw">while let </span><span class="prelude-val">Some</span>(()) = balance_changes.next().<span class="kw">await </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
                 <span class="kw">let </span>balance = <span class="self">self

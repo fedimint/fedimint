@@ -177,6 +177,29 @@
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
 
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -229,6 +252,29 @@
             db: <span class="self">self</span>.db.clone(),
             _pd: Default::default(),
         }
+    }
+
+    <span class="doccomment">/// Create a [`NotifierSender`] handle that lets the owner trigger
+    /// notifications without having to hold a full `Notifier`.
+    </span><span class="kw">pub fn </span>sender(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NotifierSender&lt;GC&gt; {
+        NotifierSender {
+            sender: <span class="self">self</span>.broadcast.clone(),
+        }
+    }
+}
+
+<span class="doccomment">/// Notifier send handle that can be shared to places where we don&#39;t need an
+/// entire [`Notifier`] but still need to trigger notifications. The main use
+/// case is triggering notifications when a DB transaction was committed
+/// successfully.
+</span><span class="kw">pub struct </span>NotifierSender&lt;GC&gt; {
+    sender: tokio::sync::broadcast::Sender&lt;DynState&lt;GC&gt;&gt;,
+}
+
+<span class="kw">impl</span>&lt;GC&gt; NotifierSender&lt;GC&gt; {
+    <span class="doccomment">/// Notify all subscribers of a state transition
+    </span><span class="kw">pub fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState&lt;GC&gt;) {
+        <span class="kw">let </span>_res = <span class="self">self</span>.sender.send(state);
     }
 }
 
