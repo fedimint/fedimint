@@ -804,7 +804,9 @@ impl MintClientModule {
             .subscribe(operation_id)
             .await
             .filter_map(|state| async move {
-                let MintClientStateMachines::Output(state) = state else { return None };
+                let MintClientStateMachines::Output(state) = state else {
+                    return None;
+                };
 
                 if state.common.out_point != out_point {
                     return None;
@@ -854,7 +856,9 @@ impl MintClientModule {
         notes: TieredMulti<SpendableNote>,
     ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
         if let Some((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
-            let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {return true;};
+            let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {
+                return true;
+            };
             !note.note.verify(*mint_key)
         }) {
             return Err(anyhow!(
@@ -932,7 +936,9 @@ impl MintClientModule {
                 .subscribe(operation_id)
                 .await
                 .filter_map(|state| async move {
-                    let MintClientStateMachines::OOB(state) = state else { return None };
+                    let MintClientStateMachines::OOB(state) = state else {
+                        return None;
+                    };
 
                     match state.state {
                         MintOOBStates::TimeoutRefund(refund) => Some(SpendOOBRefund {

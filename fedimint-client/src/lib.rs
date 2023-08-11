@@ -1662,7 +1662,7 @@ pub fn client_decoders<'a>(
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
             info!("Detected configuration for unsupported module id: {id}, kind: {kind}");
-            continue
+            continue;
         };
 
         modules.insert(
