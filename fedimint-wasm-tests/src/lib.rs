@@ -138,7 +138,9 @@ mod tests {
 
         let bolt11 = faucet::generate_invoice(11).await?;
         let (pay_types, _contract_id) = client.pay_bolt11_invoice(bolt11.parse()?).await?;
-        let PayType::Lightning(operation_id) = pay_types else { unreachable!("paying invoice over lightning"); };
+        let PayType::Lightning(operation_id) = pay_types else {
+            unreachable!("paying invoice over lightning");
+        };
 
         let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
 

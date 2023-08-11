@@ -560,10 +560,12 @@ where
 impl<GC> ExecutorInner<GC> {
     /// See [`Executor::stop_executor`].
     fn stop_executor(&self) -> Option<oneshot::Receiver<()>> {
-        let Some(shutdown_sender) = self.shutdown_executor
+        let Some(shutdown_sender) = self
+            .shutdown_executor
             .try_lock()
             .expect("Only locked during startup, no collisions should be possible")
-            .take() else {
+            .take()
+        else {
             debug!("Executor already stopped, ignoring stop request");
             return None;
         };
