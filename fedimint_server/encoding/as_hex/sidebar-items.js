@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["deserialize",""],["serialize",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["deserialize",""],["serialize",""]],"macro":[["deserialize_as_encodable_hex",""],["serde_as_encodable_hex",""],["serialize_as_encodable_hex",""]]};

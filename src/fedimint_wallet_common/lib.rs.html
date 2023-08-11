@@ -331,6 +331,7 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
@@ -405,7 +406,8 @@
 
 <span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableUTXO {
-    <span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
+    <span class="attr">#[serde(with = <span class="string">&quot;::fedimint_core::encoding::as_hex&quot;</span>)]
+    </span><span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
     <span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
 }

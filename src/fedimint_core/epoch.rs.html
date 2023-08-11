@@ -429,6 +429,10 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
@@ -441,8 +445,8 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
-<span class="kw">use </span><span class="kw">crate</span>::timing;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
+<span class="kw">use crate</span>::{serde_as_encodable_hex, timing};
 
 <span class="doccomment">/// All the items that may be produced during a consensus epoch
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
@@ -466,11 +470,15 @@
 
 <span class="kw">pub type </span>SerdeConsensusItem = SerdeModuleEncoding&lt;ConsensusItem&gt;;
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 </span><span class="kw">pub struct </span>SerdeSignatureShare(<span class="kw">pub </span>SignatureShare);
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+<span class="macro">serde_as_encodable_hex!</span>(SerdeSignatureShare);
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 </span><span class="kw">pub struct </span>SerdeSignature(<span class="kw">pub </span>Signature);
+
+<span class="macro">serde_as_encodable_hex!</span>(SerdeSignature);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SignedEpochOutcome {

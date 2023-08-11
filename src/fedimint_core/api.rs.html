@@ -1269,6 +1269,8 @@
 <a href="#1269" id="1269">1269</a>
 <a href="#1270" id="1270">1270</a>
 <a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1322,8 +1324,8 @@
     CurrentConsensus, DiscoverApiVersionSet, EventuallyConsistent, QueryStep, QueryStrategy,
     UnionResponsesSingle, VerifiableResponse,
 };
-<span class="kw">use </span><span class="kw">crate</span>::task;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
+<span class="kw">use crate</span>::{serde_as_encodable_hex, task};
 
 <span class="kw">pub type </span>MemberResult&lt;T&gt; = result::Result&lt;T, MemberError&gt;;
 
@@ -1950,8 +1952,10 @@
 </span><span class="kw">const </span>CONFIG_DOWNLOAD_TOKEN_BYTES: usize = <span class="number">12</span>;
 
 <span class="doccomment">/// Allows a client to download the config
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ClientConfigDownloadToken(<span class="kw">pub </span>[u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
+
+<span class="macro">serde_as_encodable_hex!</span>(ClientConfigDownloadToken);
 
 <span class="doccomment">/// We can represent client invite code as a bech32 string for compactness and
 /// error-checking
