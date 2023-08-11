@@ -751,73 +751,6 @@
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
 <a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a>
-<a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -834,7 +767,6 @@
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
-<span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
 <span class="kw">use </span>fedimint_core::{Amount, TieredMulti};
@@ -848,7 +780,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::common::{
     build_client, do_spend_notes, remint_denomination, switch_default_gateway, try_get_notes_cli,
-    FedimintCli, GatewayClnCli, GatewayLndCli,
+    GatewayClnCli, GatewayLndCli,
 };
 <span class="kw">pub mod </span>common;
 
@@ -885,8 +817,8 @@
 </span><span class="kw">enum </span>Command {
     <span class="attr">#[command(about = <span class="string">&quot;Keep many websocket connections to a federation for a duration of time&quot;</span>)]
     </span>TestConnect {
-        <span class="attr">#[clap(flatten)]
-        </span>connect_common_args: ConnectCommonArgs,
+        <span class="attr">#[arg(long, help = <span class="string">&quot;Federation invite code&quot;</span>)]
+        </span>invite_code: String,
         <span class="attr">#[arg(
             long,
             default_value = <span class="string">&quot;60&quot;</span>,
@@ -906,31 +838,23 @@
         </span>limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     },
     <span class="attr">#[command(about = <span class="string">&quot;Try to download the client config many times.&quot;</span>)]
-    </span>TestDownload { invite_code: String },
+    </span>TestDownload {
+        <span class="attr">#[arg(long, help = <span class="string">&quot;Federation invite code&quot;</span>)]
+        </span>invite_code: String,
+    },
     <span class="attr">#[command(
         about = <span class="string">&quot;Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway&quot;
     </span>)]
     </span>LoadTest(LoadTestArgs),
 }
-<span class="attr">#[derive(Args, Clone)]
-</span><span class="kw">struct </span>ConnectCommonArgs {
-    <span class="attr">#[arg(
-        long,
-        help = <span class="string">&quot;Path of the client config.json. If none given, will try to download it from the --invite code&quot;
-    </span>)]
-    </span>client_config: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
-
-    <span class="attr">#[arg(
-        long,
-        help = <span class="string">&quot;Invite code string. If none given, will use the one from fedimint-cli if no --client-config given&quot;
-    </span>)]
-    </span>invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;,
-}
 
 <span class="attr">#[derive(Args, Clone)]
 </span><span class="kw">struct </span>LoadTestArgs {
-    <span class="attr">#[clap(flatten)]
-    </span>connect_common_args: ConnectCommonArgs,
+    <span class="attr">#[arg(
+        long,
+        help = <span class="string">&quot;Federation invite code. If none given, we assume the client already has a config downloaded in DB&quot;
+    </span>)]
+    </span>invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
     <span class="attr">#[arg(long, value_parser = parse_ecash, help = <span class="string">&quot;Notes for the test. If none, will call fedimint-cli spend&quot;</span>)]
     </span>initial_notes: <span class="prelude-ty">Option</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt;,
@@ -1047,14 +971,14 @@
     });
     <span class="kw">let </span>futures = <span class="kw">match </span>opts.command.clone() {
         Command::TestConnect {
-            connect_common_args,
+            invite_code,
             duration_secs,
             timeout_secs,
             limit_endpoints,
         } =&gt; {
-            <span class="kw">let </span>cfg = get_cfg_from_args(<span class="kw-2">&amp;</span>connect_common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
             test_connect_raw_client(
-                cfg,
+                invite_code,
                 opts.users,
                 Duration::from_secs(duration_secs),
                 Duration::from_secs(timeout_secs),
@@ -1064,10 +988,16 @@
             .<span class="kw">await</span><span class="question-mark">?
         </span>}
         Command::TestDownload { invite_code } =&gt; {
-            test_download_config(<span class="kw-2">&amp;</span>invite_code, opts.users, event_sender.clone()).<span class="kw">await</span><span class="question-mark">?
+            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
+            test_download_config(invite_code, opts.users, event_sender.clone()).<span class="kw">await</span><span class="question-mark">?
         </span>}
         Command::LoadTest(args) =&gt; {
-            <span class="kw">let </span>cfg = get_cfg_from_args(<span class="kw-2">&amp;</span>args.connect_common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>invite_code = <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = args.invite_code {
+                <span class="prelude-val">Some</span>(InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>)
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>};
+
             <span class="kw">let </span>initial_notes = <span class="kw">if let </span><span class="prelude-val">Some</span>(initial_notes) = args.initial_notes {
                 initial_notes
             } <span class="kw">else </span>{
@@ -1099,7 +1029,7 @@
             run_load_test(
                 opts.archive_dir,
                 opts.users,
-                cfg,
+                invite_code,
                 initial_notes,
                 args.generate_invoice_with,
                 args.invoices_per_user,
@@ -1137,7 +1067,7 @@
 </span><span class="kw">async fn </span>run_load_test(
     archive_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     users: u16,
-    cfg: ClientConfig,
+    invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     initial_notes: TieredMulti&lt;SpendableNote&gt;,
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     generated_invoices_per_user: u16,
@@ -1156,13 +1086,13 @@
     } <span class="kw">else </span>{
         <span class="prelude-val">None
     </span>};
-    <span class="kw">let </span>coordinator = build_client(<span class="kw-2">&amp;</span>cfg, coordinator_db.as_ref()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>coordinator = build_client(invite_code.clone(), coordinator_db.as_ref()).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>users_clients = Vec::with_capacity(users.into());
     <span class="kw">for </span>u <span class="kw">in </span><span class="number">0</span>..users {
         <span class="kw">let </span>user_db = db_path
             .as_ref()
             .map(|db_path| db_path.join(<span class="macro">format!</span>(<span class="string">&quot;user_{u}.db&quot;</span>)));
-        <span class="kw">let </span>client = build_client(<span class="kw-2">&amp;</span>cfg, user_db.as_ref()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = build_client(invite_code.clone(), user_db.as_ref()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_id) = <span class="kw-2">&amp;</span>gateway_id {
             switch_default_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
         }
@@ -1301,11 +1231,10 @@
 }
 
 <span class="kw">async fn </span>test_download_config(
-    connect: <span class="kw-2">&amp;</span>str,
+    invite_code: InviteCode,
     users: u16,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>invite_code: InviteCode = InviteCode::from_str(connect).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]));
 
     <span class="prelude-val">Ok</span>((<span class="number">0</span>..users)
@@ -1327,59 +1256,17 @@
         .collect())
 }
 
-<span class="kw">async fn </span>_test_connect_std_client(
-    <span class="kw-2">mut </span>cfg: ClientConfig,
-    users: u16,
-    duration: Duration,
-    limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-    event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(limit_endpoints) = limit_endpoints {
-        cfg.api_endpoints = cfg
-            .api_endpoints
-            .into_iter()
-            .take(limit_endpoints)
-            .collect();
-        <span class="macro">info!</span>(<span class="string">&quot;Limiting endpoints to {:?}&quot;</span>, cfg.api_endpoints);
-    }
-    <span class="kw">let </span>clients = (<span class="number">0</span>..users)
-        .map(|<span class="kw">_</span>| <span class="kw">async </span>{
-            <span class="kw">let </span>client = build_client(<span class="kw-2">&amp;</span>cfg, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(client)
-        })
-        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>clients = futures::future::try_join_all(clients).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(<span class="string">&quot;Keeping {users} clients connected for {duration:?}&quot;</span>);
-    <span class="prelude-val">Ok</span>(clients
-        .into_iter()
-        .map(|client| {
-            <span class="kw">let </span>event_sender = event_sender.clone();
-            <span class="kw">let </span>f: BoxFuture&lt;<span class="kw">_</span>&gt; = Box::pin(<span class="kw">async move </span>{
-                <span class="kw">let </span>initial_time = fedimint_core::time::now();
-                <span class="kw">while </span>initial_time.elapsed()<span class="question-mark">? </span>&lt; duration {
-                    <span class="kw">let </span>m = fedimint_core::time::now();
-                    client.api().fetch_epoch_count().<span class="kw">await</span><span class="question-mark">?</span>;
-                    event_sender.send(MetricEvent {
-                        name: <span class="string">&quot;fetch_epoch_count&quot;</span>.into(),
-                        duration: m.elapsed()<span class="question-mark">?</span>,
-                    })<span class="question-mark">?</span>;
-                    fedimint_core::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-                }
-                <span class="prelude-val">Ok</span>(())
-            });
-            f
-        })
-        .collect())
-}
-
 <span class="kw">async fn </span>test_connect_raw_client(
-    <span class="kw-2">mut </span>cfg: ClientConfig,
+    invite_code: InviteCode,
     users: u16,
     duration: Duration,
     timeout: Duration,
     limit_endpoints: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">&#39;static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
+    <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]));
+    <span class="kw">let </span><span class="kw-2">mut </span>cfg = api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">if let </span><span class="prelude-val">Some</span>(limit_endpoints) = limit_endpoints {
         cfg.api_endpoints = cfg
             .api_endpoints
@@ -1616,27 +1503,6 @@
         .context(<span class="string">&quot;Missing gateway_id field&quot;</span>)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(gateway_id.into())
-}
-
-<span class="kw">async fn </span>get_cfg_from_args(args: <span class="kw-2">&amp;</span>ConnectCommonArgs) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>(<span class="kw-2">&amp;</span>args.client_config, <span class="kw-2">&amp;</span>args.invite_code) {
-        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Can&#39;t use both --client-config and --invite&quot;</span>),
-        (<span class="prelude-val">Some</span>(client_config), <span class="prelude-val">None</span>) =&gt; load_from_file(client_config)<span class="question-mark">?</span>,
-        (<span class="prelude-val">None</span>, invite) =&gt; {
-            <span class="kw">let </span>invite = <span class="kw">if let </span><span class="prelude-val">Some</span>(invite) = invite {
-                invite.to_owned()
-            } <span class="kw">else </span>{
-                <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;invite-code&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invite_code&quot;</span>]
-                    .as_str()
-                    .map(ToOwned::to_owned)
-                    .expect(<span class="string">&quot;invite-code command to succeed&quot;</span>)
-            };
-            <span class="kw">let </span>invite_code: InviteCode =
-                InviteCode::from_str(<span class="kw-2">&amp;</span>invite).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
-            <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]));
-            api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?
-        </span>}
-    })
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_load_test_tool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

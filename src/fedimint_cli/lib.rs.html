@@ -826,6 +826,18 @@
 <a href="#826" id="826">826</a>
 <a href="#827" id="827">827</a>
 <a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -849,9 +861,9 @@
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
-    IFederationApi, IGlobalFederationApi, InviteCode, WsFederationApi,
+    IFederationApi, InviteCode, WsFederationApi,
 };
-<span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, FederationId};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::db::DatabaseValue;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -1087,14 +1099,13 @@
             .ok_or_cli_msg(CliErrorKind::IOError, <span class="string">&quot;`--data-dir=` argument not set.&quot;</span>)
     }
 
-    <span class="kw">fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;WsAdminClient&gt; {
+    <span class="kw">fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; CliResult&lt;WsAdminClient&gt; {
         <span class="kw">let </span>our_id = <span class="kw-2">&amp;</span><span class="self">self
             </span>.our_id
             .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">&quot;Admin client needs our-id set&quot;</span>)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>url = <span class="self">self
-            </span>.load_config()<span class="question-mark">?
-            </span>.api_endpoints
+        <span class="kw">let </span>url = cfg
+            .api_endpoints
             .get(our_id)
             .expect(<span class="string">&quot;Endpoint exists&quot;</span>)
             .url
@@ -1108,11 +1119,6 @@
             .clone()
             .ok_or_cli_msg(CliErrorKind::MissingAuth, <span class="string">&quot;CLI needs password set&quot;</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ApiAuth(password))
-    }
-
-    <span class="kw">fn </span>load_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;ClientConfig&gt; {
-        <span class="kw">let </span>cfg_path = <span class="self">self</span>.workdir()<span class="question-mark">?</span>.join(<span class="string">&quot;client.json&quot;</span>);
-        load_from_file(<span class="kw-2">&amp;</span>cfg_path).map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;could not load config&quot;</span>)
     }
 
     <span class="kw">fn </span>load_rocks_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;fedimint_rocksdb::RocksDb&gt; {
@@ -1146,8 +1152,11 @@
     <span class="kw">async fn </span>build_client_ng(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_gens: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+        invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     ) -&gt; CliResult&lt;fedimint_client::Client&gt; {
-        <span class="kw">let </span>client_builder = <span class="self">self</span>.build_client_ng_builder(module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client_builder = <span class="self">self
+            </span>.build_client_ng_builder(module_gens, invite_code)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         client_builder
             .build::&lt;PlainRootSecretStrategy&gt;()
             .<span class="kw">await
@@ -1157,14 +1166,16 @@
     <span class="kw">async fn </span>build_client_ng_builder(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_gens: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+        invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     ) -&gt; CliResult&lt;fedimint_client::ClientBuilder&gt; {
-        <span class="kw">let </span>cfg = <span class="self">self</span>.load_config()<span class="question-mark">?</span>;
         <span class="kw">let </span>db = <span class="self">self</span>.load_rocks_db()<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
         client_builder.with_module_gens(module_gens.clone());
         client_builder.with_primary_module(<span class="number">1</span>);
-        client_builder.with_config(cfg);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = invite_code {
+            client_builder.with_invite_code(invite_code);
+        }
         client_builder.with_database(db);
 
         <span class="prelude-val">Ok</span>(client_builder)
@@ -1292,6 +1303,7 @@
 
 <span class="kw">pub struct </span>FedimintCli {
     module_gens: ClientModuleGenRegistry,
+    invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
 }
 
 <span class="kw">impl </span>FedimintCli {
@@ -1312,6 +1324,7 @@
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             module_gens: ClientModuleGenRegistry::new(),
+            invite_code: <span class="prelude-val">None</span>,
         })
     }
 
@@ -1329,9 +1342,8 @@
             .with_module(WalletClientGen::default())
     }
 
-    <span class="kw">pub async fn </span>run(<span class="self">self</span>) {
+    <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span>cli = Opts::parse();
-
         <span class="kw">match </span><span class="self">self</span>.handle_command(cli).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(output) =&gt; {
                 <span class="comment">// ignore if there&#39;s anyone reading the stuff we&#39;re writing out
@@ -1344,27 +1356,20 @@
         }
     }
 
-    <span class="kw">async fn </span>handle_command(<span class="kw-2">&amp;</span><span class="self">self</span>, cli: Opts) -&gt; CliOutputResult {
+    <span class="kw">async fn </span>handle_command(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: Opts) -&gt; CliOutputResult {
         <span class="kw">match </span>cli.command.clone() {
             Command::JoinFederation { invite_code } =&gt; {
                 <span class="kw">let </span>invite: InviteCode = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>;
-                <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite.clone()]))
-                    <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IGlobalFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
-                <span class="kw">let </span>cfg: ClientConfig = api.download_client_config(<span class="kw-2">&amp;</span>invite).<span class="kw">await</span>.map_err_cli_msg(
-                    CliErrorKind::NetworkError,
-                    <span class="string">&quot;couldn&#39;t download config from peer&quot;</span>,
-                )<span class="question-mark">?</span>;
-                std::fs::create_dir_all(cli.workdir()<span class="question-mark">?</span>)
-                    .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;failed to create config directory&quot;</span>)<span class="question-mark">?</span>;
-                <span class="kw">let </span>cfg_path = cli.workdir()<span class="question-mark">?</span>.join(<span class="string">&quot;client.json&quot;</span>);
-                <span class="kw">let </span>writer = std::fs::File::options()
-                    .create_new(<span class="bool-val">true</span>)
-                    .write(<span class="bool-val">true</span>)
-                    .open(cfg_path)
-                    .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t create config.json&quot;</span>)<span class="question-mark">?</span>;
-                serde_json::to_writer_pretty(writer, <span class="kw-2">&amp;</span>cfg)
-                    .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t write config&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="comment">// Build client and store config in DB
+                </span><span class="kw">let </span>_client = cli
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">Some</span>(invite.clone()))
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failed to build client&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="self">self</span>.invite_code = <span class="prelude-val">Some</span>(invite);
+
                 <span class="prelude-val">Ok</span>(CliOutput::JoinFederation {
                     joined: invite_code,
                 })
@@ -1374,7 +1379,7 @@
             }),
             Command::Client(ClientCmd::Restore { secret }) =&gt; {
                 <span class="kw">let </span>(client, metadata) = cli
-                    .build_client_ng_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
+                    .build_client_ng_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?
                     </span>.build_restoring_from_backup(ClientSecret::&lt;PlainRootSecretStrategy&gt;::new(
@@ -1393,11 +1398,11 @@
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
             }
             Command::Client(command) =&gt; {
-                <span class="kw">let </span>config = cli.load_config()<span class="question-mark">?</span>;
                 <span class="kw">let </span>client = cli
-                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>config = client.get_config().clone();
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     client::handle_ng_command(command, config, client)
                         .<span class="kw">await
@@ -1405,16 +1410,26 @@
                 ))
             }
             Command::Admin(AdminCmd::Status) =&gt; {
-                <span class="kw">let </span>status = cli.admin_client()<span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>user = cli
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="kw">let </span>status = cli.admin_client(user.get_config())<span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invalid response&quot;</span>)<span class="question-mark">?</span>,
                 ))
             }
             Command::Admin(AdminCmd::LastEpoch) =&gt; {
-                <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
+                <span class="kw">let </span>user = cli
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>cfg = user.get_config().clone();
+
                 <span class="kw">let </span>decoders = cli.load_decoders(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens);
-                <span class="kw">let </span>client = cli.admin_client()<span class="question-mark">?</span>;
+                <span class="kw">let </span>client = cli.admin_client(<span class="kw-2">&amp;</span>cfg)<span class="question-mark">?</span>;
                 <span class="kw">let </span>last_epoch = client
                     .fetch_last_epoch_history(cfg.epoch_pk, <span class="kw-2">&amp;</span>decoders)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1423,21 +1438,33 @@
                 <span class="prelude-val">Ok</span>(CliOutput::LastEpoch { hex_outcome })
             }
             Command::Admin(AdminCmd::ForceEpoch { hex_outcome }) =&gt; {
-                <span class="kw">let </span>cfg = cli.load_config()<span class="question-mark">?</span>;
-                <span class="kw">let </span>decoders = cli.load_decoders(<span class="kw-2">&amp;</span>cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens);
+                <span class="kw">let </span>user = cli
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>cfg = user.get_config();
+
+                <span class="kw">let </span>decoders = cli.load_decoders(cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens);
                 <span class="kw">let </span>outcome: SignedEpochOutcome = Decodable::consensus_decode_hex(
                     <span class="kw-2">&amp;</span>hex_outcome,
                     <span class="kw-2">&amp;</span>decoders,
                 )
                 .map_err_cli_msg(CliErrorKind::SerializationError, <span class="string">&quot;failed to decode outcome&quot;</span>)<span class="question-mark">?</span>;
-                <span class="kw">let </span>client = cli.admin_client()<span class="question-mark">?</span>;
+                <span class="kw">let </span>client = cli.admin_client(cfg)<span class="question-mark">?</span>;
                 client
                     .force_process_epoch(SerdeEpochHistory::from(<span class="kw-2">&amp;</span>outcome), cli.auth()<span class="question-mark">?</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::ForceEpoch)
             }
             Command::Admin(AdminCmd::SignalUpgrade) =&gt; {
-                cli.admin_client()<span class="question-mark">?</span>.signal_upgrade(cli.auth()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>user = cli
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+
+                cli.admin_client(user.get_config())<span class="question-mark">?
+                    </span>.signal_upgrade(cli.auth()<span class="question-mark">?</span>)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::SignalUpgrade)
             }
             Command::Dev(DevCmd::Api {
@@ -1449,7 +1476,9 @@
                     .map_err_cli_msg(CliErrorKind::InvalidValue, <span class="string">&quot;Invalid JSON-RPC parameters&quot;</span>)<span class="question-mark">?</span>;
                 <span class="kw">let </span>params = ApiRequestErased::new(params);
                 <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(
-                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>.get_config(),
+                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
+                        .<span class="kw">await</span><span class="question-mark">?
+                        </span>.get_config(),
                 )
                 .into();
                 <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {
@@ -1470,22 +1499,15 @@
                 <span class="prelude-val">Ok</span>(CliOutput::UntypedApiOutput { value: response })
             }
             Command::Dev(DevCmd::InviteCode) =&gt; {
-                <span class="kw">let </span>path = cli.workdir()<span class="question-mark">?</span>.join(<span class="string">&quot;invite-code&quot;</span>);
-                <span class="kw">let </span>string = fs::read_to_string(path).map_err_cli_msg(
-                    CliErrorKind::GeneralFederationError,
-                    <span class="string">&quot;cannot read invite code&quot;</span>,
+                <span class="kw">let </span>invite_code = <span class="self">self</span>.invite_code.clone().ok_or_cli_msg(
+                    CliErrorKind::GeneralFailure,
+                    <span class="string">&quot;fedimint-cli not connected to a federation&quot;</span>,
                 )<span class="question-mark">?</span>;
-
-                <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>string).map_err_cli_msg(
-                    CliErrorKind::GeneralFederationError,
-                    <span class="string">&quot;cannot parse invite code&quot;</span>,
-                )<span class="question-mark">?</span>;
-
                 <span class="prelude-val">Ok</span>(CliOutput::InviteCode { invite_code })
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) =&gt; {
                 task::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async move </span>{
-                    <span class="kw">let </span>client = cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>client = cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">loop </span>{
                         <span class="kw">let </span>(<span class="kw">_</span>, instance) = client
                             .get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_wallet_client::KIND);
@@ -1526,7 +1548,7 @@
             }),
             Command::Dev(DevCmd::EpochCount) =&gt; {
                 <span class="kw">let </span>count = cli
-                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens)
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.api()
                     .fetch_epoch_count()
@@ -1580,7 +1602,9 @@
 
                 <span class="kw">let </span>tx = fedimint_core::transaction::Transaction::from_bytes(
                     <span class="kw-2">&amp;</span>bytes,
-                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens).<span class="kw">await</span><span class="question-mark">?</span>.decoders(),
+                    cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
+                        .<span class="kw">await</span><span class="question-mark">?
+                        </span>.decoders(),
                 )
                 .map_err_cli_msg(
                     CliErrorKind::SerializationError,

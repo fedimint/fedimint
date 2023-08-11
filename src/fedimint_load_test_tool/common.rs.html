@@ -337,6 +337,11 @@
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -349,7 +354,7 @@
 <span class="kw">use </span>fedimint_client::sm::OperationId;
 <span class="kw">use </span>fedimint_client::transaction::TransactionBuilder;
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::core::IntoDynInstance;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -460,13 +465,18 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>build_client(cfg: <span class="kw-2">&amp;</span>ClientConfig, rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;) -&gt; anyhow::Result&lt;Client&gt; {
+<span class="kw">pub async fn </span>build_client(
+    invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
+    rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
+) -&gt; anyhow::Result&lt;Client&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientGen);
     client_builder.with_module(LightningClientGen);
     client_builder.with_module(WalletClientGen::default());
     client_builder.with_primary_module(<span class="number">1</span>);
-    client_builder.with_config(cfg.clone());
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = invite_code {
+        client_builder.with_invite_code(invite_code);
+    }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
         client_builder.with_database(fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>)
     } <span class="kw">else </span>{

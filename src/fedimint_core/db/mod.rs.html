@@ -2525,6 +2525,17 @@
 <a href="#2525" id="2525">2525</a>
 <a href="#2526" id="2526">2526</a>
 <a href="#2527" id="2527">2527</a>
+<a href="#2528" id="2528">2528</a>
+<a href="#2529" id="2529">2529</a>
+<a href="#2530" id="2530">2530</a>
+<a href="#2531" id="2531">2531</a>
+<a href="#2532" id="2532">2532</a>
+<a href="#2533" id="2533">2533</a>
+<a href="#2534" id="2534">2534</a>
+<a href="#2535" id="2535">2535</a>
+<a href="#2536" id="2536">2536</a>
+<a href="#2537" id="2537">2537</a>
+<a href="#2538" id="2538">2538</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -2643,12 +2654,12 @@
 </span><span class="kw">pub struct </span>Database {
     inner_db: Arc&lt;DatabaseInner&gt;,
     module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+    module_decoders: ModuleDecoderRegistry,
 }
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>DatabaseInner {
     notifications: Notifications,
-    module_decoders: ModuleDecoderRegistry,
     db: Box&lt;<span class="kw">dyn </span>IDatabase + <span class="lifetime">&#39;static</span>&gt;,
 }
 
@@ -2662,12 +2673,12 @@
         <span class="kw">let </span>inner = DatabaseInner {
             db: Box::new(db),
             notifications: Notifications::new(),
-            module_decoders,
         };
 
         <span class="self">Self </span>{
             inner_db: Arc::new(inner),
             module_instance_id: <span class="prelude-val">None</span>,
+            module_decoders,
         }
     }
 
@@ -2682,12 +2693,12 @@
         <span class="kw">let </span>inner = DatabaseInner {
             db,
             notifications: Notifications::new(),
-            module_decoders,
         };
 
         <span class="self">Self </span>{
             inner_db: Arc::new(inner),
             module_instance_id: <span class="prelude-val">None</span>,
+            module_decoders,
         }
     }
 
@@ -2699,14 +2710,25 @@
         <span class="kw">let </span>db = <span class="self">self</span>.inner_db.clone();
         <span class="self">Self </span>{
             inner_db: db,
+            module_decoders: <span class="self">self</span>.module_decoders.clone(),
             module_instance_id: <span class="prelude-val">Some</span>(module_instance_id),
+        }
+    }
+
+    <span class="kw">pub fn </span>new_with_decoders(<span class="kw-2">&amp;</span><span class="self">self</span>, module_decoders: ModuleDecoderRegistry) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>inner_db = <span class="self">self</span>.inner_db.clone();
+        <span class="kw">let </span>module_instance_id = <span class="self">self</span>.module_instance_id;
+        <span class="self">Self </span>{
+            inner_db,
+            module_decoders,
+            module_instance_id,
         }
     }
 
     <span class="kw">pub async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DatabaseTransaction {
         <span class="kw">let </span>dbtx = DatabaseTransaction::new(
             <span class="self">self</span>.inner_db.db.begin_transaction().<span class="kw">await</span>,
-            <span class="self">self</span>.inner_db.module_decoders.clone(),
+            <span class="self">self</span>.module_decoders.clone(),
             <span class="kw-2">&amp;</span><span class="self">self</span>.inner_db.notifications,
         );
 
@@ -2839,7 +2861,7 @@
                         std::any::type_name::&lt;K::Value&gt;(),
                         value_bytes
                     );
-                    K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span><span class="self">self</span>.inner_db.module_decoders)
+                    K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span><span class="self">self</span>.module_decoders)
                         .expect(<span class="string">&quot;Unrecoverable error when decoding the database value&quot;</span>)
                 });
 
@@ -2848,7 +2870,7 @@
                     value,
                     DatabaseTransaction::new(
                         tx,
-                        <span class="self">self</span>.inner_db.module_decoders.clone(),
+                        <span class="self">self</span>.module_decoders.clone(),
                         <span class="kw-2">&amp;</span><span class="self">self</span>.inner_db.notifications,
                     ),
                 );
