@@ -1252,25 +1252,6 @@
 <a href="#1252" id="1252">1252</a>
 <a href="#1253" id="1253">1253</a>
 <a href="#1254" id="1254">1254</a>
-<a href="#1255" id="1255">1255</a>
-<a href="#1256" id="1256">1256</a>
-<a href="#1257" id="1257">1257</a>
-<a href="#1258" id="1258">1258</a>
-<a href="#1259" id="1259">1259</a>
-<a href="#1260" id="1260">1260</a>
-<a href="#1261" id="1261">1261</a>
-<a href="#1262" id="1262">1262</a>
-<a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a>
-<a href="#1265" id="1265">1265</a>
-<a href="#1266" id="1266">1266</a>
-<a href="#1267" id="1267">1267</a>
-<a href="#1268" id="1268">1268</a>
-<a href="#1269" id="1269">1269</a>
-<a href="#1270" id="1270">1270</a>
-<a href="#1271" id="1271">1271</a>
-<a href="#1272" id="1272">1272</a>
-<a href="#1273" id="1273">1273</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1321,8 +1302,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 <span class="kw">use </span><span class="kw">crate</span>::outcome::TransactionStatus;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
-    CurrentConsensus, DiscoverApiVersionSet, EventuallyConsistent, QueryStep, QueryStrategy,
-    UnionResponsesSingle, VerifiableResponse,
+    CurrentConsensus, DiscoverApiVersionSet, QueryStep, QueryStrategy, UnionResponsesSingle,
+    VerifiableResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
 <span class="kw">use crate</span>::{serde_as_encodable_hex, task};
@@ -1584,23 +1565,7 @@
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().one_honest()),
-            method,
-            params,
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>request_eventually_consistent&lt;Ret&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        method: String,
-        params: ApiRequestErased,
-    ) -&gt; FederationResult&lt;Ret&gt;
-    <span class="kw">where
-        </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
-    {
-        <span class="self">self</span>.request_with_strategy(
-            EventuallyConsistent::new(<span class="self">self</span>.all_members().one_honest()),
+            CurrentConsensus::new(<span class="self">self</span>.all_members().total()),
             method,
             params,
         )
@@ -1793,7 +1758,7 @@
         <span class="kw">let </span>qs = ValidHistoryWrapper {
             decoders,
             strategy: VerifiableResponse::new(
-                <span class="self">self</span>.all_members().one_honest(),
+                <span class="self">self</span>.all_members().total(),
                 <span class="bool-val">true</span>,
                 <span class="kw">move </span>|epoch: <span class="kw-2">&amp;</span>SignedEpochOutcome| epoch.verify_sig(<span class="kw-2">&amp;</span>epoch_pk).is_ok(),
             ),
@@ -1808,11 +1773,8 @@
     </span>}
 
     <span class="kw">async fn </span>fetch_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
-        <span class="self">self</span>.request_eventually_consistent(
-            <span class="string">&quot;fetch_epoch_count&quot;</span>.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;fetch_epoch_count&quot;</span>.to_owned(), ApiRequestErased::default())
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
@@ -1875,7 +1837,7 @@
 
     <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().threshold()),
+            CurrentConsensus::new(<span class="self">self</span>.all_members().total()),
             <span class="string">&quot;backup&quot;</span>.to_owned(),
             ApiRequestErased::new(request),
         )
@@ -1889,7 +1851,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.request_with_strategy(
                 UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;::new(
-                    <span class="self">self</span>.all_members().threshold(),
+                    <span class="self">self</span>.all_members().total(),
                 ),
                 <span class="string">&quot;recover&quot;</span>.to_owned(),
                 ApiRequestErased::new(id),

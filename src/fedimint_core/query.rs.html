@@ -552,24 +552,6 @@
 <a href="#552" id="552">552</a>
 <a href="#553" id="553">553</a>
 <a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
-<a href="#563" id="563">563</a>
-<a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a>
-<a href="#569" id="569">569</a>
-<a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -579,7 +561,6 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, PeerId};
-<span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::{<span class="self">self</span>, ApiVersionSet, MemberError};
 <span class="kw">use </span><span class="kw">crate</span>::module::{
@@ -614,14 +595,14 @@
     ///   `required` agree
     /// * `verifier`: Function that verifies the data with the public key
     </span><span class="kw">pub fn </span>new(
-        required: usize,
+        total_peers: usize,
         allow_consensus_fallback: bool,
         verifier: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>R) -&gt; bool + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             verifier: Box::new(verifier),
             allow_consensus_fallback,
-            current: CurrentConsensus::new(required),
+            current: CurrentConsensus::new(total_peers),
         }
     }
 }
@@ -652,16 +633,19 @@
     responses: HashSet&lt;PeerId&gt;,
     existing_results: Vec&lt;R&gt;,
     current: CurrentConsensus&lt;Vec&lt;R&gt;&gt;,
-    required: usize,
+    threshold: usize,
 }
 
 <span class="kw">impl</span>&lt;R&gt; UnionResponses&lt;R&gt; {
-    <span class="kw">pub fn </span>new(required: usize) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(total_peers: usize) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>max_evil = (total_peers - <span class="number">1</span>) / <span class="number">3</span>;
+        <span class="kw">let </span>threshold = total_peers - max_evil;
+
         <span class="self">Self </span>{
             responses: HashSet::new(),
             existing_results: <span class="macro">vec!</span>[],
-            current: CurrentConsensus::new(required),
-            required,
+            current: CurrentConsensus::new(total_peers),
+            threshold,
         }
     }
 }
@@ -677,7 +661,7 @@
 
             <span class="self">self</span>.responses.insert(peer);
 
-            <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required {
+            <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.threshold {
                 QueryStep::Success(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.existing_results))
             } <span class="kw">else </span>{
                 QueryStep::Continue
@@ -697,16 +681,19 @@
     responses: HashSet&lt;PeerId&gt;,
     existing_results: Vec&lt;R&gt;,
     current: CurrentConsensus&lt;Vec&lt;R&gt;&gt;,
-    required: usize,
+    threshold: usize,
 }
 
 <span class="kw">impl</span>&lt;R&gt; UnionResponsesSingle&lt;R&gt; {
-    <span class="kw">pub fn </span>new(required: usize) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(total_peers: usize) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>max_evil = (total_peers - <span class="number">1</span>) / <span class="number">3</span>;
+        <span class="kw">let </span>threshold = total_peers - max_evil;
+
         <span class="self">Self </span>{
             responses: HashSet::new(),
             existing_results: <span class="macro">vec!</span>[],
-            current: CurrentConsensus::new(required),
-            required,
+            current: CurrentConsensus::new(total_peers),
+            threshold,
         }
     }
 }
@@ -721,7 +708,7 @@
 
                 <span class="self">self</span>.responses.insert(peer);
 
-                <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required {
+                <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.threshold {
                     QueryStep::Success(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.existing_results))
                 } <span class="kw">else </span>{
                     QueryStep::Continue
@@ -735,59 +722,37 @@
     }
 }
 
-<span class="doccomment">/// Returns when `required` responses are equal, retrying after every `required`
-/// responses
-</span><span class="comment">// FIXME: should be replaced by queries for specific epochs in case we cannot
-// get enough responses FIXME: for any single epoch
-</span><span class="kw">pub struct </span>EventuallyConsistent&lt;R&gt; {
-    responses: BTreeSet&lt;PeerId&gt;,
-    current: CurrentConsensus&lt;R&gt;,
-    required: usize,
-}
-
-<span class="kw">impl</span>&lt;R&gt; EventuallyConsistent&lt;R&gt; {
-    <span class="kw">pub fn </span>new(required: usize) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            responses: BTreeSet::new(),
-            current: CurrentConsensus::new(required),
-            required,
-        }
-    }
-}
-
-<span class="kw">impl</span>&lt;R: Eq + Clone + Debug&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>EventuallyConsistent&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::MemberResult&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
-        <span class="self">self</span>.responses.insert(peer);
-
-        <span class="kw">match </span><span class="self">self</span>.current.process(peer, result) {
-            QueryStep::Continue <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.required =&gt; {
-                <span class="kw">let </span>result = QueryStep::RetryMembers(<span class="self">self</span>.responses.clone());
-                <span class="self">self</span>.responses.clear();
-                result
-            }
-            result =&gt; result,
-        }
-    }
-}
-
 <span class="doccomment">/// Returns when `required` responses are equal
 </span><span class="kw">pub struct </span>CurrentConsensus&lt;R&gt; {
-    <span class="doccomment">/// Previously received responses/results
-    ///
-    /// Since we don&#39;t expect a lot of different responses,
-    /// it&#39;s easier to store them in `Vec` and do a linear search
-    /// than required `R: Ord` or `R: Hash`.
-    </span><span class="kw">pub </span>existing_results: Vec&lt;(R, HashSet&lt;PeerId&gt;)&gt;,
-    <span class="kw">pub </span>errors: BTreeMap&lt;PeerId, MemberError&gt;,
-    required: usize,
+    <span class="doccomment">/// Previously received responses/errors
+    </span>responses: BTreeMap&lt;PeerId, R&gt;,
+    errors: BTreeMap&lt;PeerId, MemberError&gt;,
+    responded_peers: BTreeSet&lt;PeerId&gt;,
+    threshold: usize,
+    max_evil: usize,
 }
 
 <span class="kw">impl</span>&lt;R&gt; CurrentConsensus&lt;R&gt; {
-    <span class="kw">pub fn </span>new(required: usize) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(total_peers: usize) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>max_evil = (total_peers - <span class="number">1</span>) / <span class="number">3</span>;
+        <span class="kw">let </span>threshold = total_peers - max_evil;
+
         <span class="self">Self </span>{
-            existing_results: <span class="macro">vec!</span>[],
+            responses: BTreeMap::new(),
             errors: BTreeMap::new(),
-            required,
+            responded_peers: BTreeSet::new(),
+            threshold,
+            max_evil,
+        }
+    }
+
+    <span class="kw">pub fn </span>full_participation(total_peers: usize) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            responses: BTreeMap::new(),
+            errors: BTreeMap::new(),
+            responded_peers: BTreeSet::new(),
+            threshold: total_peers,
+            max_evil: <span class="number">0</span>,
         }
     }
 }
@@ -795,40 +760,39 @@
 <span class="kw">impl</span>&lt;R: Eq + Clone + Debug&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>CurrentConsensus&lt;R&gt; {
     <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::MemberResult&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(result) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>((prev_result, peers)) = <span class="self">self
-                    </span>.existing_results
-                    .iter_mut()
-                    .find(|(prev_result, <span class="kw">_</span>)| prev_result == <span class="kw-2">&amp;</span>result)
-                {
-                    <span class="kw">if </span>peers.contains(<span class="kw-2">&amp;</span>peer) {
-                        <span class="macro">debug!</span>(prev = <span class="question-mark">?</span>prev_result, new = <span class="question-mark">?</span>result, peer = %peer, <span class="string">&quot;Ignoring duplicate response from peer&quot;</span>);
-                    } <span class="kw">else </span>{
-                        peers.insert(peer);
-                    }
-                } <span class="kw">else </span>{
-                    <span class="self">self</span>.existing_results.push((result, HashSet::from([peer])));
-                }
+            <span class="prelude-val">Ok</span>(response) =&gt; {
+                <span class="self">self</span>.responses.insert(peer, response);
+                <span class="self">self</span>.responded_peers.insert(peer);
             }
             <span class="prelude-val">Err</span>(error) =&gt; {
                 <span class="self">self</span>.errors.insert(peer, error);
+
+                <span class="kw">if </span><span class="self">self</span>.errors.len() &gt; <span class="self">self</span>.max_evil {
+                    <span class="kw">return </span>QueryStep::Failure {
+                        general: <span class="prelude-val">None</span>,
+                        members: mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.errors),
+                    };
+                }
             }
         }
 
-        <span class="kw">for </span>(result, peers) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.existing_results {
-            <span class="kw">if </span>peers.len() &gt;= <span class="self">self</span>.required {
-                <span class="kw">return </span>QueryStep::Success(result.clone());
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(response) = <span class="self">self
+            </span>.responses
+            .values()
+            .max_by_key(|response| <span class="self">self</span>.responses.values().filter(|r| r == response).count())
+        {
+            <span class="kw">let </span>count = <span class="self">self</span>.responses.values().filter(|r| r == <span class="kw-2">&amp;</span>response).count();
+
+            <span class="kw">if </span>count &gt;= <span class="self">self</span>.threshold {
+                <span class="kw">return </span>QueryStep::Success(response.clone());
             }
         }
 
-        <span class="kw">if </span><span class="self">self</span>.errors.len() &gt;= <span class="self">self</span>.required {
-            <span class="kw">return </span>QueryStep::Failure {
-                general: <span class="prelude-val">None</span>,
-                members: mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.errors),
-            };
+        <span class="kw">if </span><span class="self">self</span>.responded_peers.len() &gt;= <span class="self">self</span>.threshold {
+            QueryStep::RetryMembers(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.responded_peers))
+        } <span class="kw">else </span>{
+            QueryStep::Continue
         }
-
-        QueryStep::Continue
     }
 }
 
