@@ -575,6 +575,21 @@
 <a href="#575" id="575">575</a>
 <a href="#576" id="576">576</a>
 <a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::Path;
 
@@ -692,6 +707,21 @@
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
+        <span class="comment">// turn an `iter` into a `Stream` where every `next` is ran inside
+        // `block_in_place` to offload the blocking calls
+        </span><span class="kw">fn </span>convert_to_async_stream&lt;<span class="lifetime">&#39;i</span>, I&gt;(iter: I) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = I::Item&gt;
+        <span class="kw">where
+            </span>I: Iterator + Send + <span class="lifetime">&#39;i</span>,
+            I::Item: Send,
+        {
+            stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async move </span>{
+                tokio::task::block_in_place(<span class="kw">move </span>|| {
+                    <span class="kw">let </span>item = iter.next();
+                    item.map(<span class="kw">move </span>|item| (item, iter))
+                })
+            })
+        }
+
         <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
@@ -706,7 +736,7 @@
                     .starts_with(<span class="kw-2">&amp;</span>prefix)
                     .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
             });
-            Box::pin(stream::iter(rocksdb_iter))
+            Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
     }
 
