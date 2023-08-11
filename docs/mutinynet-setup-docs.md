@@ -144,5 +144,143 @@ You've now got the fedimint processes running on each machine. Congratulations! 
 
 Now that we have the fedimint processes running on each machine, we'll form the federation by connecting them together. We'll use the fedimint guardian dashboard to do this. Go to the dashboard url for each machine, it's running on port :3000 .
 
-> Note: If you're running on AWS EC2 you'll need to open port 3000 in your security group to access the dashboard, and if you're running on google cloud you'll need to open port 3000 in your firewall.
+> Note: If you're running on AWS EC2 you'll need to open port 3000 in your security group to access the dashboard, and if you're running on google cloud you'll need to open ports 3000 and 8174 in your firewall.
 
+![Alt text](mutinynet_setup/setup_fedimint.png)
+
+
+![Alt text](mutinynet_setup/guardian_select.png)
+
+#### Leader
+
+![Alt text](mutinynet_setup/leader.png)
+
+![Alt text](mutinynet_setup/leader_confirm.png)
+
+![Alt text](mutinynet_setup/leader_pending.png)
+
+#### Follower
+
+![Alt text](image-4.png)
+
+![Alt text](image-5.png)
+
+![Alt text](image-6.png)
+
+
+### DKG
+
+![Alt text](image-8.png)
+
+![Alt text](image-9.png)
+
+![Alt text](image-10.png)
+
+### Guardian Verificaion
+
+![Alt text](image-11.png)
+
+![Alt text](image-12.png)
+
+![Alt text](image-13.png)
+
+### Guardian Dashboard
+
+![Alt text](image-14.png)
+
+- these are all hardcoded for now
+
+The invite code doesn't populate yet so you'll have to get it from the command line with:
+
+```bash
+docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli dev invite-code
+```
+![Alt text](image-15.png)
+
+Then connect with Fedi:
+
+TODO: copy screenshots over from phone
+
+### Setting up the Lightning Gateway
+
+Now that we have the federation running, we'll set up the lightning gateway. This is a lightning node that will intercept HTLCs from the lightning network and forward them to the federation. This will allow us to provide lightning services to the federation.
+
+First we have to connect to the federation. We'll use the same federation invite code as we do with the clients.
+
+```bash
+root@mutinynet-01:~# docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli dev invite-code
+{
+  "invite_code": "fed11jznymkms83ktcn0j4v0d6pspkfn26t65dwlx8gtmucje4jshennvzlazrd9354k858a06uz5zgva2qqcwaen5te0xcuzuvfcxvhr2wpwxyunsw3cxymngta0klu5kt7vcla79lqnjvzwvmz0"
+}
+root@mutinynet-01:~# docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli connect-fed fed11jznymkms83ktcn0j4v0d6pspkfn26t65dwlx8gtmucje4jshennvzlazrd9354k858a06uz5zgva2qqcwaen5te0xcuzuvfcxvhr2wpwxyunsw3cxymngta0klu5kt7vcla79lqnjvzwvmz0
+Enter gateway password: #this is whatever you set it to, default is `thereisnosecondbest`
+{
+  "federation_id": "90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5",
+  "balance_msat": 0
+}
+```
+
+![Alt text](image-26.png)
+
+```bash
+root@mutinynet-01:~# docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli balance --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
+```
+
+You'll initially have 0, but you can deposit to it using the mutinynet faucet at https://faucet.mutinynet.com. Get a new address from the gateway and deposit to it:
+
+```bash
+docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli address --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
+```
+
+![Alt text](image-28.png)
+
+![Alt text](image-27.png)
+
+```bash
+docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli help
+```
+
+get a new address:
+```bash
+docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli deposit-address
+```
+
+![Alt text](image-16.png)
+
+deposit to it using the mutinynet faucet at https://faucet.mutinynet.com
+
+![Alt text](image-17.png)
+
+You'll also need to open a lightning channel from the gateway node, so get a deposit address from RTL and deposit to it using the mutinynet faucet at https://faucet.mutinynet.com:
+
+![Alt text](image-18.png)
+
+![Alt text](image-19.png)
+
+Opening a channel to the fedi alpha gateway:
+
+```
+025698cc9ac623f5d1baf56310f2f1b62dfffee43ffcdb2c20ccb541f70497d540@54.158.203.78:9739
+```
+
+![Alt text](image-20.png)
+
+![Alt text](image-21.png)
+
+### Getting Inbound Liquidity
+
+Send some sats through your channel to the fedi alpha signet faucet. We'll be integrating in a LSP soon to make this easier.
+
+![Alt text](image-22.png)
+
+![Alt text](image-23.png)
+
+![Alt text](image-24.png)
+
+![Alt text](image-25.png)
+
+
+In case of fire:
+```bash
+docker-compose down -v --rmi 'all'
+```
