@@ -41,7 +41,8 @@ jobs:
 
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
-        run: nix develop --ignore-environment .#lint --command env GIT_PRE_COMMIT_SHOW_STATS=1 ./misc/git-hooks/pre-commit
+        # Note: not using `--ignore-environment` leads to much faster `cargo update --locked` for some reason
+        run: nix develop .#lint --command env GIT_PRE_COMMIT_SHOW_STATS=1 ./misc/git-hooks/pre-commit
 
       - name: Check udeps
         run: nix build -L .#ci.workspaceCargoUdeps
