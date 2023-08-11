@@ -1478,7 +1478,13 @@ macro_rules! push_db_pair_items {
         let db_items = $dbtx
             .find_by_prefix(&$prefix_type)
             .await
-            .collect::<Vec<($key_type, $value_type)>>()
+            .map(|(key, val)| {
+                (
+                    $crate::encoding::Encodable::consensus_encode_to_hex(&key).expect("can't fail"),
+                    val,
+                )
+            })
+            .collect::<BTreeMap<String, $value_type>>()
             .await;
 
         $map.insert($key_literal.to_string(), Box::new(db_items));
@@ -1491,8 +1497,13 @@ macro_rules! push_db_pair_items_no_serde {
         let db_items = $dbtx
             .find_by_prefix(&$prefix_type)
             .await
-            .map(|(key, val)| (key, SerdeWrapper::from_encodable(val)))
-            .collect::<Vec<_>>()
+            .map(|(key, val)| {
+                (
+                    $crate::encoding::Encodable::consensus_encode_to_hex(&key).expect("can't fail"),
+                    SerdeWrapper::from_encodable(val),
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
             .await;
 
         $map.insert($key_literal.to_string(), Box::new(db_items));

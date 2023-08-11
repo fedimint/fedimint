@@ -243,7 +243,7 @@ impl<'a> DatabaseDump<'a> {
                         ConsensusRange::ClientConfigSignatureShareKey,
                         SerdeSignatureShare,
                         consensus,
-                        "Client Config Download"
+                        "Client Config Signature Share"
                     );
                 }
                 ConsensusRange::DbKeyPrefix::ConsensusUpgrade => {
