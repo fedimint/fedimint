@@ -4,11 +4,12 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
-use futures::stream;
+use futures::{stream, StreamExt};
 use macro_rules_attribute::apply;
 
 use super::{
-    IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, SingleUseDatabaseTransaction,
+    IDatabase, IDatabaseTransaction, IDatabaseTransactionOps, ISingleUseDatabaseTransaction,
+    SingleUseDatabaseTransaction,
 };
 use crate::async_trait_maybe_send;
 use crate::db::PrefixStream;
@@ -75,7 +76,7 @@ impl IDatabase for MemDatabase {
             num_savepoint_operations: 0,
         };
 
-        memtx.set_tx_savepoint().await;
+        memtx.set_tx_savepoint().await.expect("can't fail");
         let single_use = SingleUseDatabaseTransaction::new(memtx);
         Box::new(single_use)
     }
@@ -84,7 +85,7 @@ impl IDatabase for MemDatabase {
 // In-memory database transaction should only be used for test code and never
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
+impl<'a> IDatabaseTransactionOps<'a> for MemTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key).await;
         // Insert data from copy so we can read our own writes
@@ -113,6 +114,19 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Ok(ret)
     }
 
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        let keys = self
+            .raw_find_by_prefix(key_prefix)
+            .await?
+            .map(|kv| kv.0)
+            .collect::<Vec<_>>()
+            .await;
+        for key in keys {
+            self.raw_remove_entry(key.as_slice()).await?;
+        }
+        Ok(())
+    }
+
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
         let data = self
             .tx_data
@@ -138,6 +152,27 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Ok(Box::pin(stream::iter(data)))
     }
 
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.tx_data = self.savepoint.clone();
+
+        // Remove any pending operations beyond the savepoint
+        let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
+        for _i in 0..removed_ops {
+            self.operations.pop();
+        }
+
+        Ok(())
+    }
+
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.savepoint = self.tx_data.clone();
+        self.num_savepoint_operations = self.num_pending_operations;
+        Ok(())
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
         for op in self.operations {
             match op {
@@ -155,21 +190,6 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         }
 
         Ok(())
-    }
-
-    async fn rollback_tx_to_savepoint(&mut self) {
-        self.tx_data = self.savepoint.clone();
-
-        // Remove any pending operations beyond the savepoint
-        let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
-        for _i in 0..removed_ops {
-            self.operations.pop();
-        }
-    }
-
-    async fn set_tx_savepoint(&mut self) {
-        self.savepoint = self.tx_data.clone();
-        self.num_savepoint_operations = self.num_pending_operations;
     }
 }
 
