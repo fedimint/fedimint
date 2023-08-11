@@ -540,19 +540,53 @@
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
 <a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
 </pre><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::db::{
-    IDatabase, IDatabaseTransaction, ISingleUseDatabaseTransaction, PrefixStream,
-    SingleUseDatabaseTransaction,
+    IDatabase, IDatabaseTransaction, IDatabaseTransactionOps, ISingleUseDatabaseTransaction,
+    PrefixStream, SingleUseDatabaseTransaction,
 };
 <span class="kw">use </span>futures::stream;
 <span class="kw">pub use </span>rocksdb;
 <span class="kw">use </span>rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
-<span class="kw">use </span>tracing::warn;
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDb(rocksdb::OptimisticTransactionDB);
@@ -626,14 +660,17 @@
             <span class="self">self</span>.<span class="number">0
                 </span>.transaction_opt(<span class="kw-2">&amp;</span>WriteOptions::default(), <span class="kw-2">&amp;</span>optimistic_options),
         );
-        rocksdb_tx.set_tx_savepoint().<span class="kw">await</span>;
+        rocksdb_tx
+            .set_tx_savepoint()
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;setting tx savepoint failed&quot;</span>);
         <span class="kw">let </span>single_use = SingleUseDatabaseTransaction::new(rocksdb_tx);
         Box::new(single_use)
     }
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.get(key).unwrap();
@@ -663,16 +700,44 @@
                 rocksdb::IteratorMode::From(<span class="kw-2">&amp;</span>prefix, rocksdb::Direction::Forward),
                 options,
             );
-            <span class="kw">let </span>rocksdb_iter = iter
-                .map_while(<span class="kw">move </span>|res| {
-                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
-                    key_bytes
-                        .starts_with(<span class="kw-2">&amp;</span>prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+            <span class="kw">let </span>rocksdb_iter = iter.map_while(<span class="kw">move </span>|res| {
+                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
+                key_bytes
+                    .starts_with(<span class="kw-2">&amp;</span>prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
             Box::pin(stream::iter(rocksdb_iter))
         }))
+    }
+
+    <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;()&gt; {
+        fedimint_core::task::block_in_place(|| {
+            <span class="comment">// Note: delete_range is not supported in Transactions :/
+            </span><span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(rocksdb::PrefixRange(key_prefix.to_owned()));
+            <span class="kw">let </span>iter = <span class="self">self
+                </span>.<span class="number">0
+                </span>.snapshot()
+                .iterator_opt(
+                    rocksdb::IteratorMode::From(key_prefix, rocksdb::Direction::Forward),
+                    options,
+                )
+                .map_while(<span class="kw">move </span>|res| {
+                    res.map(|(key_bytes, <span class="kw">_</span>)| {
+                        key_bytes
+                            .starts_with(key_prefix)
+                            .then_some(key_bytes.to_vec())
+                    })
+                    .transpose()
+                });
+
+            <span class="kw">for </span>item <span class="kw">in </span>iter {
+                <span class="kw">let </span>key = item<span class="question-mark">?</span>;
+                <span class="self">self</span>.<span class="number">0</span>.delete(key)<span class="question-mark">?</span>;
+            }
+
+            <span class="prelude-val">Ok</span>(())
+        })
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
@@ -690,43 +755,41 @@
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(iterator_mode, options);
-            <span class="kw">let </span>rocksdb_iter = iter
-                .map_while(<span class="kw">move </span>|res| {
-                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
-                    key_bytes
-                        .starts_with(<span class="kw-2">&amp;</span>prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+            <span class="kw">let </span>rocksdb_iter = iter.map_while(<span class="kw">move </span>|res| {
+                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;Error reading from RocksDb&quot;</span>);
+                key_bytes
+                    .starts_with(<span class="kw-2">&amp;</span>prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
             Box::pin(stream::iter(rocksdb_iter))
         }))
     }
 
+    <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
+            <span class="self">self</span>.<span class="number">0</span>.rollback_to_savepoint()
+        })<span class="question-mark">?</span>)
+    }
+
+    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        fedimint_core::task::block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.set_savepoint());
+
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.commit()<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(())
         })
     }
-
-    <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        fedimint_core::task::block_in_place(|| <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.rollback_to_savepoint() {
-            <span class="prelude-val">Ok</span>(()) =&gt; {}
-            <span class="kw">_ </span>=&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Rolling back database transaction without a set savepoint&quot;</span>);
-            }
-        })
-    }
-
-    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        fedimint_core::task::block_in_place(|| {
-            <span class="self">self</span>.<span class="number">0</span>.set_savepoint();
-        })
-    }
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>RocksDbReadOnly {
+</span><span class="kw">impl </span>IDatabaseTransactionOps&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>RocksDbReadOnly {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key: <span class="kw-2">&amp;</span>[u8], _value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot insert into a read only transaction&quot;</span>);
     }
@@ -756,6 +819,10 @@
         }))
     }
 
+    <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;Cannot remove from a read only transaction&quot;</span>);
+    }
+
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         key_prefix: <span class="kw-2">&amp;</span>[u8],
@@ -783,16 +850,19 @@
         }))
     }
 
-    <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">panic!</span>(<span class="string">&quot;Cannot commit a read only transaction&quot;</span>);
-    }
-
-    <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot rollback a read only transaction&quot;</span>);
     }
 
-    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot set a savepoint in a read only transaction&quot;</span>);
+    }
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>RocksDbReadOnly {
+    <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">panic!</span>(<span class="string">&quot;Cannot commit a read only transaction&quot;</span>);
     }
 }
 
