@@ -9,7 +9,7 @@ use bitcoincore_rpc::bitcoin::Txid;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{Federation, Fedimintd};
-use devimint::util::{poll, poll_value, ProcessManager};
+use devimint::util::{poll, poll_max_retries, poll_value, ProcessManager};
 use devimint::{
     cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, Gatewayd, LightningNode, Lightningd,
     Lnd,
@@ -998,7 +998,13 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     fed.start_server(process_mgr, 1).await?;
     fed.start_server(process_mgr, 2).await?;
     fed.start_server(process_mgr, 3).await?;
-    fed.await_all_peers().await?;
+
+    poll_max_retries("federation back online", 15, || async {
+        fed.await_all_peers().await?;
+        Ok(true)
+    })
+    .await?;
+
     info!(LOG_DEVIMINT, "fm success: reconnect-test");
     Ok(())
 }
