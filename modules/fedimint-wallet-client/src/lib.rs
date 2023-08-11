@@ -266,7 +266,7 @@ impl WalletClientExt for Client {
         let operation_id = OperationId(thread_rng().gen());
 
         let withdraw_output = wallet_client
-            .create_withdraw_output(operation_id, address.clone(), amount, fee.clone())
+            .create_withdraw_output(operation_id, address.clone(), amount, fee)
             .await?;
         let tx_builder =
             TransactionBuilder::new().with_output(withdraw_output.into_dyn(instance.id));
@@ -277,7 +277,7 @@ impl WalletClientExt for Client {
             move |_, change| WalletOperationMeta::Withdraw {
                 address: address.clone(),
                 amount,
-                fee: fee.clone(),
+                fee,
                 change,
             },
             tx_builder,

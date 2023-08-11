@@ -21,6 +21,9 @@ fn bsats(satoshi: u64) -> bitcoin::Amount {
     bitcoin::Amount::from_sat(satoshi)
 }
 
+const PEG_IN_AMOUNT_SATS: u64 = 5000;
+const PEG_OUT_AMOUNT_SATS: u64 = 1000;
+
 #[tokio::test(flavor = "multi_thread")]
 async fn on_chain_peg_in_and_peg_out() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -31,8 +34,13 @@ async fn on_chain_peg_in_and_peg_out() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     let valid_until = SystemTime::now() + TIMEOUT;
 
+    let mut balance_sub = client.subscribe_balance_changes().await;
+    assert_eq!(balance_sub.ok().await?, sats(0));
+
     let (op, address) = client.get_deposit_address(valid_until).await?;
-    bitcoin.send_and_mine_block(&address, bsats(5000)).await;
+    bitcoin
+        .send_and_mine_block(&address, bsats(PEG_IN_AMOUNT_SATS))
+        .await;
     let sub = client.subscribe_deposit_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, DepositState::WaitingForTransaction);
@@ -42,13 +50,19 @@ async fn on_chain_peg_in_and_peg_out() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     assert_eq!(sub.ok().await?, DepositState::Confirmed);
     assert_eq!(sub.ok().await?, DepositState::Claimed);
-    assert_eq!(client.get_balance().await, sats(5000));
+    assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
+    assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
 
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
-    let peg_out = bsats(1000);
+    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let fees = client.get_withdraw_fee(address.clone(), peg_out).await?;
     let op = client.withdraw(address.clone(), peg_out, fees).await?;
+
+    let balance_after_peg_out =
+        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
+    assert_eq!(client.get_balance().await, balance_after_peg_out);
+    assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
 
     let sub = client.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();

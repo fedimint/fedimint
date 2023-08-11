@@ -15,7 +15,7 @@ pub use dbtx::ClientSMDatabaseTransaction;
 pub use executor::{ActiveState, Executor, ExecutorBuilder, InactiveState};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-pub use notifier::{ModuleNotifier, Notifier};
+pub use notifier::{ModuleNotifier, Notifier, NotifierSender};
 use rand::RngCore;
 use serde::{Deserialize, Deserializer, Serialize};
 pub use state::{Context, DynContext, DynState, IState, OperationState, State, StateTransition};
