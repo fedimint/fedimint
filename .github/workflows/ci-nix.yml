@@ -32,6 +32,13 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
+      # caching ~/.cargo to avoid downloading all (especially git) deps in pre-commit's `cargo update --lock` check
+      - name: Cache ~/.cargo
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo
+          key: ${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
         run: nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
