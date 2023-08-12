@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::mem;
 use std::time::{Duration, SystemTime};
 
-use anyhow::format_err;
+use anyhow::{anyhow, format_err};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
@@ -62,11 +62,38 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R> for VerifiableResponse<R> {
     }
 }
 
+struct ErrorStrategy {
+    errors: BTreeMap<PeerId, MemberError>,
+    threshold: usize,
+}
+
+impl ErrorStrategy {
+    pub fn new(threshold: usize) -> Self {
+        Self {
+            errors: BTreeMap::new(),
+            threshold,
+        }
+    }
+
+    pub fn process<R>(&mut self, peer: PeerId, error: MemberError) -> QueryStep<R> {
+        assert!(self.errors.insert(peer, error).is_none());
+
+        if self.errors.len() == self.threshold {
+            QueryStep::Failure {
+                general: Some(anyhow!("Received errors from {} peers", self.threshold)),
+                members: mem::take(&mut self.errors),
+            }
+        } else {
+            QueryStep::Continue
+        }
+    }
+}
+
 /// Returns the deduplicated union of `required` number of responses
 pub struct UnionResponses<R> {
+    error_strategy: ErrorStrategy,
     responses: HashSet<PeerId>,
-    existing_results: Vec<R>,
-    current: CurrentConsensus<Vec<R>>,
+    union: Vec<R>,
     threshold: usize,
 }
 
@@ -76,33 +103,34 @@ impl<R> UnionResponses<R> {
         let threshold = total_peers - max_evil;
 
         Self {
+            error_strategy: ErrorStrategy::new(max_evil + 1),
             responses: HashSet::new(),
-            existing_results: vec![],
-            current: CurrentConsensus::new(total_peers),
+            union: vec![],
+
             threshold,
         }
     }
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
-    fn process(&mut self, peer: PeerId, results: api::MemberResult<Vec<R>>) -> QueryStep<Vec<R>> {
-        if let Ok(results) = results {
-            for new_result in results {
-                if !self.existing_results.iter().any(|r| r == &new_result) {
-                    self.existing_results.push(new_result);
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<Vec<R>>) -> QueryStep<Vec<R>> {
+        match result {
+            Ok(responses) => {
+                for response in responses {
+                    if !self.union.contains(&response) {
+                        self.union.push(response);
+                    }
+                }
+
+                assert!(self.responses.insert(peer));
+
+                if self.responses.len() >= self.threshold {
+                    QueryStep::Success(mem::take(&mut self.union))
+                } else {
+                    QueryStep::Continue
                 }
             }
-
-            self.responses.insert(peer);
-
-            if self.responses.len() >= self.threshold {
-                QueryStep::Success(mem::take(&mut self.existing_results))
-            } else {
-                QueryStep::Continue
-            }
-        } else {
-            // handle error case using the CurrentConsensus method
-            self.current.process(peer, results)
+            Err(error) => self.error_strategy.process(peer, error),
         }
     }
 }
@@ -112,9 +140,9 @@ impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
 /// Unlike [`UnionResponses`], it works with single values, not `Vec`s.
 /// TODO: Should we make `UnionResponses` a wrapper around this one?
 pub struct UnionResponsesSingle<R> {
+    error_strategy: ErrorStrategy,
     responses: HashSet<PeerId>,
-    existing_results: Vec<R>,
-    current: CurrentConsensus<Vec<R>>,
+    union: Vec<R>,
     threshold: usize,
 }
 
@@ -124,9 +152,9 @@ impl<R> UnionResponsesSingle<R> {
         let threshold = total_peers - max_evil;
 
         Self {
+            error_strategy: ErrorStrategy::new(max_evil + 1),
             responses: HashSet::new(),
-            existing_results: vec![],
-            current: CurrentConsensus::new(total_peers),
+            union: vec![],
             threshold,
         }
     }
@@ -135,35 +163,30 @@ impl<R> UnionResponsesSingle<R> {
 impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R> {
     fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<Vec<R>> {
         match result {
-            Ok(new_result) => {
-                if !self.existing_results.iter().any(|r| r == &new_result) {
-                    self.existing_results.push(new_result);
+            Ok(response) => {
+                if !self.union.contains(&response) {
+                    self.union.push(response);
                 }
 
-                self.responses.insert(peer);
+                assert!(self.responses.insert(peer));
 
                 if self.responses.len() >= self.threshold {
-                    QueryStep::Success(mem::take(&mut self.existing_results))
+                    QueryStep::Success(mem::take(&mut self.union))
                 } else {
                     QueryStep::Continue
                 }
             }
-            Err(e) => {
-                // handle error case using the CurrentConsensus method
-                self.current.process(peer, Err(e))
-            }
+            Err(error) => self.error_strategy.process(peer, error),
         }
     }
 }
 
 /// Returns when `required` responses are equal
 pub struct CurrentConsensus<R> {
-    /// Previously received responses/errors
+    error_strategy: ErrorStrategy,
     responses: BTreeMap<PeerId, R>,
-    errors: BTreeMap<PeerId, MemberError>,
-    responded_peers: BTreeSet<PeerId>,
+    retry: BTreeSet<PeerId>,
     threshold: usize,
-    max_evil: usize,
 }
 
 impl<R> CurrentConsensus<R> {
@@ -172,21 +195,19 @@ impl<R> CurrentConsensus<R> {
         let threshold = total_peers - max_evil;
 
         Self {
+            error_strategy: ErrorStrategy::new(max_evil + 1),
             responses: BTreeMap::new(),
-            errors: BTreeMap::new(),
-            responded_peers: BTreeSet::new(),
+            retry: BTreeSet::new(),
             threshold,
-            max_evil,
         }
     }
 
     pub fn full_participation(total_peers: usize) -> Self {
         Self {
+            error_strategy: ErrorStrategy::new(1),
             responses: BTreeMap::new(),
-            errors: BTreeMap::new(),
-            responded_peers: BTreeSet::new(),
+            retry: BTreeSet::new(),
             threshold: total_peers,
-            max_evil: 0,
         }
     }
 }
@@ -196,36 +217,25 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
         match result {
             Ok(response) => {
                 self.responses.insert(peer, response);
-                self.responded_peers.insert(peer);
-            }
-            Err(error) => {
-                self.errors.insert(peer, error);
+                assert!(self.retry.insert(peer));
 
-                if self.errors.len() > self.max_evil {
-                    return QueryStep::Failure {
-                        general: None,
-                        members: mem::take(&mut self.errors),
-                    };
+                if let Some(response) = self.responses.values().max_by_key(|response| {
+                    self.responses.values().filter(|r| r == response).count()
+                }) {
+                    let count = self.responses.values().filter(|r| r == &response).count();
+
+                    if count >= self.threshold {
+                        return QueryStep::Success(response.clone());
+                    }
+                }
+
+                if self.retry.len() >= self.threshold {
+                    QueryStep::Retry(mem::take(&mut self.retry))
+                } else {
+                    QueryStep::Continue
                 }
             }
-        }
-
-        if let Some(response) = self
-            .responses
-            .values()
-            .max_by_key(|response| self.responses.values().filter(|r| r == response).count())
-        {
-            let count = self.responses.values().filter(|r| r == &response).count();
-
-            if count >= self.threshold {
-                return QueryStep::Success(response.clone());
-            }
-        }
-
-        if self.responded_peers.len() >= self.threshold {
-            QueryStep::Retry(mem::take(&mut self.responded_peers))
-        } else {
-            QueryStep::Continue
+            Err(error) => self.error_strategy.process(peer, error),
         }
     }
 }
@@ -250,28 +260,28 @@ impl<R> AllOrDeadline<R> {
 impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
     fn process(
         &mut self,
-        peer_id: PeerId,
-        response: api::MemberResult<R>,
+        peer: PeerId,
+        result: api::MemberResult<R>,
     ) -> QueryStep<BTreeMap<PeerId, R>> {
-        assert!(!self.responses.contains_key(&peer_id));
-        let step = match response {
-            Ok(o) => {
-                self.responses.insert(peer_id, o);
+        match result {
+            Ok(response) => {
+                assert!(self.responses.insert(peer, response).is_none());
 
-                if self.responses.len() == self.num_peers {
-                    return QueryStep::Success(mem::take(&mut self.responses));
+                if self.responses.len() == self.num_peers || self.deadline <= now() {
+                    QueryStep::Success(mem::take(&mut self.responses))
+                } else {
+                    QueryStep::Continue
                 }
-                QueryStep::Continue
             }
             // we rely on retries and timeouts to detect a deadline passing
-            Err(_e) => QueryStep::Retry(BTreeSet::from([peer_id])),
-        };
-
-        if self.deadline <= now() {
-            return QueryStep::Success(mem::take(&mut self.responses));
+            Err(_) => {
+                if self.deadline <= now() {
+                    QueryStep::Success(mem::take(&mut self.responses))
+                } else {
+                    QueryStep::Retry(BTreeSet::from([peer]))
+                }
+            }
         }
-
-        step
     }
 }
 
