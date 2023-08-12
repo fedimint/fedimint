@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::mem;
 use std::time::{Duration, SystemTime};
 
-use anyhow::format_err;
+use anyhow::{anyhow, format_err};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
@@ -13,11 +13,39 @@ use crate::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 
+pub trait QueryStrategy<IR, OR = IR> {
+    /// Should requests for this strategy have specific timeouts?
+    fn request_timeout(&self) -> Option<Duration> {
+        None
+    }
+    fn process(&mut self, peer_id: PeerId, response: api::MemberResult<IR>) -> QueryStep<OR>;
+}
+
+/// Results from the strategy handling a response from a peer
+///
+/// Note that the implementation driving the [`QueryStrategy`] returning
+/// [`QueryStep`] is responsible from remembering and collecting errors
+/// for each peer.
+#[derive(Debug)]
+pub enum QueryStep<R> {
+    /// Retry request to this peer
+    Retry(BTreeSet<PeerId>),
+    /// Do nothing yet, keep waiting for requests
+    Continue,
+    /// Return the successful result
+    Success(R),
+    /// Fail the whole request
+    Failure {
+        general: Option<anyhow::Error>,
+        members: BTreeMap<PeerId, MemberError>,
+    },
+}
+
 /// Returns first response with a valid signature
 pub struct VerifiableResponse<R> {
     verifier: Box<maybe_add_send_sync!(dyn Fn(&R) -> bool)>,
     allow_consensus_fallback: bool,
-    current: CurrentConsensus<R>,
+    current: ThresholdConsensus<R>,
 }
 
 impl<R> VerifiableResponse<R> {
@@ -36,7 +64,7 @@ impl<R> VerifiableResponse<R> {
         Self {
             verifier: Box::new(verifier),
             allow_consensus_fallback,
-            current: CurrentConsensus::new(total_peers),
+            current: ThresholdConsensus::new(total_peers),
         }
     }
 }
@@ -62,11 +90,99 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R> for VerifiableResponse<R> {
     }
 }
 
-/// Returns the deduplicated union of `required` number of responses
+struct ErrorStrategy {
+    errors: BTreeMap<PeerId, MemberError>,
+    threshold: usize,
+}
+
+impl ErrorStrategy {
+    pub fn new(threshold: usize) -> Self {
+        assert!(threshold > 0);
+
+        Self {
+            errors: BTreeMap::new(),
+            threshold,
+        }
+    }
+
+    pub fn process<R>(&mut self, peer: PeerId, error: MemberError) -> QueryStep<R> {
+        assert!(self.errors.insert(peer, error).is_none());
+
+        if self.errors.len() == self.threshold {
+            QueryStep::Failure {
+                general: Some(anyhow!("Received errors from {} peers", self.threshold)),
+                members: mem::take(&mut self.errors),
+            }
+        } else {
+            QueryStep::Continue
+        }
+    }
+}
+
+/// Returns when a threshold of responses are equal
+pub struct ThresholdConsensus<R> {
+    error_strategy: ErrorStrategy,
+    responses: BTreeMap<PeerId, R>,
+    retry: BTreeSet<PeerId>,
+    threshold: usize,
+}
+
+impl<R> ThresholdConsensus<R> {
+    pub fn new(total_peers: usize) -> Self {
+        let max_evil = (total_peers - 1) / 3;
+        let threshold = total_peers - max_evil;
+
+        Self {
+            error_strategy: ErrorStrategy::new(max_evil + 1),
+            responses: BTreeMap::new(),
+            retry: BTreeSet::new(),
+            threshold,
+        }
+    }
+
+    pub fn full_participation(total_peers: usize) -> Self {
+        Self {
+            error_strategy: ErrorStrategy::new(1),
+            responses: BTreeMap::new(),
+            retry: BTreeSet::new(),
+            threshold: total_peers,
+        }
+    }
+}
+
+impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
+        match result {
+            Ok(response) => {
+                self.responses.insert(peer, response);
+                assert!(self.retry.insert(peer));
+
+                if let Some(response) = self.responses.values().max_by_key(|response| {
+                    self.responses.values().filter(|r| r == response).count()
+                }) {
+                    let count = self.responses.values().filter(|r| r == &response).count();
+
+                    if count >= self.threshold {
+                        return QueryStep::Success(response.clone());
+                    }
+                }
+
+                if self.retry.len() >= self.threshold {
+                    QueryStep::Retry(mem::take(&mut self.retry))
+                } else {
+                    QueryStep::Continue
+                }
+            }
+            Err(error) => self.error_strategy.process(peer, error),
+        }
+    }
+}
+
+/// Returns the deduplicated union of a threshold of responses
 pub struct UnionResponses<R> {
+    error_strategy: ErrorStrategy,
     responses: HashSet<PeerId>,
-    existing_results: Vec<R>,
-    current: CurrentConsensus<Vec<R>>,
+    union: Vec<R>,
     threshold: usize,
 }
 
@@ -76,33 +192,34 @@ impl<R> UnionResponses<R> {
         let threshold = total_peers - max_evil;
 
         Self {
+            error_strategy: ErrorStrategy::new(max_evil + 1),
             responses: HashSet::new(),
-            existing_results: vec![],
-            current: CurrentConsensus::new(total_peers),
+            union: vec![],
+
             threshold,
         }
     }
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
-    fn process(&mut self, peer: PeerId, results: api::MemberResult<Vec<R>>) -> QueryStep<Vec<R>> {
-        if let Ok(results) = results {
-            for new_result in results {
-                if !self.existing_results.iter().any(|r| r == &new_result) {
-                    self.existing_results.push(new_result);
+    fn process(&mut self, peer: PeerId, result: api::MemberResult<Vec<R>>) -> QueryStep<Vec<R>> {
+        match result {
+            Ok(responses) => {
+                for response in responses {
+                    if !self.union.contains(&response) {
+                        self.union.push(response);
+                    }
+                }
+
+                assert!(self.responses.insert(peer));
+
+                if self.responses.len() >= self.threshold {
+                    QueryStep::Success(mem::take(&mut self.union))
+                } else {
+                    QueryStep::Continue
                 }
             }
-
-            self.responses.insert(peer);
-
-            if self.responses.len() >= self.threshold {
-                QueryStep::Success(mem::take(&mut self.existing_results))
-            } else {
-                QueryStep::Continue
-            }
-        } else {
-            // handle error case using the CurrentConsensus method
-            self.current.process(peer, results)
+            Err(error) => self.error_strategy.process(peer, error),
         }
     }
 }
@@ -110,11 +227,10 @@ impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
 /// Returns the deduplicated union of `required` number of responses
 ///
 /// Unlike [`UnionResponses`], it works with single values, not `Vec`s.
-/// TODO: Should we make `UnionResponses` a wrapper around this one?
 pub struct UnionResponsesSingle<R> {
+    error_strategy: ErrorStrategy,
     responses: HashSet<PeerId>,
-    existing_results: Vec<R>,
-    current: CurrentConsensus<Vec<R>>,
+    union: Vec<R>,
     threshold: usize,
 }
 
@@ -124,9 +240,9 @@ impl<R> UnionResponsesSingle<R> {
         let threshold = total_peers - max_evil;
 
         Self {
+            error_strategy: ErrorStrategy::new(max_evil + 1),
             responses: HashSet::new(),
-            existing_results: vec![],
-            current: CurrentConsensus::new(total_peers),
+            union: vec![],
             threshold,
         }
     }
@@ -135,97 +251,20 @@ impl<R> UnionResponsesSingle<R> {
 impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R> {
     fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<Vec<R>> {
         match result {
-            Ok(new_result) => {
-                if !self.existing_results.iter().any(|r| r == &new_result) {
-                    self.existing_results.push(new_result);
+            Ok(response) => {
+                if !self.union.contains(&response) {
+                    self.union.push(response);
                 }
 
-                self.responses.insert(peer);
+                assert!(self.responses.insert(peer));
 
                 if self.responses.len() >= self.threshold {
-                    QueryStep::Success(mem::take(&mut self.existing_results))
+                    QueryStep::Success(mem::take(&mut self.union))
                 } else {
                     QueryStep::Continue
                 }
             }
-            Err(e) => {
-                // handle error case using the CurrentConsensus method
-                self.current.process(peer, Err(e))
-            }
-        }
-    }
-}
-
-/// Returns when `required` responses are equal
-pub struct CurrentConsensus<R> {
-    /// Previously received responses/errors
-    responses: BTreeMap<PeerId, R>,
-    errors: BTreeMap<PeerId, MemberError>,
-    responded_peers: BTreeSet<PeerId>,
-    threshold: usize,
-    max_evil: usize,
-}
-
-impl<R> CurrentConsensus<R> {
-    pub fn new(total_peers: usize) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-        let threshold = total_peers - max_evil;
-
-        Self {
-            responses: BTreeMap::new(),
-            errors: BTreeMap::new(),
-            responded_peers: BTreeSet::new(),
-            threshold,
-            max_evil,
-        }
-    }
-
-    pub fn full_participation(total_peers: usize) -> Self {
-        Self {
-            responses: BTreeMap::new(),
-            errors: BTreeMap::new(),
-            responded_peers: BTreeSet::new(),
-            threshold: total_peers,
-            max_evil: 0,
-        }
-    }
-}
-
-impl<R: Eq + Clone + Debug> QueryStrategy<R> for CurrentConsensus<R> {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
-        match result {
-            Ok(response) => {
-                self.responses.insert(peer, response);
-                self.responded_peers.insert(peer);
-            }
-            Err(error) => {
-                self.errors.insert(peer, error);
-
-                if self.errors.len() > self.max_evil {
-                    return QueryStep::Failure {
-                        general: None,
-                        members: mem::take(&mut self.errors),
-                    };
-                }
-            }
-        }
-
-        if let Some(response) = self
-            .responses
-            .values()
-            .max_by_key(|response| self.responses.values().filter(|r| r == response).count())
-        {
-            let count = self.responses.values().filter(|r| r == &response).count();
-
-            if count >= self.threshold {
-                return QueryStep::Success(response.clone());
-            }
-        }
-
-        if self.responded_peers.len() >= self.threshold {
-            QueryStep::Retry(mem::take(&mut self.responded_peers))
-        } else {
-            QueryStep::Continue
+            Err(error) => self.error_strategy.process(peer, error),
         }
     }
 }
@@ -250,28 +289,28 @@ impl<R> AllOrDeadline<R> {
 impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
     fn process(
         &mut self,
-        peer_id: PeerId,
-        response: api::MemberResult<R>,
+        peer: PeerId,
+        result: api::MemberResult<R>,
     ) -> QueryStep<BTreeMap<PeerId, R>> {
-        assert!(!self.responses.contains_key(&peer_id));
-        let step = match response {
-            Ok(o) => {
-                self.responses.insert(peer_id, o);
+        match result {
+            Ok(response) => {
+                assert!(self.responses.insert(peer, response).is_none());
 
-                if self.responses.len() == self.num_peers {
-                    return QueryStep::Success(mem::take(&mut self.responses));
+                if self.responses.len() == self.num_peers || self.deadline <= now() {
+                    QueryStep::Success(mem::take(&mut self.responses))
+                } else {
+                    QueryStep::Continue
                 }
-                QueryStep::Continue
             }
             // we rely on retries and timeouts to detect a deadline passing
-            Err(_e) => QueryStep::Retry(BTreeSet::from([peer_id])),
-        };
-
-        if self.deadline <= now() {
-            return QueryStep::Success(mem::take(&mut self.responses));
+            Err(_) => {
+                if self.deadline <= now() {
+                    QueryStep::Success(mem::take(&mut self.responses))
+                } else {
+                    QueryStep::Retry(BTreeSet::from([peer]))
+                }
+            }
         }
-
-        step
     }
 }
 
@@ -291,6 +330,38 @@ impl DiscoverApiVersionSet {
         Self {
             inner: AllOrDeadline::new(num_peers, deadline),
             client_versions,
+        }
+    }
+}
+
+impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVersionSet {
+    fn request_timeout(&self) -> Option<Duration> {
+        Some(
+            self.inner
+                .deadline
+                .duration_since(fedimint_core::time::now())
+                .unwrap_or(Duration::ZERO),
+        )
+    }
+
+    fn process(
+        &mut self,
+        peer: PeerId,
+        result: api::MemberResult<SupportedApiVersionsSummary>,
+    ) -> QueryStep<ApiVersionSet> {
+        match self.inner.process(peer, result) {
+            QueryStep::Success(o) => {
+                match discover_common_api_versions_set(&self.client_versions, o) {
+                    Ok(o) => QueryStep::Success(o),
+                    Err(e) => QueryStep::Failure {
+                        general: Some(e),
+                        members: BTreeMap::new(),
+                    },
+                }
+            }
+            QueryStep::Retry(v) => QueryStep::Retry(v),
+            QueryStep::Continue => QueryStep::Continue,
+            QueryStep::Failure { general, members } => QueryStep::Failure { general, members },
         }
     }
 }
@@ -474,66 +545,4 @@ fn discover_common_api_versions_set(
             )
             .collect(),
     })
-}
-
-impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVersionSet {
-    fn request_timeout(&self) -> Option<Duration> {
-        Some(
-            self.inner
-                .deadline
-                .duration_since(fedimint_core::time::now())
-                .unwrap_or(Duration::ZERO),
-        )
-    }
-
-    fn process(
-        &mut self,
-        peer: PeerId,
-        result: api::MemberResult<SupportedApiVersionsSummary>,
-    ) -> QueryStep<ApiVersionSet> {
-        match self.inner.process(peer, result) {
-            QueryStep::Success(o) => {
-                match discover_common_api_versions_set(&self.client_versions, o) {
-                    Ok(o) => QueryStep::Success(o),
-                    Err(e) => QueryStep::Failure {
-                        general: Some(e),
-                        members: BTreeMap::new(),
-                    },
-                }
-            }
-            QueryStep::Retry(v) => QueryStep::Retry(v),
-            QueryStep::Continue => QueryStep::Continue,
-            QueryStep::Failure { general, members } => QueryStep::Failure { general, members },
-        }
-    }
-}
-
-pub trait QueryStrategy<IR, OR = IR> {
-    /// Should requests for this strategy have specific timeouts?
-    fn request_timeout(&self) -> Option<Duration> {
-        None
-    }
-    fn process(&mut self, peer_id: PeerId, response: api::MemberResult<IR>) -> QueryStep<OR>;
-}
-
-/// Results from the strategy handling a response from a peer
-///
-/// Note that the implementation driving the [`QueryStrategy`] returning
-/// [`QueryStep`] is responsible from remembering and collecting errors
-/// for each peer.
-#[derive(Debug)]
-pub enum QueryStep<R> {
-    /// Retry request to this peer
-    Retry(BTreeSet<PeerId>),
-    /// Do nothing yet, keep waiting for requests
-    Continue,
-    /// Return the successful result
-    Success(R),
-    /// Fail the whole request and remember errors from given members
-    /// Note: member errors are to be added to any errors previously returned
-    /// with `FailMembers`
-    Failure {
-        general: Option<anyhow::Error>,
-        members: BTreeMap<PeerId, MemberError>,
-    },
 }
