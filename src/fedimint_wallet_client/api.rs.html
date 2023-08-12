@@ -46,7 +46,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::query::CurrentConsensus;
+<span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 <span class="kw">use </span>fedimint_wallet_common::PegOutFees;
@@ -68,7 +68,7 @@
 {
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
             <span class="string">&quot;block_count&quot;</span>.to_string(),
             ApiRequestErased::default(),
         )
@@ -81,7 +81,7 @@
         amount: bitcoin::Amount,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
         <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
             <span class="string">&quot;peg_out_fees&quot;</span>.to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
         )

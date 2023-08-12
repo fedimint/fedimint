@@ -1284,7 +1284,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 <span class="kw">use </span><span class="kw">crate</span>::outcome::TransactionStatus;
 <span class="kw">use </span><span class="kw">crate</span>::query::{
-    CurrentConsensus, DiscoverApiVersionSet, QueryStep, QueryStrategy, UnionResponsesSingle,
+    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
     VerifiableResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
@@ -1530,7 +1530,7 @@
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
             method,
             params,
         )
@@ -1801,7 +1801,7 @@
 
     <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_with_strategy(
-            CurrentConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
             <span class="string">&quot;backup&quot;</span>.to_owned(),
             ApiRequestErased::new(request),
         )

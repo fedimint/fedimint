@@ -869,7 +869,7 @@
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
-<span class="kw">use </span>fedimint_core::query::CurrentConsensus;
+<span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
 <span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
@@ -1488,7 +1488,7 @@
                         </span>.map_err_cli_general()<span class="question-mark">?</span>,
                     <span class="prelude-val">None </span>=&gt; ws_api
                         .request_with_strategy(
-                            CurrentConsensus::full_participation(ws_api.peers().len()),
+                            ThresholdConsensus::full_participation(ws_api.peers().len()),
                             method,
                             params,
                         )
