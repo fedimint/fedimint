@@ -1,7 +1,7 @@
 use bitcoin::Address;
 use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::CurrentConsensus;
+use fedimint_core::query::ThresholdConsensus;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 use fedimint_wallet_common::PegOutFees;
@@ -23,7 +23,7 @@ where
 {
     async fn fetch_consensus_block_count(&self) -> FederationResult<u64> {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().total()),
+            ThresholdConsensus::new(self.all_members().total()),
             "block_count".to_string(),
             ApiRequestErased::default(),
         )
@@ -36,7 +36,7 @@ where
         amount: bitcoin::Amount,
     ) -> FederationResult<Option<PegOutFees>> {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().total()),
+            ThresholdConsensus::new(self.all_members().total()),
             "peg_out_fees".to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
         )

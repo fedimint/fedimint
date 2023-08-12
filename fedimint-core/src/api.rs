@@ -48,7 +48,7 @@ use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::outcome::TransactionStatus;
 use crate::query::{
-    CurrentConsensus, DiscoverApiVersionSet, QueryStep, QueryStrategy, UnionResponsesSingle,
+    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
     VerifiableResponse,
 };
 use crate::transaction::{SerdeTransaction, Transaction};
@@ -294,7 +294,7 @@ pub trait FederationApiExt: IFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().total()),
+            ThresholdConsensus::new(self.all_members().total()),
             method,
             params,
         )
@@ -565,7 +565,7 @@ where
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().total()),
+            ThresholdConsensus::new(self.all_members().total()),
             "backup".to_owned(),
             ApiRequestErased::new(request),
         )

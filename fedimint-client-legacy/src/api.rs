@@ -8,7 +8,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::{CurrentConsensus, UnionResponses, UnionResponsesSingle};
+use fedimint_core::query::{ThresholdConsensus, UnionResponses, UnionResponsesSingle};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 use fedimint_mint_client::common::db::ECashUserBackupSnapshot;
@@ -65,7 +65,7 @@ where
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
             .request_with_strategy(
-                CurrentConsensus::new(self.all_members().total()),
+                ThresholdConsensus::new(self.all_members().total()),
                 "register_gateway".to_string(),
                 ApiRequestErased::new(gateway),
             )
@@ -107,7 +107,7 @@ where
     ) -> FederationResult<()> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_MINT)
             .request_with_strategy(
-                CurrentConsensus::new(self.all_members().total()),
+                ThresholdConsensus::new(self.all_members().total()),
                 "backup".to_string(),
                 ApiRequestErased::new(request),
             )
@@ -151,7 +151,7 @@ where
     async fn fetch_consensus_block_count(&self) -> FederationResult<u64> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .request_with_strategy(
-                CurrentConsensus::new(self.all_members().total()),
+                ThresholdConsensus::new(self.all_members().total()),
                 "block_count".to_string(),
                 ApiRequestErased::default(),
             )

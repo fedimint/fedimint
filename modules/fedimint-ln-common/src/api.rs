@@ -1,7 +1,7 @@
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::{CurrentConsensus, UnionResponses};
+use fedimint_core::query::{ThresholdConsensus, UnionResponses};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 
@@ -70,7 +70,7 @@ where
 
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.request_with_strategy(
-            CurrentConsensus::new(self.all_members().total()),
+            ThresholdConsensus::new(self.all_members().total()),
             "register_gateway".to_string(),
             ApiRequestErased::new(gateway),
         )
