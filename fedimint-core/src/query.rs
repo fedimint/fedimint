@@ -97,6 +97,8 @@ struct ErrorStrategy {
 
 impl ErrorStrategy {
     pub fn new(threshold: usize) -> Self {
+        assert!(threshold > 0);
+
         Self {
             errors: BTreeMap::new(),
             threshold,
