@@ -365,6 +365,8 @@ pub enum LightningError {
     ZeroOutput,
     #[error("Offer contains invalid threshold-encrypted data")]
     InvalidEncryptedPreimage,
+    #[error("Offer contains a ciphertext that has already been used")]
+    DuplicateEncryptedPreimage,
     #[error(
         "The incoming LN account requires more funding according to the offer (need {0} got {1})"
     )]
