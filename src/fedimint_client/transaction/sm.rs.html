@@ -491,6 +491,7 @@
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -615,7 +616,8 @@
                                     txid,
                                     tx,
                                     next_submission,
-                                } = state <span class="kw">else </span>{
+                                } = state
+                                <span class="kw">else </span>{
                                     <span class="macro">panic!</span>(<span class="string">&quot;Wrong input state for transition fn&quot;</span>);
                                 };
 
@@ -776,7 +778,7 @@
 
     <span class="attr">#[async_trait]
     </span><span class="kw">impl </span>IFederationApi <span class="kw">for </span>FakeApiClient {
-        <span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+        <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
             <span class="kw-2">&amp;</span><span class="self">self</span>.fake_peers
         }
 

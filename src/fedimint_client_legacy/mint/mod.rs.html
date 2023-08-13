@@ -688,7 +688,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>db::{NoteKey, NoteKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
+<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError, PeerError};
 <span class="kw">use </span>fedimint_core::core::client::ClientModule;
 <span class="kw">use </span>fedimint_core::core::Decoder;
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
@@ -1325,7 +1325,7 @@
 <span class="attr">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>MintClientError {
     <span class="attr">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
-    </span>ApiError(<span class="attr">#[from] </span>MemberError),
+    </span>ApiError(<span class="attr">#[from] </span>PeerError),
     <span class="attr">#[error(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]
     </span>FinalizationError(<span class="attr">#[from] </span>NoteFinalizationError),
     <span class="attr">#[error(<span class="string">&quot;Insufficient balance. Amount requested={0} Mint balance={1}&quot;</span>)]

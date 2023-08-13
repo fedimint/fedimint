@@ -210,7 +210,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::txoproof::{PegInProof, PegInProofError};
 <span class="kw">use </span><span class="kw">crate</span>::modules::wallet::{WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use </span><span class="kw">crate</span>::MemberError;
+<span class="kw">use </span><span class="kw">crate</span>::PeerError;
 
 <span class="kw">pub mod </span>db;
 
@@ -378,7 +378,7 @@
     <span class="attr">#[error(<span class="string">&quot;Output outcome error: {0}&quot;</span>)]
     </span>OutputOutcomeError(<span class="attr">#[from] </span>OutputOutcomeError),
     <span class="attr">#[error(<span class="string">&quot;Mint API error: {0}&quot;</span>)]
-    </span>ApiError(<span class="attr">#[from] </span>MemberError),
+    </span>ApiError(<span class="attr">#[from] </span>PeerError),
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client_legacy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

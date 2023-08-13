@@ -1229,11 +1229,6 @@
 <a href="#1229" id="1229">1229</a>
 <a href="#1230" id="1230">1230</a>
 <a href="#1231" id="1231">1231</a>
-<a href="#1232" id="1232">1232</a>
-<a href="#1233" id="1233">1233</a>
-<a href="#1234" id="1234">1234</a>
-<a href="#1235" id="1235">1235</a>
-<a href="#1236" id="1236">1236</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1290,14 +1285,13 @@
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
 <span class="kw">use crate</span>::{serde_as_encodable_hex, task};
 
-<span class="kw">pub type </span>MemberResult&lt;T&gt; = result::Result&lt;T, MemberError&gt;;
+<span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
+<span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, jsonrpsee_core::Error&gt;;
+<span class="kw">pub type </span>FederationResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, FederationError&gt;;
 
-<span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = result::Result&lt;T, jsonrpsee_core::Error&gt;;
-<span class="kw">pub type </span>FederationResult&lt;T&gt; = result::Result&lt;T, FederationError&gt;;
-
-<span class="doccomment">/// An API request error when calling a single federation member
+<span class="doccomment">/// An API request error when calling a single federation peer
 </span><span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>MemberError {
+</span><span class="kw">pub enum </span>PeerError {
     <span class="attr">#[error(<span class="string">&quot;Response deserialization error: {0}&quot;</span>)]
     </span>ResponseDeserialization(anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Invalid peer id: {peer_id}&quot;</span>)]
@@ -1308,12 +1302,12 @@
     </span>InvalidResponse(String),
 }
 
-<span class="kw">impl </span>MemberError {
+<span class="kw">impl </span>PeerError {
     <span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
-            MemberError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-            MemberError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">false</span>,
-            MemberError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
+            PeerError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            PeerError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">false</span>,
+            PeerError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
                 <span class="comment">// TODO: Does this cover all retryable cases?
                 </span>JsonRpcError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
                 JsonRpcError::MaxSlotsExceeded =&gt; <span class="bool-val">true</span>,
@@ -1321,7 +1315,7 @@
                 JsonRpcError::Call(e) =&gt; e.code() == <span class="number">404</span>,
                 <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
             },
-            MemberError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            PeerError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
         }
     }
 }
@@ -1330,21 +1324,21 @@
 </span><span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub struct </span>FederationError {
     general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
-    members: BTreeMap&lt;PeerId, MemberError&gt;,
+    peers: BTreeMap&lt;PeerId, PeerError&gt;,
 }
 
-<span class="kw">impl </span>fmt::Display <span class="kw">for </span>FederationError {
+<span class="kw">impl </span>Display <span class="kw">for </span>FederationError {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         f.write_str(<span class="string">&quot;Federation rpc error {&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(general) = <span class="self">self</span>.general.as_ref() {
             f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;general =&gt; {general})&quot;</span>))<span class="question-mark">?</span>;
-            <span class="kw">if </span>!<span class="self">self</span>.members.is_empty() {
+            <span class="kw">if </span>!<span class="self">self</span>.peers.is_empty() {
                 f.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
             }
         }
-        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.members.iter().enumerate() {
+        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.peers.iter().enumerate() {
             f.write_fmt(<span class="macro">format_args!</span>(<span class="string">&quot;{peer} =&gt; {e})&quot;</span>))<span class="question-mark">?</span>;
-            <span class="kw">if </span>i == <span class="self">self</span>.members.len() - <span class="number">1 </span>{
+            <span class="kw">if </span>i == <span class="self">self</span>.peers.len() - <span class="number">1 </span>{
                 f.write_str(<span class="string">&quot;, &quot;</span>)<span class="question-mark">?</span>;
             }
         }
@@ -1355,7 +1349,7 @@
 
 <span class="kw">impl </span>FederationError {
     <span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.members.iter().any(|(<span class="kw">_</span>, e)| e.is_retryable())
+        <span class="self">self</span>.peers.iter().any(|(<span class="kw">_</span>, e)| e.is_retryable())
     }
 }
 
@@ -1380,18 +1374,18 @@
 <span class="doccomment">/// An API (module or global) that can query a federation
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IFederationApi: Debug + MaybeSend + MaybeSync {
-    <span class="doccomment">/// List of all federation members for the purpose of iterating each member
+    <span class="doccomment">/// List of all federation peers for the purpose of iterating each peer
     /// in the federation.
     ///
     /// The underlying implementation is responsible for knowing how many
     /// and `PeerId`s of each. The caller of this interface most probably
     /// have some idea as well, but passing this set across every
     /// API call to the federation would be inconvenient.
-    </span><span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;;
+    </span><span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;;
 
     <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi;
 
-    <span class="doccomment">/// Make request to a specific federation member by `peer_id`
+    <span class="doccomment">/// Make request to a specific federation peer by `peer_id`
     </span><span class="kw">async fn </span>request_raw(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peer_id: PeerId,
@@ -1415,9 +1409,9 @@
 </span><span class="kw">pub trait </span>FederationApiExt: IFederationApi {
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
-    </span><span class="kw">async fn </span>request_with_strategy&lt;MemberRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
+    </span><span class="kw">async fn </span>request_with_strategy&lt;PeerRet: serde::de::DeserializeOwned, FedRet: Debug&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;MemberRet, FedRet&gt; + MaybeSend,
+        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PeerRet, FedRet&gt; + MaybeSend,
         method: String,
         params: ApiRequestErased,
     ) -&gt; FederationResult&lt;FedRet&gt; {
@@ -1428,7 +1422,7 @@
         <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt;&gt;&gt;&gt;::new();
 
-        <span class="kw">let </span>peers = <span class="self">self</span>.all_members();
+        <span class="kw">let </span>peers = <span class="self">self</span>.all_peers();
 
         <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
             futures.push(Box::pin(<span class="kw">async </span>{
@@ -1454,20 +1448,20 @@
             }));
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>member_delay_ms = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_delay_ms = BTreeMap::new();
 
         <span class="comment">// Delegates the response handling to the `QueryStrategy` with an exponential
         // back-off with every new set of requests
         </span><span class="kw">let </span>max_delay_ms = <span class="number">1000</span>;
         <span class="kw">loop </span>{
             <span class="kw">let </span>response = futures.next().<span class="kw">await</span>;
-            <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, params = <span class="question-mark">?</span>AbbreviateDebug(params.to_json()), <span class="string">&quot;Received member response&quot;</span>);
+            <span class="macro">trace!</span>(<span class="question-mark">?</span>response, method, params = <span class="question-mark">?</span>AbbreviateDebug(params.to_json()), <span class="string">&quot;Received peer response&quot;</span>);
             <span class="kw">match </span>response {
                 <span class="prelude-val">Some</span>(PeerResponse { peer, result }) =&gt; {
-                    <span class="kw">let </span>result: MemberResult&lt;MemberRet&gt; =
-                        result.map_err(MemberError::Rpc).and_then(|o| {
-                            serde_json::from_value::&lt;MemberRet&gt;(o.<span class="number">0</span>)
-                                .map_err(|e| MemberError::ResponseDeserialization(e.into()))
+                    <span class="kw">let </span>result: PeerResult&lt;PeerRet&gt; =
+                        result.map_err(PeerError::Rpc).and_then(|o| {
+                            serde_json::from_value::&lt;PeerRet&gt;(o.<span class="number">0</span>)
+                                .map_err(|e| PeerError::ResponseDeserialization(e.into()))
                         });
 
                     <span class="kw">let </span>strategy_step = strategy.process(peer, result);
@@ -1475,15 +1469,15 @@
                         method,
                         <span class="question-mark">?</span>params,
                         <span class="question-mark">?</span>strategy_step,
-                        <span class="string">&quot;Taking strategy step to the response after member response&quot;
+                        <span class="string">&quot;Taking strategy step to the response after peer response&quot;
                     </span>);
                     <span class="kw">match </span>strategy_step {
                         QueryStep::Retry(peers) =&gt; {
                             <span class="kw">for </span>retry_peer <span class="kw">in </span>peers {
                                 <span class="kw">let </span><span class="kw-2">mut </span>delay_ms =
-                                    member_delay_ms.get(<span class="kw-2">&amp;</span>retry_peer).copied().unwrap_or(<span class="number">10</span>);
+                                    peer_delay_ms.get(<span class="kw-2">&amp;</span>retry_peer).copied().unwrap_or(<span class="number">10</span>);
                                 delay_ms = cmp::min(max_delay_ms, delay_ms * <span class="number">2</span>);
-                                member_delay_ms.insert(retry_peer, delay_ms);
+                                peer_delay_ms.insert(retry_peer, delay_ms);
 
                                 futures.push(Box::pin({
                                     <span class="kw">let </span>method = <span class="kw-2">&amp;</span>method;
@@ -1508,8 +1502,8 @@
                             }
                         }
                         QueryStep::Continue =&gt; {}
-                        QueryStep::Failure { general, members } =&gt; {
-                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError { general, members })
+                        QueryStep::Failure { general, peers } =&gt; {
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError { general, peers })
                         }
                         QueryStep::Success(response) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(response),
                     }
@@ -1530,7 +1524,7 @@
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
-            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_peers().total()),
             method,
             params,
         )
@@ -1702,19 +1696,17 @@
             <span class="kw">fn </span>process(
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>,
                 peer: PeerId,
-                result: MemberResult&lt;SerdeEpochHistory&gt;,
+                result: PeerResult&lt;SerdeEpochHistory&gt;,
             ) -&gt; QueryStep&lt;SignedEpochOutcome&gt; {
                 <span class="kw">let </span>response = result.and_then(|hist| {
                     hist.try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.decoders)
-                        .map_err(|e| MemberError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
+                        .map_err(|e| PeerError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
                 });
                 <span class="kw">match </span><span class="self">self</span>.strategy.process(peer, response) {
                     QueryStep::Retry(r) =&gt; QueryStep::Retry(r),
                     QueryStep::Continue =&gt; QueryStep::Continue,
                     QueryStep::Success(res) =&gt; QueryStep::Success(res),
-                    QueryStep::Failure { general, members } =&gt; {
-                        QueryStep::Failure { general, members }
-                    }
+                    QueryStep::Failure { general, peers } =&gt; QueryStep::Failure { general, peers },
                 }
             }
         }
@@ -1722,9 +1714,9 @@
         <span class="kw">let </span>qs = ValidHistoryWrapper {
             decoders,
             strategy: VerifiableResponse::new(
-                <span class="self">self</span>.all_members().total(),
-                <span class="bool-val">true</span>,
                 <span class="kw">move </span>|epoch: <span class="kw-2">&amp;</span>SignedEpochOutcome| epoch.verify_sig(<span class="kw-2">&amp;</span>epoch_pk).is_ok(),
+                <span class="bool-val">true</span>,
+                <span class="self">self</span>.all_peers().total(),
             ),
         };
 
@@ -1777,12 +1769,12 @@
     <span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>id = info.id;
         <span class="kw">let </span>qs = VerifiableResponse::new(
-            <span class="self">self</span>.all_members().total(),
-            <span class="bool-val">false</span>,
             <span class="kw">move </span>|config: <span class="kw-2">&amp;</span>ClientConfigResponse| {
                 <span class="kw">let </span>hash = config.client_config.consensus_hash();
                 id.<span class="number">0</span>.verify(<span class="kw-2">&amp;</span>config.signature.<span class="number">0</span>, hash)
             },
+            <span class="bool-val">false</span>,
+            <span class="self">self</span>.all_peers().total(),
         );
 
         <span class="self">self</span>.request_with_strategy(
@@ -1801,7 +1793,7 @@
 
     <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_with_strategy(
-            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_peers().total()),
             <span class="string">&quot;backup&quot;</span>.to_owned(),
             ApiRequestErased::new(request),
         )
@@ -1814,9 +1806,7 @@
     ) -&gt; FederationResult&lt;Vec&lt;ClientBackupSnapshot&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.request_with_strategy(
-                UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;::new(
-                    <span class="self">self</span>.all_members().total(),
-                ),
+                UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;::new(<span class="self">self</span>.all_peers().total()),
                 <span class="string">&quot;recover&quot;</span>.to_owned(),
                 ApiRequestErased::new(id),
             )
@@ -1833,7 +1823,7 @@
         <span class="kw">let </span>timeout = Duration::from_secs(<span class="number">60</span>);
         <span class="self">self</span>.request_with_strategy(
             DiscoverApiVersionSet::new(
-                <span class="self">self</span>.all_members().len(),
+                <span class="self">self</span>.all_peers().len(),
                 now().add(timeout),
                 client_versions.clone(),
             ),
@@ -1844,18 +1834,18 @@
     </span>}
 }
 
-<span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting
-/// equal results from at least `min_eq_results` of them. Members that return
-/// differing results are returned as a member faults list.
+<span class="doccomment">/// Mint API client that will try to run queries against all `peers` expecting
+/// equal results from at least `min_eq_results` of them. Peers that return
+/// differing results are returned as a peer faults list.
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
-    peers: BTreeSet&lt;PeerId&gt;,
-    members: Arc&lt;Vec&lt;FederationMember&lt;C&gt;&gt;&gt;,
+    peer_ids: BTreeSet&lt;PeerId&gt;,
+    peers: Arc&lt;Vec&lt;FederationPeer&lt;C&gt;&gt;&gt;,
     module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">struct </span>FederationMember&lt;C&gt; {
+</span><span class="kw">struct </span>FederationPeer&lt;C&gt; {
     url: Url,
     peer_id: PeerId,
     client: RwLock&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
@@ -1968,14 +1958,14 @@
 /// Can function as either the global or module API
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">&#39;static</span>&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
-    <span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.peers
+    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.peer_ids
     }
 
     <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
         WsFederationApi {
+            peer_ids: <span class="self">self</span>.peer_ids.clone(),
             peers: <span class="self">self</span>.peers.clone(),
-            members: <span class="self">self</span>.members.clone(),
             module_id: <span class="prelude-val">Some</span>(id),
         }
         .into()
@@ -1987,8 +1977,8 @@
         method: <span class="kw-2">&amp;</span>str,
         params: <span class="kw-2">&amp;</span>[Value],
     ) -&gt; JsonRpcResult&lt;Value&gt; {
-        <span class="kw">let </span>member = <span class="self">self
-            </span>.members
+        <span class="kw">let </span>peer = <span class="self">self
+            </span>.peers
             .iter()
             .find(|m| m.peer_id == peer_id)
             .ok_or_else(|| JsonRpcError::Custom(<span class="macro">format!</span>(<span class="string">&quot;Invalid peer_id: {peer_id}&quot;</span>)))<span class="question-mark">?</span>;
@@ -1997,7 +1987,7 @@
             <span class="prelude-val">None </span>=&gt; method.to_string(),
             <span class="prelude-val">Some</span>(id) =&gt; <span class="macro">format!</span>(<span class="string">&quot;module_{id}_{method}&quot;</span>),
         };
-        member.request(<span class="kw-2">&amp;</span>method, params).<span class="kw">await
+        peer.request(<span class="kw-2">&amp;</span>method, params).<span class="kw">await
     </span>}
 }
 
@@ -2029,8 +2019,8 @@
 
 <span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new(members: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_with_client(members)
+    </span><span class="kw">pub fn </span>new(peers: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new_with_client(peers)
     }
 
     <span class="doccomment">/// Creates a new API client from a client config
@@ -2058,15 +2048,15 @@
 
 <span class="kw">impl</span>&lt;C&gt; WsFederationApi&lt;C&gt; {
     <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
-        <span class="self">self</span>.members.iter().map(|member| member.peer_id).collect()
+        <span class="self">self</span>.peers.iter().map(|peer| peer.peer_id).collect()
     }
 
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new_with_client(members: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new_with_client(peers: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
         WsFederationApi {
-            peers: members.iter().map(|m| m.<span class="number">0</span>).collect(),
-            members: Arc::new(
-                members
+            peer_ids: peers.iter().map(|m| m.<span class="number">0</span>).collect(),
+            peers: Arc::new(
+                peers
                     .into_iter()
                     .map(|(peer_id, url)| {
                         <span class="macro">assert!</span>(
@@ -2075,7 +2065,7 @@
                         </span>);
                         <span class="macro">assert!</span>(url.host().is_some(), <span class="string">&quot;API client requires a target host&quot;</span>);
 
-                        FederationMember {
+                        FederationPeer {
                             peer_id,
                             url,
                             client: RwLock::new(<span class="prelude-val">None</span>),
@@ -2094,7 +2084,7 @@
     <span class="kw">pub </span>result: JsonRpcResult&lt;R&gt;,
 }
 
-<span class="kw">impl</span>&lt;C: JsonRpcClient&gt; FederationMember&lt;C&gt; {
+<span class="kw">impl</span>&lt;C: JsonRpcClient&gt; FederationPeer&lt;C&gt; {
     <span class="attr">#[instrument(level = <span class="string">&quot;trace&quot;</span>, fields(peer = %<span class="self">self</span>.peer_id, %method), skip_all)]
     </span><span class="kw">pub async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[Value]) -&gt; JsonRpcResult&lt;Value&gt; {
         <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
@@ -2297,8 +2287,8 @@
         }
     }
 
-    <span class="kw">fn </span>federation_member&lt;C: SimpleClient + MaybeSend + MaybeSync&gt;() -&gt; FederationMember&lt;Client&lt;C&gt;&gt; {
-        FederationMember {
+    <span class="kw">fn </span>federation_peer&lt;C: SimpleClient + MaybeSend + MaybeSync&gt;() -&gt; FederationPeer&lt;Client&lt;C&gt;&gt; {
+        FederationPeer {
             url: Url::from_str(<span class="string">&quot;http://127.0.0.1&quot;</span>).expect(<span class="string">&quot;Could not parse&quot;</span>),
             peer_id: PeerId::from(<span class="number">0</span>),
             client: RwLock::new(<span class="prelude-val">None</span>),
@@ -2327,7 +2317,7 @@
             }
         }
 
-        <span class="kw">let </span>fed = federation_member::&lt;Client&gt;();
+        <span class="kw">let </span>fed = federation_peer::&lt;Client&gt;();
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">0</span>,
@@ -2397,7 +2387,7 @@
             }
         }
 
-        <span class="kw">let </span>fed = federation_member::&lt;Client&gt;();
+        <span class="kw">let </span>fed = federation_peer::&lt;Client&gt;();
 
         FAIL.lock().unwrap().insert(<span class="number">0</span>);
 

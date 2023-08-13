@@ -68,7 +68,7 @@
 {
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_with_strategy(
-            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_peers().total()),
             <span class="string">&quot;block_count&quot;</span>.to_string(),
             ApiRequestErased::default(),
         )
@@ -81,7 +81,7 @@
         amount: bitcoin::Amount,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
         <span class="self">self</span>.request_with_strategy(
-            ThresholdConsensus::new(<span class="self">self</span>.all_members().total()),
+            ThresholdConsensus::new(<span class="self">self</span>.all_peers().total()),
             <span class="string">&quot;peg_out_fees&quot;</span>.to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
         )

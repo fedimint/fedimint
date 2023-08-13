@@ -539,13 +539,6 @@
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -556,7 +549,7 @@
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, PeerId};
 
-<span class="kw">use </span><span class="kw">crate</span>::api::{<span class="self">self</span>, ApiVersionSet, MemberError};
+<span class="kw">use </span><span class="kw">crate</span>::api::{<span class="self">self</span>, ApiVersionSet, PeerError};
 <span class="kw">use </span><span class="kw">crate</span>::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
@@ -566,7 +559,7 @@
     </span><span class="kw">fn </span>request_timeout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Duration&gt; {
         <span class="prelude-val">None
     </span>}
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, response: api::MemberResult&lt;IR&gt;) -&gt; QueryStep&lt;OR&gt;;
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, response: api::PeerResult&lt;IR&gt;) -&gt; QueryStep&lt;OR&gt;;
 }
 
 <span class="doccomment">/// Results from the strategy handling a response from a peer
@@ -585,61 +578,54 @@
     <span class="doccomment">/// Fail the whole request
     </span>Failure {
         general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
-        members: BTreeMap&lt;PeerId, MemberError&gt;,
+        peers: BTreeMap&lt;PeerId, PeerError&gt;,
     },
 }
 
 <span class="doccomment">/// Returns first response with a valid signature
 </span><span class="kw">pub struct </span>VerifiableResponse&lt;R&gt; {
     verifier: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>R) -&gt; bool)&gt;,
-    allow_consensus_fallback: bool,
-    current: ThresholdConsensus&lt;R&gt;,
+    threshold_consensus: ThresholdConsensus&lt;R&gt;,
+    allow_threshold_fallback: bool,
 }
 
 <span class="kw">impl</span>&lt;R&gt; VerifiableResponse&lt;R&gt; {
     <span class="doccomment">/// Strategy for returning first response that is verifiable (typically with
     /// a signature)
-    ///
-    /// * `required`: How many responses until a failure or success is returned
-    /// * `allow_consensus_fallback`: Returns a success if cannot verify but
-    ///   `required` agree
-    /// * `verifier`: Function that verifies the data with the public key
     </span><span class="kw">pub fn </span>new(
-        total_peers: usize,
-        allow_consensus_fallback: bool,
         verifier: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>R) -&gt; bool + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        allow_threshold_fallback: bool,
+        total_peers: usize,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             verifier: Box::new(verifier),
-            allow_consensus_fallback,
-            current: ThresholdConsensus::new(total_peers),
+            threshold_consensus: ThresholdConsensus::new(total_peers),
+            allow_threshold_fallback,
         }
     }
 }
 
 <span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>VerifiableResponse&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::MemberResult&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::PeerResult&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(result) <span class="kw">if </span>(<span class="self">self</span>.verifier)(<span class="kw-2">&amp;</span>result) =&gt; QueryStep::Success(result),
-            <span class="prelude-val">Ok</span>(result) =&gt; {
-                <span class="kw">if </span><span class="self">self</span>.allow_consensus_fallback {
-                    <span class="self">self</span>.current.process(peer, <span class="prelude-val">Ok</span>(result))
+            <span class="prelude-val">Ok</span>(response) <span class="kw">if </span>(<span class="self">self</span>.verifier)(<span class="kw-2">&amp;</span>response) =&gt; QueryStep::Success(response),
+            <span class="prelude-val">Ok</span>(response) =&gt; {
+                <span class="kw">if </span><span class="self">self</span>.allow_threshold_fallback {
+                    <span class="self">self</span>.threshold_consensus.process(peer, <span class="prelude-val">Ok</span>(response))
                 } <span class="kw">else </span>{
-                    <span class="self">self</span>.current.process(
+                    <span class="self">self</span>.threshold_consensus.process(
                         peer,
-                        <span class="prelude-val">Err</span>(MemberError::InvalidResponse(
-                            <span class="string">&quot;Invalid signature&quot;</span>.to_string(),
-                        )),
+                        <span class="prelude-val">Err</span>(PeerError::InvalidResponse(<span class="string">&quot;Invalid signature&quot;</span>.to_string())),
                     )
                 }
             }
-            error =&gt; <span class="self">self</span>.current.process(peer, error),
+            error =&gt; <span class="self">self</span>.threshold_consensus.process(peer, error),
         }
     }
 }
 
 <span class="kw">struct </span>ErrorStrategy {
-    errors: BTreeMap&lt;PeerId, MemberError&gt;,
+    errors: BTreeMap&lt;PeerId, PeerError&gt;,
     threshold: usize,
 }
 
@@ -653,13 +639,13 @@
         }
     }
 
-    <span class="kw">pub fn </span>process&lt;R&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, error: MemberError) -&gt; QueryStep&lt;R&gt; {
+    <span class="kw">pub fn </span>process&lt;R&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, error: PeerError) -&gt; QueryStep&lt;R&gt; {
         <span class="macro">assert!</span>(<span class="self">self</span>.errors.insert(peer, error).is_none());
 
         <span class="kw">if </span><span class="self">self</span>.errors.len() == <span class="self">self</span>.threshold {
             QueryStep::Failure {
                 general: <span class="prelude-val">Some</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Received errors from {} peers&quot;</span>, <span class="self">self</span>.threshold)),
-                members: mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.errors),
+                peers: mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.errors),
             }
         } <span class="kw">else </span>{
             QueryStep::Continue
@@ -699,7 +685,7 @@
 }
 
 <span class="kw">impl</span>&lt;R: Eq + Clone + Debug&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>ThresholdConsensus&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::MemberResult&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::PeerResult&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(response) =&gt; {
                 <span class="self">self</span>.responses.insert(peer, response);
@@ -715,7 +701,7 @@
                     }
                 }
 
-                <span class="kw">if </span><span class="self">self</span>.retry.len() &gt;= <span class="self">self</span>.threshold {
+                <span class="kw">if </span><span class="self">self</span>.retry.len() == <span class="self">self</span>.threshold {
                     QueryStep::Retry(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.retry))
                 } <span class="kw">else </span>{
                     QueryStep::Continue
@@ -750,7 +736,7 @@
 }
 
 <span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;Vec&lt;R&gt;&gt; <span class="kw">for </span>UnionResponses&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::MemberResult&lt;Vec&lt;R&gt;&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::PeerResult&lt;Vec&lt;R&gt;&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(responses) =&gt; {
                 <span class="kw">for </span>response <span class="kw">in </span>responses {
@@ -761,7 +747,7 @@
 
                 <span class="macro">assert!</span>(<span class="self">self</span>.responses.insert(peer));
 
-                <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.threshold {
+                <span class="kw">if </span><span class="self">self</span>.responses.len() == <span class="self">self</span>.threshold {
                     QueryStep::Success(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.union))
                 } <span class="kw">else </span>{
                     QueryStep::Continue
@@ -797,7 +783,7 @@
 }
 
 <span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;R, Vec&lt;R&gt;&gt; <span class="kw">for </span>UnionResponsesSingle&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::MemberResult&lt;R&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::PeerResult&lt;R&gt;) -&gt; QueryStep&lt;Vec&lt;R&gt;&gt; {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(response) =&gt; {
                 <span class="kw">if </span>!<span class="self">self</span>.union.contains(<span class="kw-2">&amp;</span>response) {
@@ -806,7 +792,7 @@
 
                 <span class="macro">assert!</span>(<span class="self">self</span>.responses.insert(peer));
 
-                <span class="kw">if </span><span class="self">self</span>.responses.len() &gt;= <span class="self">self</span>.threshold {
+                <span class="kw">if </span><span class="self">self</span>.responses.len() == <span class="self">self</span>.threshold {
                     QueryStep::Success(mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.union))
                 } <span class="kw">else </span>{
                     QueryStep::Continue
@@ -838,7 +824,7 @@
     <span class="kw">fn </span>process(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         peer: PeerId,
-        result: api::MemberResult&lt;R&gt;,
+        result: api::PeerResult&lt;R&gt;,
     ) -&gt; QueryStep&lt;BTreeMap&lt;PeerId, R&gt;&gt; {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(response) =&gt; {
@@ -895,7 +881,7 @@
     <span class="kw">fn </span>process(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         peer: PeerId,
-        result: api::MemberResult&lt;SupportedApiVersionsSummary&gt;,
+        result: api::PeerResult&lt;SupportedApiVersionsSummary&gt;,
     ) -&gt; QueryStep&lt;ApiVersionSet&gt; {
         <span class="kw">match </span><span class="self">self</span>.inner.process(peer, result) {
             QueryStep::Success(o) =&gt; {
@@ -903,13 +889,13 @@
                     <span class="prelude-val">Ok</span>(o) =&gt; QueryStep::Success(o),
                     <span class="prelude-val">Err</span>(e) =&gt; QueryStep::Failure {
                         general: <span class="prelude-val">Some</span>(e),
-                        members: BTreeMap::new(),
+                        peers: BTreeMap::new(),
                     },
                 }
             }
             QueryStep::Retry(v) =&gt; QueryStep::Retry(v),
             QueryStep::Continue =&gt; QueryStep::Continue,
-            QueryStep::Failure { general, members } =&gt; QueryStep::Failure { general, members },
+            QueryStep::Failure { general, peers } =&gt; QueryStep::Failure { general, peers },
         }
     }
 }

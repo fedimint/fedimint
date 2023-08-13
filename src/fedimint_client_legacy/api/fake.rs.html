@@ -239,7 +239,7 @@
 <span class="kw">where
     </span>State: fmt::Debug + Send + Sync,
 {
-    <span class="kw">fn </span>all_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.members
     }
 
