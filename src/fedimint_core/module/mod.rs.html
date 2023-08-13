@@ -978,6 +978,7 @@
 <a href="#978" id="978">978</a>
 <a href="#979" id="979">979</a>
 <a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
@@ -1019,7 +1020,8 @@
     OutPoint, PeerId,
 };
 
-<span class="kw">pub struct </span>InputMeta {
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>InputMeta {
     <span class="kw">pub </span>amount: TransactionItemAmount,
     <span class="kw">pub </span>pub_keys: Vec&lt;XOnlyPublicKey&gt;,
 }
