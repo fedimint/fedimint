@@ -757,15 +757,20 @@ impl Mint {
 
 #[cfg(test)]
 mod test {
+    use assert_matches::assert_matches;
     use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::Database;
     use fedimint_core::module::{ModuleConsensusVersion, ServerModuleGen};
-    use fedimint_core::{Amount, PeerId};
+    use fedimint_core::{Amount, PeerId, ServerModule};
     use fedimint_mint_common::config::FeeConsensus;
+    use fedimint_mint_common::{MintInput, Nonce, Note};
+    use tbs::blind_message;
 
     use crate::common::config::MintGenParamsConsensus;
     use crate::{
         Mint, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate, MintGen,
-        MintGenParams,
+        MintGenParams, VerificationCache,
     };
 
     const MINTS: usize = 5;
@@ -820,6 +825,89 @@ mod test {
                     .tbs_sks,
             },
         });
+    }
+
+    fn issue_note(
+        server_cfgs: &[ServerModuleConfig],
+        denomination: Amount,
+    ) -> (secp256k1::KeyPair, Note) {
+        let note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+        let nonce = Nonce(note_key.public_key().x_only_public_key().0);
+        let message = nonce.to_message();
+        let blinding_key = tbs::BlindingKey::random();
+        let blind_msg = blind_message(message, blinding_key);
+
+        let bsig_shares = server_cfgs
+            .iter()
+            .map(|cfg| {
+                let sks = *cfg
+                    .to_typed::<MintConfig>()
+                    .unwrap()
+                    .private
+                    .tbs_sks
+                    .get(denomination)
+                    .unwrap();
+                tbs::sign_blinded_msg(blind_msg, sks)
+            })
+            .enumerate()
+            .collect::<Vec<_>>();
+
+        let blind_signature = tbs::combine_valid_shares(
+            bsig_shares,
+            server_cfgs.len() - ((server_cfgs.len() - 1) / 3),
+        );
+        let sig = tbs::unblind_signature(blinding_key, blind_signature);
+
+        (note_key, Note(nonce, sig))
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_detect_double_spends() {
+        let (mint_server_cfg, _) = build_configs();
+
+        let mint = Mint::new(mint_server_cfg[0].to_typed().unwrap());
+        let (_, note) = issue_note(&mint_server_cfg, Amount::from_sats(1));
+
+        // Normal spend works
+        let db = Database::new(MemDatabase::new(), Default::default());
+        let input = MintInput(vec![(Amount::from_sats(1), note)].into_iter().collect());
+
+        // Double spend in same epoch is detected
+        let mut dbtx = db.begin_transaction().await;
+        mint.process_input(
+            &mut dbtx.with_module_prefix(42),
+            &input,
+            &VerificationCache {},
+        )
+        .await
+        .expect("Spend of valid e-cash works");
+        assert_matches!(
+            mint.process_input(
+                &mut dbtx.with_module_prefix(42),
+                &input,
+                &VerificationCache {}
+            )
+            .await,
+            Err(_)
+        );
+
+        // Double spend in same input is detected
+        let mut dbtx = db.begin_transaction().await;
+        let (_, note2) = issue_note(&mint_server_cfg, Amount::from_sats(1));
+        let input2 = MintInput(
+            vec![(Amount::from_sats(1), note2), (Amount::from_sats(1), note2)]
+                .into_iter()
+                .collect(),
+        );
+        assert_matches!(
+            mint.process_input(
+                &mut dbtx.with_module_prefix(42),
+                &input2,
+                &VerificationCache {}
+            )
+            .await,
+            Err(_)
+        );
     }
 }
 
