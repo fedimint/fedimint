@@ -761,13 +761,19 @@ impl Client {
         let initial_balance = self.get_balance().await;
         Box::pin(stream! {
             yield initial_balance;
+            let mut prev_balance = initial_balance;
             while let Some(()) = balance_changes.next().await {
                 let mut dbtx = self.db().begin_transaction().await;
                 let balance = self
                     .primary_module()
                     .get_balance(self.inner.primary_module_instance, &mut dbtx)
                     .await;
-                yield balance;
+
+                // Deduplicate in case modules cannot always tell if the balance actually changed
+                if balance != prev_balance {
+                    prev_balance = balance;
+                    yield balance;
+                }
             }
         })
     }
