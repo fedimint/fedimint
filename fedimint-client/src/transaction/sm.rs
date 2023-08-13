@@ -122,7 +122,8 @@ impl State for TxSubmissionStates {
                                     txid,
                                     tx,
                                     next_submission,
-                                } = state else {
+                                } = state
+                                else {
                                     panic!("Wrong input state for transition fn");
                                 };
 
@@ -283,7 +284,7 @@ mod tests {
 
     #[async_trait]
     impl IFederationApi for FakeApiClient {
-        fn all_members(&self) -> &BTreeSet<PeerId> {
+        fn all_peers(&self) -> &BTreeSet<PeerId> {
             &self.fake_peers
         }
 

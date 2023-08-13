@@ -23,7 +23,7 @@ where
 {
     async fn fetch_consensus_block_count(&self) -> FederationResult<u64> {
         self.request_with_strategy(
-            ThresholdConsensus::new(self.all_members().total()),
+            ThresholdConsensus::new(self.all_peers().total()),
             "block_count".to_string(),
             ApiRequestErased::default(),
         )
@@ -36,7 +36,7 @@ where
         amount: bitcoin::Amount,
     ) -> FederationResult<Option<PegOutFees>> {
         self.request_with_strategy(
-            ThresholdConsensus::new(self.all_members().total()),
+            ThresholdConsensus::new(self.all_peers().total()),
             "peg_out_fees".to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
         )

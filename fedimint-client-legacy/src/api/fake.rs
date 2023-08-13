@@ -102,7 +102,7 @@ impl<State> IFederationApi for FederationApiFaker<State>
 where
     State: fmt::Debug + Send + Sync,
 {
-    fn all_members(&self) -> &BTreeSet<PeerId> {
+    fn all_peers(&self) -> &BTreeSet<PeerId> {
         &self.members
     }
 

@@ -26,7 +26,7 @@ use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::module::gen::ClientModuleGenRegistry;
 use fedimint_core::api::{
-    DynGlobalApi, FederationError, GlobalFederationApi, MemberError, OutputOutcomeError,
+    DynGlobalApi, FederationError, GlobalFederationApi, OutputOutcomeError, PeerError,
     WsFederationApi,
 };
 use fedimint_core::config::ClientConfig;

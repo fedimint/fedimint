@@ -8,7 +8,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
 
-use crate::api::{self, ApiVersionSet, MemberError};
+use crate::api::{self, ApiVersionSet, PeerError};
 use crate::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
@@ -18,7 +18,7 @@ pub trait QueryStrategy<IR, OR = IR> {
     fn request_timeout(&self) -> Option<Duration> {
         None
     }
-    fn process(&mut self, peer_id: PeerId, response: api::MemberResult<IR>) -> QueryStep<OR>;
+    fn process(&mut self, peer_id: PeerId, response: api::PeerResult<IR>) -> QueryStep<OR>;
 }
 
 /// Results from the strategy handling a response from a peer
@@ -37,61 +37,54 @@ pub enum QueryStep<R> {
     /// Fail the whole request
     Failure {
         general: Option<anyhow::Error>,
-        members: BTreeMap<PeerId, MemberError>,
+        peers: BTreeMap<PeerId, PeerError>,
     },
 }
 
 /// Returns first response with a valid signature
 pub struct VerifiableResponse<R> {
     verifier: Box<maybe_add_send_sync!(dyn Fn(&R) -> bool)>,
-    allow_consensus_fallback: bool,
-    current: ThresholdConsensus<R>,
+    threshold_consensus: ThresholdConsensus<R>,
+    allow_threshold_fallback: bool,
 }
 
 impl<R> VerifiableResponse<R> {
     /// Strategy for returning first response that is verifiable (typically with
     /// a signature)
-    ///
-    /// * `required`: How many responses until a failure or success is returned
-    /// * `allow_consensus_fallback`: Returns a success if cannot verify but
-    ///   `required` agree
-    /// * `verifier`: Function that verifies the data with the public key
     pub fn new(
-        total_peers: usize,
-        allow_consensus_fallback: bool,
         verifier: impl Fn(&R) -> bool + MaybeSend + MaybeSync + 'static,
+        allow_threshold_fallback: bool,
+        total_peers: usize,
     ) -> Self {
         Self {
             verifier: Box::new(verifier),
-            allow_consensus_fallback,
-            current: ThresholdConsensus::new(total_peers),
+            threshold_consensus: ThresholdConsensus::new(total_peers),
+            allow_threshold_fallback,
         }
     }
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<R> for VerifiableResponse<R> {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
+    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<R> {
         match result {
-            Ok(result) if (self.verifier)(&result) => QueryStep::Success(result),
-            Ok(result) => {
-                if self.allow_consensus_fallback {
-                    self.current.process(peer, Ok(result))
+            Ok(response) if (self.verifier)(&response) => QueryStep::Success(response),
+            Ok(response) => {
+                if self.allow_threshold_fallback {
+                    self.threshold_consensus.process(peer, Ok(response))
                 } else {
-                    self.current.process(
+                    self.threshold_consensus.process(
                         peer,
-                        Err(MemberError::InvalidResponse(
-                            "Invalid signature".to_string(),
-                        )),
+                        Err(PeerError::InvalidResponse("Invalid signature".to_string())),
                     )
                 }
             }
-            error => self.current.process(peer, error),
+            error => self.threshold_consensus.process(peer, error),
         }
     }
 }
 
 struct ErrorStrategy {
-    errors: BTreeMap<PeerId, MemberError>,
+    errors: BTreeMap<PeerId, PeerError>,
     threshold: usize,
 }
 
@@ -105,13 +98,13 @@ impl ErrorStrategy {
         }
     }
 
-    pub fn process<R>(&mut self, peer: PeerId, error: MemberError) -> QueryStep<R> {
+    pub fn process<R>(&mut self, peer: PeerId, error: PeerError) -> QueryStep<R> {
         assert!(self.errors.insert(peer, error).is_none());
 
         if self.errors.len() == self.threshold {
             QueryStep::Failure {
                 general: Some(anyhow!("Received errors from {} peers", self.threshold)),
-                members: mem::take(&mut self.errors),
+                peers: mem::take(&mut self.errors),
             }
         } else {
             QueryStep::Continue
@@ -151,7 +144,7 @@ impl<R> ThresholdConsensus<R> {
 }
 
 impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<R> {
+    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<R> {
         match result {
             Ok(response) => {
                 self.responses.insert(peer, response);
@@ -167,7 +160,7 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
                     }
                 }
 
-                if self.retry.len() >= self.threshold {
+                if self.retry.len() == self.threshold {
                     QueryStep::Retry(mem::take(&mut self.retry))
                 } else {
                     QueryStep::Continue
@@ -202,7 +195,7 @@ impl<R> UnionResponses<R> {
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<Vec<R>>) -> QueryStep<Vec<R>> {
+    fn process(&mut self, peer: PeerId, result: api::PeerResult<Vec<R>>) -> QueryStep<Vec<R>> {
         match result {
             Ok(responses) => {
                 for response in responses {
@@ -213,7 +206,7 @@ impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
 
                 assert!(self.responses.insert(peer));
 
-                if self.responses.len() >= self.threshold {
+                if self.responses.len() == self.threshold {
                     QueryStep::Success(mem::take(&mut self.union))
                 } else {
                     QueryStep::Continue
@@ -249,7 +242,7 @@ impl<R> UnionResponsesSingle<R> {
 }
 
 impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R> {
-    fn process(&mut self, peer: PeerId, result: api::MemberResult<R>) -> QueryStep<Vec<R>> {
+    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<Vec<R>> {
         match result {
             Ok(response) => {
                 if !self.union.contains(&response) {
@@ -258,7 +251,7 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R>
 
                 assert!(self.responses.insert(peer));
 
-                if self.responses.len() >= self.threshold {
+                if self.responses.len() == self.threshold {
                     QueryStep::Success(mem::take(&mut self.union))
                 } else {
                     QueryStep::Continue
@@ -290,7 +283,7 @@ impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for AllOrDeadline<R> {
     fn process(
         &mut self,
         peer: PeerId,
-        result: api::MemberResult<R>,
+        result: api::PeerResult<R>,
     ) -> QueryStep<BTreeMap<PeerId, R>> {
         match result {
             Ok(response) => {
@@ -347,7 +340,7 @@ impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVe
     fn process(
         &mut self,
         peer: PeerId,
-        result: api::MemberResult<SupportedApiVersionsSummary>,
+        result: api::PeerResult<SupportedApiVersionsSummary>,
     ) -> QueryStep<ApiVersionSet> {
         match self.inner.process(peer, result) {
             QueryStep::Success(o) => {
@@ -355,13 +348,13 @@ impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVe
                     Ok(o) => QueryStep::Success(o),
                     Err(e) => QueryStep::Failure {
                         general: Some(e),
-                        members: BTreeMap::new(),
+                        peers: BTreeMap::new(),
                     },
                 }
             }
             QueryStep::Retry(v) => QueryStep::Retry(v),
             QueryStep::Continue => QueryStep::Continue,
-            QueryStep::Failure { general, members } => QueryStep::Failure { general, members },
+            QueryStep::Failure { general, peers } => QueryStep::Failure { general, peers },
         }
     }
 }
