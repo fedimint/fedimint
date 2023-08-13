@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use db::{NoteKey, NoteKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use fedimint_core::api::{GlobalFederationApi, MemberError, OutputOutcomeError};
+use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError, PeerError};
 use fedimint_core::core::client::ClientModule;
 use fedimint_core::core::Decoder;
 use fedimint_core::db::DatabaseTransaction;
@@ -643,7 +643,7 @@ pub enum NoteFinalizationError {
 #[derive(Error, Debug)]
 pub enum MintClientError {
     #[error("Error querying federation: {0}")]
-    ApiError(#[from] MemberError),
+    ApiError(#[from] PeerError),
     #[error("Could not finalize issuance request: {0}")]
     FinalizationError(#[from] NoteFinalizationError),
     #[error("Insufficient balance. Amount requested={0} Mint balance={1}")]

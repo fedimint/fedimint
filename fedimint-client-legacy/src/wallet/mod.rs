@@ -19,7 +19,7 @@ use crate::modules::wallet::tweakable::Tweakable;
 use crate::modules::wallet::txoproof::{PegInProof, PegInProofError};
 use crate::modules::wallet::{WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome};
 use crate::utils::ClientContext;
-use crate::MemberError;
+use crate::PeerError;
 
 pub mod db;
 
@@ -187,5 +187,5 @@ pub enum WalletClientError {
     #[error("Output outcome error: {0}")]
     OutputOutcomeError(#[from] OutputOutcomeError),
     #[error("Mint API error: {0}")]
-    ApiError(#[from] MemberError),
+    ApiError(#[from] PeerError),
 }
