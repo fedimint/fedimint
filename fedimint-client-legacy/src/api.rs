@@ -55,7 +55,7 @@ where
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
             .request_with_strategy(
-                UnionResponses::new(self.all_members().total()),
+                UnionResponses::new(self.all_peers().total()),
                 "list_gateways".to_string(),
                 ApiRequestErased::default(),
             )
@@ -65,7 +65,7 @@ where
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_LN)
             .request_with_strategy(
-                ThresholdConsensus::new(self.all_members().total()),
+                ThresholdConsensus::new(self.all_peers().total()),
                 "register_gateway".to_string(),
                 ApiRequestErased::new(gateway),
             )
@@ -107,7 +107,7 @@ where
     ) -> FederationResult<()> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_MINT)
             .request_with_strategy(
-                ThresholdConsensus::new(self.all_members().total()),
+                ThresholdConsensus::new(self.all_peers().total()),
                 "backup".to_string(),
                 ApiRequestErased::new(request),
             )
@@ -121,7 +121,7 @@ where
             .with_module(LEGACY_HARDCODED_INSTANCE_ID_MINT)
             .request_with_strategy(
                 UnionResponsesSingle::<Option<ECashUserBackupSnapshot>>::new(
-                    self.all_members().total(),
+                    self.all_peers().total(),
                 ),
                 "recover".to_string(),
                 ApiRequestErased::new(id),
@@ -151,7 +151,7 @@ where
     async fn fetch_consensus_block_count(&self) -> FederationResult<u64> {
         self.with_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .request_with_strategy(
-                ThresholdConsensus::new(self.all_members().total()),
+                ThresholdConsensus::new(self.all_peers().total()),
                 "block_count".to_string(),
                 ApiRequestErased::default(),
             )
