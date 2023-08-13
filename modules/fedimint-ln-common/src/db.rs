@@ -18,6 +18,7 @@ pub enum DbKeyPrefix {
     ContractUpdate = 0x44,
     LightningGateway = 0x45,
     BlockCountVote = 0x46,
+    EncryptedPreimageIndex = 0x47,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -54,6 +55,24 @@ impl_db_record!(
 impl_db_lookup!(
     key = ContractUpdateKey,
     query_prefix = ContractUpdateKeyPrefix
+);
+
+/// We save the hash of the encrypted preimage from each accepted offer so that
+/// we can make sure that no preimage is used twice.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct EncryptedPreimageIndexKey(pub bitcoin_hashes::sha256::Hash);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct EncryptedPreimageIndexKeyPrefix;
+
+impl_db_record!(
+    key = EncryptedPreimageIndexKey,
+    value = (),
+    db_prefix = DbKeyPrefix::EncryptedPreimageIndex,
+);
+impl_db_lookup!(
+    key = EncryptedPreimageIndexKey,
+    query_prefix = EncryptedPreimageIndexKeyPrefix
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]

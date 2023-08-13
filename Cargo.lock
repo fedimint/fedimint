@@ -1646,6 +1646,7 @@ name = "fedimint-ln-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-trait",
  "bincode",
  "bitcoin_hashes 0.11.0",
@@ -1667,6 +1668,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
+ "test-log",
  "thiserror",
  "threshold_crypto",
  "tokio",
