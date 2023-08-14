@@ -27,52 +27,52 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targe
 cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace
 
 function cli_test_reconnect() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/reconnect-test.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
 }
 export -f cli_test_reconnect
 
 function cli_test_lightning_reconnect() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/lightning-reconnect-test.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/lightning-reconnect-test.sh
 }
 export -f cli_test_lightning_reconnect
 
 function cli_test_latency() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/latency-test.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
 }
 export -f cli_test_latency
 
 function cli_test_cli() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/cli-test.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/cli-test.sh
 }
 export -f cli_test_cli
 
 function cli_load_test_tool_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/load-test-tool-test.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/load-test-tool-test.sh
 }
 export -f cli_load_test_tool_test
 
 function cli_test_rust_tests_bitcoind() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/rust-tests.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/rust-tests.sh
 }
 export -f cli_test_rust_tests_bitcoind
 
 function cli_test_rust_tests_electrs() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/rust-tests.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/rust-tests.sh
 }
 export -f cli_test_rust_tests_electrs
 
 function cli_test_rust_tests_esplora() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/rust-tests.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/rust-tests.sh
 }
 export -f cli_test_rust_tests_esplora
 
 function cli_test_wasm() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/wasm-tests.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/wasm-tests.sh
 }
 export -f cli_test_wasm
 
 function cli_test_always_success() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/always-success-test.sh
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/always-success-test.sh
 }
 export -f cli_test_always_success
 

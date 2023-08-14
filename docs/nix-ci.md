@@ -74,7 +74,7 @@ It's quite large because it contains the result of all 3: `cargo build`, `cargo 
 
 ### Cli Tests
 
-Fedimint's features a set of integration tests, which are expressed as separate Nix packages in the `flake.nix`, [like `cliTestCli`](https://github.com/fedimint/fedimint/blob/2a02caab33e97895ccffc24cd2b7eb445f1daa5f/flake.nix#L223). `cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";` is used to make `crane` run an arbitrary command (in this case: a script executing the test), instead of the default `cargo build`.
+Fedimint's features a set of integration tests, which are expressed as separate Nix packages in the `flake.nix`, [like `cliTestCli`](https://github.com/fedimint/fedimint/blob/2a02caab33e97895ccffc24cd2b7eb445f1daa5f/flake.nix#L223). `cargoBuildCommand = "patchShebangs ./scripts && ./scripts/tests/cli-test.sh";` is used to make `crane` run an arbitrary command (in this case: a script executing the test), instead of the default `cargo build`.
 
 A notable feature of expressing tests as Nix packages is that once a given test ran successfully Nix will store the package in the Nix store and know that there is no point to re-run the tests unless any relevant input file changes.
 
