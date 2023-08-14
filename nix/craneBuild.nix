@@ -266,6 +266,7 @@ craneLib.overrideScope' (self: prev: {
       fedimintd = { };
       fedimint-cli = { };
       fedimint-tests = { };
+      fedimint-dbtool = { };
     };
 
     defaultBin = "fedimintd";
@@ -288,13 +289,6 @@ craneLib.overrideScope' (self: prev: {
     pkgs = {
       fedimint-client-legacy = { };
       fedimint-client = { };
-    };
-  };
-
-  fedimint-dbtool-pkgs = self.pkgsBuild {
-    name = "fedimint-dbtool-pkgs";
-    pkgs = {
-      fedimint-dbtool = { };
     };
   };
 
