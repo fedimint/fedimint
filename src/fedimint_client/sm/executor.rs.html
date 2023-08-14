@@ -1111,6 +1111,11 @@
 <a href="#1111" id="1111">1111</a>
 <a href="#1112" id="1112">1112</a>
 <a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1621,6 +1626,10 @@
                     } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
                     AutocommitError::ClosureError { error, .. } =&gt; error,
                 })<span class="question-mark">?</span>;
+            <span class="macro">debug!</span>(
+                outcome = <span class="question-mark">?</span>active_or_inactive_state,
+                <span class="string">&quot;Finished executing state transition&quot;
+            </span>);
 
             active_state_count -= <span class="number">1</span>;
             <span class="kw">match </span>active_or_inactive_state {
@@ -2018,7 +2027,8 @@
     <span class="kw">type </span>Record = InactiveStateKey&lt;GC&gt;;
 }
 
-<span class="kw">enum </span>ActiveOrInactiveState&lt;GC&gt; {
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">enum </span>ActiveOrInactiveState&lt;GC&gt; {
     Active {
         dyn_state: DynState&lt;GC&gt;,
         active_state: ActiveState,

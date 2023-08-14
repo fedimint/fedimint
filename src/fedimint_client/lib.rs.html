@@ -1675,6 +1675,12 @@
 <a href="#1675" id="1675">1675</a>
 <a href="#1676" id="1676">1676</a>
 <a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2438,13 +2444,19 @@
         <span class="kw">let </span>initial_balance = <span class="self">self</span>.get_balance().<span class="kw">await</span>;
         Box::pin(<span class="macro">stream! </span>{
             <span class="kw">yield </span>initial_balance;
+            <span class="kw">let </span><span class="kw-2">mut </span>prev_balance = initial_balance;
             <span class="kw">while let </span><span class="prelude-val">Some</span>(()) = balance_changes.next().<span class="kw">await </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
                 <span class="kw">let </span>balance = <span class="self">self
                     </span>.primary_module()
                     .get_balance(<span class="self">self</span>.inner.primary_module_instance, <span class="kw-2">&amp;mut </span>dbtx)
                     .<span class="kw">await</span>;
-                <span class="kw">yield </span>balance;
+
+                <span class="comment">// Deduplicate in case modules cannot always tell if the balance actually changed
+                </span><span class="kw">if </span>balance != prev_balance {
+                    prev_balance = balance;
+                    <span class="kw">yield </span>balance;
+                }
             }
         })
     }
