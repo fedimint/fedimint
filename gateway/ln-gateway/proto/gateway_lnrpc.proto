@@ -11,7 +11,7 @@ service GatewayLightning {
   rpc GetNodeInfo(EmptyRequest) returns (GetNodeInfoResponse) {}
 
   /* GetRouteHints returns the route hints to the associated lightning node */
-  rpc GetRouteHints(EmptyRequest) returns (GetRouteHintsResponse) {}
+  rpc GetRouteHints(GetRouteHintsRequest) returns (GetRouteHintsResponse) {}
 
   /* 
    * PayInvoice attempts to pay an invoice using the associated lightning node
@@ -33,6 +33,10 @@ service GatewayLightning {
 message EmptyRequest {}
 
 message EmptyResponse {}
+
+message GetRouteHintsRequest {
+  uint64 num_route_hints = 1;
+}
 
 message GetNodeInfoResponse {
   // The public key of the associated lightning node

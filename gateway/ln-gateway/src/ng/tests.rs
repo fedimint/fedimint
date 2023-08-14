@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,14 +29,16 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::GatewayTest;
+use fedimint_testing::gateway::{GatewayTest, NUM_INVOICE_ROUTE_HINTS};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Invoice;
+use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
+use secp256k1::PublicKey;
 use url::Url;
 
 fn fixtures() -> Fixtures {
@@ -577,6 +580,73 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             // Balance should be unchanged
             assert_eq!(user_client.get_balance().await, sats(2000));
             assert_eq!(gateway.get_balance().await, sats(0));
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
+    if !Fixtures::is_real_test() {
+        return Ok(());
+    }
+
+    gateway_test(
+        |mut gateway, other_lightning_node, fed, user_client, bitcoin| async move {
+            let mut expected_pub_keys: HashSet<PublicKey> = HashSet::new();
+            expected_pub_keys.insert(gateway.node_pub_key);
+            let GetNodeInfoResponse { pub_key, alias: _ } = other_lightning_node.info().await?;
+            let other_pub_key = PublicKey::from_slice(&pub_key)?;
+            expected_pub_keys.insert(other_pub_key);
+
+            let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
+            expected_pub_keys.insert(ldk.node_pub_key);
+
+            ldk.open_channel(
+                Amount::from_msats(5000000),
+                gateway.node_pub_key,
+                gateway.listening_addr.clone(),
+                bitcoin.lock_exclusive().await,
+            )
+            .await?;
+
+            // Spawn another LDK Node and open a smaller channel that should be filtered out
+            // when the invoice is generated.
+            let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
+
+            ldk.open_channel(
+                Amount::from_msats(3000000),
+                gateway.node_pub_key,
+                gateway.listening_addr.clone(),
+                bitcoin.lock_exclusive().await,
+            )
+            .await?;
+            let ldk_node2 = ldk.node_pub_key;
+
+            // Re-register the gateway with the federation so it has the updated route hints
+            gateway.connect_fed(&fed).await;
+
+            let invoice_amount = sats(100);
+            let (_invoice_op, invoice) = user_client
+                .create_bolt11_invoice(invoice_amount, "description".into(), None)
+                .await?;
+            let route_hints = invoice.route_hints();
+
+            // Verify that the invoice has `NUM_INVOICE_ROUTE_HINTS` and that
+            // the pubkeys for each hop in the route hints are in our `expected_pub_keys`
+            // set.
+            assert_eq!(route_hints.len(), NUM_INVOICE_ROUTE_HINTS);
+            route_hints
+                .iter()
+                .flat_map(|route_hint| route_hint.0.clone())
+                .map(|hop| hop.src_node_id)
+                .for_each(|src_node| {
+                    assert!(expected_pub_keys.contains(&src_node));
+                });
+
+            assert!(!expected_pub_keys.contains(&ldk_node2));
 
             Ok(())
         },

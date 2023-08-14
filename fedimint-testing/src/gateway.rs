@@ -25,6 +25,8 @@ use crate::federation::FederationTest;
 use crate::fixtures::test_dir;
 use crate::ln::LightningTest;
 
+pub const NUM_INVOICE_ROUTE_HINTS: usize = 2;
+
 /// Fixture for creating a gateway
 pub struct GatewayTest {
     /// Password for the RPC
@@ -109,6 +111,7 @@ impl GatewayTest {
             clients.clone(),
             scid_to_federation.clone(),
             tg.clone(),
+            NUM_INVOICE_ROUTE_HINTS,
         )
         .await
         .unwrap();

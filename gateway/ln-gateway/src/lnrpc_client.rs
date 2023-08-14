@@ -15,7 +15,7 @@ use url::Url;
 
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 pub type RouteHtlcStream<'a> =
@@ -49,7 +49,10 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError>;
 
     /// Get route hints to the lightning node
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError>;
+    async fn routehints(
+        &self,
+        num_route_hints: usize,
+    ) -> Result<GetRouteHintsResponse, LightningRpcError>;
 
     /// Attempt to pay an invoice using the lightning node
     async fn pay(
@@ -131,8 +134,13 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(res.into_inner())
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        let req = Request::new(EmptyRequest {});
+    async fn routehints(
+        &self,
+        num_route_hints: usize,
+    ) -> Result<GetRouteHintsResponse, LightningRpcError> {
+        let req = Request::new(GetRouteHintsRequest {
+            num_route_hints: num_route_hints as u64,
+        });
         let mut client = Self::connect(self.connection_url.clone()).await?;
         let res = client.get_route_hints(req).await.map_err(|status| {
             LightningRpcError::FailedToGetRouteHints {
