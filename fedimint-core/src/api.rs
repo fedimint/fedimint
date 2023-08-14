@@ -1215,7 +1215,7 @@ mod tests {
         let connect = InviteCode {
             url: "ws://test1".parse().unwrap(),
             id: FederationId::dummy(),
-            download_token: ClientConfigDownloadToken(OsRng::default().gen()),
+            download_token: ClientConfigDownloadToken(OsRng.gen()),
         };
 
         let bech32 = connect.to_string();

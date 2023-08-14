@@ -1058,7 +1058,7 @@ async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result
 async fn run_ui(process_mgr: &ProcessManager) -> Result<Vec<Fedimintd>> {
     let bitcoind = Bitcoind::new(process_mgr).await?;
     let fed_size = process_mgr.globals.FM_FED_SIZE;
-    let fedimintds = futures::future::try_join_all((0..fed_size).into_iter().map(|peer| {
+    let fedimintds = futures::future::try_join_all((0..fed_size).map(|peer| {
         let bitcoind = bitcoind.clone();
         async move {
             let peer_port = 10000 + 8137 + peer * 2;

@@ -25,10 +25,10 @@ pub mod serde_impl;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PublicKeyShare(#[serde(with = "serde_impl::g2")] pub G2Affine);
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for PublicKeyShare {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // As per <https://rust-lang.github.io/rust-clippy/master/index.html#/derive_hash_xor_eq>
+        // As per <https://rust-lang.github.io/rust-clippy/master/index.html#/derived_hash_with_manual_eq>
         // k1 == k2 ⇒ hash(k1) == hash(k2)
         // must hold, and all infinities are equal, so must hash to the same value.
         if bool::from(self.0.is_identity()) {
@@ -86,7 +86,7 @@ impl Message {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for AggregatePublicKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let serialized = self.0.to_compressed();
