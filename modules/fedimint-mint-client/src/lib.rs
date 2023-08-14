@@ -1362,6 +1362,26 @@ impl std::fmt::Display for NoteIndex {
     }
 }
 
+struct OOBSpendTag;
+
+impl sha256t::Tag for OOBSpendTag {
+    fn engine() -> sha256::HashEngine {
+        let mut engine = sha256::HashEngine::default();
+        engine.input(b"oob-spend");
+        engine
+    }
+}
+
+struct OOBReissueTag;
+
+impl sha256t::Tag for OOBReissueTag {
+    fn engine() -> sha256::HashEngine {
+        let mut engine = sha256::HashEngine::default();
+        engine.input(b"oob-reissue");
+        engine
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use fedimint_core::{Amount, Tiered, TieredMulti, TieredSummary};
@@ -1466,25 +1486,5 @@ mod tests {
             .into_iter()
             .flat_map(|(amount, number)| vec![(amount, "dummy note".into()); number])
             .collect()
-    }
-}
-
-struct OOBSpendTag;
-
-impl sha256t::Tag for OOBSpendTag {
-    fn engine() -> sha256::HashEngine {
-        let mut engine = sha256::HashEngine::default();
-        engine.input(b"oob-spend");
-        engine
-    }
-}
-
-struct OOBReissueTag;
-
-impl sha256t::Tag for OOBReissueTag {
-    fn engine() -> sha256::HashEngine {
-        let mut engine = sha256::HashEngine::default();
-        engine.input(b"oob-reissue");
-        engine
     }
 }

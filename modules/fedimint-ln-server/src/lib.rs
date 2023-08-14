@@ -489,7 +489,7 @@ impl ServerModule for Lightning {
                     .get_value(&contract_db_key)
                     .await
                     .expect("checked before that it exists");
-                let mut incoming = match &mut contract_account.contract {
+                let incoming = match &mut contract_account.contract {
                     FundedContract::Incoming(incoming) => incoming,
                     _ => unreachable!("previously checked that it's an incoming contract"),
                 };
