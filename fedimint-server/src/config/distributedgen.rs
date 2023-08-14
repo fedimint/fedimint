@@ -454,7 +454,7 @@ mod tests {
     }
 
     fn run<G: DkgGroup>(group: G) -> HashMap<PeerId, DkgKeys<G>> {
-        let mut rng = OsRng::default();
+        let mut rng = OsRng;
         let num_peers = 4;
         let threshold = 3;
         let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();

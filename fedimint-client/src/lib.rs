@@ -1532,6 +1532,8 @@ async fn get_config(
         }
     };
 
+    // some borrowck lifetime limitation thing
+    #[allow(clippy::let_and_return)]
     config_res
 }
 

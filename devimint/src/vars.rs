@@ -29,7 +29,7 @@ macro_rules! declare_vars {
                 })
             }
 
-            pub fn vars<'a>(&'a self) -> impl Iterator<Item = (&'static str, String)> {
+            pub fn vars(&self) -> impl Iterator<Item = (&'static str, String)> {
                 let mut env = ::std::vec::Vec::new();
                 $(
                     if let Some(value) = $crate::vars::ToEnvVar::to_env_value(&self.$env_name) {

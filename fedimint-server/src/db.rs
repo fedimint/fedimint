@@ -246,7 +246,7 @@ mod fedimint_migration_tests {
         .await;
 
         dbtx.insert_new_entry(
-            &ClientConfigDownloadKey(ClientConfigDownloadToken(OsRng::default().gen())),
+            &ClientConfigDownloadKey(ClientConfigDownloadToken(OsRng.gen())),
             &0,
         )
         .await;

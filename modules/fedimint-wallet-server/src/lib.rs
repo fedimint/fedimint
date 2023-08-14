@@ -939,8 +939,7 @@ impl Wallet {
 
         // We need to search and remove all `PendingTransactions` invalidated by RBF
         let mut pending_to_remove = vec![pending_tx.clone()];
-        while !pending_to_remove.is_empty() {
-            let removed = pending_to_remove.pop().expect("exists");
+        while let Some(removed) = pending_to_remove.pop() {
             all_transactions.remove(&removed.tx.txid());
             dbtx.remove_entry(&PendingTransactionKey(removed.tx.txid()))
                 .await;
