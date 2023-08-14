@@ -17,13 +17,11 @@ else
   FM_TEST_DIR="${2-"$(mktemp --tmpdir -d XXXXX)"}"
 fi
 export FM_TEST_DIR
-export FM_PID_FILE="$FM_TEST_DIR/.pid"
 export FM_LOGS_DIR="$FM_TEST_DIR/logs"
 
 echo "Setting up env variables in $FM_TEST_DIR"
 
 mkdir -p "$FM_TEST_DIR"
-touch "$FM_PID_FILE"
 
 # Symlink $FM_TEST_DIR to local gitignored target/ directory so they're easier to find
 rm -f target/devimint
@@ -40,16 +38,9 @@ if [ -z "${SKIP_CARGO_BUILD:-}" ]; then
 fi
 export PATH="$PWD/target/${CARGO_PROFILE:-debug}:$PATH"
 
-
-# Function for killing processes stored in FM_PID_FILE in reverse-order they were created in
-function kill_fedimint_processes {
-  echo "Killing fedimint processes"
-  PIDS=$(cat $FM_PID_FILE | sed '1!G;h;$!d') # sed reverses order
-  if [ -n "$PIDS" ]
-  then
-    kill $PIDS 2>/dev/null
-  fi
-  rm -f $FM_PID_FILE
+function kill_devimint {
+  echo "Killing devimint and child processes"
+  pkill devimint
 }
 
-trap kill_fedimint_processes EXIT
+trap kill_devimint EXIT

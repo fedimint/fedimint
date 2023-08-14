@@ -12,10 +12,8 @@ source scripts/build.sh ""
 # if RUST_LOG is none, don't show output of test setup
 if [ "${RUST_LOG,,}" = "none" ]; then
   devimint external-daemons >/dev/null &
-  echo $! >> $FM_PID_FILE
 else
   devimint external-daemons &
-  echo $! >> $FM_PID_FILE
 fi
 
 STATUS=$(devimint wait)
