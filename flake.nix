@@ -157,7 +157,6 @@
             fedimint-pkgs = craneLib.fedimint-pkgs;
             gateway-pkgs = craneLib.gateway-pkgs;
             client-pkgs = craneLib.client-pkgs { };
-            fedimint-dbtool-pkgs = craneLib.fedimint-dbtool-pkgs;
             devimint = craneLib.devimint;
             fedimint-load-test-tool = craneLib.fedimint-load-test-tool;
           };
@@ -197,6 +196,11 @@
               {
                 pkg = (rustPackageOutputsFinal craneLib).fedimint-pkgs;
                 bin = "fedimint-cli";
+              };
+            fedimint-dbtool = pickBinary
+              {
+                pkg = (rustPackageOutputsFinal craneLib).fedimint-pkgs;
+                bin = "fedimint-dbtool";
               };
             gatewayd = pickBinary
               {
