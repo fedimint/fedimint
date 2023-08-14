@@ -11,7 +11,7 @@ check:
 
 # run `cargo clippy` on everything
 clippy:
-  cargo clippy --all --all-targets
+  cargo clippy --all --all-targets --deny warnings --allow deprecated
 
 # run `cargo clippy --fix` on everything
 clippy-fix:
