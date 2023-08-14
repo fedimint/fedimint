@@ -69,5 +69,5 @@ cargo test -p fedimint-tests -- --test-threads=1
 
 If you wish to clean-up the services run:
 ```shell
-kill_fedimint_processes
+pkill devimint
 ```
