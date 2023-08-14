@@ -1,5 +1,5 @@
 use std::array::TryFromSliceError;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -20,7 +20,7 @@ use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
 use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use secp256k1::PublicKey;
@@ -243,8 +243,9 @@ impl GatewayLightning for ClnRpcService {
 
     async fn get_route_hints(
         &self,
-        _request: tonic::Request<EmptyRequest>,
+        request: tonic::Request<GetRouteHintsRequest>,
     ) -> Result<tonic::Response<GetRouteHintsResponse>, Status> {
+        let GetRouteHintsRequest { num_route_hints } = request.into_inner();
         let node_info = self
             .info()
             .await
@@ -269,7 +270,7 @@ impl GatewayLightning for ClnRpcService {
         }
         .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
-        let active_peer_channels = peers
+        let mut active_peer_channels = peers
             .into_iter()
             .flat_map(|peer| peer.channels.into_iter().map(move |chan| (peer.id, chan)))
             .filter_map(|(peer_id, chan)| {
@@ -294,6 +295,27 @@ impl GatewayLightning for ClnRpcService {
             "Found {} active channels to use as route hints",
             active_peer_channels.len()
         );
+
+        let listfunds_response = client
+            .call(cln_rpc::Request::ListFunds(model::ListfundsRequest {
+                spent: None,
+            }))
+            .await
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+        let pubkey_to_incoming_capcity = match listfunds_response {
+            cln_rpc::Response::ListFunds(listfunds) => listfunds
+                .channels
+                .into_iter()
+                .map(|chan| (chan.peer_id, chan.amount_msat - chan.our_amount_msat))
+                .collect::<HashMap<_, _>>(),
+            err => panic!("CLN received unexpected response: {err:?}"),
+        };
+        active_peer_channels.sort_by(|a, b| {
+            let a_incoming = pubkey_to_incoming_capcity.get(&a.0).unwrap().msat();
+            let b_incoming = pubkey_to_incoming_capcity.get(&b.0).unwrap().msat();
+            b_incoming.cmp(&a_incoming)
+        });
+        active_peer_channels.truncate(num_route_hints as usize);
 
         let mut route_hints = vec![];
         for (peer_id, scid) in active_peer_channels {

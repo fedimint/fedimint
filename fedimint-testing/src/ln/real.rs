@@ -111,8 +111,11 @@ impl ILnRpcClient for ClnLightningTest {
         self.lnrpc.info().await
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        self.lnrpc.routehints().await
+    async fn routehints(
+        &self,
+        num_route_hints: usize,
+    ) -> Result<GetRouteHintsResponse, LightningRpcError> {
+        self.lnrpc.routehints(num_route_hints).await
     }
 
     async fn pay(
@@ -260,8 +263,11 @@ impl ILnRpcClient for LndLightningTest {
         self.lnrpc.info().await
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        self.lnrpc.routehints().await
+    async fn routehints(
+        &self,
+        num_route_hints: usize,
+    ) -> Result<GetRouteHintsResponse, LightningRpcError> {
+        self.lnrpc.routehints(num_route_hints).await
     }
 
     async fn pay(
@@ -353,7 +359,7 @@ impl LndLightningTest {
 
 #[derive(Debug)]
 pub struct LdkLightningTest {
-    node_pub_key: PublicKey,
+    pub node_pub_key: PublicKey,
     alias: String,
     ldk_node_sender: Arc<Mutex<std::sync::mpsc::Sender<LdkMessage>>>,
     listening_address: String,
@@ -649,7 +655,10 @@ impl ILnRpcClient for LdkLightningTest {
         })
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
+    async fn routehints(
+        &self,
+        _num_route_hints: usize,
+    ) -> Result<GetRouteHintsResponse, LightningRpcError> {
         unimplemented!("Unsupported: we dont currently support route hints for LDK Node")
     }
 

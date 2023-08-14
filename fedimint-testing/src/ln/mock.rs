@@ -95,7 +95,10 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
+    async fn routehints(
+        &self,
+        _num_route_hints: usize,
+    ) -> Result<GetRouteHintsResponse, LightningRpcError> {
         Ok(GetRouteHintsResponse {
             route_hints: vec![gateway_lnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
         })
