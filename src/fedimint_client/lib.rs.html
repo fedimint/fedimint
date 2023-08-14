@@ -1671,6 +1671,10 @@
 <a href="#1671" id="1671">1671</a>
 <a href="#1672" id="1672">1672</a>
 <a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2189,6 +2193,10 @@
     }
 
     <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="macro">debug!</span>(
+            <span class="string">&quot;Starting fedimint client executor (version: {})&quot;</span>,
+            <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>)
+        );
         <span class="self">self</span>.inner
             .executor
             .start_executor(<span class="self">self</span>.inner.context_gen())
