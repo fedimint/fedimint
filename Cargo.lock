@@ -1378,7 +1378,7 @@ dependencies = [
  "jsonrpsee-ws-client",
  "lightning 0.0.113",
  "lightning-invoice 0.21.0",
- "miniscript 7.0.0",
+ "miniscript 8.0.1",
  "once_cell",
  "rand",
  "reqwest",
@@ -1427,7 +1427,7 @@ dependencies = [
  "lightning 0.0.113",
  "lightning-invoice 0.21.0",
  "macro_rules_attribute",
- "miniscript 7.0.0",
+ "miniscript 8.0.1",
  "once_cell",
  "rand",
  "secp256k1-zkp",
@@ -2022,7 +2022,7 @@ dependencies = [
  "fedimint-wallet-common",
  "futures",
  "impl-tools",
- "miniscript 7.0.0",
+ "miniscript 8.0.1",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2047,7 +2047,7 @@ dependencies = [
  "fedimint-core",
  "futures",
  "impl-tools",
- "miniscript 7.0.0",
+ "miniscript 8.0.1",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2077,7 +2077,7 @@ dependencies = [
  "fedimint-wallet-common",
  "futures",
  "impl-tools",
- "miniscript 7.0.0",
+ "miniscript 8.0.1",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -3441,8 +3441,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "7.0.0"
-source = "git+https://github.com/rust-bitcoin/rust-miniscript/?rev=2f1535e470c75fad85dbad8633986aae36a89a92#2f1535e470c75fad85dbad8633986aae36a89a92"
+version = "8.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fe8d0ee3580c650aadd33400cfe2a3004462dca6b921ca9e9cef4e654ebc404"
 dependencies = [
  "bitcoin 0.29.2",
  "serde",
@@ -4162,7 +4163,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-wallet-server",
  "futures",
- "miniscript 7.0.0",
+ "miniscript 8.0.1",
  "secp256k1 0.24.3",
  "serde",
  "serde_json",

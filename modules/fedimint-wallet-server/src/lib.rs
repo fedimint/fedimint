@@ -61,7 +61,7 @@ use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::Rbf;
 use futures::StreamExt;
 use miniscript::psbt::PsbtExt;
-use miniscript::{Descriptor, TranslatePk};
+use miniscript::{translate_hash_clone, Descriptor, TranslatePk};
 use rand::rngs::OsRng;
 use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
@@ -1377,7 +1377,7 @@ impl<'a> StatelessWallet<'a> {
         }
 
         impl<'t, 's, Ctx: Verification>
-            miniscript::PkTranslator<CompressedPublicKey, CompressedPublicKey, Infallible>
+            miniscript::Translator<CompressedPublicKey, CompressedPublicKey, Infallible>
             for CompressedPublicKeyTranslator<'t, 's, Ctx>
         {
             fn pk(&mut self, pk: &CompressedPublicKey) -> Result<CompressedPublicKey, Infallible> {
@@ -1397,13 +1397,7 @@ impl<'a> StatelessWallet<'a> {
                         .expect("tweaking failed"),
                 })
             }
-
-            fn pkh(
-                &mut self,
-                pkh: &CompressedPublicKey,
-            ) -> Result<CompressedPublicKey, Infallible> {
-                self.pk(pkh)
-            }
+            translate_hash_clone!(CompressedPublicKey, CompressedPublicKey, Infallible);
         }
 
         let descriptor = self

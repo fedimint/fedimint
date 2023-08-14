@@ -22,7 +22,7 @@ fedimint-client = { path = "../../fedimint-client" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-wallet-common ={ path = "../fedimint-wallet-common" }
 futures = "0.3"
-miniscript = { version = "7.0.0", git = "https://github.com/rust-bitcoin/rust-miniscript/", rev = "2f1535e470c75fad85dbad8633986aae36a89a92", features = [ "compiler", "serde" ] }
+miniscript = { version = "8.0.0", features = [ "compiler", "serde" ] }
 impl-tools = "0.8.0"
 rand = "0.8"
 secp256k1 = { version = "0.24.2", features = [ "serde" ] }
