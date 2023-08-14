@@ -366,26 +366,15 @@ impl MiniscriptKey for Key {
         false
     }
 
-    type RawPkHash = Key;
     type Sha256 = bitcoin::hashes::sha256::Hash;
     type Hash256 = miniscript::hash256::Hash;
     type Ripemd160 = bitcoin::hashes::ripemd160::Hash;
     type Hash160 = bitcoin::hashes::hash160::Hash;
-
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        *self
-    }
 }
 
 impl ToPublicKey for Key {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         self.to_compressed_public_key().to_public_key()
-    }
-
-    fn hash_to_hash160(
-        hash: &<Self as MiniscriptKey>::RawPkHash,
-    ) -> bitcoin::hashes::hash160::Hash {
-        <CompressedPublicKey as ToPublicKey>::hash_to_hash160(&hash.to_compressed_public_key())
     }
 
     fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> Hash {
@@ -419,17 +408,6 @@ impl Translator<CompressedPublicKey, Key, ()> for SecretKeyInjector {
             Ok(Key::Private(self.secret))
         } else {
             Ok(Key::Public(*pk))
-        }
-    }
-
-    fn pkh(
-        &mut self,
-        pkh: &<CompressedPublicKey as MiniscriptKey>::RawPkHash,
-    ) -> Result<<Key as MiniscriptKey>::RawPkHash, ()> {
-        if &self.public == pkh {
-            Ok(Key::Private(self.secret))
-        } else {
-            Ok(Key::Public(*pkh))
         }
     }
 
