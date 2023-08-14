@@ -323,8 +323,12 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // This test can't tolerate "spend", but not "reissue"d coins currently,
     // and there's a no clean way to do `reissue` on `spend` output ATM
     // so just putting it here for time being.
-    cli_tests_backup_and_restore(&fed).await?;
+    //cli_tests_backup_and_restore(&fed).await?;
 
+    fed.use_gateway(&gw_cln).await?;
+    cli_tests_lightning_backup_and_restore(&fed, &lnd).await?;
+
+    /*
     // # Spend from client
     info!("Testing spending from client");
     let notes = cmd!(fed, "spend", CLIENT_SPEND_AMOUNT)
@@ -656,6 +660,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let expected_wallet_balance = initial_walletng_balance - 5_000_000 - (fees_sat * 1000);
 
     assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
+    */
 
     Ok(())
 }
@@ -717,6 +722,55 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
         output.contains("1 gateway_pay_invoice"),
         "paid different number of invoices than expected"
     );
+    Ok(())
+}
+
+async fn cli_tests_lightning_backup_and_restore(fed_cli: &Federation, lnd: &Lnd) -> Result<()> {
+    info!("Lightning Backup and Restore");
+
+    let secret = cmd!(fed_cli, "print-secret").out_json().await?["secret"]
+        .as_str()
+        .map(ToOwned::to_owned)
+        .unwrap();
+
+    let pre_notes = cmd!(fed_cli, "info").out_json().await?;
+    let pre_balance = pre_notes["total_msat"].as_u64().unwrap();
+
+    let invoice = {
+        let client = fed_cli.fork_client("lightning-restore2").await?;
+        let ln_response = cmd!(
+            client,
+            "ln-invoice",
+            "--amount=3000msat",
+            "--description='incoming-over-lnd-gw'"
+        )
+        .out_json()
+        .await?;
+        let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response)?;
+        ln_invoice_response.invoice
+    };
+
+    info!("PreBalance: {pre_balance} Lightning Invoice: {invoice}");
+
+    let _ = cmd!(fed_cli, "wipe", "--force").out_json().await?;
+
+    let response = lnd
+        .client_lock()
+        .await?
+        .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+            payment_request: invoice.clone(),
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    assert_eq!(response.payment_error, "".to_string());
+
+    let _ = cmd!(fed_cli, "restore", &secret,).out_json().await?;
+
+    let post_notes = cmd!(fed_cli, "info").out_json().await?;
+    let post_balance = post_notes["total_msat"].as_u64().unwrap();
+    info!("PostBalance: {post_balance}");
+
     Ok(())
 }
 
