@@ -508,6 +508,10 @@ where
                     } => last_error.context(format!("Failed to commit after {attempts} attempts")),
                     AutocommitError::ClosureError { error, .. } => error,
                 })?;
+            debug!(
+                outcome = ?active_or_inactive_state,
+                "Finished executing state transition"
+            );
 
             active_state_count -= 1;
             match active_or_inactive_state {
@@ -905,6 +909,7 @@ where
     type Record = InactiveStateKey<GC>;
 }
 
+#[derive(Debug)]
 enum ActiveOrInactiveState<GC> {
     Active {
         dyn_state: DynState<GC>,
