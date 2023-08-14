@@ -18,7 +18,6 @@ if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then
   touch "$HOME/.parallel/will-cite"
 fi
 
-
 # Avoid re-building workspace in parallel in all test derivations
 # Note: Respect 'CARGO_PROFILE' that crane uses
 >&2 echo "Pre-building workspace..."
@@ -28,109 +27,68 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targe
 cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace
 
 function cli_test_reconnect() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/reconnect-test.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/reconnect-test.sh
 }
 export -f cli_test_reconnect
 
 function cli_test_lightning_reconnect() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/lightning-reconnect-test.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/lightning-reconnect-test.sh
 }
 export -f cli_test_lightning_reconnect
 
 function cli_test_latency() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/latency-test.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/latency-test.sh
 }
 export -f cli_test_latency
 
 function cli_test_cli() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/cli-test.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/cli-test.sh
 }
 export -f cli_test_cli
 
 function cli_load_test_tool_test() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/load-test-tool-test.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/load-test-tool-test.sh
 }
 export -f cli_load_test_tool_test
 
 function cli_test_rust_tests_bitcoind() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=bitcoind ./scripts/rust-tests.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/rust-tests.sh
 }
 export -f cli_test_rust_tests_bitcoind
 
 function cli_test_rust_tests_electrs() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=electrs ./scripts/rust-tests.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/rust-tests.sh
 }
 export -f cli_test_rust_tests_electrs
 
 function cli_test_rust_tests_esplora() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=esplora ./scripts/rust-tests.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/rust-tests.sh
 }
-
-function cli_test_wasm() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
-
-  echo "## START: ${FUNCNAME[0]}"
-  unshare -rn bash -c "ip link set lo up && exec unshare --user env FM_TEST_ONLY=esplora ./scripts/wasm-tests.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
-}
-
 export -f cli_test_rust_tests_esplora
 
-function cli_test_always_success() {
-  set -eo pipefail # pipefail must be set manually again
-  trap 'echo "## FAILED: ${FUNCNAME[0]}"' ERR
+function cli_test_wasm() {
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/wasm-tests.sh
+}
+export -f cli_test_wasm
 
-  echo "## START: ${FUNCNAME[0]}"
-  # this must fail, so we know nix build is actually running tests
-  unshare -rn bash -c "ip link set lo up && exec unshare --user ./scripts/always-success-test.sh" 2>&1 | ts -s
-  echo "## COMPLETE: ${FUNCNAME[0]}"
+function cli_test_always_success() {
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/always-success-test.sh
 }
 export -f cli_test_always_success
+
+export parallel_jobs='+0'
+
+if [ "$(uname -s)" == "Darwin" ]; then
+  # We rely on `unshare` to run all tests in separate network namespaces
+  # This is not possible on MacOS, so we run every test serially with a no-op fake 'unshare'
+  parallel_jobs='1'
+fi
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
 joblog="$tmpdir/joblog"
+
+PATH="$(pwd)/scripts/dev/run-isolated-test/:$PATH"
 
 >&2 echo "## Starting all tests in parallel..."
 # --load to keep the load under-control, especially during target dir extraction
@@ -145,7 +103,7 @@ if parallel \
   --timeout 600 \
   --load 150% \
   --delay 5 \
-  --jobs '+0' \
+  --jobs "$parallel_jobs" \
   --memfree 1G \
   --nice 15 ::: \
   cli_test_always_success \

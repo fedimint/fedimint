@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+test_name="$1"
+shift 1
+
+
+if [ -z "$test_name" ]; then
+    >&2 "error: no test name"
+    exit 1
+fi
+
+set -eo pipefail # pipefail must be set manually again
+trap 'echo "## FAILED: $test_name"' ERR
+
+echo "## START: $test_name"
+
+# We rely on `unshare` to run all tests in separate network namespaces,
+# Not possible on MacOS though
+if [ "$(uname -s)" == "Darwin" ]; then
+    >&2 echo "MacOS hack: no-op run-in-namespace isolation"
+    "$@" 2>&1 | ts -s
+else
+    unshare -rn bash -c "ip link set lo up && exec unshare --user $*" 2>&1 | ts -s
+fi
+
+echo "## COMPLETE: $test_name"
