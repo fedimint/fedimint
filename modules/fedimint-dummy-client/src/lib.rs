@@ -297,7 +297,6 @@ impl ClientModule for DummyClientModule {
                 .await
                 .filter_map(|state| async move {
                     match state {
-                        // Since Done also happens for inputs we will fire too often, but that's ok
                         DummyStateMachine::OutputDone(_, _) => Some(()),
                         DummyStateMachine::Input { .. } => Some(()),
                         DummyStateMachine::Refund(_) => Some(()),
