@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source ./scripts/user-shell.sh
+source ./scripts/dev/user-shell.sh
 
 echo ""
 echo "Important tmux key sequences:"
