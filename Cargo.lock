@@ -441,7 +441,7 @@ dependencies = [
  "getrandom",
  "js-sys",
  "log",
- "miniscript 9.0.1",
+ "miniscript",
  "rand",
  "rusqlite",
  "serde",
@@ -1385,7 +1385,7 @@ dependencies = [
  "jsonrpsee-ws-client",
  "lightning 0.0.113",
  "lightning-invoice 0.21.0",
- "miniscript 7.0.0",
+ "miniscript",
  "once_cell",
  "rand",
  "reqwest",
@@ -1434,7 +1434,7 @@ dependencies = [
  "lightning 0.0.113",
  "lightning-invoice 0.21.0",
  "macro_rules_attribute",
- "miniscript 7.0.0",
+ "miniscript",
  "once_cell",
  "rand",
  "secp256k1-zkp",
@@ -2031,7 +2031,7 @@ dependencies = [
  "fedimint-wallet-common",
  "futures",
  "impl-tools",
- "miniscript 7.0.0",
+ "miniscript",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2056,7 +2056,7 @@ dependencies = [
  "fedimint-core",
  "futures",
  "impl-tools",
- "miniscript 7.0.0",
+ "miniscript",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -2086,7 +2086,7 @@ dependencies = [
  "fedimint-wallet-common",
  "futures",
  "impl-tools",
- "miniscript 7.0.0",
+ "miniscript",
  "rand",
  "secp256k1 0.24.3",
  "serde",
@@ -3451,18 +3451,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "7.0.0"
-source = "git+https://github.com/rust-bitcoin/rust-miniscript/?rev=2f1535e470c75fad85dbad8633986aae36a89a92#2f1535e470c75fad85dbad8633986aae36a89a92"
-dependencies = [
- "bitcoin 0.29.2",
- "serde",
-]
-
-[[package]]
-name = "miniscript"
-version = "9.0.1"
+version = "9.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9601439f168c13bdc5bf84349c2e61c815be4a4dcebe8c4ff4af58f4e8a6d20"
+checksum = "e5b106477a0709e2da253e5559ba4ab20a272f8577f1eefff72f3a905b5d35f5"
 dependencies = [
  "bitcoin 0.29.2",
  "serde",
@@ -4172,7 +4163,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-wallet-server",
  "futures",
- "miniscript 7.0.0",
+ "miniscript",
  "secp256k1 0.24.3",
  "serde",
  "serde_json",
