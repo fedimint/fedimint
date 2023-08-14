@@ -1,3 +1,4 @@
+mod backup;
 pub mod db;
 pub mod pay;
 pub mod receive;
@@ -8,21 +9,26 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, ensure, format_err};
 use async_stream::stream;
+use backup::LightningBackup;
 use bitcoin::Network;
 use bitcoin_hashes::Hash;
-use db::{LightningGatewayKey, NextOutgoingContractIndexKey};
+use db::{LightningGatewayKey, LightningGatewayKeyPrefix, NextOutgoingContractIndexKey};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::gen::ClientModuleGen;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
+use fedimint_client::sm::{
+    DynState, Executor, ModuleNotifier, OperationId, State, StateTransition,
+};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
@@ -611,6 +617,7 @@ pub struct LightningClientModule {
     module_root_secret: DerivableSecret,
 }
 
+#[apply(async_trait_maybe_send!)]
 impl ClientModule for LightningClientModule {
     type Common = LightningModuleTypes;
     type ModuleStateMachineContext = LightningClientContext;
@@ -645,6 +652,86 @@ impl ClientModule for LightningClientModule {
                 }
             }
         }
+    }
+
+    fn supports_backup(&self) -> bool {
+        true
+    }
+
+    async fn backup(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynGlobalApi,
+        module_instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<Vec<u8>> {
+        let gateways = dbtx
+            .find_by_prefix(&LightningGatewayKeyPrefix)
+            .await
+            .map(|pair| pair.1)
+            .collect::<Vec<_>>()
+            .await;
+        let next_incoming_contract_index = dbtx
+            .get_value(&NextIncomingContractIndexKey)
+            .await
+            .unwrap_or(0);
+        let next_outgoing_contract_index = dbtx
+            .get_value(&NextOutgoingContractIndexKey)
+            .await
+            .unwrap_or(0);
+        let backup = LightningBackup {
+            gateways,
+            next_incoming_contract_index,
+            next_outgoing_contract_index,
+        };
+        Ok(backup.consensus_encode_to_vec()?)
+    }
+
+    async fn restore(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+        api: DynGlobalApi,
+        snapshot: Option<&[u8]>,
+    ) -> anyhow::Result<()> {
+        // TODO: Need to look for active states here?
+
+        let snapshot = snapshot
+            .map(|mut s| LightningBackup::consensus_decode(&mut s, &Default::default()))
+            .transpose()?
+            .unwrap_or(LightningBackup::new_empty());
+        {
+            let module_dbtx = &mut dbtx.with_module_prefix(module_instance_id);
+            for gateway in snapshot.gateways {
+                module_dbtx
+                    .insert_new_entry(&LightningGatewayKey, &gateway)
+                    .await;
+            }
+
+            module_dbtx.insert_new_entry(
+                &NextIncomingContractIndexKey,
+                &snapshot.next_incoming_contract_index,
+            );
+            module_dbtx.insert_new_entry(
+                &NextOutgoingContractIndexKey,
+                &snapshot.next_outgoing_contract_index,
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn wipe(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor<DynGlobalClientContext>,
+    ) -> anyhow::Result<()> {
+        dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
+        dbtx.remove_entry(&NextIncomingContractIndexKey).await;
+        dbtx.remove_entry(&NextOutgoingContractIndexKey).await;
+        Ok(())
     }
 }
 
