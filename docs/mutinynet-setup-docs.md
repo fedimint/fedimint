@@ -1,13 +1,23 @@
 # Setting up a 3/4 Federation + Lightning Gateway on Mutinynet
 
+## Intro
+
+What is fedimint. Community custody. Trusted people who custody assets.
+
+Fedimint is a federated chaumian ecash mint, built on bitcoin, compatible with the lightning network.
+
+This is a guide for setting up a 3/4 federation + lightning gateway on mutinynet. This is a good setup for a developer to get started with fedimint and start building applications on top of it.
+
 ## Step 1. Provisioning VPS's
 For this setup we'll be setting up a 3/4 Federation, then a Lightning Gateway to service the federation. The default docker install scripts install both the fedimint daemon and gateway on each machine.
 
 Fedimint can run with any t/n configuration including 1/1, so feel free to use any number of machines you want or just run it locally. However the power of fedimint is in the redundancy of the federation, and at the end of this guide we'll see how we can kill a machine and the federation will continue to function.
 
-I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS provider or your own hardware will work if it can run Linux and Docker. Feel free to use 
+I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS provider or your own hardware will work if it can run Linux and Docker. Feel free to use whichever you're most comfortable with or prefer. We recommend Digital Ocean for the best experience.
 
 ### 1.1. Digital Ocean Setup
+
+- Create a new droplet, use the default parameters for a $12 2GB RAM/1 CPU machine.
 
 - Default Ubuntu image
 
@@ -17,27 +27,25 @@ I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS 
 
 ![Alt text](mutiny_setup/boxSize.png)
 
-- Auth with SSH keys (recommended) or password. Digital Ocean has an excellent guide on how to set up SSH keys if you click "New SSH Key" in the "Authentication" section.
-
-![Alt text](image.png)
+- Auth with SSH keys (recommended) or password. Digital Ocean has an excellent guide on how to set up SSH keys if you click "New SSH Key" in the "Authentication" section. It also has a great browser based console though you can use to access the box directly from the dashboard.
 
 ![Alt text](mutiny_setup/ssh.png)
 
 - Finalize and create the droplet. You can create multiple droplets with the same configuration, so if you want just create your 4 droplets now for the 3/4 federation + lightning gateway and skip to section 2 to install the software. Otherwise continue to the next step to create the other machines.
 
-- ![Alt text](mutiny_setup/finalize.png)
+![Alt text](mutiny_setup/finalize.png)
 
-- You can SSH into the machine from your terminal by copying the ssh command for key or root user/password. Or just use the droplet terminal from the digital oceanconsole.
+- You can SSH into the machine from your terminal by copying the ssh command for key or root user/password. Or just use the droplet terminal from the digital ocean console.
 
 ![Alt text](mutiny_setup/droplet_console.png)
 
 ### 1.2. Linode Setup
 
-For the Linode Setup we'll use the same $12 2GB/1CPU machine as Digital Ocean, if you're also running the lightning gateway off of this machine you'll want to use the 4GB/2CPU machine. We'll use the same ubuntu 22 image, set it up in par
+For the Linode Setup we'll use the same $12 2GB/1CPU machine as Digital Ocean, if you're also running the lightning gateway off of this machine you'll want to use the 4GB/2CPU machine. We'll use the same ubuntu 22 image.
 
 ![Alt text](mutiny_setup/linode1.png)
 
-- Set up the root password and SSH keys (recommended)
+- Set up the root password (and SSH keys recommended)
 
 ![Alt text](mutiny_setup/linode2.png)
 
@@ -82,7 +90,7 @@ For the google cloud machine we'll use something a little bigger because we'll a
 You should now have your machines running and be able to ssh into them. We'll install fedimint on each machine using the docker install script.
 
 Notes for specific machines:
-- If you're running on linode or aws you'll need to install and start docker and docker compose first. You can do this by running the following commands:
+- If you're running on linode or aws you'll need to install and start docker and docker compose first. You can do this by running the following commands ():
 ```bash
 # update packages
 sudo apt-get update
@@ -99,7 +107,7 @@ sudo systemctl start docker
 # enable docker startup on boot
 sudo systemctl enable docker
 # make a new docker group
-newgrp docker
+sudo newgrp docker
 # add current user to docker group
 sudo usermod -aG docker $USER
 # make sure you set docker socket permissions for your user
@@ -116,7 +124,7 @@ and if you get a "platform error" when trying to install with docker compose, yo
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 ```
 
-Run the command below on each machine and it'll install:
+Run the command below on each machine and it'll let you install one or all of:
 
 1. Fedimintd: The fedimint daemon
 2. LND + Gateway: A lightning node with fedimint gateway for intercepting HTLCs to provide lightning services for the federation
@@ -130,7 +138,7 @@ and it'll start the services on the following ports:
 
 ### Fedimint Setup Script:
 ```bash 
-curl -sSL https://gist.githubusercontent.com/otech47/ca281c9729495728b3232993121ec011/raw/07c0bae9f876082e88f548a8941fd188059e7665/setup.sh | bash
+curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
 ```
 
 ![Alt text](mutiny_setup/install_scripts.png)
@@ -138,26 +146,26 @@ curl -sSL https://gist.githubusercontent.com/otech47/ca281c9729495728b3232993121
 ![Alt text](mutiny_setup/fedimint_startup.png)
 
 
-You've now got the fedimint processes running on each machine. Congratulations! However, they're not federated yet. We'll do that in the next step.
+You've now got the fedimint processes running on each machine. Congratulations! However, they're not connected into a federation yet. We'll do that in the next step.
 
 ## Step 3. Forming the Federation
 
 Now that we have the fedimint processes running on each machine, we'll form the federation by connecting them together. We'll use the fedimint guardian dashboard to do this. Go to the dashboard url for each machine, it's running on port :3000 .
 
-> Note: If you're running on AWS EC2 you'll need to open port 3000 in your security group to access the dashboard, and if you're running on google cloud you'll need to open ports 3000 and 8174 in your firewall.
+> Note: If you're running on AWS = you'll need to open port 3000 in your security group to access the dashboard, and if you're running on google cloud you'll need to open both ports 3000 and 8174 in your firewall.
 
-![Alt text](mutinynet_setup/setup_fedimint.png)
+![Alt text](mutiny_setup/fedimint_setup.png)
 
 
-![Alt text](mutinynet_setup/guardian_select.png)
+![Alt text](mutiny_setup/guardian_select.png)
 
 #### Leader
 
-![Alt text](mutinynet_setup/leader.png)
+![Alt text](mutiny_setup/leader.png)
 
-![Alt text](mutinynet_setup/leader_confirm.png)
+![Alt text](mutiny_setup/leader_confirm.png)
 
-![Alt text](mutinynet_setup/leader_pending.png)
+![Alt text](mutiny_setup/leader_pending.png)
 
 #### Follower
 
