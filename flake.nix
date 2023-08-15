@@ -36,6 +36,13 @@
                 wasm-bindgen-cli = pkgs-unstable.wasm-bindgen-cli;
 
                 clightning = prev.clightning.overrideAttrs (oldAttrs: {
+                  version = "v23.08";
+                  src = pkgs.fetchgit {
+                    url = "https://github.com/ElementsProject/lightning";
+                    rev = "v23.08";
+                    sha256 = "sha256-sxr+L9eZh1L8PARHyJAD4I2XNW0BCMgLztKWSTiYczY=";
+                    fetchSubmodules = true;
+                  };
                   configureFlags = [ "--enable-developer" "--disable-valgrind" ];
                 } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
                   NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -w";
@@ -109,7 +116,6 @@
           lib = pkgs.lib;
 
           stdenv = pkgs.stdenv;
-
 
           # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
           # the binary we need from `moreutils`

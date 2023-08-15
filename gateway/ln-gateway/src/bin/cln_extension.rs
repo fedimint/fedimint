@@ -65,7 +65,8 @@ async fn main() -> Result<(), anyhow::Error> {
         .serve_with_shutdown(listen, async {
             // Wait for plugin to signal it's shutting down
             // Shut down everything else via TaskGroup regardless of error
-            let _ = plugin.join().await;
+            let result = plugin.join().await;
+            assert!(result.is_ok(), "{:?}", result);
             // lightningd needs to see exit code 0 to notice the plugin has
             // terminated -- even if we return from main().
             std::process::exit(0);
@@ -284,11 +285,9 @@ impl GatewayLightning for ClnRpcService {
                     }
                 }
             }
-
             None
         })
         .collect::<Vec<_>>();
-
         debug!(
             "Found {} active channels to use as route hints",
             active_peer_channels.len()

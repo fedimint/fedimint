@@ -35,7 +35,7 @@ bitcoin = { version = "0.29.2", features = ["serde"] }
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 cln-plugin = "0.1.5"
-cln-rpc = "0.1.1"
+cln-rpc = "0.1.3"
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-logging = { path = "../../fedimint-logging" }
