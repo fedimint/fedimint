@@ -444,6 +444,8 @@
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -811,6 +813,8 @@
     </span>ZeroOutput,
     <span class="attr">#[error(<span class="string">&quot;Offer contains invalid threshold-encrypted data&quot;</span>)]
     </span>InvalidEncryptedPreimage,
+    <span class="attr">#[error(<span class="string">&quot;Offer contains a ciphertext that has already been used&quot;</span>)]
+    </span>DuplicateEncryptedPreimage,
     <span class="attr">#[error(
         <span class="string">&quot;The incoming LN account requires more funding according to the offer (need {0} got {1})&quot;
     </span>)]
