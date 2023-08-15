@@ -24,7 +24,7 @@ fi
 cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 # Avoid re-building tests in parallel in all test derivations
 >&2 echo "Pre-building tests..."
-cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace
+cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 
 function cli_test_reconnect() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh

@@ -6,7 +6,8 @@ craneLib.overrideScope' (self: prev: {
 
   workspaceDeps = self.buildDepsOnly (prev.commonArgsDepsOnly // {
     version = "0.0.1";
-    buildPhaseCargoCommand = "cargo doc --workspace --locked --profile $CARGO_PROFILE ; cargo check --workspace  --locked --profile $CARGO_PROFILE --all-targets ; cargo build --locked --profile $CARGO_PROFILE --workspace --all-targets";
+    # note: cargo doc does not have --all-targets
+    buildPhaseCargoCommand = "cargo doc --workspace --locked --profile $CARGO_PROFILE ; cargo check --workspace --all-targets --locked --profile $CARGO_PROFILE ; cargo build --locked --profile $CARGO_PROFILE --workspace --all-targets";
     doCheck = false;
   });
 
@@ -73,7 +74,7 @@ craneLib.overrideScope' (self: prev: {
     nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
     # since we filtered all the actual project source, everything will definitely fail
     # but we only run this step to cache the build artifacts, so we ignore failure with `|| true`
-    buildPhaseCargoCommand = "cargo udeps --all-targets --workspace --profile $CARGO_PROFILE || true";
+    buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE || true";
     doCheck = false;
   });
 
@@ -84,7 +85,7 @@ craneLib.overrideScope' (self: prev: {
     # about the docs
     cargoArtifacts = self.workspaceCargoUdepsDeps;
     nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-    buildPhaseCargoCommand = "cargo udeps --all-targets --workspace --profile $CARGO_PROFILE";
+    buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE";
     doInstallCargoArtifacts = false;
     doCheck = false;
   });
@@ -99,7 +100,7 @@ craneLib.overrideScope' (self: prev: {
   workspaceDepsCov = self.buildDepsOnly (self.commonArgsDepsOnly // {
     pnameSuffix = "-lcov-deps";
     version = "0.0.1";
-    buildPhaseCargoCommand = "cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --no-report";
+    buildPhaseCargoCommand = "cargo llvm-cov --locked --workspace --all-targets --profile $CARGO_PROFILE --no-report";
     cargoBuildCommand = "dontuse";
     cargoCheckCommand = "dontuse";
     nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ self.cargo-llvm-cov ];
@@ -110,7 +111,7 @@ craneLib.overrideScope' (self: prev: {
     pnameSuffix = "-lcov";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDepsCov;
-    buildPhaseCargoCommand = "mkdir -p $out ; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo llvm-cov --locked --workspace --profile $CARGO_PROFILE --lcov --all-targets --tests --output-path $out/lcov.info --  --test-threads=$(($(nproc) * 2))";
+    buildPhaseCargoCommand = "mkdir -p $out ; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo llvm-cov --locked --workspace --all-targets --profile $CARGO_PROFILE --lcov --tests --output-path $out/lcov.info --  --test-threads=$(($(nproc) * 2))";
     installPhaseCommand = "true";
     nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ self.cargo-llvm-cov ];
     doCheck = false;
