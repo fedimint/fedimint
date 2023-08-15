@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use bitcoin::Network;
+pub use bitcoin::Network;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
