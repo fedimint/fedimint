@@ -109,6 +109,11 @@ pub trait MintClientExt {
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, TieredMulti<SpendableNote>)>;
 
+    /// Validate the given notes and return the total amount of the notes.
+    /// Validation checks that the note has a valid signature and that the spend
+    /// key is correct.
+    async fn validate_notes(&self, notes: TieredMulti<SpendableNote>) -> anyhow::Result<Amount>;
+
     /// Try to cancel a spend operation started with
     /// [`MintClientExt::spend_notes`]. If the e-cash notes have already been
     /// spent this operation will fail which can be observed using
@@ -310,6 +315,28 @@ impl MintClientExt for Client {
                     anyhow!("Commit to DB failed: {last_error}")
                 }
             })
+    }
+
+    async fn validate_notes(&self, notes: TieredMulti<SpendableNote>) -> anyhow::Result<Amount> {
+        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let tbs_pks = &mint.cfg.tbs_pks;
+
+        for (idx, (amt, note)) in notes.iter_items().enumerate() {
+            let key = tbs_pks
+                .get(amt)
+                .ok_or_else(|| anyhow!("Note {idx} uses an invalid amount tier {amt}"))?;
+
+            if !note.note.verify(*key) {
+                bail!("Note {idx} has an invalid federation signature");
+            }
+
+            let expected_nonce = Nonce(note.spend_key.x_only_public_key().0);
+            if note.note.0 != expected_nonce {
+                bail!("Note {idx} cannot be spent using the supplied spend key");
+            }
+        }
+
+        Ok(notes.total_amount())
     }
 
     async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
