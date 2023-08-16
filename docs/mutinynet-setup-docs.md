@@ -1,15 +1,22 @@
 # Setting up a 3/4 Federation + Lightning Gateway on Mutinynet
 
-## Intro
+This is a guide for setting up a 3/4 federation + lightning gateway on mutinynet, a test network for bitcoin with 30 second block times. You can run this same setup on a different test network or on mainnet with real bitcoin, but that is not encouraged while fedimint remains under active development.
 
-What is fedimint. Community custody. Trusted people who custody assets.
+### Step 0: What is Fedimint and how does it work?
 
-Fedimint is a federated chaumian ecash mint, built on bitcoin, compatible with the lightning network.
+Fedimint is a federated chaumian e-cash mint, built on bitcoin, compatible with the lightning network via gateways. Let's break that down:
 
-This is a guide for setting up a 3/4 federation + lightning gateway on mutinynet. This is a good setup for a developer to get started with fedimint and start building applications on top of it.
+1. **Federated**: fedimint attempts to minimize trust by splitting the custodian (the mint) across multiple actors who run a distributed consensus. You can run fedimint as any t/n setup (including 1/1) but we recommend you use a Byzantine Fault Tolerant configuration if possible, so `3m+1` where `m` is the number of gaurdians who can be actively malicious or compromised without impacting the federation. e.g. 3/4 for 1 compromised, 5/7 for 2 compromised, 7/10 for 3 compromised, etc.
+2. **Chaumian**: Fedimint uses a blinded signature accounting system to give users near perfect privacy. This accounting system was developed by David Chaum in the late 20th century.
+3. **E-cash Mint**: Users deposit bitcoin into fedimint and are issued e-cash "notes". Users then redeem those notes in exchange for bitcoin (either a withdrawal from the mint or to complete a lightning invoice payment). The chaumian e-cash system blinds the mint from its users: there isn't even a concept of a "user" to the mint, there is simply the e-cash notes, where every e-cash note is indistinguishable from every other of the same denomination.
+4. **Built on Bitcoin**: the underlying reserves which are deposited and withdrawn from the fedimint are bitcoin. The e-cash notes are 1-1 backed by on-chain bitcoin held by the fedimint and are denominated in satoshis. It will eventually be possible to denominate the e-cash notes in different currencies like USD or EUR using fedimint modules.
+5. **Compatible with the Lightning Network**: The e-cash mint alone is insufficient to successfully scale bitcoin. When you deposit into the mint and receive the ecash notes, the only other people who might accept that e-cash claim against bitcoin will be your mint or other users of that mint. Fedimint's compatibility with Lightning allows you to use your e-cash notes to pay lightning invoices, and to generate lightning invoices which you receive as e-cash, letting users of fedimints remain compatible with the broader bitcoin network.
+6. **Via Gateways**: we call the mechanism we use for lightning network compatiblity a "lightning gateway". Any user of a fedimint who also runs a lightning node can use that node to send and receive bitcoin in exchange for e-cash payments by other users of the mint. A lightning gateway can service many federations, and federations can be serviced by many lightning gateways. When a fedimint user tries to pay a lightning invoice, what they're actually doing is locking e-cash notes to a contract and advertising "Any lightning node that proves it paid this invoice can claim the e-cash". Lightning gateways servicing the federation compete to pay the invoice because they'll receive slightly more in e-cash than the value of the invoice. This gateway e-cash payment can be usefully thought of as an "extra hop" on the lightning payment's onion route, fitting with the standard economic incentives of lightning nodes.
+
+# Let's Make a Fedimint
 
 ## Step 1. Provisioning VPS's
-For this setup we'll be setting up a 3/4 Federation, then a Lightning Gateway to service the federation. The default docker install scripts install both the fedimint daemon and gateway on each machine.
+For this setup we'll be setting up a 3/4 Federation, then a Lightning Gateway to service the federation.
 
 Fedimint can run with any t/n configuration including 1/1, so feel free to use any number of machines you want or just run it locally. However the power of fedimint is in the redundancy of the federation, and at the end of this guide we'll see how we can kill a machine and the federation will continue to function.
 
@@ -19,23 +26,27 @@ I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS 
 
 - Create a new droplet, use the default parameters for a $12 2GB RAM/1 CPU machine.
 
+![Alt text](image.png)
+
 - Default Ubuntu image
 
 ![Alt text](mutiny_setup/linux.png)
 
-- `fedimintd` can reliably run on the $12 2GB RAM/1 CPU machine, but for the machine that'll also be running the lightning gateway you might want to use the 2CPU machine (not required, but it'll make the gateway run a bit smoother)
+- `fedimintd` CAN run on the $6 1GB RAM/1 CPU machine, but for a longer running federation or one you want to be highly performant with > a couple dozen users we recommend the 2GB RAM at least.
 
 ![Alt text](mutiny_setup/boxSize.png)
 
-- Auth with SSH keys (recommended) or password. Digital Ocean has an excellent guide on how to set up SSH keys if you click "New SSH Key" in the "Authentication" section. It also has a great browser based console though you can use to access the box directly from the dashboard.
+- Auth with SSH keys (recommended) or password. Digital Ocean has an excellent guide on how to set up SSH keys if you click "New SSH Key" in the "Authentication" section. It also has a great browser based console that you can use to access the box directly from the dashboard.
 
 ![Alt text](mutiny_setup/ssh.png)
 
-- Finalize and create the droplet. You can create multiple droplets with the same configuration, so if you want just create your 4 droplets now for the 3/4 federation + lightning gateway and skip to section 2 to install the software. Otherwise continue to the next step to create the other machines.
+- Finalize and create the droplet. You can create multiple droplets with the same configuration, so if you want just create your 5 droplets now for the 3/4 federation + lightning gateway and skip to section 2 to install the software. Otherwise continue to the next step to create the other machines.
 
 ![Alt text](mutiny_setup/finalize.png)
 
 - You can SSH into the machine from your terminal by copying the ssh command for key or root user/password. Or just use the droplet terminal from the digital ocean console.
+
+![Alt text](image-1.png)
 
 ![Alt text](mutiny_setup/droplet_console.png)
 
@@ -90,7 +101,7 @@ For the google cloud machine we'll use something a little bigger because we'll a
 You should now have your machines running and be able to ssh into them. We'll install fedimint on each machine using the docker install script.
 
 Notes for specific machines:
-- If you're running on linode or aws you'll need to install and start docker and docker compose first. You can do this by running the following commands ():
+- If you're running on linode or aws you'll need to install and start docker and docker compose first. You can do this by running the following commands (change apt-get to yum if not using ubuntu):
 ```bash
 # update packages
 sudo apt-get update
@@ -124,9 +135,23 @@ and if you get a "platform error" when trying to install with docker compose, yo
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 ```
 
-Run the command below on each machine and it'll let you install one or all of:
+Run the No TLS fedimint setup script below on each of the 4 machines you're running the fedimint gaurdian daemon on. Only install fedimintd on the boxes that'll run the guardians.
 
-1. Fedimintd: The fedimint daemon
+### Fedimint Setup Script (No TLS):
+```bash 
+curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
+```
+
+or if you want to install with TLS:
+```bash
+curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/tls-download-mutinynet.sh | bash
+```
+
+then we'll run it again later for the gateway setup. 
+
+The install script lets you install one or all of:
+
+1. Fedimintd: The fedimint daemon, this is the only thing we're installing right now.
 2. LND + Gateway: A lightning node with fedimint gateway for intercepting HTLCs to provide lightning services for the federation
 3. RTL: Ride the Lightning web interface for the the lightning node
 
@@ -135,11 +160,6 @@ and it'll start the services on the following ports:
 - Fedimintd Guardian Dashboard: http://your.ip.add.ress:3000
 - Lightning Gateway Dashboard: http://your.ip.add.ress:3001
 - RTL Lightning Node Management: http://your.ip.add.ress.198:3003
-
-### Fedimint Setup Script:
-```bash 
-curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
-```
 
 ![Alt text](mutiny_setup/install_scripts.png)
 
@@ -154,24 +174,35 @@ Now that we have the fedimint processes running on each machine, we'll form the 
 
 > Note: If you're running on AWS = you'll need to open port 3000 in your security group to access the dashboard, and if you're running on google cloud you'll need to open both ports 3000 and 8174 in your firewall.
 
-![Alt text](mutiny_setup/fedimint_setup.png)
+### Leader and Followers
+On the homescreen you'll see a selection to lead or follow. This does not refer to any of the underyling security elements: all the guardians will participate in a round-robin distributed key generation once connected to generate all of the secrets and private keys required to run the mint. No guardian at any time during setup knows the complete key or secret.
 
+The "Leader" is simply the guardian who will input the configuration settings for the federation and the "Followers" will agree to and validate those settings. This distinction is made simply for UX purposes so each guardian doesn't have to repeatedly input the same things, and when there's a typo blow up the key generation.
 
 ![Alt text](mutiny_setup/guardian_select.png)
 
-#### Leader
+## Leader
+
+The leader inputs an additional couple parameters beyond his name and password:
+
+- Federation Name: whatever you want to name your federation
+- Number of Guardians: the n of the t/n, so 4 for a 3/4 federation
+- Network: use signet (mutinynet is a fork of signet with 30 second blocktimes)
+- Block Confirmations: Fedimint's consensus CANNOT handle bitcoin block reorganizations (it's impossible to invalidate or distinguish e-cash once issued) so we recommend at least 6 confirmations (meaning the fedimint's consensus blockheight will be current blockheight - 6) for any mainnet or production use, but if you're just using this for development you can set it to 1 or 2
 
 ![Alt text](mutiny_setup/leader.png)
 
+Once you confirm your settings you'll see a guardian confirmation page with a "Invite Followers" websocket link. That's the link you'll send to each of the followers. Once they copy it over they'll be presented with a page to confirm the federation specifications set by the leader.
+
 ![Alt text](mutiny_setup/leader_confirm.png)
 
-![Alt text](mutiny_setup/leader_pending.png)
+## Follower
 
-#### Follower
-
-![Alt text](image-4.png)
+The followers simply set their names and passwords then paste the websocket link from the leader to connect. Once connected, they'll be prompted to confirm the federation info set by the leader. All the guardians have to connect and approve. Once that's done, they'll go through the distributed key generation to set up the fedimint.
 
 ![Alt text](image-5.png)
+
+![Alt text](mutiny_setup/leader_pending.png)
 
 ![Alt text](image-6.png)
 
@@ -290,5 +321,5 @@ Send some sats through your channel to the fedi alpha signet faucet. We'll be in
 
 In case of fire:
 ```bash
-docker-compose down -v --rmi 'all'
+docker-compose -f ./fedimint/docker-compose.yaml down -v --rmi 'all'
 ```
