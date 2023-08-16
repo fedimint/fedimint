@@ -181,15 +181,15 @@ impl OperationLogEntry {
     /// an update stream for easier handling using
     /// [`UpdateStreamOrOutcome::into_stream`] but can also be matched over to
     /// shortcut the handling of final outcomes.
-    pub fn outcome_or_updates<'a, U, S>(
+    pub fn outcome_or_updates<U, S>(
         &self,
         db: &Database,
         operation_id: OperationId,
         stream_gen: impl FnOnce() -> S,
-    ) -> UpdateStreamOrOutcome<'a, U>
+    ) -> UpdateStreamOrOutcome<U>
     where
         U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
-        S: Stream<Item = U> + MaybeSend + 'a,
+        S: Stream<Item = U> + MaybeSend + 'static,
     {
         match self.outcome::<U>() {
             Some(outcome) => UpdateStreamOrOutcome::Outcome(outcome),
@@ -246,19 +246,19 @@ impl Decodable for OperationLogEntry {
 
 /// Either a stream of operation updates if the operation hasn't finished yet or
 /// its outcome otherwise.
-pub enum UpdateStreamOrOutcome<'a, U> {
-    UpdateStream(BoxStream<'a, U>),
+pub enum UpdateStreamOrOutcome<U> {
+    UpdateStream(BoxStream<'static, U>),
     Outcome(U),
 }
 
-impl<'a, U> UpdateStreamOrOutcome<'a, U>
+impl<U> UpdateStreamOrOutcome<U>
 where
     U: MaybeSend + MaybeSync + 'static,
 {
     /// Returns a stream no matter if the operation is finished. If there
     /// already is a cached outcome the stream will only return that, otherwise
     /// all updates will be returned until the operation finishes.
-    pub fn into_stream(self) -> BoxStream<'a, U> {
+    pub fn into_stream(self) -> BoxStream<'static, U> {
         match self {
             UpdateStreamOrOutcome::UpdateStream(stream) => stream,
             UpdateStreamOrOutcome::Outcome(outcome) => {

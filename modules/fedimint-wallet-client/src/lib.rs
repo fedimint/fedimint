@@ -190,6 +190,7 @@ impl WalletClientExt for Client {
 
         let mut operation_stream = wallet_client.notifier.subscribe(operation_id).await;
         let tx_subscriber = self.transaction_updates(operation_id).await;
+        let client = self.clone();
 
         Ok(
             operation_log_entry.outcome_or_updates(self.db(), operation_id, || {
@@ -233,7 +234,7 @@ impl WalletClientExt for Client {
                     }
 
                     if let Some(out_point) = claiming.change.as_ref() {
-                        self.await_primary_module_output(operation_id, *out_point)
+                        client.await_primary_module_output(operation_id, *out_point)
                             .await
                             .expect("Cannot fail if tx was accepted and federation is honest");
                     }
@@ -311,6 +312,7 @@ impl WalletClientExt for Client {
         };
 
         let mut operation_stream = wallet_client.notifier.subscribe(operation_id).await;
+        let client = self.clone();
 
         Ok(
             operation.outcome_or_updates(self.db(), operation_id, move || {
@@ -329,7 +331,7 @@ impl WalletClientExt for Client {
                     if let Some(change_out_point) = change {
                         // Swallowing potential errors since the transaction failing  is handled by
                         // output outcome fetching already
-                        let _ = self
+                        let _ = client
                             .await_primary_module_output(operation_id, change_out_point)
                             .await;
                     }
