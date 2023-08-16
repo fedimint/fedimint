@@ -3,19 +3,19 @@ default:
 
 # run `cargo build` on everything
 build:
-  cargo build --all --all-targets
+  cargo build --workspace --all-targets
 
 # run `cargo check` on everything
 check:
-  cargo check --all --all-targets
+  cargo check --workspace --all-targets
 
 # run `cargo clippy` on everything
 clippy:
-  cargo clippy --all --all-targets --deny warnings --allow deprecated
+  cargo clippy --workspace --all-targets -- --deny warnings --allow deprecated
 
 # run `cargo clippy --fix` on everything
 clippy-fix:
-  cargo clippy --all --all-targets --fix
+  cargo clippy --workspace --all-targets --fix
 
 # check if ulimit is set correctly
 check-ulimit:
