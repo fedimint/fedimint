@@ -646,7 +646,11 @@ async fn handle_metrics_summary(
     }
     if let Some(metrics_json_output) = opts.metrics_json_output {
         metrics_json_output_files.push(BufWriter::new(
-            tokio::fs::File::create(metrics_json_output).await?,
+            tokio::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(metrics_json_output)
+                .await?,
         ))
     }
 
