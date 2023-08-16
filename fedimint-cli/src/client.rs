@@ -63,6 +63,12 @@ pub enum ClientCmd {
         #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
     },
+    /// Verifies the signatures of e-cash notes, but *not* if they have been
+    /// spent already
+    Validate {
+        #[clap(value_parser = parse_ecash)]
+        notes: TieredMulti<SpendableNote>,
+    },
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
         #[clap(long, value_parser = parse_fedimint_amount)]
@@ -171,6 +177,13 @@ pub async fn handle_ng_command(
 
             Ok(json!({
                 "notes": serialize_ecash(&notes),
+            }))
+        }
+        ClientCmd::Validate { notes } => {
+            let amount = client.validate_notes(notes).await?;
+
+            Ok(json!({
+                "amount_msat": amount,
             }))
         }
         ClientCmd::LnInvoice {
