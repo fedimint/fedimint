@@ -9,7 +9,7 @@ windows:
   - main:
       panes:
         - user:
-            - source scripts/tmux-user-shell.sh
+            - source scripts/dev/tmuxinator/user-shell.sh
   - federation:
       panes:
         - fedimint0:

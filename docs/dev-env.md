@@ -5,7 +5,7 @@
 This instruction is available in a script version. If you prefer it, you can run:
 
 ```
-git clone -o upstream https://github.com/fedimint/fedimint && cd fedimint && ./scripts/bootstrap.sh
+git clone -o upstream https://github.com/fedimint/fedimint && cd fedimint && ./scripts/dev/bootstrap.sh
 ```
 
 and follow the instructions instead of reading this document.
