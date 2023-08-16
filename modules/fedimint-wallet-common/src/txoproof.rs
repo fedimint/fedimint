@@ -5,7 +5,7 @@ use bitcoin::{BlockHash, OutPoint, Transaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
-use miniscript::{Descriptor, TranslatePk};
+use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -121,7 +121,7 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
         }
 
         impl<'t, 's, Ctx: Verification + Signing, Ctr: Contract>
-            miniscript::PkTranslator<CompressedPublicKey, CompressedPublicKey, Infallible>
+            miniscript::Translator<CompressedPublicKey, CompressedPublicKey, Infallible>
             for CompressedPublicKeyTranslator<'t, 's, Ctx, Ctr>
         {
             fn pk(&mut self, pk: &CompressedPublicKey) -> Result<CompressedPublicKey, Infallible> {
@@ -130,14 +130,7 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
                 ))
             }
 
-            fn pkh(
-                &mut self,
-                pkh: &CompressedPublicKey,
-            ) -> Result<CompressedPublicKey, Infallible> {
-                Ok(CompressedPublicKey::new(
-                    pkh.key.tweak(self.tweak, self.secp),
-                ))
-            }
+            translate_hash_fail!(CompressedPublicKey, bitcoin::PublicKey, Infallible);
         }
         self.translate_pk(&mut CompressedPublicKeyTranslator { tweak, secp })
             .expect("can't fail")
