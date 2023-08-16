@@ -19,7 +19,7 @@ MESSAGE="$(
 
 # convco fails on fixup!, so remove fixup! prefix
 MESSAGE="${MESSAGE#fixup! }"
-if ! convco check <<<"$MESSAGE" ; then
+if ! convco check --from-stdin <<<"$MESSAGE" ; then
    >&2 echo "Please follow conventional commits(https://www.conventionalcommits.org)"
    >&2 echo "Use git recommit <args> to fix your commit"
   exit 1
