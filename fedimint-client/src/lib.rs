@@ -756,17 +756,20 @@ impl Client {
 
     /// Returns a stream that yields the current client balance every time it
     /// changes.
-    pub async fn subscribe_balance_changes(&self) -> BoxStream<'_, Amount> {
+    pub async fn subscribe_balance_changes(&self) -> BoxStream<'static, Amount> {
         let mut balance_changes = self.primary_module().subscribe_balance_changes().await;
         let initial_balance = self.get_balance().await;
+        let db = self.db().clone();
+        let primary_module = self.primary_module().clone();
+        let primary_module_instance = self.inner.primary_module_instance;
+
         Box::pin(stream! {
             yield initial_balance;
             let mut prev_balance = initial_balance;
             while let Some(()) = balance_changes.next().await {
-                let mut dbtx = self.db().begin_transaction().await;
-                let balance = self
-                    .primary_module()
-                    .get_balance(self.inner.primary_module_instance, &mut dbtx)
+                let mut dbtx = db.begin_transaction().await;
+                let balance = primary_module
+                    .get_balance(primary_module_instance, &mut dbtx)
                     .await;
 
                 // Deduplicate in case modules cannot always tell if the balance actually changed
