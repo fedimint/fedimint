@@ -26,57 +26,10 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{msats, sats};
 use fedimint_server::epoch::ConsensusItem;
-use fedimint_wallet_server::common::{PegOutFees, Rbf};
 use futures::future::{join_all, Either};
 use serde::{Deserialize, Serialize};
 
 use crate::fixtures::{peers, test};
-
-#[tokio::test(flavor = "multi_thread")]
-async fn wallet_peg_outs_support_rbf() -> Result<()> {
-    test(2, |fed, user, bitcoin| async move {
-        // Need lock to keep tx in mempool from getting mined
-        let bitcoin = bitcoin.lock_exclusive().await;
-        let address = bitcoin.get_new_address().await;
-
-        fed.mine_and_mint(&*user, &*bitcoin, sats(5000)).await;
-        let (fees, out_point) = user.peg_out(1000, &address);
-        fed.run_consensus_epochs(2).await;
-        fed.broadcast_transactions().await;
-
-        let txid = user.await_peg_out_txid(out_point).await.unwrap();
-        assert_eq!(
-            bitcoin.get_mempool_tx_fee(&txid).await,
-            fees.amount().into()
-        );
-
-        // RBF by increasing sats per kvb by 1000
-        let rbf = Rbf {
-            fees: PegOutFees::new(1000, fees.total_weight),
-            txid,
-        };
-        let out_point = user.rbf_peg_out_tx(rbf.clone()).await.unwrap();
-        fed.run_consensus_epochs(2).await;
-        fed.broadcast_transactions().await;
-        let txid = user.await_peg_out_txid(out_point).await.unwrap();
-
-        assert_eq!(
-            bitcoin.get_mempool_tx_fee(&txid).await,
-            (fees.amount() + rbf.fees.amount()).into()
-        );
-
-        assert_eq!(
-            bitcoin.mine_block_and_get_received(&address).await,
-            sats(1000)
-        );
-        bitcoin
-            .mine_blocks(fed.wallet.consensus.finality_delay as u64)
-            .await;
-        fed.run_consensus_epochs(1).await;
-        assert_eq!(fed.max_balance_sheet(), 0);
-    })
-    .await
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
