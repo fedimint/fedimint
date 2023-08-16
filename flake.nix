@@ -28,12 +28,18 @@
     flake-utils.lib.eachDefaultSystem
       (system:
         let
-          pkgs = import nixpkgs {
-            inherit system;
-          };
 
           pkgs-unstable = import nixpkgs-unstable {
             inherit system;
+          };
+
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [
+              (final: prev: {
+                cargo-udeps = pkgs-unstable.cargo-udeps;
+              })
+            ];
           };
 
           pkgs-kitman = import nixpkgs-kitman {
@@ -339,7 +345,7 @@
                     pkgs.rust-analyzer
                     toolchain.fenixToolchainRustfmt
                     cargo-llvm-cov
-                    pkgs-unstable.cargo-udeps
+                    pkgs.cargo-udeps
                     pkgs.parallel
                     pkgs.just
                     typos
