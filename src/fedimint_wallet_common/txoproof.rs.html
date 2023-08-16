@@ -238,13 +238,6 @@
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
-<a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::hash::Hash;
 
@@ -252,7 +245,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
+<span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 <span class="kw">use </span>secp256k1::{Secp256k1, Signing, Verification};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -368,7 +361,7 @@
         }
 
         <span class="kw">impl</span>&lt;<span class="lifetime">&#39;t</span>, <span class="lifetime">&#39;s</span>, Ctx: Verification + Signing, Ctr: Contract&gt;
-            miniscript::PkTranslator&lt;CompressedPublicKey, CompressedPublicKey, Infallible&gt;
+            miniscript::Translator&lt;CompressedPublicKey, CompressedPublicKey, Infallible&gt;
             <span class="kw">for </span>CompressedPublicKeyTranslator&lt;<span class="lifetime">&#39;t</span>, <span class="lifetime">&#39;s</span>, Ctx, Ctr&gt;
         {
             <span class="kw">fn </span>pk(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pk: <span class="kw-2">&amp;</span>CompressedPublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;CompressedPublicKey, Infallible&gt; {
@@ -377,14 +370,7 @@
                 ))
             }
 
-            <span class="kw">fn </span>pkh(
-                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-                pkh: <span class="kw-2">&amp;</span>CompressedPublicKey,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;CompressedPublicKey, Infallible&gt; {
-                <span class="prelude-val">Ok</span>(CompressedPublicKey::new(
-                    pkh.key.tweak(<span class="self">self</span>.tweak, <span class="self">self</span>.secp),
-                ))
-            }
+            <span class="macro">translate_hash_fail!</span>(CompressedPublicKey, bitcoin::PublicKey, Infallible);
         }
         <span class="self">self</span>.translate_pk(<span class="kw-2">&amp;mut </span>CompressedPublicKeyTranslator { tweak, secp })
             .expect(<span class="string">&quot;can&#39;t fail&quot;</span>)

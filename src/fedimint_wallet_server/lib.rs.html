@@ -1871,12 +1871,6 @@
 <a href="#1871" id="1871">1871</a>
 <a href="#1872" id="1872">1872</a>
 <a href="#1873" id="1873">1873</a>
-<a href="#1874" id="1874">1874</a>
-<a href="#1875" id="1875">1875</a>
-<a href="#1876" id="1876">1876</a>
-<a href="#1877" id="1877">1877</a>
-<a href="#1878" id="1878">1878</a>
-<a href="#1879" id="1879">1879</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1940,7 +1934,7 @@
 <span class="kw">use </span>fedimint_wallet_common::Rbf;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
-<span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
+<span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>secp256k1::{Message, Scalar};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -3257,7 +3251,7 @@
         }
 
         <span class="kw">impl</span>&lt;<span class="lifetime">&#39;t</span>, <span class="lifetime">&#39;s</span>, Ctx: Verification&gt;
-            miniscript::PkTranslator&lt;CompressedPublicKey, CompressedPublicKey, Infallible&gt;
+            miniscript::Translator&lt;CompressedPublicKey, CompressedPublicKey, Infallible&gt;
             <span class="kw">for </span>CompressedPublicKeyTranslator&lt;<span class="lifetime">&#39;t</span>, <span class="lifetime">&#39;s</span>, Ctx&gt;
         {
             <span class="kw">fn </span>pk(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pk: <span class="kw-2">&amp;</span>CompressedPublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;CompressedPublicKey, Infallible&gt; {
@@ -3277,13 +3271,7 @@
                         .expect(<span class="string">&quot;tweaking failed&quot;</span>),
                 })
             }
-
-            <span class="kw">fn </span>pkh(
-                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-                pkh: <span class="kw-2">&amp;</span>CompressedPublicKey,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;CompressedPublicKey, Infallible&gt; {
-                <span class="self">self</span>.pk(pkh)
-            }
+            <span class="macro">translate_hash_fail!</span>(CompressedPublicKey, CompressedPublicKey, Infallible);
         }
 
         <span class="kw">let </span>descriptor = <span class="self">self
