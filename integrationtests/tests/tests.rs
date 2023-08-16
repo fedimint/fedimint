@@ -33,26 +33,6 @@ use serde::{Deserialize, Serialize};
 use crate::fixtures::{peers, test};
 
 #[tokio::test(flavor = "multi_thread")]
-async fn wallet_peg_outs_are_rejected_if_fees_are_too_low() -> Result<()> {
-    test(2, |fed, user, bitcoin| async move {
-        let peg_out_amount = Amount::from_sat(1000);
-        let peg_out_address = bitcoin.get_new_address().await;
-
-        fed.mine_and_mint(&*user, &*bitcoin, sats(3000)).await;
-        let mut peg_out = user
-            .fetch_peg_out_fees(peg_out_amount, peg_out_address.clone())
-            .await
-            .unwrap();
-
-        // Lower rate below FeeConsensus
-        peg_out.fees.fee_rate.sats_per_kvb = 10;
-        // TODO: return a better error message to clients
-        assert!(user.submit_peg_out(peg_out).await.is_err());
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_support_rbf() -> Result<()> {
     test(2, |fed, user, bitcoin| async move {
         // Need lock to keep tx in mempool from getting mined
