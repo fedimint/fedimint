@@ -650,6 +650,9 @@
 <a href="#650" id="650">650</a>
 <a href="#651" id="651">651</a>
 <a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
 </pre><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 
 </span><span class="kw">use </span>std::collections::VecDeque;
@@ -1067,7 +1070,8 @@
     }
 
     <span class="kw">pub async fn </span>sleep(duration: Duration) {
-        tokio::time::sleep(duration).<span class="kw">await
+        <span class="comment">// nosemgrep: ban-tokio-sleep
+        </span>tokio::time::sleep(duration).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>sleep_until(deadline: Instant) {
@@ -1121,7 +1125,9 @@
     </span>}
 
     <span class="kw">pub async fn </span>sleep_until(deadline: Instant) {
-        sleep(deadline.saturating_duration_since(Instant::now())).<span class="kw">await
+        <span class="comment">// nosemgrep: ban-system-time-now
+        // nosemgrep: ban-instant-now
+        </span>sleep(deadline.saturating_duration_since(Instant::now())).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>timeout&lt;T&gt;(duration: Duration, future: T) -&gt; <span class="prelude-ty">Result</span>&lt;T::Output, Elapsed&gt;

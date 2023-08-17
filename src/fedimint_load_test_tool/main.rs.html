@@ -751,6 +751,10 @@
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
 <a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1399,7 +1403,11 @@
     }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(metrics_json_output) = opts.metrics_json_output {
         metrics_json_output_files.push(BufWriter::new(
-            tokio::fs::File::create(metrics_json_output).<span class="kw">await</span><span class="question-mark">?</span>,
+            tokio::fs::OpenOptions::new()
+                .write(<span class="bool-val">true</span>)
+                .create(<span class="bool-val">true</span>)
+                .open(metrics_json_output)
+                .<span class="kw">await</span><span class="question-mark">?</span>,
         ))
     }
 

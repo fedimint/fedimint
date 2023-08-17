@@ -1403,7 +1403,6 @@
 <a href="#1403" id="1403">1403</a>
 <a href="#1404" id="1404">1404</a>
 <a href="#1405" id="1405">1405</a>
-<a href="#1406" id="1406">1406</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -2529,7 +2528,6 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_migration_tests {
     <span class="kw">use </span>std::str::FromStr;
-    <span class="kw">use </span>std::time::SystemTime;
 
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
@@ -2657,7 +2655,7 @@
             api: Url::parse(<span class="string">&quot;http://example.com&quot;</span>)
                 .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
             route_hints: <span class="macro">vec!</span>[],
-            valid_until: SystemTime::now(),
+            valid_until: fedimint_core::time::now(),
             fees: RoutingFees {
                 base_msat: <span class="number">0</span>,
                 proportional_millionths: <span class="number">0</span>,

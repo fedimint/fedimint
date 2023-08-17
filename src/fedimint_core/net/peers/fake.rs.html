@@ -83,19 +83,17 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
 </pre><pre class="rust"><code><span class="doccomment">/// Fake (channel-based) implementation of [`super::PeerConnections`].
 </span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::{IPeerConnections, PeerConnections};
-<span class="kw">use </span>fedimint_core::task::TaskHandle;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskHandle};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tokio::sync::mpsc::{<span class="self">self</span>, Receiver, Sender};
-<span class="kw">use </span>tokio::time::sleep;
 
 <span class="kw">struct </span>FakePeerConnections&lt;Msg&gt; {
     tx: Sender&lt;Msg&gt;,

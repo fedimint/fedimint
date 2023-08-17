@@ -492,6 +492,7 @@
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
 </pre><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -728,7 +729,7 @@
     <span class="kw">use </span>std::collections::BTreeSet;
     <span class="kw">use </span>std::fmt::{Debug, Formatter};
     <span class="kw">use </span>std::sync::Arc;
-    <span class="kw">use </span>std::time::{Duration, SystemTime};
+    <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>fedimint_core::api::{
@@ -741,6 +742,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
     <span class="kw">use </span>fedimint_core::task::sleep;
+    <span class="kw">use </span>fedimint_core::time::now;
     <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
     <span class="kw">use </span>fedimint_core::util::BoxStream;
     <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
@@ -854,7 +856,7 @@
                 state: TxSubmissionStates::Created {
                     txid,
                     tx,
-                    next_submission: SystemTime::now(),
+                    next_submission: now(),
                 },
             }
             .into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE);

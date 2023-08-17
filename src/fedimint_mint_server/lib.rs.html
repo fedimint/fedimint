@@ -2068,13 +2068,13 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_migration_tests {
     <span class="kw">use </span>std::collections::BTreeMap;
-    <span class="kw">use </span>std::time::SystemTime;
 
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
+    <span class="kw">use </span>fedimint_core::time::now;
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
     <span class="kw">use </span>fedimint_mint_common::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
@@ -2164,7 +2164,7 @@
 
         <span class="kw">let </span>backup_key = EcashBackupKey(pk.x_only_public_key().<span class="number">0</span>);
         <span class="kw">let </span>ecash_backup = ECashUserBackupSnapshot {
-            timestamp: SystemTime::now(),
+            timestamp: now(),
             data: BYTE_32.to_vec(),
         };
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>backup_key, <span class="kw-2">&amp;</span>ecash_backup).<span class="kw">await</span>;

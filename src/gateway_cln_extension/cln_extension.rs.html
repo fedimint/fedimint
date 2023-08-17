@@ -614,20 +614,6 @@
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
 <a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -654,7 +640,7 @@
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
-<span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::io::{stdin, stdout};
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot, Mutex};
@@ -706,24 +692,11 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot;
-/// suffix
-</span><span class="kw">fn </span>as_fedimint_amount&lt;<span class="lifetime">&#39;de</span>, D&gt;(amount: D) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, D::Error&gt;
-<span class="kw">where
-    </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
-{
-    <span class="kw">let </span>amount = String::deserialize(amount)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Amount::from_msats(
-        amount[<span class="number">0</span>..amount.len() - <span class="number">4</span>].parse::&lt;u64&gt;().unwrap(),
-    ))
-}
-
 <span class="comment">// TODO: upstream these structs to cln-plugin
 // See: https://github.com/ElementsProject/lightning/blob/master/doc/PLUGINS.md#htlc_accepted
 </span><span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>Htlc {
-    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
-    </span><span class="kw">pub </span>amount_msat: Amount,
+    <span class="kw">pub </span>amount_msat: Amount,
     <span class="comment">// TODO: use these to validate we can actually redeem the HTLC in time
     </span><span class="kw">pub </span>cltv_expiry: u32,
     <span class="kw">pub </span>cltv_expiry_relative: u32,
@@ -738,8 +711,7 @@
 </span><span class="kw">pub struct </span>Onion {
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
-    </span><span class="kw">pub </span>forward_msat: Amount,
+    <span class="kw">pub </span>forward_msat: Amount,
 }
 
 <span class="attr">#[derive(Clone, Serialize, Deserialize, Debug)]
