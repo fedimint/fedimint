@@ -13,6 +13,17 @@ use crate::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 
+/// Fedimint has a design constraint that you can never trust a single guardian,
+/// we only trust that a threshold of t/n guardians are honest. Where f is the
+/// number of malicious guardians, we require 3f + 1 total nodes n and t = n-f
+/// for the honest threshold. This means that we need to query multiple
+/// guardians for the same information, and then combine the results. The
+/// QueryStrategy generally retries until we have enough responses to meet the
+/// threshold, and handles when a guardian doesn't respond. There are nuanced
+/// cases where instead of arriving at a single t/n result the client will want
+/// a union e.g. guardians 1 and 2 respond (A,B) and guardian 3 responds (C) so
+/// return (A,B,C). This is handled by the specfic QueryStrategy
+/// implementations.
 pub trait QueryStrategy<IR, OR = IR> {
     /// Should requests for this strategy have specific timeouts?
     fn request_timeout(&self) -> Option<Duration> {

@@ -59,6 +59,9 @@ where
         .await
     }
 
+    /// There is no consensus within Fedimint on the gateways, each guardian
+    /// might be aware of different ones, so we just return the union of all
+    /// responses and allow client selection.
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
         self.request_with_strategy(
             UnionResponses::new(self.all_peers().total()),
