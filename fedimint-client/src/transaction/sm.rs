@@ -234,7 +234,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::fmt::{Debug, Formatter};
     use std::sync::Arc;
-    use std::time::{Duration, SystemTime};
+    use std::time::Duration;
 
     use async_trait::async_trait;
     use fedimint_core::api::{
@@ -247,6 +247,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiRequestErased;
     use fedimint_core::task::sleep;
+    use fedimint_core::time::now;
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
     use fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
@@ -360,7 +361,7 @@ mod tests {
                 state: TxSubmissionStates::Created {
                     txid,
                     tx,
-                    next_submission: SystemTime::now(),
+                    next_submission: now(),
                 },
             }
             .into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE);

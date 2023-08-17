@@ -1123,7 +1123,6 @@ mod tests {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::str::FromStr;
-    use std::time::SystemTime;
 
     use bitcoin_hashes::Hash;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
@@ -1251,7 +1250,7 @@ mod fedimint_migration_tests {
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
-            valid_until: SystemTime::now(),
+            valid_until: fedimint_core::time::now(),
             fees: RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,

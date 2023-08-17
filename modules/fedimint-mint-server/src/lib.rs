@@ -919,13 +919,13 @@ impl fedimint_core::server::VerificationCache for VerificationCache {}
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::collections::BTreeMap;
-    use std::time::SystemTime;
 
     use bitcoin_hashes::Hash;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
+    use fedimint_core::time::now;
     use fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
     use fedimint_mint_common::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
@@ -1015,7 +1015,7 @@ mod fedimint_migration_tests {
 
         let backup_key = EcashBackupKey(pk.x_only_public_key().0);
         let ecash_backup = ECashUserBackupSnapshot {
-            timestamp: SystemTime::now(),
+            timestamp: now(),
             data: BYTE_32.to_vec(),
         };
         dbtx.insert_new_entry(&backup_key, &ecash_backup).await;

@@ -415,6 +415,7 @@ mod imp {
     }
 
     pub async fn sleep(duration: Duration) {
+        // nosemgrep: ban-tokio-sleep
         tokio::time::sleep(duration).await
     }
 
@@ -469,6 +470,8 @@ mod imp {
     }
 
     pub async fn sleep_until(deadline: Instant) {
+        // nosemgrep: ban-system-time-now
+        // nosemgrep: ban-instant-now
         sleep(deadline.saturating_duration_since(Instant::now())).await
     }
 
