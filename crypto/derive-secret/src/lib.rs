@@ -97,8 +97,8 @@ impl DerivableSecret {
         }
     }
 
-    // secp256k1 keys are used for bitcoin deposit addresses, redeem keys and
-    // contract keys for lightning.
+    /// secp256k1 keys are used for bitcoin deposit addresses, redeem keys and
+    /// contract keys for lightning.
     pub fn to_secp_key<C: Signing>(self, ctx: &Secp256k1<C>) -> KeyPair {
         for key_try in 0u64.. {
             let secret = self
@@ -114,8 +114,8 @@ impl DerivableSecret {
         unreachable!("If key generation fails this often something else has to be wrong.")
     }
 
-    // bls12-381 keys are used for the guardians' threshold signature scheme,
-    // and most importantly for its use for the blinding keys for e-cash notes.
+    /// bls12-381 keys are used for the guardians' threshold signature scheme,
+    /// and most importantly for its use for the blinding keys for e-cash notes.
     pub fn to_bls12_381_key(&self) -> Scalar {
         Scalar::from_bytes_wide(&self.kdf.derive(&tagged_derive(BLS12_381_TAG, ChildId(0))))
     }
