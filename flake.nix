@@ -1,7 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-kitman.url = "github:jkitman/nixpkgs/add-esplora-pkg";
     crane.url = "github:ipetkov/crane?rev=116b32c30b5ff28e49f4fcbeeb1bbe3544593204";
     crane.inputs.nixpkgs.follows = "nixpkgs";
@@ -24,15 +23,11 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flake-compat, fenix, crane, advisory-db, android-nixpkgs }:
+  outputs = { self, nixpkgs, nixpkgs-kitman, flake-utils, flake-compat, fenix, crane, advisory-db, android-nixpkgs }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
           pkgs = import nixpkgs {
-            inherit system;
-          };
-
-          pkgs-unstable = import nixpkgs-unstable {
             inherit system;
           };
 
@@ -339,7 +334,7 @@
                     pkgs.rust-analyzer
                     toolchain.fenixToolchainRustfmt
                     cargo-llvm-cov
-                    pkgs-unstable.cargo-udeps
+                    pkgs.cargo-udeps
                     pkgs.parallel
                     pkgs.just
                     typos
