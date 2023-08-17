@@ -102,11 +102,32 @@ jobs:
 
       - name: Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
-        run: nix build -L .#ci.cli-test.all
+        run: |
+          nix build -L .#ci.cli-test.all --keep-failed
 
       - name: Wasm Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
-        run: nix build -L .#ci.wasm-tests
+        run: nix build -L .#ci.wasm-tests --keep-failed
+
+      - name: Prepare failed test build dirs
+        if: always()
+        run:  |
+          set -x
+          # delete source and target artifacts as it is huge and rather useless now
+          sudo rm -Rf /tmp/nix-build-*/source || true
+          # chown so actions/upload-artifact can access it
+          sudo chown -R $USER /tmp/nix-build-* || true
+          # delete unix sockets, as actions/upload-artifact can't handle them
+          find /tmp/nix-build-* -type s -print0 | xargs -0 rm || true
+
+      - name: Upload failed test build dirs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with: 
+          name: "${{ matrix.host}}-test-logs"
+          path: |
+            /tmp/nix-build-*/
+            !/tmp/nix-build-*/source/
 
   audit:
     name: "Audit"
