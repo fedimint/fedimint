@@ -80,7 +80,7 @@ const INITIAL_SCID: u64 = 1;
 /// How long a gateway announcement stays valid
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
-const ROUTE_HINT_RETRIES: usize = 10;
+const ROUTE_HINT_RETRIES: usize = 30;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
