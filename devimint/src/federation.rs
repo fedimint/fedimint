@@ -176,13 +176,14 @@ impl Federation {
         cmd!("fedimint-cli", "--data-dir={cfg_dir}")
     }
 
-    pub async fn pegin(&self, amt: u64) -> Result<()> {
+    pub async fn pegin(&self, amount: u64) -> Result<()> {
+        info!(amount, "Peg-in");
         let deposit = cmd!(self, "deposit-address").out_json().await?;
         let deposit_address = deposit["address"].as_str().unwrap();
         let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
 
         self.bitcoind
-            .send_to(deposit_address.to_owned(), amt)
+            .send_to(deposit_address.to_owned(), amount)
             .await?;
         self.bitcoind.mine_blocks(100).await?;
 
@@ -192,24 +193,25 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn pegin_gateway(&self, amt: u64, gw_cln: &Gatewayd) -> Result<()> {
+    pub async fn pegin_gateway(&self, amount: u64, gw: &Gatewayd) -> Result<()> {
+        info!(amount, "Pegging-in gateway funds");
         let fed_id = self.federation_id().await;
-        let pegin_addr = cmd!(gw_cln, "address", "--federation-id={fed_id}")
+        let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
             .out_json()
             .await?
             .as_str()
             .context("address must be a string")?
             .to_owned();
-        self.bitcoind.send_to(pegin_addr, amt).await?;
+        self.bitcoind.send_to(pegin_addr, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
         poll("gateway pegin", || async {
-            let gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
+            let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
                 .out_json()
                 .await?
                 .as_u64()
                 .unwrap();
 
-            Ok(gateway_balance == (amt * 1000))
+            Ok(gateway_balance == (amount * 1000))
         })
         .await?;
         Ok(())

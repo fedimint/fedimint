@@ -74,18 +74,20 @@ impl Bitcoind {
         self.client.clone()
     }
 
-    pub async fn mine_blocks(&self, amt: u64) -> Result<()> {
+    pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
+        info!(block_num, "Mining bitcoin blocks");
         let client = self.client();
         let addr = client.get_new_address(None, None)?;
-        client.generate_to_address(amt, &addr)?;
+        client.generate_to_address(block_num, &addr)?;
         Ok(())
     }
 
-    pub async fn send_to(&self, addr: String, amt: u64) -> Result<bitcoin::Txid> {
-        let amt = bitcoin::Amount::from_sat(amt);
+    pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin::Txid> {
+        info!(amount, addr, "Sending funds from bitcoind");
+        let amount = bitcoin::Amount::from_sat(amount);
         let tx = self.client().send_to_address(
             &bitcoin::Address::from_str(&addr)?,
-            amt,
+            amount,
             None,
             None,
             None,
