@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::unreachable;
 
 use anyhow::bail;
 use fedimint_core::task;
@@ -251,30 +252,23 @@ pub async fn poll_max_retries<Fut>(name: &str, retries: usize, f: impl Fn() -> F
 where
     Fut: Future<Output = Result<bool>>,
 {
-    let mut i = 0;
-    loop {
-        let result = f().await;
-        if i == retries - 1 {
-            match result {
-                Ok(true) => return Ok(()),
-                Ok(false) => {
-                    bail!("{name} failed to reach good state after {retries} retries");
-                }
-                Err(e) => {
-                    bail!("{name} failed after {retries} retries with: {e:?}");
-                }
+    for i in 0.. {
+        match f().await {
+            Ok(true) => return Ok(()),
+            other if i <= retries => {
+                debug!("polling {name} failed with: {other:?}, will retry... ({i}/{retries})");
+                task::sleep(Duration::from_secs(1)).await;
             }
-        } else {
-            match result {
-                Ok(true) => return Ok(()),
-                other => {
-                    i += 1;
-                    debug!("polling {name} failed with: {other:?}, will retry... ({i}/{retries})");
-                    task::sleep(Duration::from_secs(1)).await;
-                }
+            Ok(false) => {
+                bail!("{name} failed to reach good state after {retries} retries");
+            }
+            Err(e) => {
+                bail!("{name} failed after {retries} retries with: {e:?}");
             }
         }
     }
+
+    unreachable!();
 }
 
 pub async fn poll<Fut>(name: &str, f: impl Fn() -> Fut) -> Result<()>
