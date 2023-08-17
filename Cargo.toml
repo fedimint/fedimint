@@ -61,7 +61,6 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 
 [profile.dev]
-split-debuginfo = "packed"
 
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
@@ -84,7 +83,6 @@ threshold_crypto = { opt-level = 3 }
 
 [profile.ci]
 inherits = "dev"
-split-debuginfo = "packed"
 debug = 1
 
 [patch.crates-io]

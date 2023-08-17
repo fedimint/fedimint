@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-echo "Run with 'source ./scripts/build.sh [fed_size] [dir]"
-
 # allow for overriding arguments
 export FM_FED_SIZE=${1:-4}
 
