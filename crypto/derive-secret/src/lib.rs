@@ -19,7 +19,51 @@ const RAW_BYTES: &[u8; 8] = b"rawbytes";
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
 pub struct ChildId(pub u64);
 
-/// Secret key that allows deriving child secret keys
+/// `DerivableSecret` represents a secret key that can be used to derive child
+/// secret keys. Fedimint on init generates a root key, and then derives child
+/// keys from it for each of the modules. Each module's child key can then be
+/// used to derive child keys for its specific use cases. This derivable secret
+/// pattern is especially useful for creating backups for both client and server
+/// side operations.
+///
+/// The `DerivableSecret` struct in this implementation is only used for
+/// deriving secret keys, not public keys. This allows us to support multiple
+/// crypto schemes for the different cryptographic operations used across the
+/// different modules:
+/// - secp256k1 for bitcoin deposit addresses, redeem keys and contract keys for
+///   lightning,
+/// - bls12-381 for the guardians' threshold signature scheme,
+/// - chacha20-poly1305 for symmetric encryption used for backups.
+///
+/// The `DerivableSecret` struct contains two fields:
+/// - `level`: This represents the derivation level of the secret key and acts
+///   as an index. The root key starts at level 0, and each derived child key
+///   increments this level.
+/// - `kdf`: This is an instance of the HKDF (Hash-based Key Derivation
+///   Function) with SHA-512 as the underlying hash function. It is used to
+///   derive child keys.
+///
+/// The `salt` used in the `new_root` function is just random data that is used
+/// as an additional input to the HKDF.
+///
+/// # Example
+/// In the context of e-cash, the `DerivableSecret` can be used to derive
+/// blinding and spend keys for e-cash notes. Here's an example from
+/// modules/fedimint-mint-client/src/output.rs
+///
+/// ```rust
+/// let spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
+/// let nonce = Nonce(spend_key.x_only_public_key().0);
+/// let blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
+/// let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
+///
+/// let cr = NoteIssuanceRequest {
+///     spend_key,
+///     blinding_key,
+/// };
+///
+/// (cr, BlindNonce(blinded_nonce))
+/// ```
 #[derive(Clone)]
 pub struct DerivableSecret {
     /// Derivation level, root = 0, every `child_key` increments it
@@ -38,7 +82,6 @@ impl DerivableSecret {
 
     /// Get derivation level
     ///
-    ///
     /// This is useful for ensuring a correct derivation level is used,
     /// in various places.
     ///
@@ -54,6 +97,8 @@ impl DerivableSecret {
         }
     }
 
+    // secp256k1 keys are used for bitcoin deposit addresses, redeem keys and
+    // contract keys for lightning.
     pub fn to_secp_key<C: Signing>(self, ctx: &Secp256k1<C>) -> KeyPair {
         for key_try in 0u64.. {
             let secret = self
@@ -69,6 +114,8 @@ impl DerivableSecret {
         unreachable!("If key generation fails this often something else has to be wrong.")
     }
 
+    // bls12-381 keys are used for the guardians' threshold signature scheme,
+    // and most importantly for its use for the blinding keys for e-cash notes.
     pub fn to_bls12_381_key(&self) -> Scalar {
         Scalar::from_bytes_wide(&self.kdf.derive(&tagged_derive(BLS12_381_TAG, ChildId(0))))
     }
