@@ -472,6 +472,40 @@ impl ClientModuleGen for MintClientGen {
     }
 }
 
+/// The `MintClientModule` is responsible for handling e-cash minting
+/// operations. It interacts with the mint server to issue, reissue, and
+/// validate e-cash notes.
+///
+/// # DerivableSecret
+///
+/// The `DerivableSecret` is a cryptographic secret that can be used to derive
+/// other secrets. In the context of the `MintClientModule`, it is used to
+/// derive the blinding and spend keys for e-cash notes. The `DerivableSecret`
+/// is initialized when the `MintClientModule` is created and is kept private
+/// within the module.
+///
+/// # Blinding Key
+///
+/// The blinding key is derived from the `DerivableSecret` and is used to blind
+/// the e-cash note during the issuance process. This ensures that the mint
+/// server cannot link the e-cash note to the client that requested it,
+/// providing privacy for the client.
+///
+/// # Spend Key
+///
+/// The spend key is also derived from the `DerivableSecret` and is used to
+/// spend the e-cash note. Only the client that possesses the `DerivableSecret`
+/// can derive the correct spend key to spend the e-cash note. This ensures that
+/// only the owner of the e-cash note can spend it.
+///
+/// # E-Cash Note Creation
+///
+/// When creating an e-cash note, the `MintClientModule` first derives the
+/// blinding and spend keys from the `DerivableSecret`. It then creates a
+/// `NoteIssuanceRequest` containing the blinded spend key and sends it to the
+/// mint server. The mint server signs the blinded spend key and returns it to
+/// the client. The client can then unblind the signed spend key to obtain the
+/// e-cash note, which can be spent using the spend key.
 #[derive(Debug)]
 pub struct MintClientModule {
     cfg: MintClientConfig,
@@ -1070,6 +1104,9 @@ impl MintClientModule {
             .child_key(ChildId(amount.msats))
     }
 
+    /// We always keep track of an incrementing index in the database and use
+    /// it as part of the derivation path for the note secret. This ensures that
+    /// we never reuse the same note secret twice.
     async fn new_note_secret(
         &self,
         amount: Amount,
