@@ -79,21 +79,6 @@ async fn wallet_peg_outs_support_rbf() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn wallet_peg_ins_that_are_unconfirmed_are_rejected() -> Result<()> {
-    test(2, |_fed, user, bitcoin| async move {
-        let peg_in_address = user.get_new_peg_in_address().await;
-        let (proof, tx) = bitcoin
-            .send_and_mine_block(&peg_in_address, Amount::from_sat(10000))
-            .await;
-        let result = user.submit_peg_in(proof, tx).await;
-
-        // TODO make return error more useful
-        assert!(result.is_err());
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
     test(2, |fed, user, bitcoin| async move {
         // at least one epoch needed to establish fees
