@@ -16,6 +16,7 @@ Fedimint is a federated chaumian e-cash mint, built on bitcoin, compatible with 
 # Let's Make a Fedimint
 
 ## Step 1. Provisioning VPS's
+
 For this setup we'll be setting up a 3/4 Federation, then a Lightning Gateway to service the federation.
 
 Fedimint can run with any t/n configuration including 1/1, so feel free to use any number of machines you want or just run it locally. However the power of fedimint is in the redundancy of the federation, and at the end of this guide we'll see how we can kill a machine and the federation will continue to function.
@@ -26,7 +27,7 @@ I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS 
 
 - Create a new droplet, use the default parameters for a $12 2GB RAM/1 CPU machine.
 
-![Alt text](image.png)
+![Alt text](mutiny_setup/create_droplet.png)
 
 - Default Ubuntu image
 
@@ -46,7 +47,7 @@ I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS 
 
 - You can SSH into the machine from your terminal by copying the ssh command for key or root user/password. Or just use the droplet terminal from the digital ocean console.
 
-![Alt text](image-1.png)
+![Alt text](mutiny_setup/access.png)
 
 ![Alt text](mutiny_setup/droplet_console.png)
 
@@ -72,7 +73,7 @@ For the Linode Setup we'll use the same $12 2GB/1CPU machine as Digital Ocean, i
 
 ### 1.3. Amazon EC2 Setup
 
-For the AWS EC2 Setup we'll use the free tier t2.micro machine, which is 1GB RAM/1CPU. This is below the recommended specs but for a 3/4 federation it's redundant to this machine occasionally being slow or glitching out, and at the end of this tutorial we'll kill the machine entirely and demonstrate the federation continuing to operate. 
+For the AWS EC2 Setup we'll use the free tier t2.micro machine, which is 1GB RAM/1CPU. This is below the recommended specs but for a 3/4 federation it's redundant to this machine occasionally being slow or glitching out, and at the end of this tutorial we'll kill the machine entirely and demonstrate the federation continuing to operate.
 
 - Use your ssh keys (you'll have to import them for EC2 in the console beforehand), set a security group, and free tier EC2 lets you have up to 30GB of storage.
 
@@ -101,7 +102,9 @@ For the google cloud machine we'll use something a little bigger because we'll a
 You should now have your machines running and be able to ssh into them. We'll install fedimint on each machine using the docker install script.
 
 Notes for specific machines:
+
 - If you're running on linode or aws you'll need to install and start docker and docker compose first. You can do this by running the following commands (change apt-get to yum if not using ubuntu):
+
 ```bash
 # update packages
 sudo apt-get update
@@ -131,6 +134,7 @@ sudo systemctl restart docker
 ```
 
 and if you get a "platform error" when trying to install with docker compose, you can run the following commands to install the most recent version of docker compose:
+
 ```bash
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 ```
@@ -138,16 +142,18 @@ sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-
 Run the No TLS fedimint setup script below on each of the 4 machines you're running the fedimint gaurdian daemon on. Only install fedimintd on the boxes that'll run the guardians.
 
 ### Fedimint Setup Script (No TLS):
-```bash 
+
+```bash
 curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
 ```
 
 or if you want to install with TLS:
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/tls-download-mutinynet.sh | bash
 ```
 
-then we'll run it again later for the gateway setup. 
+then we'll run it again later for the gateway setup.
 
 The install script lets you install one or all of:
 
@@ -165,7 +171,6 @@ and it'll start the services on the following ports:
 
 ![Alt text](mutiny_setup/fedimint_startup.png)
 
-
 You've now got the fedimint processes running on each machine. Congratulations! However, they're not connected into a federation yet. We'll do that in the next step.
 
 ## Step 3. Forming the Federation
@@ -175,6 +180,7 @@ Now that we have the fedimint processes running on each machine, we'll form the 
 > Note: If you're running on AWS = you'll need to open port 3000 in your security group to access the dashboard, and if you're running on google cloud you'll need to open both ports 3000 and 8174 in your firewall.
 
 ### Leader and Followers
+
 On the homescreen you'll see a selection to lead or follow. This does not refer to any of the underyling security elements: all the guardians will participate in a round-robin distributed key generation once connected to generate all of the secrets and private keys required to run the mint. No guardian at any time during setup knows the complete key or secret.
 
 The "Leader" is simply the guardian who will input the configuration settings for the federation and the "Followers" will agree to and validate those settings. This distinction is made simply for UX purposes so each guardian doesn't have to repeatedly input the same things, and when there's a typo blow up the key generation.
@@ -200,32 +206,31 @@ Once you confirm your settings you'll see a guardian confirmation page with a "I
 
 The followers simply set their names and passwords then paste the websocket link from the leader to connect. Once connected, they'll be prompted to confirm the federation info set by the leader. All the guardians have to connect and approve. Once that's done, they'll go through the distributed key generation to set up the fedimint.
 
-![Alt text](image-5.png)
+![Alt text](mutiny_setup/follower_confirm.png)
 
 ![Alt text](mutiny_setup/leader_pending.png)
 
-![Alt text](image-6.png)
-
+![Alt text](mutiny_setup/boom_sharing.png)
 
 ### DKG
 
-![Alt text](image-8.png)
+TODO: Write up describing the DKG
 
-![Alt text](image-9.png)
+![Alt text](mutiny_setup/dkg.png)
 
 ![Alt text](image-10.png)
 
 ### Guardian Verificaion
 
-![Alt text](image-11.png)
+![Alt text](mutiny_setup/verify1.png)
 
-![Alt text](image-12.png)
+![Alt text](mutiny_setup/verify2.png)
 
-![Alt text](image-13.png)
+![Alt text](mutiny_setup/congrats.png)
 
 ### Guardian Dashboard
 
-![Alt text](image-14.png)
+![Alt text](mutiny_setup/guardian_dashboard.png)
 
 - these are all hardcoded for now
 
@@ -234,7 +239,8 @@ The invite code doesn't populate yet so you'll have to get it from the command l
 ```bash
 docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli dev invite-code
 ```
-![Alt text](image-15.png)
+
+![Alt text](mutiny_setup/invite.png)
 
 Then connect with Fedi:
 
@@ -259,7 +265,7 @@ Enter gateway password: #this is whatever you set it to, default is `thereisnose
 }
 ```
 
-![Alt text](image-26.png)
+![Alt text](mutiny_setup/dev_invite_code.png)
 
 ```bash
 root@mutinynet-01:~# docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli balance --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
@@ -271,30 +277,31 @@ You'll initially have 0, but you can deposit to it using the mutinynet faucet at
 docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli address --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
 ```
 
-![Alt text](image-28.png)
+![Alt text](mutiny_setup/gateway_address.png)
 
-![Alt text](image-27.png)
+![Alt text](mutiny_setup/gateway_balance.png)
 
 ```bash
 docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli help
 ```
 
 get a new address:
+
 ```bash
 docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli deposit-address
 ```
 
-![Alt text](image-16.png)
+![Alt text](mutiny_setup/fed_deposit_addr.png)
 
 deposit to it using the mutinynet faucet at https://faucet.mutinynet.com
 
-![Alt text](image-17.png)
+![Alt text](mutiny_setup/mutiny_faucet.png)
 
 You'll also need to open a lightning channel from the gateway node, so get a deposit address from RTL and deposit to it using the mutinynet faucet at https://faucet.mutinynet.com:
 
-![Alt text](image-18.png)
+![Alt text](mutiny_setup/rtl_deposit.png)
 
-![Alt text](image-19.png)
+![Alt text](mutiny_setup/mutiny_sent.png)
 
 Opening a channel to the fedi alpha gateway:
 
@@ -302,24 +309,24 @@ Opening a channel to the fedi alpha gateway:
 025698cc9ac623f5d1baf56310f2f1b62dfffee43ffcdb2c20ccb541f70497d540@54.158.203.78:9739
 ```
 
-![Alt text](image-20.png)
+![Alt text](mutiny_setup/channel_open1.png)
 
-![Alt text](image-21.png)
+![Alt text](mutiny_setup/channel_open1.png)
 
 ### Getting Inbound Liquidity
 
 Send some sats through your channel to the fedi alpha signet faucet. We'll be integrating in a LSP soon to make this easier.
 
-![Alt text](image-22.png)
+![Alt text](mutiny_setup/inbound.png)
 
-![Alt text](image-23.png)
+![Alt text](mutiny_setup/send_sats.png)
 
-![Alt text](image-24.png)
+![Alt text](mutiny_setup/send_invoice.png)
 
-![Alt text](image-25.png)
-
+![Alt text](mutiny_setup/received.png)
 
 In case of fire:
+
 ```bash
 docker-compose -f ./fedimint/docker-compose.yaml down -v --rmi 'all'
 ```
