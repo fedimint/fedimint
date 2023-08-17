@@ -27,7 +27,7 @@ fn bsats(satoshi: u64) -> bitcoin::Amount {
 
 const PEG_IN_AMOUNT_SATS: u64 = 5000;
 const PEG_OUT_AMOUNT_SATS: u64 = 1000;
-const PEG_IN_TIMEOUT: Duration = Duration::from_secs(30);
+const PEG_IN_TIMEOUT: Duration = Duration::from_secs(60);
 
 async fn peg_in<'a>(
     client: &'a Client,
