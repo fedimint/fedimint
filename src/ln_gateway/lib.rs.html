@@ -820,6 +820,22 @@
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -902,7 +918,7 @@
 <span class="doccomment">/// How long a gateway announcement stays valid
 </span><span class="kw">pub const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);
 
-<span class="kw">const </span>ROUTE_HINT_RETRIES: usize = <span class="number">10</span>;
+<span class="kw">const </span>ROUTE_HINT_RETRIES: usize = <span class="number">30</span>;
 <span class="kw">const </span>ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(<span class="number">2</span>);
 
 <span class="kw">pub const </span>DEFAULT_FEES: RoutingFees = RoutingFees {
@@ -1286,23 +1302,40 @@
         }
     }
 
+    <span class="kw">async fn </span>fetch_lightning_route_info_try(
+        lnrpc: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ILnRpcClient,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;RouteHint&gt;, PublicKey, String)&gt; {
+        <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = lnrpc
+            .routehints()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.try_into()
+            .expect(<span class="string">&quot;Could not parse route hints&quot;</span>);
+
+        <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
+            .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid node pubkey {e}&quot;</span>)))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>((route_hints, node_pub_key, alias))
+    }
+
     <span class="kw">async fn </span>fetch_lightning_route_info(
         lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;RouteHint&gt;, PublicKey, String)&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
-        <span class="kw">let </span>(route_hints, node_pub_key, alias) = <span class="kw">loop </span>{
-            <span class="kw">let </span>route_hints: Vec&lt;RouteHint&gt; = lnrpc
-                .routehints()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.try_into()
-                .expect(<span class="string">&quot;Could not parse route hints&quot;</span>);
-
-            <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
-                .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid node pubkey {e}&quot;</span>)))<span class="question-mark">?</span>;
-
+        <span class="kw">for </span>num_retries <span class="kw">in </span><span class="number">0</span>.. {
+            <span class="kw">let </span>(route_hints, node_pub_key, alias) =
+                <span class="kw">match </span><span class="self">Self</span>::fetch_lightning_route_info_try(lnrpc.as_ref()).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(res) =&gt; res,
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="kw">if </span>num_retries == ROUTE_HINT_RETRIES {
+                            <span class="kw">return </span><span class="prelude-val">Err</span>(e);
+                        }
+                        <span class="macro">warn!</span>(<span class="string">&quot;Could not fetch route hints: {e}&quot;</span>);
+                        sleep(ROUTE_HINT_RETRY_SLEEP).<span class="kw">await</span>;
+                        <span class="kw">continue</span>;
+                    }
+                };
             <span class="kw">if </span>!route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
-                <span class="kw">break </span>(route_hints, node_pub_key, alias);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>((route_hints, node_pub_key, alias));
             }
 
             <span class="macro">info!</span>(
@@ -1310,11 +1343,10 @@
                 <span class="string">&quot;LN node returned no route hints, trying again in {}s&quot;</span>,
                 ROUTE_HINT_RETRY_SLEEP.as_secs()
             );
-            num_retries += <span class="number">1</span>;
             sleep(ROUTE_HINT_RETRY_SLEEP).<span class="kw">await</span>;
-        };
+        }
 
-        <span class="prelude-val">Ok</span>((route_hints, node_pub_key, alias))
+        <span class="macro">unreachable!</span>();
     }
 
     <span class="kw">async fn </span>register_clients_timer(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
