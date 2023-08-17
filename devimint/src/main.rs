@@ -815,6 +815,7 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
         faucet,
     } = dev_fed;
 
+    info!("Pegging-in both gateways");
     fed.pegin_gateway(99_999, &gw_cln).await?;
     fed.pegin_gateway(99_999, &gw_lnd).await?;
 
@@ -824,7 +825,7 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
 
     let mut gateways = vec![gw_cln, gw_lnd];
 
-    tracing::info!("Stopping the lightning nodes...");
+    tracing::info!("Stopping all lightning nodes");
     for gw in &mut gateways {
         // Verify that the gateway can query the lightning node for the pubkey and alias
         let mut info_cmd = cmd!(gw, "info");
