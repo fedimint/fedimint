@@ -80,7 +80,7 @@ const INITIAL_SCID: u64 = 1;
 /// How long a gateway announcement stays valid
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
-const ROUTE_HINT_RETRIES: usize = 10;
+const ROUTE_HINT_RETRIES: usize = 30;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
@@ -464,23 +464,40 @@ impl Gateway {
         }
     }
 
+    async fn fetch_lightning_route_info_try(
+        lnrpc: &dyn ILnRpcClient,
+    ) -> Result<(Vec<RouteHint>, PublicKey, String)> {
+        let route_hints: Vec<RouteHint> = lnrpc
+            .routehints()
+            .await?
+            .try_into()
+            .expect("Could not parse route hints");
+
+        let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
+        let node_pub_key = PublicKey::from_slice(&pub_key)
+            .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
+
+        Ok((route_hints, node_pub_key, alias))
+    }
+
     async fn fetch_lightning_route_info(
         lnrpc: Arc<dyn ILnRpcClient>,
     ) -> Result<(Vec<RouteHint>, PublicKey, String)> {
-        let mut num_retries = 0;
-        let (route_hints, node_pub_key, alias) = loop {
-            let route_hints: Vec<RouteHint> = lnrpc
-                .routehints()
-                .await?
-                .try_into()
-                .expect("Could not parse route hints");
-
-            let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
-            let node_pub_key = PublicKey::from_slice(&pub_key)
-                .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-
+        for num_retries in 0.. {
+            let (route_hints, node_pub_key, alias) =
+                match Self::fetch_lightning_route_info_try(lnrpc.as_ref()).await {
+                    Ok(res) => res,
+                    Err(e) => {
+                        if num_retries == ROUTE_HINT_RETRIES {
+                            return Err(e);
+                        }
+                        warn!("Could not fetch route hints: {e}");
+                        sleep(ROUTE_HINT_RETRY_SLEEP).await;
+                        continue;
+                    }
+                };
             if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
-                break (route_hints, node_pub_key, alias);
+                return Ok((route_hints, node_pub_key, alias));
             }
 
             info!(
@@ -488,11 +505,10 @@ impl Gateway {
                 "LN node returned no route hints, trying again in {}s",
                 ROUTE_HINT_RETRY_SLEEP.as_secs()
             );
-            num_retries += 1;
             sleep(ROUTE_HINT_RETRY_SLEEP).await;
-        };
+        }
 
-        Ok((route_hints, node_pub_key, alias))
+        unreachable!();
     }
 
     async fn register_clients_timer(&mut self) {
