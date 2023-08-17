@@ -471,6 +471,19 @@
 <a href="#471" id="471">471</a>
 <a href="#472" id="472">472</a>
 <a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::{Duration, UNIX_EPOCH};
 
@@ -535,6 +548,12 @@
     </span>Spend {
         <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
+    },
+    <span class="doccomment">/// Verifies the signatures of e-cash notes, but *not* if they have been
+    /// spent already
+    </span>Validate {
+        <span class="attr">#[clap(value_parser = parse_ecash)]
+        </span>notes: TieredMulti&lt;SpendableNote&gt;,
     },
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
@@ -644,6 +663,13 @@
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">&quot;notes&quot;</span>: serialize_ecash(<span class="kw-2">&amp;</span>notes),
+            }))
+        }
+        ClientCmd::Validate { notes } =&gt; {
+            <span class="kw">let </span>amount = client.validate_notes(notes).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
+                <span class="string">&quot;amount_msat&quot;</span>: amount,
             }))
         }
         ClientCmd::LnInvoice {

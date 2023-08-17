@@ -1443,6 +1443,33 @@
 <a href="#1443" id="1443">1443</a>
 <a href="#1444" id="1444">1444</a>
 <a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
 </pre><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1553,6 +1580,11 @@
         try_cancel_after: Duration,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, TieredMulti&lt;SpendableNote&gt;)&gt;;
+
+    <span class="doccomment">/// Validate the given notes and return the total amount of the notes.
+    /// Validation checks that the note has a valid signature and that the spend
+    /// key is correct.
+    </span><span class="kw">async fn </span>validate_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, notes: TieredMulti&lt;SpendableNote&gt;) -&gt; anyhow::Result&lt;Amount&gt;;
 
     <span class="doccomment">/// Try to cancel a spend operation started with
     /// [`MintClientExt::spend_notes`]. If the e-cash notes have already been
@@ -1755,6 +1787,28 @@
                     <span class="macro">anyhow!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
                 }
             })
+    }
+
+    <span class="kw">async fn </span>validate_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, notes: TieredMulti&lt;SpendableNote&gt;) -&gt; anyhow::Result&lt;Amount&gt; {
+        <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span>mint.cfg.tbs_pks;
+
+        <span class="kw">for </span>(idx, (amt, note)) <span class="kw">in </span>notes.iter_items().enumerate() {
+            <span class="kw">let </span>key = tbs_pks
+                .get(amt)
+                .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Note {idx} uses an invalid amount tier {amt}&quot;</span>))<span class="question-mark">?</span>;
+
+            <span class="kw">if </span>!note.note.verify(<span class="kw-2">*</span>key) {
+                <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} has an invalid federation signature&quot;</span>);
+            }
+
+            <span class="kw">let </span>expected_nonce = Nonce(note.spend_key.x_only_public_key().<span class="number">0</span>);
+            <span class="kw">if </span>note.note.<span class="number">0 </span>!= expected_nonce {
+                <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} cannot be spent using the supplied spend key&quot;</span>);
+            }
+        }
+
+        <span class="prelude-val">Ok</span>(notes.total_amount())
     }
 
     <span class="kw">async fn </span>try_cancel_spend_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) {
