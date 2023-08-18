@@ -742,7 +742,7 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
 
     let pre_notes = cmd!(fed_cli, "info").out_json().await?;
 
-    let pre_balance = pre_notes["total_msat"].as_u64().unwrap();
+    let pre_balance = pre_notes["total_amount_msat"].as_u64().unwrap();
 
     debug!(%pre_notes, pre_balance, "State before backup");
 
@@ -763,14 +763,14 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
 
         assert_eq!(
             0,
-            cmd!(client, "info").out_json().await?["total_msat"]
+            cmd!(client, "info").out_json().await?["total_amount_msat"]
                 .as_u64()
                 .unwrap()
         );
         let _ = cmd!(client, "restore", &secret,).out_json().await?;
 
         let post_notes = cmd!(client, "info").out_json().await?;
-        let post_balance = post_notes["total_msat"].as_u64().unwrap();
+        let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
 
         debug!(%post_notes, post_balance, "State after backup");
         assert_eq!(pre_balance, post_balance);
@@ -785,14 +785,14 @@ async fn cli_tests_backup_and_restore(fed_cli: &Federation) -> Result<()> {
 
         assert_eq!(
             0,
-            cmd!(client, "info").out_json().await?["total_msat"]
+            cmd!(client, "info").out_json().await?["total_amount_msat"]
                 .as_u64()
                 .unwrap()
         );
         let _ = cmd!(client, "restore", &secret,).out_json().await?;
 
         let post_notes = cmd!(client, "info").out_json().await?;
-        let post_balance = post_notes["total_msat"].as_u64().unwrap();
+        let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
 
         debug!(%post_notes, post_balance, "State after backup");
         assert_eq!(pre_balance, post_balance);
