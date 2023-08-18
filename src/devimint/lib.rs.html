@@ -365,7 +365,7 @@
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>invite_code = fed.invite_code()<span class="question-mark">?</span>;
-        poll_max_retries(<span class="string">&quot;gateway connect-fed&quot;</span>, <span class="number">10</span>, || <span class="kw">async </span>{
+        poll_max_retries(<span class="string">&quot;gateway connect-fed&quot;</span>, <span class="number">60</span>, || <span class="kw">async </span>{
             <span class="kw">match </span><span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;connect-fed&quot;</span>, invite_code.clone()).run().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
                 <span class="prelude-val">Err</span>(e) =&gt; {
