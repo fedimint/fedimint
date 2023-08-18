@@ -130,6 +130,7 @@ pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
 mod fedimint_migration_tests {
     use std::collections::BTreeSet;
 
+    use anyhow::{ensure, Context};
     use bitcoin::{secp256k1, KeyPair};
     use bitcoin_hashes::Hash;
     use fedimint_core::api::ClientConfigDownloadToken;
@@ -278,7 +279,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_migrations() {
+    async fn test_migrations() -> anyhow::Result<()> {
         validate_migrations(
             "global",
             |db| async move {
@@ -289,7 +290,7 @@ mod fedimint_migration_tests {
                     get_global_database_migrations(),
                 )
                 .await
-                .expect("Error applying migrations to temp database");
+                .context("Error applying migrations to temp database")?;
 
                 // Verify that all of the data from the global namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -305,7 +306,7 @@ mod fedimint_migration_tests {
                                     .collect::<Vec<_>>()
                                     .await;
                                 let num_accepted_transactions = accepted_transactions.len();
-                                assert!(
+                                ensure!(
                                     num_accepted_transactions > 0,
                                     "validate_migrations was not able to read any AcceptedTransactions"
                                 );
@@ -317,13 +318,13 @@ mod fedimint_migration_tests {
                                     .collect::<Vec<_>>()
                                     .await;
                                 let num_epochs = epoch_history.len();
-                                assert!(
+                                ensure!(
                                     num_epochs > 0,
                                     "validate_migrations was not able to read any EpochHistory"
                                 );
                             }
                             DbKeyPrefix::LastEpoch => {
-                                assert!(dbtx.get_value(&LastEpochKey).await.is_some());
+                                ensure!(dbtx.get_value(&LastEpochKey).await.is_some());
                             }
                             DbKeyPrefix::ClientConfigSignature => {
                                 dbtx
@@ -338,13 +339,13 @@ mod fedimint_migration_tests {
                                     .collect::<Vec<_>>()
                                     .await;
                                 let num_signature_shares = signature_shares.len();
-                                assert!(
+                                ensure!(
                                     num_signature_shares > 0,
                                     "validate_migrations was not able to read any ClientConfigSignatureShares"
                                 );
                             }
                             DbKeyPrefix::ConsensusUpgrade => {
-                                assert!(dbtx.get_value(&ConsensusUpgradeKey).await.is_some());
+                                ensure!(dbtx.get_value(&ConsensusUpgradeKey).await.is_some());
                             }
                             DbKeyPrefix::ClientConfigDownload => {
                                 let downloads = dbtx
@@ -353,7 +354,7 @@ mod fedimint_migration_tests {
                                     .collect::<Vec<_>>()
                                     .await;
                                 let downloads_len = downloads.len();
-                                assert!(
+                                ensure!(
                                     downloads_len > 0,
                                     "validate_migrations was not able to read any ClientConfigDownloadKey"
                                 );
@@ -362,6 +363,7 @@ mod fedimint_migration_tests {
                             DbKeyPrefix::Module => {}
                     }
                 }
+                Ok(())
             },
             ModuleDecoderRegistry::from_iter([(
                 0,
@@ -369,6 +371,6 @@ mod fedimint_migration_tests {
                 <Dummy as ServerModule>::decoder(),
             )]),
         )
-        .await;
+        .await
     }
 }

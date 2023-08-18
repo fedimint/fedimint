@@ -920,6 +920,7 @@ impl fedimint_core::server::VerificationCache for VerificationCache {}
 mod fedimint_migration_tests {
     use std::collections::BTreeMap;
 
+    use anyhow::{ensure, Context};
     use bitcoin_hashes::Hash;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
@@ -1054,7 +1055,7 @@ mod fedimint_migration_tests {
                     module.get_database_migrations(),
                 )
                 .await
-                .expect("Error applying migrations to temp database");
+                .context("Error applying migrations to temp database")?;
 
                 // Verify that all of the data from the mint namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -1070,7 +1071,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_nonces = nonces.len();
-                            assert!(
+                            ensure!(
                                 num_nonces > 0,
                                 "validate_migrations was not able to read any NoteNonces"
                             );
@@ -1082,7 +1083,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_sigs = proposed_partial_sigs.len();
-                            assert!(
+                            ensure!(
                                 num_sigs > 0,
                                 "validate_migrations was not able to read any ProposedPartialSignatures"
                             );
@@ -1094,7 +1095,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_sigs = received_partial_sigs.len();
-                            assert!(
+                            ensure!(
                                 num_sigs > 0,
                                 "validate_migrations was not able to read any ReceivedPartialSignatures"
                             );
@@ -1106,7 +1107,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_outcomes = outcomes.len();
-                            assert!(
+                            ensure!(
                                 num_outcomes > 0,
                                 "validate_migrations was not able to read any OutputOutcomes"
                             );
@@ -1118,7 +1119,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_items = audit_items.len();
-                            assert!(
+                            ensure!(
                                 num_items > 0,
                                 "validate_migrations was not able to read any MintAuditItems"
                             );
@@ -1130,13 +1131,14 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_backups = backups.len();
-                            assert!(
+                            ensure!(
                                 num_backups > 0,
                                 "validate_migrations was not able to read any EcashBackups"
                             );
                         }
                     }
                 }
+                Ok(())
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -1144,6 +1146,6 @@ mod fedimint_migration_tests {
                 <Mint as ServerModule>::decoder(),
             )]),
         )
-        .await;
+        .await.context("Migration validation").unwrap();
     }
 }

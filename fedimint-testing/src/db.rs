@@ -3,6 +3,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
+use anyhow::{format_err, Context};
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_rocksdb::RocksDb;
@@ -74,26 +75,30 @@ pub async fn validate_migrations<F, Fut>(
     db_prefix: &str,
     validate: F,
     decoders: ModuleDecoderRegistry,
-) where
+) -> anyhow::Result<()>
+where
     F: Fn(Database) -> Fut,
-    Fut: futures::Future<Output = ()>,
+    Fut: futures::Future<Output = anyhow::Result<()>>,
 {
-    let project_root = get_project_root().unwrap();
-    let snapshot_dirs = project_root.join("db/migrations");
-    let files_res = fs::read_dir(snapshot_dirs);
-    if let Ok(files) = files_res {
-        for file in files.flatten() {
-            let name = file.file_name().into_string().unwrap();
+    let snapshot_dirs = get_project_root().unwrap().join("db/migrations");
+    if snapshot_dirs.exists() {
+        for file in fs::read_dir(snapshot_dirs)?.flatten() {
+            let name = file
+                .file_name()
+                .into_string()
+                .map_err(|_e| format_err!("Invalid path name"))?;
             if name.starts_with(db_prefix) {
-                let temp_db = open_temp_db_and_copy(
-                    format!("{}-{}", name.as_str(), OsRng.next_u64()),
-                    &file.path(),
-                    decoders.clone(),
-                );
-                validate(temp_db).await;
+                let temp_path = format!("{}-{}", name.as_str(), OsRng.next_u64());
+                let temp_db =
+                    open_temp_db_and_copy(temp_path.clone(), &file.path(), decoders.clone())
+                        .with_context(|| format!("Validating {name}, copied to {temp_path}"))?;
+                validate(temp_db)
+                    .await
+                    .with_context(|| format!("Validating {name}, copied to {temp_path}"))?;
             }
         }
     }
+    Ok(())
 }
 
 /// Open a temporary database located at `temp_path` and copy the contents from
@@ -102,16 +107,16 @@ fn open_temp_db_and_copy(
     temp_path: String,
     src_dir: &Path,
     decoders: ModuleDecoderRegistry,
-) -> Database {
+) -> anyhow::Result<Database> {
     // First copy the contents from src_dir to the path where the database will be
     // opened
     let path = tempfile::Builder::new()
         .prefix(temp_path.as_str())
-        .tempdir()
-        .unwrap();
-    copy_directory(src_dir, path.path()).expect("Error copying database to temporary directory");
+        .tempdir()?;
+    copy_directory(src_dir, path.path())
+        .context("Error copying database to temporary directory")?;
 
-    Database::new(RocksDb::open(path).unwrap(), decoders)
+    Ok(Database::new(RocksDb::open(path)?, decoders))
 }
 
 /// Helper function that recursively copies all of the contents from
