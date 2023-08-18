@@ -632,8 +632,6 @@
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>db;
@@ -826,7 +824,6 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = wallet_client.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>tx_subscriber = <span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>;
-        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(
             operation_log_entry.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
@@ -870,7 +867,7 @@
                     }
 
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(out_point) = claiming.change.as_ref() {
-                        client.await_primary_module_output(operation_id, <span class="kw-2">*</span>out_point)
+                        <span class="self">self</span>.await_primary_module_output(operation_id, <span class="kw-2">*</span>out_point)
                             .<span class="kw">await
                             </span>.expect(<span class="string">&quot;Cannot fail if tx was accepted and federation is honest&quot;</span>);
                     }
@@ -948,7 +945,6 @@
         };
 
         <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = wallet_client.notifier.subscribe(operation_id).<span class="kw">await</span>;
-        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(
             operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, <span class="kw">move </span>|| {
@@ -967,8 +963,8 @@
                     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(change_out_point) = change {
                         <span class="comment">// Swallowing potential errors since the transaction failing  is handled by
                         // output outcome fetching already
-                        </span><span class="kw">let _ </span>= client
-                            .await_primary_module_output(operation_id, change_out_point)
+                        </span><span class="kw">let _ </span>= <span class="self">self
+                            </span>.await_primary_module_output(operation_id, change_out_point)
                             .<span class="kw">await</span>;
                     }
 

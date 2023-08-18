@@ -1693,9 +1693,6 @@
 <a href="#1693" id="1693">1693</a>
 <a href="#1694" id="1694">1694</a>
 <a href="#1695" id="1695">1695</a>
-<a href="#1696" id="1696">1696</a>
-<a href="#1697" id="1697">1697</a>
-<a href="#1698" id="1698">1698</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2466,20 +2463,17 @@
 
     <span class="doccomment">/// Returns a stream that yields the current client balance every time it
     /// changes.
-    </span><span class="kw">pub async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, Amount&gt; {
+    </span><span class="kw">pub async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;_</span>, Amount&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>balance_changes = <span class="self">self</span>.primary_module().subscribe_balance_changes().<span class="kw">await</span>;
         <span class="kw">let </span>initial_balance = <span class="self">self</span>.get_balance().<span class="kw">await</span>;
-        <span class="kw">let </span>db = <span class="self">self</span>.db().clone();
-        <span class="kw">let </span>primary_module = <span class="self">self</span>.primary_module().clone();
-        <span class="kw">let </span>primary_module_instance = <span class="self">self</span>.inner.primary_module_instance;
-
         Box::pin(<span class="macro">stream! </span>{
             <span class="kw">yield </span>initial_balance;
             <span class="kw">let </span><span class="kw-2">mut </span>prev_balance = initial_balance;
             <span class="kw">while let </span><span class="prelude-val">Some</span>(()) = balance_changes.next().<span class="kw">await </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-                <span class="kw">let </span>balance = primary_module
-                    .get_balance(primary_module_instance, <span class="kw-2">&amp;mut </span>dbtx)
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
+                <span class="kw">let </span>balance = <span class="self">self
+                    </span>.primary_module()
+                    .get_balance(<span class="self">self</span>.inner.primary_module_instance, <span class="kw-2">&amp;mut </span>dbtx)
                     .<span class="kw">await</span>;
 
                 <span class="comment">// Deduplicate in case modules cannot always tell if the balance actually changed
