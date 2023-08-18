@@ -460,9 +460,9 @@ async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> 
         federation_id: client.federation_id(),
         network: wallet_client.get_network(),
         meta: client.get_config().meta.clone(),
-        total_amount: summary.total_amount(),
+        total_amount_msat: summary.total_amount(),
         total_num_notes: summary.count_items(),
-        details: summary,
+        denominations_msat: summary,
     })
     .unwrap())
 }
@@ -472,9 +472,9 @@ struct InfoResponse {
     federation_id: FederationId,
     network: Network,
     meta: BTreeMap<String, String>,
-    total_amount: Amount,
+    total_amount_msat: Amount,
     total_num_notes: usize,
-    details: TieredSummary,
+    denominations_msat: TieredSummary,
 }
 
 pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmountError> {
