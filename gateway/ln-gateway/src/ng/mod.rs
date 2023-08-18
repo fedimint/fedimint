@@ -117,7 +117,7 @@ pub trait GatewayClientExt {
     async fn gateway_subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtPayStates>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtPayStates>>;
 
     /// Register gateway with federation
     async fn register_with_federation(
@@ -135,7 +135,7 @@ pub trait GatewayClientExt {
     async fn gateway_subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtReceiveStates>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -193,28 +193,33 @@ impl GatewayClientExt for Client {
     async fn gateway_subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtPayStates>> {
-        let (gateway, _instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtPayStates>> {
+        let mut stream = self
+            .get_first_module::<GatewayClientModule>(&KIND)
+            .0
+            .notifier
+            .subscribe(operation_id)
+            .await;
         let operation = ln_operation(self, operation_id).await?;
+        let client = self.clone();
 
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                 yield GatewayExtPayStates::Created;
 
-                let mut stream = gateway.notifier.subscribe(operation_id).await;
                 loop {
                     if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
                         match state.state {
                             GatewayPayStates::Preimage(outpoint, preimage) => {
                                 yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
-                                if self.await_primary_module_output(operation_id, outpoint).await.is_ok() {
+                                if client.await_primary_module_output(operation_id, outpoint).await.is_ok() {
                                     yield GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
                                     return;
                                 }
                             }
                             GatewayPayStates::Canceled { txid, contract_id: _, error } => {
-                                match self.transaction_updates(operation_id).await.await_tx_accepted(txid).await {
+                                match client.transaction_updates(operation_id).await.await_tx_accepted(txid).await {
                                     Ok(()) => {
                                         yield GatewayExtPayStates::Canceled{ error };
                                         return;
@@ -279,22 +284,27 @@ impl GatewayClientExt for Client {
     async fn gateway_subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, GatewayExtReceiveStates>> {
-        let (gateway, _instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>> {
         let operation = ln_operation(self, operation_id).await?;
+        let mut stream = self
+            .get_first_module::<GatewayClientModule>(&KIND)
+            .0
+            .notifier
+            .subscribe(operation_id)
+            .await;
+        let client = self.clone();
 
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                 yield GatewayExtReceiveStates::Funding;
 
-                let mut stream = gateway.notifier.subscribe(operation_id).await;
                 let state = loop {
                     if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
                             IncomingSmStates::RefundSubmitted{ txid, error } => {
                                 let out_point = OutPoint { txid, out_idx: 0};
-                                match self.await_primary_module_output(operation_id, out_point).await {
+                                match client.await_primary_module_output(operation_id, out_point).await {
                                     Ok(_) => break GatewayExtReceiveStates::RefundSuccess{ outpoint: out_point, error },
                                     Err(e) => break GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error },
                                 }

@@ -84,12 +84,12 @@ pub trait LightningClientExt {
     async fn subscribe_internal_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, InternalPayState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<InternalPayState>>;
 
     async fn subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnPayState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>>;
 
     /// Receive over LN with a new invoice
     async fn create_bolt11_invoice(
@@ -102,7 +102,7 @@ pub trait LightningClientExt {
     async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnReceiveState>>;
+    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>>;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -352,9 +352,7 @@ impl LightningClientExt for Client {
     async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnReceiveState>> {
-        let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
-
+    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = ln_operation(self, operation_id).await?;
         let (out_point, invoice) = match operation.meta::<LightningMeta>() {
             LightningMeta::Receive { out_point, invoice } => (out_point, invoice),
@@ -366,27 +364,30 @@ impl LightningClientExt for Client {
             .await
             .await_tx_accepted(out_point.txid);
 
-        let receive_success = lightning.await_receive_success(operation_id);
-        let claim_acceptance = lightning.await_claim_acceptance(operation_id);
+        let client = self.clone();
 
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
-                    yield LnReceiveState::Created;
+                let lightning = client
+                    .get_first_module::<LightningClientModule>(&KIND)
+                    .0;
 
-                    if tx_accepted_future.await.is_err() {
+                yield LnReceiveState::Created;
+
+                if tx_accepted_future.await.is_err() {
                     yield LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
-                        return;
+                    return;
                 }
-                            yield LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
+                yield LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
 
-                            match receive_success.await {
-                                Ok(()) => {
-                                    yield LnReceiveState::Funded;
+                match lightning.await_receive_success(operation_id).await {
+                    Ok(()) => {
+                        yield LnReceiveState::Funded;
 
-                        if let Ok(txid) = claim_acceptance.await {
+                        if let Ok(txid) = lightning.await_claim_acceptance(operation_id).await {
                             yield LnReceiveState::AwaitingFunds;
 
-                            if self.await_primary_module_output(operation_id, OutPoint{ txid, out_idx: 0}).await.is_ok() {
+                            if client.await_primary_module_output(operation_id, OutPoint{ txid, out_idx: 0}).await.is_ok() {
                                 yield LnReceiveState::Claimed;
                                 return;
                             }
@@ -398,16 +399,14 @@ impl LightningClientExt for Client {
                         yield LnReceiveState::Canceled { reason: e };
                     }
                 }
-            }}
-        ))
+            }
+        }))
     }
 
     async fn subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, LnPayState>> {
-        let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
-
+    ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
         let operation = ln_operation(self, operation_id).await?;
         let (out_point, _, change_outpoint) = match operation.meta::<LightningMeta>() {
             LightningMeta::Pay {
@@ -418,29 +417,31 @@ impl LightningClientExt for Client {
             _ => bail!("Operation is not a lightning payment"),
         };
 
-        let tx_accepted_future = self
-            .transaction_updates(operation_id)
-            .await
-            .await_tx_accepted(out_point.txid);
-        let payment_success = lightning.await_lightning_payment_success(operation_id);
-
-        let refund_success = lightning.await_refund(operation_id);
+        let client = self.clone();
 
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
-                    yield LnPayState::Created;
+                let lightning = client.get_first_module::<LightningClientModule>(&KIND).0;
 
-                    if tx_accepted_future.await.is_err() {
+                yield LnPayState::Created;
+
+                if client
+                    .transaction_updates(operation_id)
+                    .await
+                    .await_tx_accepted(out_point.txid)
+                    .await
+                    .is_err()
+                {
                     yield LnPayState::Canceled;
-                        return;
+                    return;
                 }
-                            yield LnPayState::Funded;
+                yield LnPayState::Funded;
 
-                match payment_success.await {
+                match lightning.await_lightning_payment_success(operation_id).await {
                     Ok(preimage) => {
                         if let Some(change) = change_outpoint {
                             yield LnPayState::AwaitingChange;
-                            match self.await_primary_module_output(operation_id, change).await {
+                            match client.await_primary_module_output(operation_id, change).await {
                                 Ok(_) => {}
                                 Err(_) => {
                                     yield LnPayState::UnexpectedError { error_message: "Error occurred while waiting for the primary module's output".to_string() };
@@ -455,9 +456,9 @@ impl LightningClientExt for Client {
                     Err(PayError::Refundable(block_height, error)) => {
                         yield LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
 
-                        if let Ok(refund_txid) = refund_success.await {
+                        if let Ok(refund_txid) = lightning.await_refund(operation_id).await {
                             // need to await primary module to get refund
-                            if self.await_primary_module_output(operation_id, OutPoint{ txid: refund_txid, out_idx: 0}).await.is_ok() {
+                            if client.await_primary_module_output(operation_id, OutPoint{ txid: refund_txid, out_idx: 0}).await.is_ok() {
                                 yield LnPayState::Refunded { gateway_error: error };
                                 return;
                             }
@@ -474,22 +475,24 @@ impl LightningClientExt for Client {
     async fn subscribe_internal_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<'_, InternalPayState>> {
+    ) -> anyhow::Result<UpdateStreamOrOutcome<InternalPayState>> {
         let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
 
         let operation = ln_operation(self, operation_id).await?;
+        let mut stream = lightning.notifier.subscribe(operation_id).await;
+        let client = self.clone();
+
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                 yield InternalPayState::Funding;
 
-                let mut stream = lightning.notifier.subscribe(operation_id).await;
                 let state = loop {
                     if let Some(LightningClientStateMachines::InternalPay(state)) = stream.next().await {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) => break InternalPayState::Preimage(preimage),
                             IncomingSmStates::RefundSubmitted{ txid, error } => {
                                 let out_point = OutPoint { txid, out_idx: 0};
-                                match self.await_primary_module_output(operation_id, out_point).await {
+                                match client.await_primary_module_output(operation_id, out_point).await {
                                     Ok(_) => break InternalPayState::RefundSuccess { outpoint: out_point, error },
                                     Err(e) => break InternalPayState::RefundError{ error_message: e.to_string(), error },
                                 }
