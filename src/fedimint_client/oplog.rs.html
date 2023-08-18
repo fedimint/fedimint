@@ -631,15 +631,15 @@
     /// an update stream for easier handling using
     /// [`UpdateStreamOrOutcome::into_stream`] but can also be matched over to
     /// shortcut the handling of final outcomes.
-    </span><span class="kw">pub fn </span>outcome_or_updates&lt;<span class="lifetime">&#39;a</span>, U, S&gt;(
+    </span><span class="kw">pub fn </span>outcome_or_updates&lt;U, S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         db: <span class="kw-2">&amp;</span>Database,
         operation_id: OperationId,
         stream_gen: <span class="kw">impl </span>FnOnce() -&gt; S,
-    ) -&gt; UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;a</span>, U&gt;
+    ) -&gt; UpdateStreamOrOutcome&lt;U&gt;
     <span class="kw">where
         </span>U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        S: Stream&lt;Item = U&gt; + MaybeSend + <span class="lifetime">&#39;a</span>,
+        S: Stream&lt;Item = U&gt; + MaybeSend + <span class="lifetime">&#39;static</span>,
     {
         <span class="kw">match </span><span class="self">self</span>.outcome::&lt;U&gt;() {
             <span class="prelude-val">Some</span>(outcome) =&gt; UpdateStreamOrOutcome::Outcome(outcome),
@@ -696,19 +696,19 @@
 
 <span class="doccomment">/// Either a stream of operation updates if the operation hasn&#39;t finished yet or
 /// its outcome otherwise.
-</span><span class="kw">pub enum </span>UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;a</span>, U&gt; {
-    UpdateStream(BoxStream&lt;<span class="lifetime">&#39;a</span>, U&gt;),
+</span><span class="kw">pub enum </span>UpdateStreamOrOutcome&lt;U&gt; {
+    UpdateStream(BoxStream&lt;<span class="lifetime">&#39;static</span>, U&gt;),
     Outcome(U),
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, U&gt; UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;a</span>, U&gt;
+<span class="kw">impl</span>&lt;U&gt; UpdateStreamOrOutcome&lt;U&gt;
 <span class="kw">where
     </span>U: MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="doccomment">/// Returns a stream no matter if the operation is finished. If there
     /// already is a cached outcome the stream will only return that, otherwise
     /// all updates will be returned until the operation finishes.
-    </span><span class="kw">pub fn </span>into_stream(<span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;a</span>, U&gt; {
+    </span><span class="kw">pub fn </span>into_stream(<span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, U&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             UpdateStreamOrOutcome::UpdateStream(stream) =&gt; stream,
             UpdateStreamOrOutcome::Outcome(outcome) =&gt; {

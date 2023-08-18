@@ -1403,6 +1403,8 @@
 <a href="#1403" id="1403">1403</a>
 <a href="#1404" id="1404">1404</a>
 <a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -2529,6 +2531,7 @@
 </span><span class="kw">mod </span>fedimint_migration_tests {
     <span class="kw">use </span>std::str::FromStr;
 
+    <span class="kw">use </span>anyhow::{ensure, Context};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
     <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
@@ -2690,7 +2693,7 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>test_migrations() {
+    </span><span class="kw">async fn </span>test_migrations() -&gt; anyhow::Result&lt;()&gt; {
         validate_migrations(
             <span class="string">&quot;lightning&quot;</span>,
             |db| <span class="kw">async move </span>{
@@ -2702,7 +2705,7 @@
                     module.get_database_migrations(),
                 )
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Error applying migrations to temp database&quot;</span>);
+                </span>.context(<span class="string">&quot;Error applying migrations to temp database&quot;</span>)<span class="question-mark">?</span>;
 
                 <span class="comment">// Verify that all of the data from the lightning namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -2718,7 +2721,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_contracts = contracts.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_contracts &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any contracts&quot;
                             </span>);
@@ -2730,7 +2733,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_shares = agreed_decryption_shares.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                             num_shares &gt; <span class="number">0</span>,
                             <span class="string">&quot;validate_migrations was not able to read any AgreedDecryptionShares&quot;
                         </span>);
@@ -2742,7 +2745,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_updates = contract_updates.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_updates &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any ContractUpdates&quot;
                             </span>);
@@ -2754,7 +2757,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_gateways = gateways.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_gateways &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any LightningGateways&quot;
                             </span>);
@@ -2766,7 +2769,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_offers = offers.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_offers &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any Offers&quot;
                             </span>);
@@ -2778,7 +2781,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_shares = proposed_decryption_shares.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                             num_shares &gt; <span class="number">0</span>,
                             <span class="string">&quot;validate_migrations was not able to read any ProposeDecryptionShares&quot;
                         </span>);
@@ -2791,13 +2794,14 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_shares = encrypted_preimage_index.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_shares &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any EncryptedPreimageIndexKeys&quot;
                             </span>);
                         }
                     }
                 }
+                <span class="prelude-val">Ok</span>(())
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
@@ -2805,8 +2809,8 @@
                 &lt;Lightning <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
-        .<span class="kw">await</span>;
-    }
+        .<span class="kw">await
+    </span>}
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

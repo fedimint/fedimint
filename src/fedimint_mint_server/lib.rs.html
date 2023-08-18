@@ -1147,6 +1147,8 @@
 <a href="#1147" id="1147">1147</a>
 <a href="#1148" id="1148">1148</a>
 <a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -2069,6 +2071,7 @@
 </span><span class="kw">mod </span>fedimint_migration_tests {
     <span class="kw">use </span>std::collections::BTreeMap;
 
+    <span class="kw">use </span>anyhow::{ensure, Context};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
@@ -2203,7 +2206,7 @@
                     module.get_database_migrations(),
                 )
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Error applying migrations to temp database&quot;</span>);
+                </span>.context(<span class="string">&quot;Error applying migrations to temp database&quot;</span>)<span class="question-mark">?</span>;
 
                 <span class="comment">// Verify that all of the data from the mint namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -2219,7 +2222,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_nonces = nonces.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_nonces &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any NoteNonces&quot;
                             </span>);
@@ -2231,7 +2234,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_sigs = proposed_partial_sigs.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_sigs &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any ProposedPartialSignatures&quot;
                             </span>);
@@ -2243,7 +2246,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_sigs = received_partial_sigs.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_sigs &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any ReceivedPartialSignatures&quot;
                             </span>);
@@ -2255,7 +2258,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_outcomes = outcomes.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_outcomes &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any OutputOutcomes&quot;
                             </span>);
@@ -2267,7 +2270,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_items = audit_items.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_items &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any MintAuditItems&quot;
                             </span>);
@@ -2279,13 +2282,14 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_backups = backups.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_backups &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any EcashBackups&quot;
                             </span>);
                         }
                     }
                 }
+                <span class="prelude-val">Ok</span>(())
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -2293,7 +2297,7 @@
                 &lt;Mint <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
-        .<span class="kw">await</span>;
+        .<span class="kw">await</span>.context(<span class="string">&quot;Migration validation&quot;</span>).unwrap();
     }
 }
 </code></pre></div>

@@ -1869,6 +1869,8 @@
 <a href="#1869" id="1869">1869</a>
 <a href="#1870" id="1870">1870</a>
 <a href="#1871" id="1871">1871</a>
+<a href="#1872" id="1872">1872</a>
+<a href="#1873" id="1873">1873</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -3402,6 +3404,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_migration_tests {
+    <span class="kw">use </span>anyhow::{ensure, Context};
     <span class="kw">use </span>bitcoin::psbt::{Input, PartiallySignedTransaction};
     <span class="kw">use </span>bitcoin::{
         Amount, BlockHash, PackedLockTime, Script, Sequence, Transaction, TxIn, TxOut, Txid,
@@ -3605,7 +3608,7 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>test_migrations() {
+    </span><span class="kw">async fn </span>test_migrations() -&gt; anyhow::Result&lt;()&gt; {
         validate_migrations(
             <span class="string">&quot;wallet&quot;</span>,
             |db| <span class="kw">async move </span>{
@@ -3617,7 +3620,7 @@
                     module.get_database_migrations(),
                 )
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Error applying migrations to temp database&quot;</span>);
+                </span>.context(<span class="string">&quot;Error applying migrations to temp database&quot;</span>)<span class="question-mark">?</span>;
 
                 <span class="comment">// Verify that all of the data from the wallet namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -3633,7 +3636,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_blocks = blocks.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_blocks &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any BlockHashes&quot;
                             </span>);
@@ -3645,7 +3648,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_outpoints = outpoints.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_outpoints &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any PegOutBitcoinTransactions&quot;
                             </span>);
@@ -3657,7 +3660,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_sigs = sigs.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_sigs &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any PegOutTxSigCi&quot;
                             </span>);
@@ -3669,13 +3672,13 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_txs = pending_txs.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_txs &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any PendingTransactions&quot;
                             </span>);
                         }
                         DbKeyPrefix::PegOutNonce =&gt; {
-                            <span class="macro">assert!</span>(dbtx
+                            <span class="macro">ensure!</span>(dbtx
                                 .get_value(<span class="kw-2">&amp;</span>PegOutNonceKey)
                                 .<span class="kw">await
                                 </span>.is_some());
@@ -3687,7 +3690,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_txs = unsigned_txs.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_txs &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any UnsignedTransactions&quot;
                             </span>);
@@ -3699,7 +3702,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_utxos = utxos.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_utxos &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any UTXOs&quot;
                             </span>);
@@ -3711,7 +3714,7 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_heights = heights.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_heights &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any block height votes&quot;
                             </span>);
@@ -3723,13 +3726,14 @@
                                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_rates = rates.len();
-                            <span class="macro">assert!</span>(
+                            <span class="macro">ensure!</span>(
                                 num_rates &gt; <span class="number">0</span>,
                                 <span class="string">&quot;validate_migrations was not able to read any fee rate votes&quot;
                             </span>);
                         }
                     }
                 }
+                <span class="prelude-val">Ok</span>(())
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -3737,8 +3741,8 @@
                 &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
-        .<span class="kw">await</span>;
-    }
+        .<span class="kw">await
+    </span>}
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_wallet_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

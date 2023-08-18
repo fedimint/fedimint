@@ -133,11 +133,17 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fs::read_dir;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::{env, fs, io};
 
+<span class="kw">use </span>anyhow::{format_err, Context};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
@@ -209,26 +215,30 @@
     db_prefix: <span class="kw-2">&amp;</span>str,
     validate: F,
     decoders: ModuleDecoderRegistry,
-) <span class="kw">where
+) -&gt; anyhow::Result&lt;()&gt;
+<span class="kw">where
     </span>F: Fn(Database) -&gt; Fut,
-    Fut: futures::Future&lt;Output = ()&gt;,
+    Fut: futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt;,
 {
-    <span class="kw">let </span>project_root = get_project_root().unwrap();
-    <span class="kw">let </span>snapshot_dirs = project_root.join(<span class="string">&quot;db/migrations&quot;</span>);
-    <span class="kw">let </span>files_res = fs::read_dir(snapshot_dirs);
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(files) = files_res {
-        <span class="kw">for </span>file <span class="kw">in </span>files.flatten() {
-            <span class="kw">let </span>name = file.file_name().into_string().unwrap();
+    <span class="kw">let </span>snapshot_dirs = get_project_root().unwrap().join(<span class="string">&quot;db/migrations&quot;</span>);
+    <span class="kw">if </span>snapshot_dirs.exists() {
+        <span class="kw">for </span>file <span class="kw">in </span>fs::read_dir(snapshot_dirs)<span class="question-mark">?</span>.flatten() {
+            <span class="kw">let </span>name = file
+                .file_name()
+                .into_string()
+                .map_err(|_e| <span class="macro">format_err!</span>(<span class="string">&quot;Invalid path name&quot;</span>))<span class="question-mark">?</span>;
             <span class="kw">if </span>name.starts_with(db_prefix) {
-                <span class="kw">let </span>temp_db = open_temp_db_and_copy(
-                    <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, name.as_str(), OsRng.next_u64()),
-                    <span class="kw-2">&amp;</span>file.path(),
-                    decoders.clone(),
-                );
-                validate(temp_db).<span class="kw">await</span>;
+                <span class="kw">let </span>temp_path = <span class="macro">format!</span>(<span class="string">&quot;{}-{}&quot;</span>, name.as_str(), OsRng.next_u64());
+                <span class="kw">let </span>temp_db =
+                    open_temp_db_and_copy(temp_path.clone(), <span class="kw-2">&amp;</span>file.path(), decoders.clone())
+                        .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Validating {name}, copied to {temp_path}&quot;</span>))<span class="question-mark">?</span>;
+                validate(temp_db)
+                    .<span class="kw">await
+                    </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Validating {name}, copied to {temp_path}&quot;</span>))<span class="question-mark">?</span>;
             }
         }
     }
+    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="doccomment">/// Open a temporary database located at `temp_path` and copy the contents from
@@ -237,16 +247,16 @@
     temp_path: String,
     src_dir: <span class="kw-2">&amp;</span>Path,
     decoders: ModuleDecoderRegistry,
-) -&gt; Database {
+) -&gt; anyhow::Result&lt;Database&gt; {
     <span class="comment">// First copy the contents from src_dir to the path where the database will be
     // opened
     </span><span class="kw">let </span>path = tempfile::Builder::new()
         .prefix(temp_path.as_str())
-        .tempdir()
-        .unwrap();
-    copy_directory(src_dir, path.path()).expect(<span class="string">&quot;Error copying database to temporary directory&quot;</span>);
+        .tempdir()<span class="question-mark">?</span>;
+    copy_directory(src_dir, path.path())
+        .context(<span class="string">&quot;Error copying database to temporary directory&quot;</span>)<span class="question-mark">?</span>;
 
-    Database::new(RocksDb::open(path).unwrap(), decoders)
+    <span class="prelude-val">Ok</span>(Database::new(RocksDb::open(path)<span class="question-mark">?</span>, decoders))
 }
 
 <span class="doccomment">/// Helper function that recursively copies all of the contents from

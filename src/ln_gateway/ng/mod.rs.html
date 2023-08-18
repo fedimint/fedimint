@@ -612,6 +612,16 @@
 <a href="#612" id="612">612</a>
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -731,7 +741,7 @@
     </span><span class="kw">async fn </span>gateway_subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtPayStates&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt;;
 
     <span class="doccomment">/// Register gateway with federation
     </span><span class="kw">async fn </span>register_with_federation(
@@ -749,7 +759,7 @@
     </span><span class="kw">async fn </span>gateway_subscribe_ln_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtReceiveStates&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -807,28 +817,33 @@
     <span class="kw">async fn </span>gateway_subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtPayStates&gt;&gt; {
-        <span class="kw">let </span>(gateway, _instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
+            </span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
+            .<span class="number">0
+            </span>.notifier
+            .subscribe(operation_id)
+            .<span class="kw">await</span>;
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
                 <span class="kw">yield </span>GatewayExtPayStates::Created;
 
-                <span class="kw">let </span><span class="kw-2">mut </span>stream = gateway.notifier.subscribe(operation_id).<span class="kw">await</span>;
                 <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             GatewayPayStates::Preimage(outpoint, preimage) =&gt; {
                                 <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
-                                <span class="kw">if </span><span class="self">self</span>.await_primary_module_output(operation_id, outpoint).<span class="kw">await</span>.is_ok() {
+                                <span class="kw">if </span>client.await_primary_module_output(operation_id, outpoint).<span class="kw">await</span>.is_ok() {
                                     <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
                                     <span class="kw">return</span>;
                                 }
                             }
                             GatewayPayStates::Canceled { txid, contract_id: <span class="kw">_</span>, error } =&gt; {
-                                <span class="kw">match </span><span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
+                                <span class="kw">match </span>client.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(()) =&gt; {
                                         <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
                                         <span class="kw">return</span>;
@@ -893,22 +908,27 @@
     <span class="kw">async fn </span>gateway_subscribe_ln_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtReceiveStates&gt;&gt; {
-        <span class="kw">let </span>(gateway, _instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
+            </span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
+            .<span class="number">0
+            </span>.notifier
+            .subscribe(operation_id)
+            .<span class="kw">await</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
                 <span class="kw">yield </span>GatewayExtReceiveStates::Funding;
 
-                <span class="kw">let </span><span class="kw-2">mut </span>stream = gateway.notifier.subscribe(operation_id).<span class="kw">await</span>;
                 <span class="kw">let </span>state = <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage),
                             IncomingSmStates::RefundSubmitted{ txid, error } =&gt; {
                                 <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0</span>};
-                                <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
+                                <span class="kw">match </span>client.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess{ outpoint: out_point, error },
                                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error },
                                 }

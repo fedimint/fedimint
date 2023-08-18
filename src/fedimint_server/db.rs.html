@@ -372,6 +372,8 @@
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
 <a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -504,6 +506,7 @@
 </span><span class="kw">mod </span>fedimint_migration_tests {
     <span class="kw">use </span>std::collections::BTreeSet;
 
+    <span class="kw">use </span>anyhow::{ensure, Context};
     <span class="kw">use </span>bitcoin::{secp256k1, KeyPair};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::api::ClientConfigDownloadToken;
@@ -652,7 +655,7 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>test_migrations() {
+    </span><span class="kw">async fn </span>test_migrations() -&gt; anyhow::Result&lt;()&gt; {
         validate_migrations(
             <span class="string">&quot;global&quot;</span>,
             |db| <span class="kw">async move </span>{
@@ -663,7 +666,7 @@
                     get_global_database_migrations(),
                 )
                 .<span class="kw">await
-                </span>.expect(<span class="string">&quot;Error applying migrations to temp database&quot;</span>);
+                </span>.context(<span class="string">&quot;Error applying migrations to temp database&quot;</span>)<span class="question-mark">?</span>;
 
                 <span class="comment">// Verify that all of the data from the global namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -679,7 +682,7 @@
                                     </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                     .<span class="kw">await</span>;
                                 <span class="kw">let </span>num_accepted_transactions = accepted_transactions.len();
-                                <span class="macro">assert!</span>(
+                                <span class="macro">ensure!</span>(
                                     num_accepted_transactions &gt; <span class="number">0</span>,
                                     <span class="string">&quot;validate_migrations was not able to read any AcceptedTransactions&quot;
                                 </span>);
@@ -691,13 +694,13 @@
                                     </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                     .<span class="kw">await</span>;
                                 <span class="kw">let </span>num_epochs = epoch_history.len();
-                                <span class="macro">assert!</span>(
+                                <span class="macro">ensure!</span>(
                                     num_epochs &gt; <span class="number">0</span>,
                                     <span class="string">&quot;validate_migrations was not able to read any EpochHistory&quot;
                                 </span>);
                             }
                             DbKeyPrefix::LastEpoch =&gt; {
-                                <span class="macro">assert!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>LastEpochKey).<span class="kw">await</span>.is_some());
+                                <span class="macro">ensure!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>LastEpochKey).<span class="kw">await</span>.is_some());
                             }
                             DbKeyPrefix::ClientConfigSignature =&gt; {
                                 dbtx
@@ -712,13 +715,13 @@
                                     </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                     .<span class="kw">await</span>;
                                 <span class="kw">let </span>num_signature_shares = signature_shares.len();
-                                <span class="macro">assert!</span>(
+                                <span class="macro">ensure!</span>(
                                     num_signature_shares &gt; <span class="number">0</span>,
                                     <span class="string">&quot;validate_migrations was not able to read any ClientConfigSignatureShares&quot;
                                 </span>);
                             }
                             DbKeyPrefix::ConsensusUpgrade =&gt; {
-                                <span class="macro">assert!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>.is_some());
+                                <span class="macro">ensure!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>.is_some());
                             }
                             DbKeyPrefix::ClientConfigDownload =&gt; {
                                 <span class="kw">let </span>downloads = dbtx
@@ -727,7 +730,7 @@
                                     </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                     .<span class="kw">await</span>;
                                 <span class="kw">let </span>downloads_len = downloads.len();
-                                <span class="macro">assert!</span>(
+                                <span class="macro">ensure!</span>(
                                     downloads_len &gt; <span class="number">0</span>,
                                     <span class="string">&quot;validate_migrations was not able to read any ClientConfigDownloadKey&quot;
                                 </span>);
@@ -736,6 +739,7 @@
                             </span>DbKeyPrefix::Module =&gt; {}
                     }
                 }
+                <span class="prelude-val">Ok</span>(())
             },
             ModuleDecoderRegistry::from_iter([(
                 <span class="number">0</span>,
@@ -743,8 +747,8 @@
                 &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
-        .<span class="kw">await</span>;
-    }
+        .<span class="kw">await
+    </span>}
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

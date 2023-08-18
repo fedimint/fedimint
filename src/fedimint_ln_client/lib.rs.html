@@ -1027,6 +1027,9 @@
 <a href="#1027" id="1027">1027</a>
 <a href="#1028" id="1028">1028</a>
 <a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1113,12 +1116,12 @@
     <span class="kw">async fn </span>subscribe_internal_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, InternalPayState&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;InternalPayState&gt;&gt;;
 
     <span class="kw">async fn </span>subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnPayState&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt;;
 
     <span class="doccomment">/// Receive over LN with a new invoice
     </span><span class="kw">async fn </span>create_bolt11_invoice(
@@ -1131,7 +1134,7 @@
     <span class="kw">async fn </span>subscribe_ln_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnReceiveState&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt;;
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -1381,9 +1384,7 @@
     <span class="kw">async fn </span>subscribe_ln_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnReceiveState&gt;&gt; {
-        <span class="kw">let </span>(lightning, _instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningMeta&gt;() {
             LightningMeta::Receive { out_point, invoice } =&gt; (out_point, invoice),
@@ -1395,27 +1396,30 @@
             .<span class="kw">await
             </span>.await_tx_accepted(out_point.txid);
 
-        <span class="kw">let </span>receive_success = lightning.await_receive_success(operation_id);
-        <span class="kw">let </span>claim_acceptance = lightning.await_claim_acceptance(operation_id);
+        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
-                    <span class="kw">yield </span>LnReceiveState::Created;
+                <span class="kw">let </span>lightning = client
+                    .get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
+                    .<span class="number">0</span>;
 
-                    <span class="kw">if </span>tx_accepted_future.<span class="kw">await</span>.is_err() {
+                <span class="kw">yield </span>LnReceiveState::Created;
+
+                <span class="kw">if </span>tx_accepted_future.<span class="kw">await</span>.is_err() {
                     <span class="kw">yield </span>LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
-                        <span class="kw">return</span>;
+                    <span class="kw">return</span>;
                 }
-                            <span class="kw">yield </span>LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
+                <span class="kw">yield </span>LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
 
-                            <span class="kw">match </span>receive_success.<span class="kw">await </span>{
-                                <span class="prelude-val">Ok</span>(()) =&gt; {
-                                    <span class="kw">yield </span>LnReceiveState::Funded;
+                <span class="kw">match </span>lightning.await_receive_success(operation_id).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(()) =&gt; {
+                        <span class="kw">yield </span>LnReceiveState::Funded;
 
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(txid) = claim_acceptance.<span class="kw">await </span>{
+                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(txid) = lightning.await_claim_acceptance(operation_id).<span class="kw">await </span>{
                             <span class="kw">yield </span>LnReceiveState::AwaitingFunds;
 
-                            <span class="kw">if </span><span class="self">self</span>.await_primary_module_output(operation_id, OutPoint{ txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
+                            <span class="kw">if </span>client.await_primary_module_output(operation_id, OutPoint{ txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
                                 <span class="kw">yield </span>LnReceiveState::Claimed;
                                 <span class="kw">return</span>;
                             }
@@ -1427,16 +1431,14 @@
                         <span class="kw">yield </span>LnReceiveState::Canceled { reason: e };
                     }
                 }
-            }}
-        ))
+            }
+        }))
     }
 
     <span class="kw">async fn </span>subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, LnPayState&gt;&gt; {
-        <span class="kw">let </span>(lightning, _instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(out_point, <span class="kw">_</span>, change_outpoint) = <span class="kw">match </span>operation.meta::&lt;LightningMeta&gt;() {
             LightningMeta::Pay {
@@ -1447,29 +1449,31 @@
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
 
-        <span class="kw">let </span>tx_accepted_future = <span class="self">self
-            </span>.transaction_updates(operation_id)
-            .<span class="kw">await
-            </span>.await_tx_accepted(out_point.txid);
-        <span class="kw">let </span>payment_success = lightning.await_lightning_payment_success(operation_id);
-
-        <span class="kw">let </span>refund_success = lightning.await_refund(operation_id);
+        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
-                    <span class="kw">yield </span>LnPayState::Created;
+                <span class="kw">let </span>lightning = client.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND).<span class="number">0</span>;
 
-                    <span class="kw">if </span>tx_accepted_future.<span class="kw">await</span>.is_err() {
+                <span class="kw">yield </span>LnPayState::Created;
+
+                <span class="kw">if </span>client
+                    .transaction_updates(operation_id)
+                    .<span class="kw">await
+                    </span>.await_tx_accepted(out_point.txid)
+                    .<span class="kw">await
+                    </span>.is_err()
+                {
                     <span class="kw">yield </span>LnPayState::Canceled;
-                        <span class="kw">return</span>;
+                    <span class="kw">return</span>;
                 }
-                            <span class="kw">yield </span>LnPayState::Funded;
+                <span class="kw">yield </span>LnPayState::Funded;
 
-                <span class="kw">match </span>payment_success.<span class="kw">await </span>{
+                <span class="kw">match </span>lightning.await_lightning_payment_success(operation_id).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(preimage) =&gt; {
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(change) = change_outpoint {
                             <span class="kw">yield </span>LnPayState::AwaitingChange;
-                            <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, change).<span class="kw">await </span>{
+                            <span class="kw">match </span>client.await_primary_module_output(operation_id, change).<span class="kw">await </span>{
                                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                                     <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">&quot;Error occurred while waiting for the primary module&#39;s output&quot;</span>.to_string() };
@@ -1484,9 +1488,9 @@
                     <span class="prelude-val">Err</span>(PayError::Refundable(block_height, error)) =&gt; {
                         <span class="kw">yield </span>LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
 
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(refund_txid) = refund_success.<span class="kw">await </span>{
+                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(refund_txid) = lightning.await_refund(operation_id).<span class="kw">await </span>{
                             <span class="comment">// need to await primary module to get refund
-                            </span><span class="kw">if </span><span class="self">self</span>.await_primary_module_output(operation_id, OutPoint{ txid: refund_txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
+                            </span><span class="kw">if </span>client.await_primary_module_output(operation_id, OutPoint{ txid: refund_txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
                                 <span class="kw">yield </span>LnPayState::Refunded { gateway_error: error };
                                 <span class="kw">return</span>;
                             }
@@ -1503,22 +1507,24 @@
     <span class="kw">async fn </span>subscribe_internal_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, InternalPayState&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;InternalPayState&gt;&gt; {
         <span class="kw">let </span>(lightning, _instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
 
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = lightning.notifier.subscribe(operation_id).<span class="kw">await</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.clone();
+
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
                 <span class="kw">yield </span>InternalPayState::Funding;
 
-                <span class="kw">let </span><span class="kw-2">mut </span>stream = lightning.notifier.subscribe(operation_id).<span class="kw">await</span>;
                 <span class="kw">let </span>state = <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(LightningClientStateMachines::InternalPay(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt; <span class="kw">break </span>InternalPayState::Preimage(preimage),
                             IncomingSmStates::RefundSubmitted{ txid, error } =&gt; {
                                 <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0</span>};
-                                <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
+                                <span class="kw">match </span>client.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>InternalPayState::RefundSuccess { outpoint: out_point, error },
                                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>InternalPayState::RefundError{ error_message: e.to_string(), error },
                                 }
