@@ -1,8 +1,10 @@
+use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::unreachable;
 
 use anyhow::bail;
 use fedimint_core::task;
+use nix::sys::signal::Signal;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
@@ -12,23 +14,23 @@ use tracing::{debug, warn};
 use super::*;
 
 fn send_sigterm(child: &Child) {
-    let _ = nix::sys::signal::kill(
-        nix::unistd::Pid::from_raw(child.id().expect("pid should be present") as _),
-        nix::sys::signal::Signal::SIGTERM,
-    );
+    send_signal(child, nix::sys::signal::Signal::SIGTERM);
 }
 
 fn send_sigkill(child: &Child) {
+    send_signal(child, nix::sys::signal::Signal::SIGKILL);
+}
+
+fn send_signal(child: &Child, signal: Signal) {
     let _ = nix::sys::signal::kill(
         nix::unistd::Pid::from_raw(child.id().expect("pid should be present") as _),
-        nix::sys::signal::Signal::SIGKILL,
+        signal,
     );
 }
 
 /// Kills process when all references to ProcessHandle are dropped.
-///
-/// NOTE: drop order is significant make sure fields in struct are declared in
-/// correct order it is generally clients, process handle, deps
+/// But in general we should not rely on this and always call `kill` or
+/// `terminate` explicitly.
 #[derive(Debug, Clone)]
 pub struct ProcessHandle(Arc<Mutex<ProcessHandleInner>>);
 
@@ -38,6 +40,19 @@ impl ProcessHandle {
         if let Some(mut child) = inner.child.take() {
             info!(LOG_DEVIMINT, "sending SIGTERM to {}", inner.name);
             send_sigterm(&child);
+            child.wait().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn kill(&self) -> Result<()> {
+        let mut inner = self.0.lock().await;
+        if let Some(mut child) = inner.child.take() {
+            info!(
+                LOG_DEVIMINT,
+                "sending SIGKILL to {} and waiting it to die", inner.name
+            );
+            send_sigkill(&child);
             child.wait().await?;
         }
         Ok(())
@@ -60,13 +75,18 @@ impl Drop for ProcessHandleInner {
     }
 }
 
+#[derive(Clone)]
 pub struct ProcessManager {
-    pub globals: vars::Global,
+    pub globals: Arc<vars::Global>,
+    pub handlers: Arc<Mutex<VecDeque<ProcessHandle>>>,
 }
 
 impl ProcessManager {
     pub fn new(globals: vars::Global) -> Self {
-        Self { globals }
+        Self {
+            globals: Arc::new(globals),
+            handlers: Arc::new(Mutex::new(Default::default())),
+        }
     }
 
     /// Logs to $FM_LOGS_DIR/{name}.{out,err}
@@ -87,11 +107,30 @@ impl ProcessManager {
             .cmd
             .spawn()
             .with_context(|| format!("Could not spawn: {name}"))?;
-        let handle = ProcessHandle(Arc::new(Mutex::new(ProcessHandleInner {
+        let inner = Arc::new(Mutex::new(ProcessHandleInner {
             name: name.to_owned(),
             child: Some(child),
-        })));
+        }));
+        // We push to front so that we kill the most recently spawned process first when
+        // calling `kill_all`. This doesn't guarantee anything, it's just a reasonable
+        // heuristic to avoid unnecessary error messages on shutdown of daemons that
+        // depend on other daemons
+        self.handlers
+            .lock()
+            .await
+            .push_front(ProcessHandle(Arc::clone(&inner)));
+        let handle = ProcessHandle(inner);
         Ok(handle)
+    }
+
+    pub async fn kill_all(&self) {
+        let mut handlers = self.handlers.lock().await;
+        for handler in handlers.iter() {
+            if let Err(e) = handler.kill().await {
+                warn!(LOG_DEVIMINT, "failed to kill process: {e:?}");
+            }
+        }
+        handlers.clear();
     }
 }
 

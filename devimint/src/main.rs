@@ -1140,7 +1140,8 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     Ok((process_mgr, task_group))
 }
 
-async fn cleanup_on_exit<T>(
+async fn wait_to_exit<T>(
+    process_mgr: ProcessManager,
     main_process: impl futures::Future<Output = Result<T>>,
     task_group: TaskGroup,
 ) -> anyhow::Result<()> {
@@ -1149,19 +1150,21 @@ async fn cleanup_on_exit<T>(
     tokio::select! {
         _ = task_group.make_handle().make_shutdown_rx().await => {
             info!("Received shutdown signal before finishing main process, exiting early");
+            process_mgr.kill_all().await;
             Ok(())
         }
         result = main_process => {
             match result {
-                Ok(v) => {
+                Ok(_v) => {
                     info!("Main process finished successfully, will wait for shutdown signal");
                     task_group.make_handle().make_shutdown_rx().await.await;
                     info!("Received shutdown signal, shutting down");
-                    drop(v); // execute destructors
+                    process_mgr.kill_all().await;
                     Ok(())
                 },
                 Err(e) => {
                     warn!("Main process failed with {e:?}, will shutdown");
+                    process_mgr.kill_all().await;
                     Err(e)
                 }
             }
@@ -1174,56 +1177,75 @@ async fn handle_command() -> Result<()> {
     match args.command {
         Cmd::ExternalDaemons => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let _daemons =
-                write_ready_file(&process_mgr.globals, external_daemons(&process_mgr).await)
+            let main = {
+                let process_mgr = process_mgr.clone();
+                async move {
+                    let daemons = write_ready_file(
+                        &process_mgr.globals,
+                        external_daemons(&process_mgr).await,
+                    )
                     .await?;
-            task_group.make_handle().make_shutdown_rx().await.await;
+                    Ok::<_, anyhow::Error>(daemons)
+                }
+            };
+            wait_to_exit(process_mgr, main, task_group).await?;
         }
         Cmd::DevFed => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let main = async move {
-                let dev_fed = dev_fed(&process_mgr).await?;
-                dev_fed.fed.pegin(10_000).await?;
-                dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln).await?;
-                dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd).await?;
-                let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
-                Ok::<_, anyhow::Error>(daemons)
+            let main = {
+                let process_mgr = process_mgr.clone();
+                async move {
+                    let dev_fed = dev_fed(&process_mgr).await?;
+                    dev_fed.fed.pegin(10_000).await?;
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln).await?;
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd).await?;
+                    let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+                    Ok::<_, anyhow::Error>(daemons)
+                }
             };
-            cleanup_on_exit(main, task_group).await?;
+            wait_to_exit(process_mgr, main, task_group).await?;
         }
         Cmd::RunUi => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let main = async move {
-                let fedimintds = run_ui(&process_mgr).await?;
-                let daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
-                Ok::<_, anyhow::Error>(daemons)
+            let main = {
+                let process_mgr = process_mgr.clone();
+                async move {
+                    let fedimintds = run_ui(&process_mgr).await?;
+                    let daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
+                    Ok::<_, anyhow::Error>(daemons)
+                }
             };
-            cleanup_on_exit(main, task_group).await?;
+            wait_to_exit(process_mgr, main, task_group).await?;
         }
         Cmd::LatencyTests => {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             latency_tests(dev_fed).await?;
+            process_mgr.kill_all().await;
         }
         Cmd::ReconnectTest => {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
+            process_mgr.kill_all().await;
         }
         Cmd::CliTests => {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_tests(dev_fed).await?;
+            process_mgr.kill_all().await;
         }
         Cmd::LoadTestToolTest => {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_load_test_tool_test(dev_fed).await?;
+            process_mgr.kill_all().await;
         }
         Cmd::LightningReconnectTest => {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
+            process_mgr.kill_all().await;
         }
         Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,
     }
