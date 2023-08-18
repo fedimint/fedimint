@@ -14,6 +14,7 @@ if [[ "${TMP:-}" == *"/nix-shell."* ]]; then
 else
   FM_TEST_DIR="${2-"$(mktemp --tmpdir -d XXXXX)"}"
 fi
+
 export FM_TEST_DIR
 export FM_PID_FILE="$FM_TEST_DIR/.pid"
 export FM_LOGS_DIR="$FM_TEST_DIR/logs"
@@ -22,6 +23,11 @@ echo "Setting up env variables in $FM_TEST_DIR"
 
 mkdir -p "$FM_TEST_DIR"
 touch "$FM_PID_FILE"
+
+if [ -n "${FM_TEST_NAME:-}" ]; then
+  # make it easy to identify which tmp dir belongs to which test
+  touch "$FM_TEST_DIR-$(echo "$FM_TEST_NAME" |tr -cd '[:alnum:]-_')" || true
+fi
 
 # Symlink $FM_TEST_DIR to local gitignored target/ directory so they're easier to find
 rm -f target/devimint
