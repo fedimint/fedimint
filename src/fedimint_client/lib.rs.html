@@ -1681,6 +1681,18 @@
 <a href="#1681" id="1681">1681</a>
 <a href="#1682" id="1682">1682</a>
 <a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
+<a href="#1693" id="1693">1693</a>
+<a href="#1694" id="1694">1694</a>
+<a href="#1695" id="1695">1695</a>
 </pre><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1789,6 +1801,7 @@
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
 <span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
@@ -2168,9 +2181,20 @@
             <span class="kw">let </span>maybe_shutdown_confirmation = <span class="self">self</span>.inner.executor.stop_executor();
 
             <span class="comment">// Just in case the shutdown does not take immediate effect we block here if
-            // possible
+            // possible. If running as WASM we are running in single-threaded mode and
+            // cannot use block_on.
             </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(shutdown_confirmation) = maybe_shutdown_confirmation {
+            </span>{
+                <span class="kw">if </span>RuntimeHandle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
+                    <span class="comment">// We can&#39;t use block_on in single-threaded mode
+                    </span><span class="kw">return</span>;
+                }
+
+                <span class="kw">let </span><span class="prelude-val">Some</span>(shutdown_confirmation) = maybe_shutdown_confirmation  <span class="kw">else </span>{
+                    <span class="comment">// Already shut down
+                    </span><span class="kw">return</span>;
+                };
+
                 tokio::task::block_in_place(<span class="kw">move </span>|| {
                     futures::executor::block_on(<span class="kw">async </span>{
                         <span class="kw">if </span>shutdown_confirmation.<span class="kw">await</span>.is_err() {

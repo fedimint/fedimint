@@ -319,6 +319,12 @@
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
@@ -334,7 +340,7 @@
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
 <span class="kw">use </span>miniscript::ToPublicKey;
 <span class="kw">use </span>secp256k1::KeyPair;
-<span class="kw">use </span>tracing::{trace, warn};
+<span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
 <span class="kw">use crate</span>::{WalletClientContext, WalletClientStates};
@@ -503,7 +509,8 @@
     }
 }
 
-<span class="kw">async fn </span>await_btc_transaction_confirmed(
+<span class="attr">#[instrument(skip_all, level = <span class="string">&quot;debug&quot;</span>)]
+</span><span class="kw">async fn </span>await_btc_transaction_confirmed(
     context: WalletClientContext,
     global_context: DynGlobalClientContext,
     waiting_state: WaitingForConfirmationsDepositState,
@@ -523,6 +530,7 @@
                 <span class="kw">continue</span>;
             }
         };
+        <span class="macro">debug!</span>(consensus_height, <span class="string">&quot;Fetched consensus height&quot;</span>);
 
         <span class="kw">let </span>confirmation_height = <span class="kw">match </span>context
             .rpc
@@ -536,6 +544,8 @@
                 <span class="kw">continue</span>;
             }
         };
+
+        <span class="macro">debug!</span>(<span class="question-mark">?</span>confirmation_height, <span class="string">&quot;Fetched confirmation height&quot;</span>);
 
         <span class="kw">if </span>!confirmation_height
             .map(|confirmation_height| consensus_height &gt;= confirmation_height)
@@ -559,6 +569,8 @@
                 <span class="kw">continue</span>;
             }
         };
+
+        <span class="macro">debug!</span>(proof_block_hash = <span class="question-mark">?</span>txout_proof.block_header.block_hash(), <span class="string">&quot;Generated merkle proof&quot;</span>);
 
         <span class="kw">return </span>txout_proof;
     }

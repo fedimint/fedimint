@@ -1869,8 +1869,6 @@
 <a href="#1869" id="1869">1869</a>
 <a href="#1870" id="1870">1870</a>
 <a href="#1871" id="1871">1871</a>
-<a href="#1872" id="1872">1872</a>
-<a href="#1873" id="1873">1873</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2243,9 +2241,7 @@
                 <span class="kw">let </span>new_consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
                 <span class="comment">// only sync from the first non-default consensus block count
-                </span><span class="kw">if </span>new_consensus_block_count &gt; old_consensus_block_count
-                    &amp;&amp; old_consensus_block_count &gt; <span class="number">0
-                </span>{
+                </span><span class="kw">if </span>new_consensus_block_count &gt; old_consensus_block_count {
                     <span class="self">self</span>.sync_up_to_consensus_height(
                         dbtx,
                         old_consensus_block_count,
