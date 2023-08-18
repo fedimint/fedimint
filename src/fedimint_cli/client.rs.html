@@ -482,11 +482,23 @@
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
 <a href="#484" id="484">484</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::{Duration, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
-<span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>bitcoin::{secp256k1, Network};
 <span class="kw">use </span>bitcoin_hashes::hex;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Subcommand;
@@ -494,7 +506,7 @@
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::sm::OperationId;
 <span class="kw">use </span>fedimint_client::Client;
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
@@ -505,7 +517,7 @@
 <span class="kw">use </span>fedimint_mint_client::{
     parse_ecash, serialize_ecash, MintClientExt, MintClientModule, SpendableNote,
 };
-<span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WithdrawState};
+<span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -934,11 +946,17 @@
 
 <span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>Client) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">let </span>(mint_client, <span class="kw">_</span>) = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
+    <span class="kw">let </span>(wallet_client, <span class="kw">_</span>) =
+        client.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_wallet_client::KIND);
     <span class="kw">let </span>summary = mint_client
         .get_wallet_summary(<span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>))
         .<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {
-        total_msat: summary.total_amount(),
+        federation_id: client.federation_id(),
+        network: wallet_client.get_network(),
+        meta: client.get_config().meta.clone(),
+        total_amount_msat: summary.total_amount(),
+        total_num_notes: summary.count_items(),
         denominations_msat: summary,
     })
     .unwrap())
@@ -946,7 +964,11 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">struct </span>InfoResponse {
-    total_msat: Amount,
+    federation_id: FederationId,
+    network: Network,
+    meta: BTreeMap&lt;String, String&gt;,
+    total_amount_msat: Amount,
+    total_num_notes: usize,
     denominations_msat: TieredSummary,
 }
 
