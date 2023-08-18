@@ -124,7 +124,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with: 
-          name: "${{ matrix.host}}-test-logs"
+          name: "fedimint-failed-test-logs-${{ github.run_number }}-${{ matrix.host}}"
           path: |
             /tmp/nix-build-*/
             !/tmp/nix-build-*/source/
