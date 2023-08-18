@@ -3,7 +3,6 @@
 test_name="$1"
 shift 1
 
-
 if [ -z "$test_name" ]; then
     >&2 "error: no test name"
     exit 1
@@ -13,6 +12,8 @@ set -eo pipefail # pipefail must be set manually again
 trap 'echo "## FAILED: $test_name"' ERR
 
 echo "## START: $test_name"
+
+export FM_TEST_NAME="$test_name"
 
 # We rely on `unshare` to run all tests in separate network namespaces,
 # Not possible on MacOS though
