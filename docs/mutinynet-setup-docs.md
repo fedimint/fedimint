@@ -27,49 +27,49 @@ I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS 
 
 - Create a new droplet, use the default parameters for a $12 2GB RAM/1 CPU machine.
 
-![Alt text](mutiny_setup/create_droplet.png)
+<img src="mutiny_setup/create_droplet.png" width="500">
 
 - Default Ubuntu image
 
-![Alt text](mutiny_setup/linux.png)
+<img src="mutiny_setup/linux.png" width="500">
 
 - `fedimintd` CAN run on the $6 1GB RAM/1 CPU machine, but for a longer running federation or one you want to be highly performant with > a couple dozen users we recommend the 2GB RAM at least.
 
-![Alt text](mutiny_setup/boxSize.png)
+<img src="mutiny_setup/boxSize.png" width="500">
 
 - Auth with SSH keys (recommended) or password. Digital Ocean has an excellent guide on how to set up SSH keys if you click "New SSH Key" in the "Authentication" section. It also has a great browser based console that you can use to access the box directly from the dashboard.
 
-![Alt text](mutiny_setup/ssh.png)
+<img src="mutiny_setup/ssh.png" width="500">
 
 - Finalize and create the droplet. You can create multiple droplets with the same configuration, so if you want just create your 5 droplets now for the 3/4 federation + lightning gateway and skip to section 2 to install the software. Otherwise continue to the next step to create the other machines.
 
-![Alt text](mutiny_setup/finalize.png)
+<img src="mutiny_setup/finalize.png" width="500">
 
 - You can SSH into the machine from your terminal by copying the ssh command for key or root user/password. Or just use the droplet terminal from the digital ocean console.
 
-![Alt text](mutiny_setup/access.png)
+<img src="mutiny_setup/access.png" width="500">
 
-![Alt text](mutiny_setup/droplet_console.png)
+<img src="mutiny_setup/droplet_console.png" width="500">
 
 ### 1.2. Linode Setup
 
 For the Linode Setup we'll use the same $12 2GB/1CPU machine as Digital Ocean, if you're also running the lightning gateway off of this machine you'll want to use the 4GB/2CPU machine. We'll use the same ubuntu 22 image.
 
-![Alt text](mutiny_setup/linode1.png)
+<img src="mutiny_setup/linode1.png" width="500">
 
 - Set up the root password (and SSH keys recommended)
 
-![Alt text](mutiny_setup/linode2.png)
+<img src="mutiny_setup/linode2.png" width="500">
 
 - Then create the machine.
 
-![Alt text](mutiny_setup/linode3.png)
+<img src="mutiny_setup/linode3.png" width="500">
 
 - You can SSH into the machine from your terminal by copying the ssh command for key or root user/password:
 
-![Alt text](mutiny_setup/linode4.png)
+<img src="mutiny_setup/linode4.png" width="500">
 
-![Alt text](mutiny_setup/linode5.png)
+<img src="mutiny_setup/linode5.png" width="500">
 
 ### 1.3. Amazon EC2 Setup
 
@@ -77,25 +77,25 @@ For the AWS EC2 Setup we'll use the free tier t2.micro machine, which is 1GB RAM
 
 - Use your ssh keys (you'll have to import them for EC2 in the console beforehand), set a security group, and free tier EC2 lets you have up to 30GB of storage.
 
-![Alt text](mutiny_setup/ec2.png)
+<img src="mutiny_setup/ec2.png" width="500">
 
 - Then in your EC2 management console select "Connect your instance", adjust the key visibility, and you'll be able to ssh into the machine
 
-![Alt text](mutiny_setup/ec2_connect.png)
+<img src="mutiny_setup/ec2_connect.png" width="500">
 
 - Then you're good to connect to the machine from a terminal:
 
-![Alt text](mutiny_setup/ec2_ssh.png)
+<img src="mutiny_setup/ec2_ssh.png" width="500">
 
 ### 1.4. Google Cloud Setup
 
 For the google cloud machine we'll use something a little bigger because we'll also run the lightning gateway on it. Google VMs generate new ssh keys for you so make sure you copy those down into your local to ssh into the machine.
 
-![Alt text](mutiny_setup/google.png)
+<img src="mutiny_setup/google.png" width="500">
 
 - Then google VMs have a nice SSH button in the console that pops open a bash terminal connect to the machine.
 
-![Alt text](mutiny_setup/google_ssh.png)
+<img src="mutiny_setup/google_ssh.png" width="500">
 
 ## Step 2. Installing Fedimint w/ Docker
 
@@ -167,9 +167,9 @@ and it'll start the services on the following ports:
 - Lightning Gateway Dashboard: http://your.ip.add.ress:3001
 - RTL Lightning Node Management: http://your.ip.add.ress.198:3003
 
-![Alt text](mutiny_setup/install_scripts.png)
+<img src="mutiny_setup/install_scripts.png" alt="Install Scripts">
 
-![Alt text](mutiny_setup/fedimint_startup.png)
+<img src="mutiny_setup/fedimint_startup.png" alt="Fedimint Startup">
 
 You've now got the fedimint processes running on each machine. Congratulations! However, they're not connected into a federation yet. We'll do that in the next step.
 
@@ -185,7 +185,7 @@ On the homescreen you'll see a selection to lead or follow. This does not refer 
 
 The "Leader" is simply the guardian who will input the configuration settings for the federation and the "Followers" will agree to and validate those settings. This distinction is made simply for UX purposes so each guardian doesn't have to repeatedly input the same things, and when there's a typo blow up the key generation.
 
-![Alt text](mutiny_setup/guardian_select.png)
+<img src="mutiny_setup/guardian_select.png" alt="Guardian Select" width="500">
 
 ## Leader
 
@@ -196,41 +196,41 @@ The leader inputs an additional couple parameters beyond his name and password:
 - Network: use signet (mutinynet is a fork of signet with 30 second blocktimes)
 - Block Confirmations: Fedimint's consensus CANNOT handle bitcoin block reorganizations (it's impossible to invalidate or distinguish e-cash once issued) so we recommend at least 6 confirmations (meaning the fedimint's consensus blockheight will be current blockheight - 6) for any mainnet or production use, but if you're just using this for development you can set it to 1 or 2
 
-![Alt text](mutiny_setup/leader.png)
+<img src="mutiny_setup/leader.png" alt="Leader" width="500">
 
 Once you confirm your settings you'll see a guardian confirmation page with a "Invite Followers" websocket link. That's the link you'll send to each of the followers. Once they copy it over they'll be presented with a page to confirm the federation specifications set by the leader.
 
-![Alt text](mutiny_setup/leader_confirm.png)
+<img src="mutiny_setup/leader_confirm.png" alt="Leader Confirm" width="500">
 
 ## Follower
 
 The followers simply set their names and passwords then paste the websocket link from the leader to connect. Once connected, they'll be prompted to confirm the federation info set by the leader. All the guardians have to connect and approve. Once that's done, they'll go through the distributed key generation to set up the fedimint.
 
-![Alt text](mutiny_setup/follower_confirm.png)
+<img src="mutiny_setup/follower_confirm.png" alt="Follower Confirm" width="500">
 
-![Alt text](mutiny_setup/leader_pending.png)
+<img src="mutiny_setup/leader_pending.png" alt="Leader Pending" width="500">
 
-![Alt text](mutiny_setup/boom_sharing.png)
+<img src="mutiny_setup/boom_sharing.png" alt="Boom Sharing" width="500">
 
 ### DKG
 
 TODO: Write up describing the DKG
 
-![Alt text](mutiny_setup/dkg.png)
+<img src="mutiny_setup/dkg.png" alt="DKG" width="500">
 
-![Alt text](image-10.png)
+<img src="image-10.png" alt="Image 10" width="500">
 
 ### Guardian Verificaion
 
-![Alt text](mutiny_setup/verify1.png)
+<img src="mutiny_setup/verify1.png" alt="Verify 1" width="500">
 
-![Alt text](mutiny_setup/verify2.png)
+<img src="mutiny_setup/verify2.png" alt="Verify 2" width="500">
 
-![Alt text](mutiny_setup/congrats.png)
+<img src="mutiny_setup/congrats.png" alt="Congrats" width="500">
 
 ### Guardian Dashboard
 
-![Alt text](mutiny_setup/guardian_dashboard.png)
+<img src="mutiny_setup/guardian_dashboard.png" alt="Guardian Dashboard" width="500">
 
 - these are all hardcoded for now
 
@@ -240,7 +240,7 @@ The invite code doesn't populate yet so you'll have to get it from the command l
 docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli dev invite-code
 ```
 
-![Alt text](mutiny_setup/invite.png)
+<img src="mutiny_setup/invite.png" alt="Invite" width="500">
 
 Then connect with Fedi:
 
@@ -265,7 +265,7 @@ Enter gateway password: #this is whatever you set it to, default is `thereisnose
 }
 ```
 
-![Alt text](mutiny_setup/dev_invite_code.png)
+<img src="mutiny_setup/dev_invite_code.png" alt="Dev Invite Code" width="500">
 
 ```bash
 root@mutinynet-01:~# docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli balance --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
@@ -277,9 +277,9 @@ You'll initially have 0, but you can deposit to it using the mutinynet faucet at
 docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli address --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
 ```
 
-![Alt text](mutiny_setup/gateway_address.png)
+<img src="mutiny_setup/gateway_address.png" alt="Gateway Address" width="500">
 
-![Alt text](mutiny_setup/gateway_balance.png)
+<img src="mutiny_setup/gateway_balance.png" alt="Gateway Balance" width="500">
 
 ```bash
 docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli help
@@ -291,17 +291,17 @@ get a new address:
 docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli deposit-address
 ```
 
-![Alt text](mutiny_setup/fed_deposit_addr.png)
+<img src="mutiny_setup/fed_deposit_addr.png" alt="Fed Deposit Address" width="500">
 
 deposit to it using the mutinynet faucet at https://faucet.mutinynet.com
 
-![Alt text](mutiny_setup/mutiny_faucet.png)
+<img src="mutiny_setup/mutiny_faucet.png" alt="Mutiny Faucet" width="500">
 
 You'll also need to open a lightning channel from the gateway node, so get a deposit address from RTL and deposit to it using the mutinynet faucet at https://faucet.mutinynet.com:
 
-![Alt text](mutiny_setup/rtl_deposit.png)
+<img src="mutiny_setup/rtl_deposit.png" alt="RTL Deposit" width="500">
 
-![Alt text](mutiny_setup/mutiny_sent.png)
+<img src="mutiny_setup/mutiny_sent.png" alt="Mutiny Sent" width="500">
 
 Opening a channel to the fedi alpha gateway:
 
@@ -309,21 +309,21 @@ Opening a channel to the fedi alpha gateway:
 025698cc9ac623f5d1baf56310f2f1b62dfffee43ffcdb2c20ccb541f70497d540@54.158.203.78:9739
 ```
 
-![Alt text](mutiny_setup/channel_open1.png)
+<img src="mutiny_setup/channel_open1.png" alt="Channel Open 1" width="500">
 
-![Alt text](mutiny_setup/channel_open1.png)
+<img src="mutiny_setup/channel_open1.png" alt="Channel Open 1" width="500">
 
 ### Getting Inbound Liquidity
 
 Send some sats through your channel to the fedi alpha signet faucet. We'll be integrating in a LSP soon to make this easier.
 
-![Alt text](mutiny_setup/inbound.png)
+<img src="mutiny_setup/inbound.png" alt="Inbound" width="500">
 
-![Alt text](mutiny_setup/send_sats.png)
+<img src="mutiny_setup/send_sats.png" alt="Send Sats" width="500">
 
-![Alt text](mutiny_setup/send_invoice.png)
+<img src="mutiny_setup/send_invoice.png" alt="Send Invoice" width="500">
 
-![Alt text](mutiny_setup/received.png)
+<img src="mutiny_setup/received.png" alt="Received" width="500">
 
 In case of fire:
 
