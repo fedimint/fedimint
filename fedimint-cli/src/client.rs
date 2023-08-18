@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail};
-use bitcoin::secp256k1;
+use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
@@ -10,7 +11,7 @@ use fedimint_client::backup::Metadata;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
-use fedimint_core::config::ClientConfig;
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
@@ -21,7 +22,7 @@ use fedimint_ln_client::{
 use fedimint_mint_client::{
     parse_ecash, serialize_ecash, MintClientExt, MintClientModule, SpendableNote,
 };
-use fedimint_wallet_client::{WalletClientExt, WithdrawState};
+use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -450,20 +451,30 @@ pub async fn handle_ng_command(
 
 async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> {
     let (mint_client, _) = client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
+    let (wallet_client, _) =
+        client.get_first_module::<WalletClientModule>(&fedimint_wallet_client::KIND);
     let summary = mint_client
         .get_wallet_summary(&mut client.db().begin_transaction().await.with_module_prefix(1))
         .await;
     Ok(serde_json::to_value(InfoResponse {
-        total_msat: summary.total_amount(),
-        denominations_msat: summary,
+        federation_id: client.federation_id(),
+        network: wallet_client.get_network(),
+        meta: client.get_config().meta.clone(),
+        total_amount: summary.total_amount(),
+        total_num_notes: summary.count_items(),
+        details: summary,
     })
     .unwrap())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InfoResponse {
-    total_msat: Amount,
-    denominations_msat: TieredSummary,
+    federation_id: FederationId,
+    network: Network,
+    meta: BTreeMap<String, String>,
+    total_amount: Amount,
+    total_num_notes: usize,
+    details: TieredSummary,
 }
 
 pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmountError> {
