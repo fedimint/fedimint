@@ -48,8 +48,9 @@ async fn peg_in<'a>(
     assert_eq!(sub.ok().await?, DepositState::WaitingForTransaction);
     assert_eq!(sub.ok().await?, DepositState::WaitingForConfirmation);
 
-    // Need to mine blocks until deposit is confirmed
-    bitcoin.mine_blocks(finality_delay).await;
+    // Need to mine blocks until deposit is confirmed, but send_and_mine_block
+    // already mined one, so we can mine one less here.
+    bitcoin.mine_blocks(finality_delay - 1).await;
     assert_eq!(sub.ok().await?, DepositState::Confirmed);
     assert_eq!(sub.ok().await?, DepositState::Claimed);
     assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
