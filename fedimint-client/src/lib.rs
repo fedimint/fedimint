@@ -495,7 +495,7 @@ impl Drop for Client {
                     return;
                 }
 
-                let Some(shutdown_confirmation) = maybe_shutdown_confirmation  else {
+                let Some(shutdown_confirmation) = maybe_shutdown_confirmation else {
                     // Already shut down
                     return;
                 };
@@ -1535,6 +1535,8 @@ async fn get_config(
         }
     };
 
+    // some borrowck lifetime limitation thing
+    #[allow(clippy::let_and_return)]
     config_res
 }
 
@@ -1683,7 +1685,7 @@ pub fn client_decoders<'a>(
     for (id, kind) in module_kinds {
         let Some(init) = registry.get(kind) else {
             info!("Detected configuration for unsupported module id: {id}, kind: {kind}");
-            continue
+            continue;
         };
 
         modules.insert(

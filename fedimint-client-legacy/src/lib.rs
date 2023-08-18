@@ -1493,7 +1493,7 @@ impl Client<GatewayClientConfig> {
                     }
                     Ok(t) => {
                         return t.try_into_variant::<DecryptedPreimage>().and_then(|maybe_preimage| {
-                            return match maybe_preimage {
+                            match maybe_preimage {
                                 DecryptedPreimage::Some(preimage) => Ok(preimage),
                                 DecryptedPreimage::Pending => panic!("Pending outcomes are temporary and covered by the previous match arm"),
                                 DecryptedPreimage::Invalid => Err(OutputOutcomeError::ResponseDeserialization(anyhow!("Federation says we submitted an invalid encrypted preimage, we disagree"))),

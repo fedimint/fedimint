@@ -409,11 +409,7 @@ pub async fn run_dkg(
         .map(|peer| peer.name)
         .collect::<HashSet<_>>();
     let all_names = {
-        let mut names = followers_names
-            .values()
-            .into_iter()
-            .cloned()
-            .collect::<HashSet<_>>();
+        let mut names = followers_names.values().cloned().collect::<HashSet<_>>();
         names.insert(leader_name);
         names
     };
