@@ -1531,6 +1531,7 @@ mod tests {
 
 #[cfg(test)]
 mod fedimint_migration_tests {
+    use anyhow::{ensure, Context};
     use bitcoin::psbt::{Input, PartiallySignedTransaction};
     use bitcoin::{
         Amount, BlockHash, PackedLockTime, Script, Sequence, Transaction, TxIn, TxOut, Txid,
@@ -1734,7 +1735,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_migrations() {
+    async fn test_migrations() -> anyhow::Result<()> {
         validate_migrations(
             "wallet",
             |db| async move {
@@ -1746,7 +1747,7 @@ mod fedimint_migration_tests {
                     module.get_database_migrations(),
                 )
                 .await
-                .expect("Error applying migrations to temp database");
+                .context("Error applying migrations to temp database")?;
 
                 // Verify that all of the data from the wallet namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -1762,7 +1763,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_blocks = blocks.len();
-                            assert!(
+                            ensure!(
                                 num_blocks > 0,
                                 "validate_migrations was not able to read any BlockHashes"
                             );
@@ -1774,7 +1775,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_outpoints = outpoints.len();
-                            assert!(
+                            ensure!(
                                 num_outpoints > 0,
                                 "validate_migrations was not able to read any PegOutBitcoinTransactions"
                             );
@@ -1786,7 +1787,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_sigs = sigs.len();
-                            assert!(
+                            ensure!(
                                 num_sigs > 0,
                                 "validate_migrations was not able to read any PegOutTxSigCi"
                             );
@@ -1798,13 +1799,13 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_txs = pending_txs.len();
-                            assert!(
+                            ensure!(
                                 num_txs > 0,
                                 "validate_migrations was not able to read any PendingTransactions"
                             );
                         }
                         DbKeyPrefix::PegOutNonce => {
-                            assert!(dbtx
+                            ensure!(dbtx
                                 .get_value(&PegOutNonceKey)
                                 .await
                                 .is_some());
@@ -1816,7 +1817,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_txs = unsigned_txs.len();
-                            assert!(
+                            ensure!(
                                 num_txs > 0,
                                 "validate_migrations was not able to read any UnsignedTransactions"
                             );
@@ -1828,7 +1829,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_utxos = utxos.len();
-                            assert!(
+                            ensure!(
                                 num_utxos > 0,
                                 "validate_migrations was not able to read any UTXOs"
                             );
@@ -1840,7 +1841,7 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_heights = heights.len();
-                            assert!(
+                            ensure!(
                                 num_heights > 0,
                                 "validate_migrations was not able to read any block height votes"
                             );
@@ -1852,13 +1853,14 @@ mod fedimint_migration_tests {
                                 .collect::<Vec<_>>()
                                 .await;
                             let num_rates = rates.len();
-                            assert!(
+                            ensure!(
                                 num_rates > 0,
                                 "validate_migrations was not able to read any fee rate votes"
                             );
                         }
                     }
                 }
+                Ok(())
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -1866,6 +1868,6 @@ mod fedimint_migration_tests {
                 <Wallet as ServerModule>::decoder(),
             )]),
         )
-        .await;
+        .await
     }
 }
