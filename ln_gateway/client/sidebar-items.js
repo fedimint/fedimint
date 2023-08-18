@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["StandardGatewayClientBuilder",""]]};
+window.SIDEBAR_ITEMS = {"struct":["StandardGatewayClientBuilder"]};

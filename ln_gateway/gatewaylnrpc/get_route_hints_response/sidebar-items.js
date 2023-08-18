@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["RouteHint",""],["RouteHintHop",""]]};
+window.SIDEBAR_ITEMS = {"struct":["RouteHint","RouteHintHop"]};

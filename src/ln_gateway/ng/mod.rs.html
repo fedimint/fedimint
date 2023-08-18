@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/ng/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-505eba68f310f6bf.css" id="mainThemeStyle"><link rel="stylesheet" id="themeStyle" href="../../../static.files/light-f501212b8b071243.css"><link rel="stylesheet" disabled href="../../../static.files/dark-e92fc12c34ff89d3.css"><link rel="stylesheet" disabled href="../../../static.files/ayu-c8c85693c8a4f9db.css"><script id="default-settings" ></script><script src="../../../static.files/storage-3891ce972e3a2bf8.js"></script><script defer src="../../../static.files/source-script-ea63cb6500f71309.js"></script><script defer src="../../../source-files.js"></script><script defer src="../../../static.files/main-364b95f387bc3166.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-13285aec31fa243e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../ln_gateway/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-5ec35bf9ca753509.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/ng/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0-nightly (439d066bc 2023-08-10)" data-channel="nightly" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../ln_gateway/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -612,7 +612,17 @@
 <a href="#612" id="612">612</a>
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
-</pre><pre class="rust"><code><span class="kw">pub mod </span>complete;
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
 <span class="kw">use </span>std::sync::Arc;
@@ -731,7 +741,7 @@
     </span><span class="kw">async fn </span>gateway_subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtPayStates&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt;;
 
     <span class="doccomment">/// Register gateway with federation
     </span><span class="kw">async fn </span>register_with_federation(
@@ -749,7 +759,7 @@
     </span><span class="kw">async fn </span>gateway_subscribe_ln_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtReceiveStates&gt;&gt;;
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -807,28 +817,33 @@
     <span class="kw">async fn </span>gateway_subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtPayStates&gt;&gt; {
-        <span class="kw">let </span>(gateway, _instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
+            </span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
+            .<span class="number">0
+            </span>.notifier
+            .subscribe(operation_id)
+            .<span class="kw">await</span>;
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
                 <span class="kw">yield </span>GatewayExtPayStates::Created;
 
-                <span class="kw">let </span><span class="kw-2">mut </span>stream = gateway.notifier.subscribe(operation_id).<span class="kw">await</span>;
                 <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             GatewayPayStates::Preimage(outpoint, preimage) =&gt; {
                                 <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
-                                <span class="kw">if </span><span class="self">self</span>.await_primary_module_output(operation_id, outpoint).<span class="kw">await</span>.is_ok() {
+                                <span class="kw">if </span>client.await_primary_module_output(operation_id, outpoint).<span class="kw">await</span>.is_ok() {
                                     <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
                                     <span class="kw">return</span>;
                                 }
                             }
                             GatewayPayStates::Canceled { txid, contract_id: <span class="kw">_</span>, error } =&gt; {
-                                <span class="kw">match </span><span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
+                                <span class="kw">match </span>client.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(()) =&gt; {
                                         <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
                                         <span class="kw">return</span>;
@@ -893,22 +908,27 @@
     <span class="kw">async fn </span>gateway_subscribe_ln_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;<span class="lifetime">&#39;_</span>, GatewayExtReceiveStates&gt;&gt; {
-        <span class="kw">let </span>(gateway, _instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
+            </span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
+            .<span class="number">0
+            </span>.notifier
+            .subscribe(operation_id)
+            .<span class="kw">await</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
                 <span class="kw">yield </span>GatewayExtReceiveStates::Funding;
 
-                <span class="kw">let </span><span class="kw-2">mut </span>stream = gateway.notifier.subscribe(operation_id).<span class="kw">await</span>;
                 <span class="kw">let </span>state = <span class="kw">loop </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage),
                             IncomingSmStates::RefundSubmitted{ txid, error } =&gt; {
                                 <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0</span>};
-                                <span class="kw">match </span><span class="self">self</span>.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
+                                <span class="kw">match </span>client.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess{ outpoint: out_point, error },
                                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error },
                                 }
@@ -1226,5 +1246,4 @@
         })
     }
 }
-</code></pre></div>
-</section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.69.0-nightly (f3126500f 2023-02-02)" data-search-js="search-98d53477a794af0b.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
+</code></pre></div></section></main></body></html>

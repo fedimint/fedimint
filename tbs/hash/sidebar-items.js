@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["HASH_TAG",""]],"fn":[["hash_bytes_to_curve",""],["hash_to_curve","IMPORTANT: the byte hashing fn includes a tag, this doesn’t"]]};
+window.SIDEBAR_ITEMS = {"constant":["HASH_TAG"],"fn":["hash_bytes_to_curve","hash_to_curve"]};

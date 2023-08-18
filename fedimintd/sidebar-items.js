@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["attach_default_module_gen_params","Generates the configuration for the modules configured in the server binary"],["default_esplora_server",""]],"mod":[["fedimintd","Module for creating `fedimintd` binary with custom modules"]]};
+window.SIDEBAR_ITEMS = {"fn":["attach_default_module_gen_params","default_esplora_server"],"mod":["fedimintd"]};

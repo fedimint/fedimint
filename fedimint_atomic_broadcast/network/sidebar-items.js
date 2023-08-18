@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["Hasher",""],["Network",""]],"type":[["NetworkData",""]]};
+window.SIDEBAR_ITEMS = {"struct":["Hasher","Network"],"type":["NetworkData"]};

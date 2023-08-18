@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["OutgoingContract","Specialized smart contract for outgoing payments."],["OutgoingContractAccount",""],["OutgoingContractData",""]]};
+window.SIDEBAR_ITEMS = {"struct":["OutgoingContract","OutgoingContractAccount","OutgoingContractData"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["EsploraClient",""],["EsploraFactory",""]]};
+window.SIDEBAR_ITEMS = {"struct":["EsploraClient","EsploraFactory"]};

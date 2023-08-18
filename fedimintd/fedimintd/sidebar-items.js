@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["SHUTDOWN_TIMEOUT","Time we will wait before forcefully shutting down tasks"]],"fn":[["run",""],["spawn_metrics_server",""]],"struct":[["Fedimintd","`fedimintd` builder"],["ServerOpts",""]]};
+window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"fn":["run","spawn_metrics_server"],"struct":["Fedimintd","ServerOpts"]};

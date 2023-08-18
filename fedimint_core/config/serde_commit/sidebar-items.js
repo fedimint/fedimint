@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["deserialize",""],["serialize",""]],"struct":[["Wrap",""]]};
+window.SIDEBAR_ITEMS = {"fn":["deserialize","serialize"],"struct":["Wrap"]};

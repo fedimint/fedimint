@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["BASE_PORT","Base port for devimint"]],"fn":[["run_dkg",""],["set_config_gen_params",""],["wait_server_status",""]],"struct":[["Client","`fedimint-cli` instance (basically path with client state: config + db)"],["Federation",""],["Fedimintd",""]]};
+window.SIDEBAR_ITEMS = {"constant":["BASE_PORT"],"fn":["run_dkg","set_config_gen_params","wait_server_status"],"struct":["Client","Federation","Fedimintd"]};

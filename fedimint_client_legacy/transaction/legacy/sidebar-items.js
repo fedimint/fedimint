@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["Input","An Input consumed by a Transaction is defined within a Fedimint Module."],["Output",""]],"struct":[["Transaction","An atomic value transfer operation within the Fedimint system and consensus"]]};
+window.SIDEBAR_ITEMS = {"enum":["Input","Output"],"struct":["Transaction"]};

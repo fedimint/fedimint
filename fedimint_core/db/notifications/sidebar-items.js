@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["NOTIFY_BUCKETS","Number of buckets used for `Notifications`."]],"fn":[["slot_index_for_hash",""],["slot_index_for_key",""]],"struct":[["Notifications","The state of Notification."],["NotifyQueue","Save notifications to be sent after transaction is complete."],["NotifyingTransaction","Wrapper to implement `add_notification_key`"]]};
+window.SIDEBAR_ITEMS = {"constant":["NOTIFY_BUCKETS"],"fn":["slot_index_for_hash","slot_index_for_key"],"struct":["Notifications","NotifyQueue","NotifyingTransaction"]};

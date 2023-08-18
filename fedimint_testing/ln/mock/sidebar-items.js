@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["INVALID_INVOICE_DESCRIPTION",""]],"struct":[["FakeLightningTest",""]]};
+window.SIDEBAR_ITEMS = {"constant":["INVALID_INVOICE_DESCRIPTION"],"struct":["FakeLightningTest"]};

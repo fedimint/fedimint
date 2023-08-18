@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["RouteHint","A list of hops along a payment path terminating with a channel to the recipient."],["RouteHintHop",""]]};
+window.SIDEBAR_ITEMS = {"struct":["RouteHint","RouteHintHop"]};

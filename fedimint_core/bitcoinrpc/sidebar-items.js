@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["FM_BITCOIND_COOKIE_FILE_VAR_NAME","Env var that can be set to point at the bitcoind’s cookie file to use for auth"],["FM_BITCOIN_RPC_KIND","Env var for bitcoin RPC kind"],["FM_BITCOIN_RPC_URL","Env var for bitcoin URL"]],"struct":[["BitcoinRpcConfig","Configuration for the bitcoin RPC"]]};
+window.SIDEBAR_ITEMS = {"constant":["FM_BITCOIND_COOKIE_FILE_VAR_NAME","FM_BITCOIN_RPC_KIND","FM_BITCOIN_RPC_URL"],"struct":["BitcoinRpcConfig"]};

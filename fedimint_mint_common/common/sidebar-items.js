@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["BackupRequest",""],["SignedBackupRequest",""]]};
+window.SIDEBAR_ITEMS = {"struct":["BackupRequest","SignedBackupRequest"]};

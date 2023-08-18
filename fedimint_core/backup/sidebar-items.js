@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["ClientBackupKey","Key used to store user’s ecash backups"],["ClientBackupKeyPrefix",""],["ClientBackupSnapshot","User’s backup, received at certain time, containing encrypted payload"]]};
+window.SIDEBAR_ITEMS = {"struct":["ClientBackupKey","ClientBackupKeyPrefix","ClientBackupSnapshot"]};

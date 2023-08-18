@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["UpdateStreamOrOutcome","Either a stream of operation updates if the operation hasn’t finished yet or its outcome otherwise."]],"fn":[["caching_operation_update_stream","Wraps an operation update stream such that the last update before it closes is tried to be written to the operation log entry as its outcome."]],"struct":[["OperationLog",""],["OperationLogEntry",""]]};
+window.SIDEBAR_ITEMS = {"enum":["UpdateStreamOrOutcome"],"fn":["caching_operation_update_stream"],"struct":["OperationLog","OperationLogEntry"]};

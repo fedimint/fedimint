@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":[["DummyFederationApi",""]]};
+window.SIDEBAR_ITEMS = {"trait":["DummyFederationApi"]};

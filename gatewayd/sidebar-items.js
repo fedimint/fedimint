@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["main","Fedimint Gateway Binary"]]};
+window.SIDEBAR_ITEMS = {"fn":["main"]};

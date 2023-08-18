@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["TransactionBuilderBalance",""]],"fn":[["state_gen_to_dyn",""]],"struct":[["ClientInput",""],["ClientOutput",""],["TransactionBuilder",""]]};
+window.SIDEBAR_ITEMS = {"enum":["TransactionBuilderBalance"],"fn":["state_gen_to_dyn"],"struct":["ClientInput","ClientOutput","TransactionBuilder"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["recovery",""]],"struct":[["EcashBackup","Snapshot of a ecash state (notes)"]]};
+window.SIDEBAR_ITEMS = {"mod":["recovery"],"struct":["EcashBackup"]};

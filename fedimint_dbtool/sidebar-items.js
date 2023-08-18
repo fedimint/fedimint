@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["DbCommand","Tool to inspect and manipulate rocksdb databases. All binary arguments (keys, values) have to be hex encoded."]],"fn":[["hex_parser",""],["main",""],["print_kv",""]],"mod":[["dump",""]],"struct":[["Options",""]]};
+window.SIDEBAR_ITEMS = {"enum":["DbCommand"],"fn":["hex_parser","main","print_kv"],"mod":["dump"],"struct":["Options"]};

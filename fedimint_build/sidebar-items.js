@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["FORCE_GIT_HASH_ENV","Env variable to set to force git hash during build process"],["GIT_HASH_ENV","Env variable the cargo will set during crate build to pass the detected git hash to the binary itself."]],"fn":[["set_code_version",""],["set_code_version_inner",""]]};
+window.SIDEBAR_ITEMS = {"constant":["FORCE_GIT_HASH_ENV","GIT_HASH_ENV"],"fn":["set_code_version","set_code_version_inner"]};

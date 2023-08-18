@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["next_prefix",""]],"struct":[["RocksDb",""],["RocksDbReadOnly",""],["RocksDbTransaction",""]]};
+window.SIDEBAR_ITEMS = {"fn":["next_prefix"],"struct":["RocksDb","RocksDbReadOnly","RocksDbTransaction"]};

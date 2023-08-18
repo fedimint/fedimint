@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["address","Generate deposit address"],["backup","Backup a gateway actor state"],["balance","Display gateway ecash note balance"],["connect_fed","Connect a new federation"],["info","Display high-level information about the Gateway"],["pay_invoice",""],["restore",""],["run_webserver",""],["withdraw","Withdraw from a gateway federation."]]};
+window.SIDEBAR_ITEMS = {"fn":["address","backup","balance","connect_fed","info","pay_invoice","restore","run_webserver","withdraw"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["InvalidAmountTierError",""],["Tiered",""]]};
+window.SIDEBAR_ITEMS = {"struct":["InvalidAmountTierError","Tiered"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["TransactionError",""]],"fn":[["agg_keys","Aggregate a stream of public keys."],["agg_sign","Create an aggregated signature over the `msg`"],["new_pre_session","Precompute a combined public key and the hash of the given public keys for Musig2."]],"struct":[["Transaction","An atomic value transfer operation within the Fedimint system and consensus"]],"type":[["SerdeTransaction",""]]};
+window.SIDEBAR_ITEMS = {"enum":["TransactionError"],"fn":["agg_keys","agg_sign","new_pre_session"],"struct":["Transaction"],"type":["SerdeTransaction"]};

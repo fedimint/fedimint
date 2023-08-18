@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":[["LnFederationApi",""]]};
+window.SIDEBAR_ITEMS = {"trait":["LnFederationApi"]};

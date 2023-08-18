@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["TxOutProof",""]]};
+window.SIDEBAR_ITEMS = {"struct":["TxOutProof"]};

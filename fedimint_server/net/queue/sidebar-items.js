@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["MessageId",""],["MessageQueue",""],["UniqueMessage",""]]};
+window.SIDEBAR_ITEMS = {"struct":["MessageId","MessageQueue","UniqueMessage"]};

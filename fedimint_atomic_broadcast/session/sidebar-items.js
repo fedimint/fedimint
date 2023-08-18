@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["run","this function completes a session with the following steps:"]]};
+window.SIDEBAR_ITEMS = {"fn":["run"]};

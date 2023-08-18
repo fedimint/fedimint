@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["FinalizationHandler",""]]};
+window.SIDEBAR_ITEMS = {"struct":["FinalizationHandler"]};

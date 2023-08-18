@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["GatewayLightningClient","GatewayLightning is a service that provides limited access and functionality from a lightning node to Fedimint gateways"]]};
+window.SIDEBAR_ITEMS = {"struct":["GatewayLightningClient"]};
