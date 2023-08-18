@@ -496,6 +496,8 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fs;
 
@@ -674,13 +676,14 @@
         <span class="macro">cmd!</span>(<span class="string">&quot;fedimint-cli&quot;</span>, <span class="string">&quot;--data-dir={cfg_dir}&quot;</span>)
     }
 
-    <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">info!</span>(amount, <span class="string">&quot;Peg-in&quot;</span>);
         <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit_address = deposit[<span class="string">&quot;address&quot;</span>].as_str().unwrap();
         <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">&quot;operation_id&quot;</span>].as_str().unwrap();
 
         <span class="self">self</span>.bitcoind
-            .send_to(deposit_address.to_owned(), amt)
+            .send_to(deposit_address.to_owned(), amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">100</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -690,24 +693,25 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: u64, gw_cln: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in gateway funds&quot;</span>);
         <span class="kw">let </span>fed_id = <span class="self">self</span>.federation_id().<span class="kw">await</span>;
-        <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw_cln, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+        <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.as_str()
             .context(<span class="string">&quot;address must be a string&quot;</span>)<span class="question-mark">?
             </span>.to_owned();
-        <span class="self">self</span>.bitcoind.send_to(pegin_addr, amt).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.bitcoind.send_to(pegin_addr, amount).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         poll(<span class="string">&quot;gateway pegin&quot;</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw_cln, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
+            <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
                 .out_json()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.as_u64()
                 .unwrap();
 
-            <span class="prelude-val">Ok</span>(gateway_balance == (amt * <span class="number">1000</span>))
+            <span class="prelude-val">Ok</span>(gateway_balance == (amount * <span class="number">1000</span>))
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
