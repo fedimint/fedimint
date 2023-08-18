@@ -13,7 +13,7 @@ use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
 use miniscript::ToPublicKey;
 use secp256k1::KeyPair;
-use tracing::{trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
 use crate::api::WalletFederationApi;
 use crate::{WalletClientContext, WalletClientStates};
@@ -182,6 +182,7 @@ async fn transition_deposit_timeout(old_state: DepositStateMachine) -> DepositSt
     }
 }
 
+#[instrument(skip_all, level = "debug")]
 async fn await_btc_transaction_confirmed(
     context: WalletClientContext,
     global_context: DynGlobalClientContext,
@@ -202,6 +203,7 @@ async fn await_btc_transaction_confirmed(
                 continue;
             }
         };
+        debug!(consensus_height, "Fetched consensus height");
 
         let confirmation_height = match context
             .rpc
@@ -215,6 +217,8 @@ async fn await_btc_transaction_confirmed(
                 continue;
             }
         };
+
+        debug!(?confirmation_height, "Fetched confirmation height");
 
         if !confirmation_height
             .map(|confirmation_height| consensus_height >= confirmation_height)
@@ -238,6 +242,8 @@ async fn await_btc_transaction_confirmed(
                 continue;
             }
         };
+
+        debug!(proof_block_hash = ?txout_proof.block_header.block_hash(), "Generated merkle proof");
 
         return txout_proof;
     }
