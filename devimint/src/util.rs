@@ -2,7 +2,8 @@ use std::ffi::OsStr;
 use std::unreachable;
 
 use anyhow::bail;
-use fedimint_core::task;
+use fedimint_core::task::{self, block_in_place};
+use futures::executor::block_on;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
@@ -12,16 +13,17 @@ use tracing::{debug, warn};
 use super::*;
 
 fn send_sigterm(child: &Child) {
-    let _ = nix::sys::signal::kill(
-        nix::unistd::Pid::from_raw(child.id().expect("pid should be present") as _),
-        nix::sys::signal::Signal::SIGTERM,
-    );
+    send_signal(child, nix::sys::signal::Signal::SIGTERM);
 }
 
 fn send_sigkill(child: &Child) {
+    send_signal(child, nix::sys::signal::Signal::SIGKILL);
+}
+
+fn send_signal(child: &Child, signal: nix::sys::signal::Signal) {
     let _ = nix::sys::signal::kill(
         nix::unistd::Pid::from_raw(child.id().expect("pid should be present") as _),
-        nix::sys::signal::Signal::SIGKILL,
+        signal,
     );
 }
 
@@ -55,8 +57,19 @@ impl Drop for ProcessHandleInner {
         let Some(child) = &mut self.child else {
             return;
         };
-        info!(LOG_DEVIMINT, "sending SIGKILL to {}", self.name);
-        send_sigkill(child);
+        let name = self.name.clone();
+        block_in_place(move || {
+            block_on(async move {
+                info!(
+                    LOG_DEVIMINT,
+                    "sending SIGKILL to {name} and waiting for it to exit"
+                );
+                send_sigkill(child);
+                if let Err(e) = child.wait().await {
+                    warn!(LOG_DEVIMINT, "failed to wait for {name}: {e:?}");
+                }
+            })
+        })
     }
 }
 
