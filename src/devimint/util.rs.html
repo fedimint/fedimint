@@ -331,11 +331,25 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::unreachable;
 
 <span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>fedimint_core::task;
+<span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
+<span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::process::Child;
@@ -345,16 +359,17 @@
 <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
 <span class="kw">fn </span>send_sigterm(child: <span class="kw-2">&amp;</span>Child) {
-    <span class="kw">let _ </span>= nix::sys::signal::kill(
-        nix::unistd::Pid::from_raw(child.id().expect(<span class="string">&quot;pid should be present&quot;</span>) <span class="kw">as _</span>),
-        nix::sys::signal::Signal::SIGTERM,
-    );
+    send_signal(child, nix::sys::signal::Signal::SIGTERM);
 }
 
 <span class="kw">fn </span>send_sigkill(child: <span class="kw-2">&amp;</span>Child) {
+    send_signal(child, nix::sys::signal::Signal::SIGKILL);
+}
+
+<span class="kw">fn </span>send_signal(child: <span class="kw-2">&amp;</span>Child, signal: nix::sys::signal::Signal) {
     <span class="kw">let _ </span>= nix::sys::signal::kill(
         nix::unistd::Pid::from_raw(child.id().expect(<span class="string">&quot;pid should be present&quot;</span>) <span class="kw">as _</span>),
-        nix::sys::signal::Signal::SIGKILL,
+        signal,
     );
 }
 
@@ -388,8 +403,19 @@
         <span class="kw">let </span><span class="prelude-val">Some</span>(child) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.child <span class="kw">else </span>{
             <span class="kw">return</span>;
         };
-        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;sending SIGKILL to {}&quot;</span>, <span class="self">self</span>.name);
-        send_sigkill(child);
+        <span class="kw">let </span>name = <span class="self">self</span>.name.clone();
+        block_in_place(<span class="kw">move </span>|| {
+            block_on(<span class="kw">async move </span>{
+                <span class="macro">info!</span>(
+                    LOG_DEVIMINT,
+                    <span class="string">&quot;sending SIGKILL to {name} and waiting for it to exit&quot;
+                </span>);
+                send_sigkill(child);
+                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = child.wait().<span class="kw">await </span>{
+                    <span class="macro">warn!</span>(LOG_DEVIMINT, <span class="string">&quot;failed to wait for {name}: {e:?}&quot;</span>);
+                }
+            })
+        })
     }
 }
 
