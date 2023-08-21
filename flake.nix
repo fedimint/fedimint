@@ -106,6 +106,7 @@
               inherit name;
 
               dontUnpack = true;
+              dontStrip = true;
 
               installPhase = ''
                 cp -a ${package} $out
@@ -132,6 +133,7 @@
               name = bin;
 
               dontUnpack = true;
+              dontStrip = true;
 
               installPhase = ''
                 mkdir -p $out/bin
