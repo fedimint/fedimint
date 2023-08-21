@@ -606,12 +606,17 @@ impl ServerModule for Mint {
 
     async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
         audit
-            .add_items(dbtx, &MintAuditItemKeyPrefix, |k, v| match k {
-                MintAuditItemKey::Issuance(_) => -(v.msats as i64),
-                MintAuditItemKey::IssuanceTotal => -(v.msats as i64),
-                MintAuditItemKey::Redemption(_) => v.msats as i64,
-                MintAuditItemKey::RedemptionTotal => v.msats as i64,
-            })
+            .add_items(
+                dbtx,
+                common::KIND.as_str(),
+                &MintAuditItemKeyPrefix,
+                |k, v| match k {
+                    MintAuditItemKey::Issuance(_) => -(v.msats as i64),
+                    MintAuditItemKey::IssuanceTotal => -(v.msats as i64),
+                    MintAuditItemKey::Redemption(_) => v.msats as i64,
+                    MintAuditItemKey::RedemptionTotal => v.msats as i64,
+                },
+            )
             .await;
     }
 

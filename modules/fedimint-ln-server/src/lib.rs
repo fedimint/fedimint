@@ -821,7 +821,9 @@ impl ServerModule for Lightning {
 
     async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
         audit
-            .add_items(dbtx, &ContractKeyPrefix, |_, v| -(v.amount.msats as i64))
+            .add_items(dbtx, common::KIND.as_str(), &ContractKeyPrefix, |_, v| {
+                -(v.amount.msats as i64)
+            })
             .await;
     }
 

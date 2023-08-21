@@ -380,6 +380,9 @@ enum AdminCmd {
 
     /// Signal a consensus upgrade
     SignalUpgrade,
+
+    /// Show an audit across all modules
+    Audit,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -567,6 +570,21 @@ impl FedimintCli {
                     client::handle_ng_command(command, config, client)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
+                ))
+            }
+            Command::Admin(AdminCmd::Audit) => {
+                let user = cli
+                    .build_client_ng(&self.module_gens, None)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+
+                let audit = cli
+                    .admin_client(user.get_config())?
+                    .audit(cli.auth()?)
+                    .await?;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(audit)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
             }
             Command::Admin(AdminCmd::Status) => {

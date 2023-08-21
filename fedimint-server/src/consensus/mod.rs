@@ -201,7 +201,7 @@ impl FedimintConsensus {
 
         let audit = self.audit().await;
 
-        if audit.sum().milli_sat < 0 {
+        if audit.net_assets().milli_sat < 0 {
             panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
         }
 

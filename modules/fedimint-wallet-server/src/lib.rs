@@ -571,20 +571,33 @@ impl ServerModule for Wallet {
     }
 
     async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
+        let module_name = common::KIND.as_str().to_string();
         audit
-            .add_items(dbtx, &UTXOPrefixKey, |_, v| v.amount.to_sat() as i64 * 1000)
-            .await;
-        audit
-            .add_items(dbtx, &UnsignedTransactionPrefixKey, |_, v| match v.rbf {
-                None => v.change.to_sat() as i64 * 1000,
-                Some(rbf) => rbf.fees.amount().to_sat() as i64 * -1000,
+            .add_items(dbtx, &module_name, &UTXOPrefixKey, |_, v| {
+                v.amount.to_sat() as i64 * 1000
             })
             .await;
         audit
-            .add_items(dbtx, &PendingTransactionPrefixKey, |_, v| match v.rbf {
-                None => v.change.to_sat() as i64 * 1000,
-                Some(rbf) => rbf.fees.amount().to_sat() as i64 * -1000,
-            })
+            .add_items(
+                dbtx,
+                &module_name,
+                &UnsignedTransactionPrefixKey,
+                |_, v| match v.rbf {
+                    None => v.change.to_sat() as i64 * 1000,
+                    Some(rbf) => rbf.fees.amount().to_sat() as i64 * -1000,
+                },
+            )
+            .await;
+        audit
+            .add_items(
+                dbtx,
+                &module_name,
+                &PendingTransactionPrefixKey,
+                |_, v| match v.rbf {
+                    None => v.change.to_sat() as i64 * 1000,
+                    Some(rbf) => rbf.fees.amount().to_sat() as i64 * -1000,
+                },
+            )
             .await;
     }
 
