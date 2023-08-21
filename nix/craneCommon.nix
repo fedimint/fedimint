@@ -130,6 +130,11 @@ craneLib.overrideScope' (self: prev: {
       which
     ];
 
+    # we carefully optimize our debug symbols on cargo level,
+    # and in case of errors and panics, would like to see the
+    # line numbers etc.
+    dontStrip = true;
+
 
     # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
     installCargoArtifactsMode = "use-zstd";
