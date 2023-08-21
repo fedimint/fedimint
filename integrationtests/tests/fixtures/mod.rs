@@ -783,7 +783,7 @@ impl FederationTest {
             for (i, server) in self.servers.iter().enumerate() {
                 let server = server.clone();
                 task_group
-                    .spawn(format!("server-{i}-consensu_epoch"), move |_| async {
+                    .spawn(format!("server-{i}-consensus_epoch"), move |_| async {
                         Self::consensus_epoch(server, Duration::from_millis(0)).await
                     })
                     .await;
@@ -962,7 +962,7 @@ impl FederationTest {
             info!("\n{}", audit);
             let bs = std::cmp::max(
                 self.max_balance_sheet.load(Ordering::SeqCst),
-                audit.sum().milli_sat,
+                audit.net_assets().milli_sat,
             );
             self.max_balance_sheet.store(bs, Ordering::SeqCst);
             *last_consensus = new_consensus;

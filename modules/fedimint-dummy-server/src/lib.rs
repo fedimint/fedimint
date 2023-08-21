@@ -24,7 +24,7 @@ use fedimint_dummy_common::config::{
 };
 use fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
-    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION, KIND,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::{FutureExt, StreamExt};
@@ -410,7 +410,7 @@ impl ServerModule for Dummy {
 
     async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
         audit
-            .add_items(dbtx, &DummyFundsPrefixV1, |k, v| match k {
+            .add_items(dbtx, KIND.as_str(), &DummyFundsPrefixV1, |k, v| match k {
                 // the fed's test account is considered an asset (positive)
                 // should be the bitcoin we own in a real module
                 DummyFundsKeyV1(key) if key == fed_public_key() => v.msats as i64,
