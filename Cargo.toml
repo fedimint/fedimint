@@ -85,6 +85,9 @@ threshold_crypto = { opt-level = 3 }
 inherits = "dev"
 debug = "line-tables-only"
 
+[profile.release]
+debug = "line-tables-only"
+
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
 ring = { git = "https://github.com/dpc/ring", rev = "5493e7e76d0d8fb1d3cbb0be9c4944700741b802" }
