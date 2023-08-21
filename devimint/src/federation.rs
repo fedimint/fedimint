@@ -110,12 +110,14 @@ impl Federation {
             format!("{out_dir}/invite-code"),
             format!("{cfg_dir}/invite-code"),
         )
-        .await?;
+        .await
+        .context("moving invite code file")?;
         tokio::fs::rename(
             format!("{out_dir}/client.json"),
             format!("{cfg_dir}/client.json"),
         )
-        .await?;
+        .await
+        .context("moving client.json")?;
         info!("copied client configs");
 
         Ok(Self {
