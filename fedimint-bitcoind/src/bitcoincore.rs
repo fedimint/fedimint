@@ -50,7 +50,10 @@ impl IBitcoindRpc for BitcoinClient {
     }
 
     async fn get_block_count(&self) -> anyhow::Result<u64> {
-        block_in_place(|| self.0.get_block_count()).map_err(anyhow::Error::from)
+        // The RPC function is confusingly named and actually returns the block height
+        block_in_place(|| self.0.get_block_count())
+            .map(|height| height + 1)
+            .map_err(anyhow::Error::from)
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
