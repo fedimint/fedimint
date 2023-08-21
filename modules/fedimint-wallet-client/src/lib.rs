@@ -7,7 +7,7 @@ mod withdraw;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use bitcoin::{Address, Network};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -80,6 +80,12 @@ pub trait WalletClientExt {
         amount: bitcoin::Amount,
         fee: PegOutFees,
     ) -> anyhow::Result<OperationId>;
+
+    /// Attempt to increase the fee of a onchain withdraw transaction using
+    /// replace by fee (RBF).
+    /// This can prevent transactions from getting stuck
+    /// in the mempool
+    async fn rbf_withdraw(&self, rbf: Rbf) -> anyhow::Result<OperationId>;
 
     async fn subscribe_withdraw_updates(
         &self,
@@ -176,7 +182,7 @@ impl WalletClientExt for Client {
             .operation_log()
             .get_operation(operation_id)
             .await
-            .ok_or(anyhow!("Operation not found"))?;
+            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
 
         if operation_log_entry.operation_type() != WalletCommonGen::KIND.as_str() {
             bail!("Operation is not a wallet operation");
@@ -288,6 +294,32 @@ impl WalletClientExt for Client {
         Ok(operation_id)
     }
 
+    async fn rbf_withdraw(&self, rbf: Rbf) -> anyhow::Result<OperationId> {
+        let (wallet_client, instance) =
+            self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
+
+        let operation_id = OperationId(thread_rng().gen());
+
+        let withdraw_output = wallet_client
+            .create_rbf_withdraw_output(operation_id, rbf.clone())
+            .await?;
+        let tx_builder =
+            TransactionBuilder::new().with_output(withdraw_output.into_dyn(instance.id));
+
+        self.finalize_and_submit_transaction(
+            operation_id,
+            WalletCommonGen::KIND.as_str(),
+            move |_, change| WalletOperationMeta::RbfWithdraw {
+                rbf: rbf.clone(),
+                change,
+            },
+            tx_builder,
+        )
+        .await?;
+
+        Ok(operation_id)
+    }
+
     async fn subscribe_withdraw_updates(
         &self,
         operation_id: OperationId,
@@ -299,7 +331,7 @@ impl WalletClientExt for Client {
             .operation_log()
             .get_operation(operation_id)
             .await
-            .ok_or(anyhow!("Operation not found"))?;
+            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
 
         if operation.operation_type() != WalletCommonGen::KIND.as_str() {
             bail!("Operation is not a wallet operation");
@@ -307,7 +339,9 @@ impl WalletClientExt for Client {
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
-        let WalletOperationMeta::Withdraw { change, .. } = operation_meta else {
+        let (WalletOperationMeta::Withdraw { change, .. }
+        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
+        else {
             bail!("Operation is not a withdraw operation");
         };
 
@@ -436,6 +470,11 @@ pub enum WalletOperationMeta {
         fee: PegOutFees,
         change: Option<OutPoint>,
     },
+
+    RbfWithdraw {
+        rbf: Rbf,
+        change: Option<OutPoint>,
+    },
 }
 
 #[derive(Debug)]
@@ -537,7 +576,7 @@ impl WalletClientModule {
         self.module_api
             .fetch_peg_out_fees(&address, amount)
             .await?
-            .ok_or(anyhow!("Federation didn't return peg-out fees"))
+            .context("Federation didn't return peg-out fees")
     }
 
     pub async fn create_withdraw_output(
@@ -554,6 +593,28 @@ impl WalletClientModule {
             amount,
             fees,
         });
+
+        let sm_gen = move |txid, out_idx| {
+            vec![WalletClientStates::Withdraw(WithdrawStateMachine {
+                operation_id,
+                state: WithdrawStates::Created(CreatedWithdrawState {
+                    fm_outpoint: OutPoint { txid, out_idx },
+                }),
+            })]
+        };
+
+        Ok(ClientOutput::<WalletOutput, WalletClientStates> {
+            output,
+            state_machines: Arc::new(sm_gen),
+        })
+    }
+
+    pub async fn create_rbf_withdraw_output(
+        &self,
+        operation_id: OperationId,
+        rbf: Rbf,
+    ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
+        let output = WalletOutput::Rbf(rbf);
 
         let sm_gen = move |txid, out_idx| {
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {

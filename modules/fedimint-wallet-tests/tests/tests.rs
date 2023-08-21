@@ -1,5 +1,6 @@
 use std::time::{Duration, SystemTime};
 
+use anyhow::bail;
 use fedimint_client::Client;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{sats, Amount, Feerate};
@@ -10,7 +11,7 @@ use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::{DepositState, WalletClientExt, WalletClientGen, WithdrawState};
 use fedimint_wallet_common::config::WalletGenParams;
-use fedimint_wallet_common::PegOutFees;
+use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletGen;
 use futures::stream::StreamExt;
 
@@ -87,7 +88,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, WithdrawState::Created);
     let txid = match sub.ok().await? {
         WithdrawState::Succeeded(txid) => txid,
-        _ => panic!("Unexpected state"),
+        other => panic!("Unexpected state: {other:?}"),
     };
     bitcoin.get_mempool_tx_fee(&txid).await;
 
@@ -131,5 +132,67 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     assert_eq!(balance_sub.next().await.unwrap(), sats(PEG_IN_AMOUNT_SATS));
     assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_outs_support_rbf() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    // Need lock to keep tx in mempool from getting mined
+    let bitcoin = bitcoin.lock_exclusive().await;
+
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+
+    let address = bitcoin.get_new_address().await;
+    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
+    let fees = client.get_withdraw_fee(address.clone(), peg_out).await?;
+    let op = client.withdraw(address.clone(), peg_out, fees).await?;
+
+    let sub = client.subscribe_withdraw_updates(op).await?;
+    let mut sub = sub.into_stream();
+    assert_eq!(sub.ok().await?, WithdrawState::Created);
+    let state = sub.ok().await?;
+    let WithdrawState::Succeeded(txid) = state else {
+        bail!("Unexpected state: {state:?}")
+    };
+    assert_eq!(
+        bitcoin.get_mempool_tx_fee(&txid).await,
+        fees.amount().into()
+    );
+    let balance_after_normal_peg_out =
+        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
+    assert_eq!(client.get_balance().await, balance_after_normal_peg_out);
+    assert_eq!(balance_sub.ok().await?, balance_after_normal_peg_out);
+
+    // RBF by increasing sats per kvb by 1000
+    let rbf = Rbf {
+        fees: PegOutFees::new(1000, fees.total_weight),
+        txid,
+    };
+    let op = client.rbf_withdraw(rbf.clone()).await?;
+    let sub = client.subscribe_withdraw_updates(op).await?;
+    let mut sub = sub.into_stream();
+    assert_eq!(sub.ok().await?, WithdrawState::Created);
+    let txid = match sub.ok().await? {
+        WithdrawState::Succeeded(txid) => txid,
+        other => panic!("Unexpected state: {other:?}"),
+    };
+    let total_fees = fees.amount() + rbf.fees.amount();
+    assert_eq!(bitcoin.get_mempool_tx_fee(&txid).await, total_fees.into());
+    assert_eq!(
+        bitcoin.mine_block_and_get_received(&address).await,
+        sats(PEG_OUT_AMOUNT_SATS)
+    );
+
+    let balance_after_rbf_peg_out =
+        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - total_fees.to_sat());
+    assert_eq!(client.get_balance().await, balance_after_rbf_peg_out);
+    assert_eq!(balance_sub.ok().await?, balance_after_rbf_peg_out);
     Ok(())
 }
