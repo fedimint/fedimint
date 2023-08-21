@@ -391,7 +391,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
                 TransactionBuilder::new().with_input(instance_input),
             )
             .await
-            .expect("Can obly fail if additional funding is needed")
+            .expect("Can only fail if additional funding is needed")
     }
 
     async fn fund_output_dyn(

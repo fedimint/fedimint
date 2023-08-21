@@ -321,12 +321,18 @@ impl ServerModule for Wallet {
             .collect::<Vec<WalletConsensusItem>>()
             .await;
 
-        let block_count_proposal = self
-            .block_count()
-            .await
-            .saturating_sub(self.cfg.consensus.finality_delay);
+        let block_count = self.block_count().await;
+        let block_count_proposal = block_count.saturating_sub(self.cfg.consensus.finality_delay);
+        let consensus_block_count = self.consensus_block_count(dbtx).await;
 
-        if block_count_proposal != self.consensus_block_count(dbtx).await {
+        debug!(
+            ?block_count_proposal,
+            ?block_count,
+            ?consensus_block_count,
+            "Considering proposing block count"
+        );
+
+        if Some(block_count_proposal) != consensus_block_count {
             items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
@@ -355,10 +361,16 @@ impl ServerModule for Wallet {
                     .unwrap_or(0);
 
                 if block_count < current_vote {
+                    debug!(?peer_id, ?block_count, "Received outdated block count vote");
                     bail!("Block count vote decreased");
                 }
 
                 if block_count == current_vote {
+                    debug!(
+                        ?peer_id,
+                        ?block_count,
+                        "Received redundant block count vote"
+                    );
                     bail!("Block height vote is redundant");
                 }
 
@@ -369,14 +381,21 @@ impl ServerModule for Wallet {
 
                 let new_consensus_block_count = self.consensus_block_count(dbtx).await;
 
-                // only sync from the first non-default consensus block count
-                if new_consensus_block_count > old_consensus_block_count {
-                    self.sync_up_to_consensus_height(
-                        dbtx,
-                        old_consensus_block_count,
-                        new_consensus_block_count,
-                    )
-                    .await;
+                debug!(
+                    ?peer_id,
+                    ?current_vote,
+                    ?block_count,
+                    ?old_consensus_block_count,
+                    ?new_consensus_block_count,
+                    "Received block count vote"
+                );
+
+                // only sync when we have a consensus block count
+                match (old_consensus_block_count, new_consensus_block_count) {
+                    (Some(old), Some(new)) if new > old => {
+                        self.sync_up_to_consensus_height(dbtx, old, new).await;
+                    }
+                    _ => {}
                 }
             }
             WalletConsensusItem::Feerate(feerate) => {
@@ -574,7 +593,8 @@ impl ServerModule for Wallet {
             api_endpoint! {
                 "block_count",
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    Ok(module.consensus_block_count(&mut context.dbtx()).await)
+                    // TODO: perhaps change this to an Option
+                    Ok(module.consensus_block_count(&mut context.dbtx()).await.unwrap_or_default())
                 }
             },
             api_endpoint! {
@@ -795,20 +815,22 @@ impl Wallet {
             .unwrap_or(self.cfg.consensus.default_fee)
     }
 
-    pub async fn consensus_block_count(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u32 {
+    pub async fn consensus_block_count(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> Option<u32> {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
 
         let mut counts = dbtx
             .find_by_prefix(&BlockCountVotePrefix)
             .await
-            .map(|(.., count)| count)
+            .map(|(.., count)| Some(count))
             .collect::<Vec<_>>()
             .await;
 
         assert!(counts.len() <= peer_count);
-
         while counts.len() < peer_count {
-            counts.push(0);
+            counts.push(None);
         }
 
         counts.sort_unstable();
