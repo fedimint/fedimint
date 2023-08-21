@@ -634,6 +634,67 @@
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
 <a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>db;
@@ -643,7 +704,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, ensure};
+<span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as </span>AnyhowContext};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -716,6 +777,12 @@
         amount: bitcoin::Amount,
         fee: PegOutFees,
     ) -&gt; anyhow::Result&lt;OperationId&gt;;
+
+    <span class="doccomment">/// Attempt to increase the fee of a onchain withdraw transaction using
+    /// replace by fee (RBF).
+    /// This can prevent transactions from getting stuck
+    /// in the mempool
+    </span><span class="kw">async fn </span>rbf_withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, rbf: Rbf) -&gt; anyhow::Result&lt;OperationId&gt;;
 
     <span class="kw">async fn </span>subscribe_withdraw_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -812,7 +879,7 @@
             </span>.operation_log()
             .get_operation(operation_id)
             .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>operation_log_entry.operation_type() != WalletCommonGen::KIND.as_str() {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
@@ -924,6 +991,32 @@
         <span class="prelude-val">Ok</span>(operation_id)
     }
 
+    <span class="kw">async fn </span>rbf_withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, rbf: Rbf) -&gt; anyhow::Result&lt;OperationId&gt; {
+        <span class="kw">let </span>(wallet_client, instance) =
+            <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>WalletCommonGen::KIND);
+
+        <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
+
+        <span class="kw">let </span>withdraw_output = wallet_client
+            .create_rbf_withdraw_output(operation_id, rbf.clone())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>tx_builder =
+            TransactionBuilder::new().with_output(withdraw_output.into_dyn(instance.id));
+
+        <span class="self">self</span>.finalize_and_submit_transaction(
+            operation_id,
+            WalletCommonGen::KIND.as_str(),
+            <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta::RbfWithdraw {
+                rbf: rbf.clone(),
+                change,
+            },
+            tx_builder,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(operation_id)
+    }
+
     <span class="kw">async fn </span>subscribe_withdraw_updates(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
@@ -935,7 +1028,7 @@
             </span>.operation_log()
             .get_operation(operation_id)
             .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>operation.operation_type() != WalletCommonGen::KIND.as_str() {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
@@ -943,7 +1036,9 @@
 
         <span class="kw">let </span>operation_meta = operation.meta::&lt;WalletOperationMeta&gt;();
 
-        <span class="kw">let </span>WalletOperationMeta::Withdraw { change, .. } = operation_meta <span class="kw">else </span>{
+        <span class="kw">let </span>(WalletOperationMeta::Withdraw { change, .. }
+        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
+        <span class="kw">else </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a withdraw operation&quot;</span>);
         };
 
@@ -1072,6 +1167,11 @@
         fee: PegOutFees,
         change: <span class="prelude-ty">Option</span>&lt;OutPoint&gt;,
     },
+
+    RbfWithdraw {
+        rbf: Rbf,
+        change: <span class="prelude-ty">Option</span>&lt;OutPoint&gt;,
+    },
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1173,7 +1273,7 @@
         <span class="self">self</span>.module_api
             .fetch_peg_out_fees(<span class="kw-2">&amp;</span>address, amount)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Federation didn&#39;t return peg-out fees&quot;</span>))
+            </span>.context(<span class="string">&quot;Federation didn&#39;t return peg-out fees&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>create_withdraw_output(
@@ -1190,6 +1290,28 @@
             amount,
             fees,
         });
+
+        <span class="kw">let </span>sm_gen = <span class="kw">move </span>|txid, out_idx| {
+            <span class="macro">vec!</span>[WalletClientStates::Withdraw(WithdrawStateMachine {
+                operation_id,
+                state: WithdrawStates::Created(CreatedWithdrawState {
+                    fm_outpoint: OutPoint { txid, out_idx },
+                }),
+            })]
+        };
+
+        <span class="prelude-val">Ok</span>(ClientOutput::&lt;WalletOutput, WalletClientStates&gt; {
+            output,
+            state_machines: Arc::new(sm_gen),
+        })
+    }
+
+    <span class="kw">pub async fn </span>create_rbf_withdraw_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        rbf: Rbf,
+    ) -&gt; anyhow::Result&lt;ClientOutput&lt;WalletOutput, WalletClientStates&gt;&gt; {
+        <span class="kw">let </span>output = WalletOutput::Rbf(rbf);
 
         <span class="kw">let </span>sm_gen = <span class="kw">move </span>|txid, out_idx| {
             <span class="macro">vec!</span>[WalletClientStates::Withdraw(WithdrawStateMachine {
