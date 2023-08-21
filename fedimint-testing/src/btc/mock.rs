@@ -22,6 +22,7 @@ use fedimint_core::task::{sleep, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{Amount, Feerate};
 use rand::rngs::OsRng;
+use tracing::debug;
 use url::Url;
 
 use super::BitcoinTest;
@@ -102,6 +103,11 @@ impl FakeBitcoinTest {
     }
 
     fn mine_block(blocks: &mut Vec<Block>, pending: &mut Vec<Transaction>) {
+        debug!(
+            "Mining block: {} transactions, {} blocks",
+            pending.len(),
+            blocks.len()
+        );
         let root = BlockHash::hash(&[0]);
         // all blocks need at least one transaction
         if pending.is_empty() {

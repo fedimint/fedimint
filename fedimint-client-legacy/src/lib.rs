@@ -739,7 +739,9 @@ impl<T: AsRef<ClientConfig> + Clone + MaybeSend> Client<T> {
 
     async fn await_consensus_block_count_inner(&self, requested_count: u64) -> u64 {
         loop {
-            match self.context.api.fetch_consensus_block_count().await {
+            let current_count = self.context.api.fetch_consensus_block_count().await;
+            debug!(target: LOG_WALLET, "awaiting consensus block count: {:?}/{}", current_count, requested_count);
+            match current_count {
                 Ok(current_count) if requested_count <= current_count => return current_count,
                 _ => sleep(Duration::from_millis(100)).await,
             }

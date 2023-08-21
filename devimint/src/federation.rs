@@ -180,6 +180,8 @@ impl Federation {
 
     pub async fn pegin(&self, amount: u64) -> Result<()> {
         info!(amount, "Peg-in");
+        // Some blocks must always be mined first before pegin
+        self.await_minimum_blocks().await?;
         let deposit = cmd!(self, "deposit-address").out_json().await?;
         let deposit_address = deposit["address"].as_str().unwrap();
         let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
@@ -197,6 +199,8 @@ impl Federation {
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
+        // Some blocks must always be mined first before pegin
+        self.await_minimum_blocks().await?;
         let fed_id = self.federation_id().await;
         let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
             .out_json()
@@ -229,19 +233,30 @@ impl Federation {
             .to_string()
     }
 
-    pub async fn await_block_sync(&self) -> Result<()> {
-        let client = self.client().await?;
+    pub async fn await_block_sync(&self) -> Result<u64> {
+        let finality_delay = self.get_finality_delay().await?;
+        let bitcoind_block_count = self.bitcoind.client().get_blockchain_info()?.blocks;
+        let expected = bitcoind_block_count.saturating_sub(finality_delay.into());
+        cmd!(self, "dev", "wait-block-count", expected)
+            .run()
+            .await?;
+        Ok(expected)
+    }
+
+    pub async fn await_minimum_blocks(&self) -> Result<()> {
+        // TODO: optimize this
+        self.generate_epochs(1).await?;
+        Ok(())
+    }
+
+    async fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
+        let client: fedimint_client_legacy::Client<UserClientConfig> = self.client().await?;
         let wallet_cfg: &WalletClientConfig = client
             .config_ref()
             .0
             .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)?;
         let finality_delay = wallet_cfg.finality_delay;
-        let bitcoind_block_count = self.bitcoind.client().get_blockchain_info()?.blocks;
-        let expected = bitcoind_block_count - (finality_delay as u64);
-        cmd!(self, "dev", "wait-block-count", expected)
-            .run()
-            .await?;
-        Ok(())
+        Ok(finality_delay)
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
@@ -281,8 +296,9 @@ impl Federation {
     }
 
     pub async fn generate_epochs(&self, epochs: usize) -> Result<()> {
+        let finality_delay = self.get_finality_delay().await?;
         for _ in 0..epochs {
-            self.bitcoind.mine_blocks(10).await?;
+            self.bitcoind.mine_blocks(finality_delay.into()).await?;
             self.await_block_sync().await?;
         }
         Ok(())
