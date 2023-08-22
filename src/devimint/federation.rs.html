@@ -498,6 +498,8 @@
 <a href="#498" id="498">498</a>
 <a href="#499" id="499">499</a>
 <a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fs;
 
@@ -610,12 +612,14 @@
             <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/invite-code&quot;</span>),
             <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/invite-code&quot;</span>),
         )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        .<span class="kw">await
+        </span>.context(<span class="string">&quot;moving invite code file&quot;</span>)<span class="question-mark">?</span>;
         tokio::fs::rename(
             <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client.json&quot;</span>),
             <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client.json&quot;</span>),
         )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        .<span class="kw">await
+        </span>.context(<span class="string">&quot;moving client.json&quot;</span>)<span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">&quot;copied client configs&quot;</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
