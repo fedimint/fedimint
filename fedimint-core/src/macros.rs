@@ -314,7 +314,7 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
                 let val = match modules.get(module_instance_id) {
                     Some(decoder) => {
                         let total_len_u64 = u64::consensus_decode(reader, modules)?;
-                        let mut reader = reader.take(total_len_u64);
+                        let mut reader = std::io::Read::take(reader, total_len_u64);
                         let v = decoder.decode(&mut reader, module_instance_id, modules)?;
 
                         if reader.limit() != 0 {
