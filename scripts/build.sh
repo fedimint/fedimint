@@ -41,10 +41,3 @@ if [ -z "${SKIP_CARGO_BUILD:-}" ]; then
   cargo build --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 fi
 export PATH="$PWD/target/${CARGO_PROFILE:-debug}:$PATH"
-
-function kill_devimint {
-  echo "Killing devimint and child processes"
-  pkill devimint
-}
-
-trap kill_devimint EXIT

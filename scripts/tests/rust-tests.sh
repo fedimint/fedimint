@@ -4,6 +4,7 @@
 set -euo pipefail
 export RUST_LOG="${RUST_LOG:-info,timing=debug}"
 
+source scripts/lib.sh
 source scripts/build.sh ""
 
 >&2 echo "### Setting up tests"
@@ -12,11 +13,10 @@ source scripts/build.sh ""
 # if RUST_LOG is none, don't show output of test setup
 if [ "${RUST_LOG,,}" = "none" ]; then
   devimint external-daemons >/dev/null &
-  echo $! >> $FM_PID_FILE
 else
   devimint external-daemons &
-  echo $! >> $FM_PID_FILE
 fi
+auto_kill_last_cmd external-daemons
 
 STATUS=$(devimint wait)
 if [ "$STATUS" = "ERROR" ]
