@@ -937,7 +937,9 @@ mod fedimint_migration_tests {
     use fedimint_mint_common::{
         MintCommonGen, MintOutputBlindSignatures, MintOutputSignatureShare, Nonce,
     };
-    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
+    use fedimint_testing::db::{
+        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
+    };
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
@@ -1025,8 +1027,8 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_migration_snapshots() {
-        prepare_snapshot(
+    async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
             "mint-v0",
             |dbtx| {
                 Box::pin(async move {
@@ -1039,7 +1041,7 @@ mod fedimint_migration_tests {
                 <Mint as ServerModule>::decoder(),
             )]),
         )
-        .await;
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]
