@@ -12,6 +12,7 @@ use fedimint_core::encoding::DecodeError;
 use fedimint_core::epoch::{
     ConsensusItem, EpochOutcome, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
+use fedimint_core::fmt_utils::OptStracktrace;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
@@ -264,7 +265,7 @@ impl ConsensusServer {
                 Ok(consensus_hash) if consensus_hash == our_hash => break,
                 Ok(_) => bail!("Our consensus config doesn't match peers!"),
                 Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "ERROR {:?}", e)
+                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStracktrace(e))
                 }
             }
             sleep(Duration::from_millis(100)).await;
