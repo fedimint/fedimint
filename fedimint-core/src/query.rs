@@ -98,12 +98,30 @@ impl ErrorStrategy {
         }
     }
 
+    fn format_errors(&self) -> String {
+        use std::fmt::Write;
+        self.errors
+            .iter()
+            .fold(String::new(), |mut s, (peer_id, e)| {
+                if !s.is_empty() {
+                    write!(s, ", ").expect("can't fail");
+                }
+                write!(s, "peer-{peer_id}: {e}").expect("can't fail");
+
+                s
+            })
+    }
+
     pub fn process<R>(&mut self, peer: PeerId, error: PeerError) -> QueryStep<R> {
         assert!(self.errors.insert(peer, error).is_none());
 
         if self.errors.len() == self.threshold {
             QueryStep::Failure {
-                general: Some(anyhow!("Received errors from {} peers", self.threshold)),
+                general: Some(anyhow!(
+                    "Received errors from {} peers: {}",
+                    self.threshold,
+                    self.format_errors()
+                )),
                 peers: mem::take(&mut self.errors),
             }
         } else {
