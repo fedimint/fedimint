@@ -218,8 +218,8 @@
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines};
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Settle};
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::InterceptHtlcResponse;
+<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Settle};
+<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::InterceptHtlcResponse;
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>CompleteHtlcError {

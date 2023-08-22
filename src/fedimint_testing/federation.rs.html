@@ -293,7 +293,7 @@
             <span class="kw">let </span>connections = network.connector(peer_id, reliability).into_dyn();
 
             <span class="kw">let </span>instances = config.consensus.iter_module_instances();
-            <span class="kw">let </span>decoders = server_gen.decoders(instances).unwrap();
+            <span class="kw">let </span>decoders = server_gen.available_decoders(instances).unwrap();
             <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
             <span class="kw">let </span>server = ConsensusServer::new_with(

@@ -548,7 +548,7 @@
     <span class="kw">let </span>module_kinds = module_gens_params
         .iter_modules()
         .map(|(id, kind, <span class="kw">_</span>)| (id, kind));
-    <span class="kw">let </span>decoders = module_gens.decoders(module_kinds.into_iter())<span class="question-mark">?</span>;
+    <span class="kw">let </span>decoders = module_gens.available_decoders(module_kinds.into_iter())<span class="question-mark">?</span>;
     <span class="kw">let </span>db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
         decoders.clone(),

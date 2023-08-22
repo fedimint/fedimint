@@ -154,7 +154,7 @@
     Currency, Description, Invoice, InvoiceBuilder, InvoiceDescription, SignedRawInvoice,
     DEFAULT_EXPIRY_TIME,
 };
-<span class="kw">use </span>ln_gateway::gatewaylnrpc::{
+<span class="kw">use </span>ln_gateway::gateway_lnrpc::{
     <span class="self">self</span>, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
@@ -237,7 +237,7 @@
 
     <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse {
-            route_hints: <span class="macro">vec!</span>[gatewaylnrpc::get_route_hints_response::RouteHint { hops: <span class="macro">vec!</span>[] }],
+            route_hints: <span class="macro">vec!</span>[gateway_lnrpc::get_route_hints_response::RouteHint { hops: <span class="macro">vec!</span>[] }],
         })
     }
 

@@ -635,12 +635,12 @@
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::Amount;
-<span class="kw">use </span>ln_gateway::gatewaylnrpc::gateway_lightning_server::{
+<span class="kw">use </span>ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
-<span class="kw">use </span>ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
-<span class="kw">use </span>ln_gateway::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
-<span class="kw">use </span>ln_gateway::gatewaylnrpc::{
+<span class="kw">use </span>ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+<span class="kw">use </span>ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
+<span class="kw">use </span>ln_gateway::gateway_lnrpc::{
     EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };

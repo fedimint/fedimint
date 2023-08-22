@@ -845,8 +845,8 @@
 <span class="kw">pub mod </span>types;
 <span class="kw">pub mod </span>utils;
 
-<span class="kw">pub mod </span>gatewaylnrpc {
-    <span class="macro">tonic::include_proto!</span>(<span class="string">&quot;gatewaylnrpc&quot;</span>);
+<span class="kw">pub mod </span>gateway_lnrpc {
+    <span class="macro">tonic::include_proto!</span>(<span class="string">&quot;gateway_lnrpc&quot;</span>);
 }
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -886,8 +886,8 @@
 <span class="kw">use </span>fedimint_mint_client::{MintClientGen, MintCommonGen};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
 <span class="kw">use </span>futures::stream::StreamExt;
-<span class="kw">use </span>gatewaylnrpc::intercept_htlc_response::Action;
-<span class="kw">use </span>gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+<span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::Action;
+<span class="kw">use </span>gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lnrpc_client::{ILnRpcClient, LightningRpcError, RouteHtlcStream};
 <span class="kw">use </span>ng::pay::OutgoingPaymentError;
@@ -902,7 +902,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::gatewaylnrpc::intercept_htlc_response::Forward;
+<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::lnd::GatewayLndClient;
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::NetworkLnRpcClient;
 <span class="kw">use </span><span class="kw">crate</span>::ng::GatewayExtPayStates;
@@ -1032,7 +1032,7 @@
 
         <span class="kw">let </span>decoders = <span class="self">self
             </span>.registry
-            .decoders(DEFAULT_MODULE_KINDS.iter().cloned())<span class="question-mark">?</span>;
+            .available_decoders(DEFAULT_MODULE_KINDS.iter().cloned())<span class="question-mark">?</span>;
 
         <span class="kw">let </span>client_builder = StandardGatewayClientBuilder::new(
             <span class="self">self</span>.data_dir.clone(),
