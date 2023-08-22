@@ -5,13 +5,15 @@ use std::time::Duration;
 use std::{env, fs};
 
 use fedimint_bitcoind::create_bitcoind;
-use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
+use fedimint_client::module::init::{
+    ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
+};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
+use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_logging::TracingSetup;
 use tempfile::TempDir;
@@ -33,9 +35,9 @@ static BASE_PORT: AtomicU16 = AtomicU16::new(18173);
 /// A tool for easily writing fedimint integration tests
 pub struct Fixtures {
     num_peers: u16,
-    clients: Vec<DynClientModuleGen>,
-    servers: Vec<DynServerModuleGen>,
-    params: ServerModuleGenParamsRegistry,
+    clients: Vec<DynClientModuleInit>,
+    servers: Vec<DynServerModuleInit>,
+    params: ServerModuleConfigGenParamsRegistry,
     primary_client: ModuleInstanceId,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
@@ -44,9 +46,9 @@ pub struct Fixtures {
 
 impl Fixtures {
     pub fn new_primary(
-        client: impl IClientModuleGen + MaybeSend + MaybeSync + 'static,
-        server: impl IServerModuleGen + MaybeSend + MaybeSync + 'static,
-        params: impl ModuleGenParams,
+        client: impl IClientModuleInit + MaybeSend + MaybeSync + 'static,
+        server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
+        params: impl ModuleInitParams,
     ) -> Self {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
@@ -94,14 +96,14 @@ impl Fixtures {
     /// Add a module to the fed
     pub fn with_module(
         mut self,
-        client: impl IClientModuleGen + MaybeSend + MaybeSync + 'static,
-        server: impl IServerModuleGen + MaybeSend + MaybeSync + 'static,
-        params: impl ModuleGenParams,
+        client: impl IClientModuleInit + MaybeSend + MaybeSync + 'static,
+        server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
+        params: impl ModuleInitParams,
     ) -> Self {
         self.params
             .attach_config_gen_params(self.id, server.module_kind(), params);
-        self.clients.push(DynClientModuleGen::from(client));
-        self.servers.push(DynServerModuleGen::from(server));
+        self.clients.push(DynClientModuleInit::from(client));
+        self.servers.push(DynServerModuleInit::from(server));
         self.id += 1;
 
         self
@@ -118,8 +120,8 @@ impl Fixtures {
             num_peers,
             BASE_PORT.fetch_add(num_peers * 2, Ordering::Relaxed),
             self.params.clone(),
-            ServerModuleGenRegistry::from(self.servers.clone()),
-            ClientModuleGenRegistry::from(self.clients.clone()),
+            ServerModuleInitRegistry::from(self.servers.clone()),
+            ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_client,
         )
         .await
@@ -128,7 +130,7 @@ impl Fixtures {
     /// Starts a new gateway with a given lightning node
     pub async fn new_gateway(&self, ln: Box<dyn LightningTest>) -> GatewayTest {
         // TODO: Make construction easier
-        let server_gens = ServerModuleGenRegistry::from(self.servers.clone());
+        let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
         let decoders = server_gens.available_decoders(module_kinds).unwrap();
         let clients = self.clients.clone().into_iter();
@@ -138,7 +140,7 @@ impl Fixtures {
             rand::random::<u64>().to_string(),
             ln,
             decoders,
-            ClientModuleGenRegistry::from_iter(clients.filter(|client| {
+            ClientModuleInitRegistry::from_iter(clients.filter(|client| {
                 // Remove LN module because the gateway adds one
                 client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
             })),

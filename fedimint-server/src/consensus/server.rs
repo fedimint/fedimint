@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::bail;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsFederationApi};
 use fedimint_core::cancellable::Cancellable;
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{apply_migrations, Database};
 use fedimint_core::encoding::DecodeError;
 use fedimint_core::epoch::{
@@ -109,7 +109,7 @@ impl ConsensusServer {
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ServerModuleGenRegistry,
+        module_inits: ServerModuleInitRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
         let connector: PeerConnector<EpochMessage> =
@@ -132,7 +132,7 @@ impl ConsensusServer {
     pub async fn new_with(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ServerModuleGenRegistry,
+        module_inits: ServerModuleInitRegistry,
         connector: PeerConnector<EpochMessage>,
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,

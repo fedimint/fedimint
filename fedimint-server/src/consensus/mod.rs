@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::FromIterator;
 
 use anyhow::bail;
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::epoch::*;
@@ -76,7 +76,7 @@ pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
     /// Modules config gen information
-    pub module_inits: ServerModuleGenRegistry,
+    pub module_inits: ServerModuleInitRegistry,
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Database storing the result of processing consensus outcomes

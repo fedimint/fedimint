@@ -18,7 +18,7 @@ use fedimint_core::core::{
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::CommonModuleGen;
+use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{BitcoinHash, ServerModule};
 use fedimint_ln_server::common::LightningCommonGen;
 use fedimint_ln_server::Lightning;

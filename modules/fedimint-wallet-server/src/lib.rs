@@ -35,8 +35,8 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
+    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -71,12 +71,12 @@ use tracing::{debug, info, instrument, trace, warn};
 #[derive(Debug, Clone)]
 pub struct WalletGen;
 
-impl ExtendsCommonModuleGen for WalletGen {
+impl ExtendsCommonModuleInit for WalletGen {
     type Common = WalletCommonGen;
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ServerModuleGen for WalletGen {
+impl ServerModuleInit for WalletGen {
     type Params = WalletGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -1574,7 +1574,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
+    use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32,
@@ -1775,7 +1775,7 @@ mod fedimint_migration_tests {
         validate_migrations(
             "wallet",
             |db| async move {
-                let module = DynServerModuleGen::from(WalletGen);
+                let module = DynServerModuleInit::from(WalletGen);
                 apply_migrations(
                     &db,
                     module.module_kind().to_string(),

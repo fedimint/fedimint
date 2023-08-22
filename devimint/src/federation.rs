@@ -6,7 +6,7 @@ use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 use fedimint_core::api::ServerStatus;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::ServerModuleGenParamsRegistry;
+use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ApiAuth;
@@ -14,7 +14,7 @@ use fedimint_core::{Amount, PeerId};
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
-use fedimintd::attach_default_module_gen_params;
+use fedimintd::attach_default_module_init_params;
 use futures::future::join_all;
 use rand::Rng;
 use url::Url;
@@ -84,8 +84,11 @@ impl Federation {
         let mut vars = BTreeMap::new();
 
         let peers: Vec<_> = (0..servers).map(|id| PeerId::from(id as u16)).collect();
-        let params: HashMap<PeerId, ConfigGenParams> =
-            local_config_gen_params(&peers, BASE_PORT, ServerModuleGenParamsRegistry::default())?;
+        let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
+            &peers,
+            BASE_PORT,
+            ServerModuleConfigGenParamsRegistry::default(),
+        )?;
 
         let mut admin_clients: BTreeMap<PeerId, WsAdminClient> = BTreeMap::new();
         for (peer, peer_params) in &params {
@@ -134,12 +137,12 @@ impl Federation {
         let decoders = module_decode_stubs();
         cfg.0 = cfg.0.redecode_raw(&decoders)?;
         let db = Database::new(MemDatabase::new(), module_decode_stubs());
-        let module_gens = ClientModuleGenRegistry::from(vec![
-            DynClientModuleGen::from(WalletClientGen::default()),
-            DynClientModuleGen::from(MintClientGen),
-            DynClientModuleGen::from(LightningClientGen),
+        let module_inits = ClientModuleInitRegistry::from(vec![
+            DynClientModuleInit::from(WalletClientGen::default()),
+            DynClientModuleInit::from(MintClientGen),
+            DynClientModuleInit::from(LightningClientGen),
         ]);
-        let client = UserClient::new(cfg, decoders, module_gens, db, Default::default()).await;
+        let client = UserClient::new(cfg, decoders, module_inits, db, Default::default()).await;
         Ok(client)
     }
 
@@ -488,9 +491,9 @@ pub async fn run_dkg(
 async fn set_config_gen_params(
     client: &WsAdminClient,
     auth: ApiAuth,
-    mut server_gen_params: ServerModuleGenParamsRegistry,
+    mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> anyhow::Result<()> {
-    attach_default_module_gen_params(
+    attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
         &mut server_gen_params,
         Amount::from_sats(100_000_000),

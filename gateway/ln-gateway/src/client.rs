@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::ClientBuilder;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, InviteCode, WsFederationApi};
@@ -20,14 +20,14 @@ use crate::{GatewayError, Result};
 #[derive(Debug, Clone)]
 pub struct StandardGatewayClientBuilder {
     work_dir: PathBuf,
-    registry: ClientModuleGenRegistry,
+    registry: ClientModuleInitRegistry,
     primary_module: ModuleInstanceId,
 }
 
 impl StandardGatewayClientBuilder {
     pub fn new(
         work_dir: PathBuf,
-        registry: ClientModuleGenRegistry,
+        registry: ClientModuleInitRegistry,
         primary_module: ModuleInstanceId,
     ) -> Self {
         Self {
@@ -58,7 +58,7 @@ impl StandardGatewayClientBuilder {
         });
 
         let mut client_builder = ClientBuilder::default();
-        client_builder.with_module_gens(registry);
+        client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
         client_builder.with_config(config.config);
         if let Some(old_client) = old_client {

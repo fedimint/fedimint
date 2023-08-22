@@ -24,7 +24,7 @@ use api::{LnFederationApi, WalletFederationApi};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_core::api::{
     DynGlobalApi, FederationError, GlobalFederationApi, OutputOutcomeError, PeerError,
     WsFederationApi,
@@ -38,7 +38,7 @@ use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{CommonModuleGen, ModuleCommon};
+use fedimint_core::module::{CommonModuleInit, ModuleCommon};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep, MaybeSend};
 use fedimint_core::tiered::InvalidAmountTierError;
@@ -182,8 +182,8 @@ impl<C> Client<C> {
         &self.context.decoders
     }
 
-    pub fn module_gens(&self) -> &ClientModuleGenRegistry {
-        &self.context.module_gens
+    pub fn module_inits(&self) -> &ClientModuleInitRegistry {
+        &self.context.module_inits
     }
 
     pub fn context(&self) -> &Arc<ClientContext> {
@@ -293,18 +293,18 @@ impl<T: AsRef<ClientConfig> + Clone + MaybeSend> Client<T> {
     pub async fn new(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
+        module_inits: ClientModuleInitRegistry,
         db: Database,
         secp: Secp256k1<All>,
     ) -> Self {
         let api = WsFederationApi::from_config(config.as_ref());
-        Self::new_with_api(config, decoders, module_gens, db, api.into(), secp).await
+        Self::new_with_api(config, decoders, module_inits, db, api.into(), secp).await
     }
 
     pub async fn new_with_api(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
+        module_inits: ClientModuleInitRegistry,
         db: Database,
         api: DynGlobalApi,
         secp: Secp256k1<All>,
@@ -315,7 +315,7 @@ impl<T: AsRef<ClientConfig> + Clone + MaybeSend> Client<T> {
             config,
             context: Arc::new(ClientContext {
                 decoders,
-                module_gens,
+                module_inits,
                 db,
                 api,
                 secp,

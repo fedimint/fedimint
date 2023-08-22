@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key, LessSafeKey};
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::ServerModuleInitRegistry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -75,7 +75,7 @@ pub fn write_server_config(
     server: &ServerConfig,
     path: PathBuf,
     password: &str,
-    module_config_gens: &ServerModuleGenRegistry,
+    module_config_gens: &ServerModuleInitRegistry,
 ) -> anyhow::Result<()> {
     let salt = fs::read_to_string(path.join(SALT_FILE))?;
     let key = get_encryption_key(password, &salt)?;

@@ -6,7 +6,7 @@ use fedimint_client_legacy::db as ClientRange;
 use fedimint_client_legacy::ln::db as ClientLightningRange;
 use fedimint_client_legacy::mint::db as ClientMintRange;
 use fedimint_client_legacy::wallet::db as ClientWalletRange;
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::notifications::Notifications;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
@@ -41,7 +41,7 @@ pub struct DatabaseDump<'a> {
     modules: Vec<String>,
     prefixes: Vec<String>,
     cfg: Option<ServerConfig>,
-    module_inits: ServerModuleGenRegistry,
+    module_inits: ServerModuleInitRegistry,
 }
 
 impl<'a> DatabaseDump<'a> {
@@ -49,7 +49,7 @@ impl<'a> DatabaseDump<'a> {
         cfg_dir: PathBuf,
         data_dir: String,
         password: String,
-        module_gens: ServerModuleGenRegistry,
+        module_inits: ServerModuleInitRegistry,
         modules: Vec<String>,
         prefixes: Vec<String>,
     ) -> DatabaseDump<'a> {
@@ -80,7 +80,7 @@ impl<'a> DatabaseDump<'a> {
         }
 
         let cfg = read_server_config(&password, cfg_dir).unwrap();
-        let decoders = module_gens
+        let decoders = module_inits
             .available_decoders(cfg.iter_module_instances())
             .unwrap()
             .with_fallback();
@@ -92,7 +92,7 @@ impl<'a> DatabaseDump<'a> {
             modules,
             prefixes,
             cfg: Some(cfg),
-            module_inits: module_gens,
+            module_inits,
         }
     }
 }

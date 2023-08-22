@@ -18,7 +18,7 @@ use tracing::instrument;
 
 pub use self::version::*;
 use crate::config::{
-    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ModuleGenParams, ServerModuleConfig,
+    ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ModuleInitParams, ServerModuleConfig,
     ServerModuleConsensusConfig,
 };
 use crate::core::{
@@ -407,25 +407,25 @@ where
 
 /// Operations common to Server and Client side module gen dyn newtypes
 ///
-/// Due to conflict of `impl Trait for T` for both `ServerModuleGen` and
-/// `ClientModuleGen`, we can't really have a `ICommonModuleGen`, so to unify
-/// them in `ModuleGenRegistry` we move the common functionality to be an
+/// Due to conflict of `impl Trait for T` for both `ServerModuleInit` and
+/// `ClientModuleInit`, we can't really have a `ICommonModuleInit`, so to unify
+/// them in `ModuleInitRegistry` we move the common functionality to be an
 /// interface over their dyn newtype wrappers. A bit weird, but works.
-pub trait IDynCommonModuleGen: Debug {
+pub trait IDynCommonModuleInit: Debug {
     fn decoder(&self) -> Decoder;
 
     fn module_kind(&self) -> ModuleKind;
 
-    fn to_dyn_common(&self) -> DynCommonModuleGen;
+    fn to_dyn_common(&self) -> DynCommonModuleInit;
 }
 
-pub trait ExtendsCommonModuleGen: Debug + Clone + Send + Sync + 'static {
-    type Common: CommonModuleGen;
+pub trait ExtendsCommonModuleInit: Debug + Clone + Send + Sync + 'static {
+    type Common: CommonModuleInit;
 }
 
-impl<T> IDynCommonModuleGen for T
+impl<T> IDynCommonModuleInit for T
 where
-    T: ExtendsCommonModuleGen,
+    T: ExtendsCommonModuleInit,
 {
     fn decoder(&self) -> Decoder {
         T::Common::decoder()
@@ -435,8 +435,8 @@ where
         T::Common::KIND
     }
 
-    fn to_dyn_common(&self) -> DynCommonModuleGen {
-        DynCommonModuleGen::from_inner(Arc::new(self.clone()))
+    fn to_dyn_common(&self) -> DynCommonModuleInit {
+        DynCommonModuleInit::from_inner(Arc::new(self.clone()))
     }
 }
 
@@ -450,8 +450,8 @@ where
 /// Once the module configuration is ready, the module can be instantiated via
 /// `[Self::init]`.
 #[apply(async_trait_maybe_send!)]
-pub trait IServerModuleGen: IDynCommonModuleGen {
-    fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static);
+pub trait IServerModuleInit: IDynCommonModuleInit {
+    fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static);
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
@@ -501,32 +501,34 @@ pub trait IServerModuleGen: IDynCommonModuleGen {
 
 dyn_newtype_define!(
     #[derive(Clone)]
-    pub DynCommonModuleGen(Arc<IDynCommonModuleGen>)
+    pub DynCommonModuleInit(Arc<IDynCommonModuleInit>)
 );
 
-impl AsRef<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)> for DynCommonModuleGen {
-    fn as_ref(&self) -> &(maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)) {
+impl AsRef<maybe_add_send_sync!(dyn IDynCommonModuleInit + 'static)> for DynCommonModuleInit {
+    fn as_ref(&self) -> &(maybe_add_send_sync!(dyn IDynCommonModuleInit + 'static)) {
         self.inner.as_ref()
     }
 }
 
-impl DynCommonModuleGen {
-    pub fn from_inner(inner: Arc<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)>) -> Self {
-        DynCommonModuleGen { inner }
+impl DynCommonModuleInit {
+    pub fn from_inner(
+        inner: Arc<maybe_add_send_sync!(dyn IDynCommonModuleInit + 'static)>,
+    ) -> Self {
+        DynCommonModuleInit { inner }
     }
 }
 
 dyn_newtype_define!(
     #[derive(Clone)]
-    pub DynServerModuleGen(Arc<IServerModuleGen>)
+    pub DynServerModuleInit(Arc<IServerModuleInit>)
 );
 
-impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynServerModuleGen {
-    fn as_ref(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
+impl AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static> for DynServerModuleInit {
+    fn as_ref(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
         self.inner.as_common()
     }
 }
-pub trait CommonModuleGen: Debug + Sized {
+pub trait CommonModuleInit: Debug + Sized {
     const CONSENSUS_VERSION: ModuleConsensusVersion;
     const KIND: ModuleKind;
 
@@ -542,8 +544,8 @@ pub trait CommonModuleGen: Debug + Sized {
 /// For examples, take a look at one of the `MintConfigGenerator`,
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
-pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
-    type Params: ModuleGenParams;
+pub trait ServerModuleInit: ExtendsCommonModuleInit + Sized {
+    type Params: ModuleInitParams;
 
     /// This represents the module's database version that the current code is
     /// compatible with. It is important to increment this value whenever a
@@ -559,7 +561,7 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     /// Refer to [`ModuleConsensusVersion`] for more information about
     /// versioning.
     ///
-    /// One module implementation ([`ServerModuleGen`] of a given
+    /// One module implementation ([`ServerModuleInit`] of a given
     /// [`ModuleKind`]) can potentially implement multiple versions of the
     /// consensus, and depending on the config module instance config,
     /// instantiate the desired one. This method should expose all the
@@ -570,7 +572,7 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
     fn kind() -> ModuleKind {
-        <Self as ExtendsCommonModuleGen>::Common::KIND
+        <Self as ExtendsCommonModuleInit>::Common::KIND
     }
 
     /// Initialize the [`DynServerModule`] instance from its config
@@ -610,7 +612,7 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<<<Self as ExtendsCommonModuleGen>::Common as CommonModuleGen>::ClientConfig>;
+    ) -> anyhow::Result<<<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig>;
 
     async fn dump_database(
         &self,
@@ -620,20 +622,20 @@ pub trait ServerModuleGen: ExtendsCommonModuleGen + Sized {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T> IServerModuleGen for T
+impl<T> IServerModuleInit for T
 where
-    T: ServerModuleGen + 'static + Sync,
+    T: ServerModuleInit + 'static + Sync,
 {
-    fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
+    fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
         self
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        <Self as ServerModuleGen>::supported_api_versions(self)
+        <Self as ServerModuleInit>::supported_api_versions(self)
     }
 
     fn database_version(&self) -> DatabaseVersion {
-        <Self as ServerModuleGen>::DATABASE_VERSION
+        <Self as ServerModuleInit>::DATABASE_VERSION
     }
 
     async fn init(
@@ -642,15 +644,15 @@ where
         db: Database,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        <Self as ServerModuleGen>::init(self, cfg, db, task_group).await
+        <Self as ServerModuleInit>::init(self, cfg, db, task_group).await
     }
 
     fn get_database_migrations(&self) -> MigrationMap {
-        <Self as ServerModuleGen>::get_database_migrations(self)
+        <Self as ServerModuleInit>::get_database_migrations(self)
     }
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()> {
-        <Self as ServerModuleGen>::parse_params(self, params)?;
+        <Self as ServerModuleInit>::parse_params(self, params)?;
         Ok(())
     }
 
@@ -659,7 +661,7 @@ where
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ServerModuleGen>::trusted_dealer_gen(self, peers, params)
+        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, params)
     }
 
     async fn distributed_gen(
@@ -667,11 +669,11 @@ where
         peers: &PeerHandle,
         params: &ConfigGenModuleParams,
     ) -> DkgResult<ServerModuleConfig> {
-        <Self as ServerModuleGen>::distributed_gen(self, peers, params).await
+        <Self as ServerModuleInit>::distributed_gen(self, peers, params).await
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
-        <Self as ServerModuleGen>::validate_config(self, identity, config)
+        <Self as ServerModuleInit>::validate_config(self, identity, config)
     }
 
     fn get_client_config(
@@ -681,9 +683,9 @@ where
     ) -> anyhow::Result<ClientModuleConfig> {
         ClientModuleConfig::from_typed(
             module_instance_id,
-            <Self as ServerModuleGen>::kind(),
+            <Self as ServerModuleInit>::kind(),
             config.version,
-            <Self as ServerModuleGen>::get_client_config(self, config)?,
+            <Self as ServerModuleInit>::get_client_config(self, config)?,
         )
     }
 
@@ -692,7 +694,7 @@ where
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        <Self as ServerModuleGen>::dump_database(self, dbtx, prefix_names).await
+        <Self as ServerModuleInit>::dump_database(self, dbtx, prefix_names).await
     }
 }
 
@@ -784,13 +786,13 @@ pub trait ModuleCommon {
 pub trait ServerModule: Debug + Sized {
     type Common: ModuleCommon;
 
-    type Gen: ServerModuleGen;
+    type Gen: ServerModuleInit;
     type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
         // allocate
-        <Self::Gen as ExtendsCommonModuleGen>::Common::KIND
+        <Self::Gen as ExtendsCommonModuleInit>::Common::KIND
     }
 
     /// Returns a decoder for the following associated types of this module:
@@ -941,7 +943,7 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
     }
 }
 
-/// A handle passed to [`ServerModuleGen::distributed_gen`]
+/// A handle passed to [`ServerModuleInit::distributed_gen`]
 ///
 /// This struct encapsulates dkg data that the module should not have a direct
 /// access to, and implements higher level dkg operations available to the

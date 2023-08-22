@@ -19,7 +19,7 @@ use crate::sm::{Context, DynContext, DynState, Executor, OperationId, State};
 use crate::transaction::{ClientInput, ClientOutput};
 use crate::{Client, DynGlobalClientContext};
 
-pub mod gen;
+pub mod init;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 

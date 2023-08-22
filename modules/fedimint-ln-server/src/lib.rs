@@ -13,8 +13,8 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleGen, SupportedModuleApiVersions, TransactionItemAmount,
+    ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
+    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -105,12 +105,12 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct LightningGen;
 
-impl ExtendsCommonModuleGen for LightningGen {
+impl ExtendsCommonModuleInit for LightningGen {
     type Common = LightningCommonGen;
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ServerModuleGen for LightningGen {
+impl ServerModuleInit for LightningGen {
     type Params = LightningGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -1018,7 +1018,7 @@ mod tests {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::module::ServerModuleGen;
+    use fedimint_core::module::ServerModuleInit;
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::config::{
@@ -1035,7 +1035,7 @@ mod tests {
 
     fn build_configs() -> (Vec<LightningConfig>, LightningClientConfig) {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-        let server_cfg = ServerModuleGen::trusted_dealer_gen(
+        let server_cfg = ServerModuleInit::trusted_dealer_gen(
             &LightningGen,
             &peers,
             &ConfigGenModuleParams::from_typed(LightningGenParams {
@@ -1052,7 +1052,7 @@ mod tests {
             .expect("valid config params"),
         );
 
-        let client_cfg = ServerModuleGen::get_client_config(
+        let client_cfg = ServerModuleInit::get_client_config(
             &LightningGen,
             &server_cfg[&PeerId::from(0)].consensus,
         )
@@ -1132,7 +1132,7 @@ mod fedimint_migration_tests {
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
+    use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::{OutPoint, ServerModule, TransactionId};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
@@ -1294,7 +1294,7 @@ mod fedimint_migration_tests {
         validate_migrations(
             "lightning",
             |db| async move {
-                let module = DynServerModuleGen::from(LightningGen);
+                let module = DynServerModuleInit::from(LightningGen);
                 apply_migrations(
                     &db,
                     module.module_kind().to_string(),

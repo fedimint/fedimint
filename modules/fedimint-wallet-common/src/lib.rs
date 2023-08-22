@@ -7,7 +7,7 @@ use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
-use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Feerate, PeerId};
 use impl_tools::autoimpl;
 use miniscript::Descriptor;
@@ -178,7 +178,7 @@ impl std::fmt::Display for WalletOutputOutcome {
 #[derive(Debug)]
 pub struct WalletCommonGen;
 
-impl CommonModuleGen for WalletCommonGen {
+impl CommonModuleInit for WalletCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 

@@ -30,7 +30,7 @@ use url::Url;
 use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
 use crate::module::{
-    CoreConsensusVersion, DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen,
+    CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
 };
 use crate::{maybe_add_send_sync, PeerId};
@@ -287,15 +287,15 @@ impl ClientConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct ModuleGenRegistry<M>(BTreeMap<ModuleKind, M>);
+pub struct ModuleInitRegistry<M>(BTreeMap<ModuleKind, M>);
 
-impl<M> Default for ModuleGenRegistry<M> {
+impl<M> Default for ModuleInitRegistry<M> {
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-/// Type erased `ModuleGenParams` used to generate the `ServerModuleConfig`
+/// Type erased `ModuleInitParams` used to generate the `ServerModuleConfig`
 /// during config gen
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ConfigGenModuleParams {
@@ -303,7 +303,7 @@ pub struct ConfigGenModuleParams {
     pub consensus: Option<serde_json::Value>,
 }
 
-pub type ServerModuleGenRegistry = ModuleGenRegistry<DynServerModuleGen>;
+pub type ServerModuleInitRegistry = ModuleInitRegistry<DynServerModuleInit>;
 
 impl ConfigGenModuleParams {
     pub fn new(local: Option<serde_json::Value>, consensus: Option<serde_json::Value>) -> Self {
@@ -312,7 +312,7 @@ impl ConfigGenModuleParams {
 
     /// Converts the JSON into typed version, errors unless both `local` and
     /// `consensus` values are defined
-    pub fn to_typed<P: ModuleGenParams>(&self) -> anyhow::Result<P> {
+    pub fn to_typed<P: ModuleInitParams>(&self) -> anyhow::Result<P> {
         Ok(P::from_parts(
             Self::parse("local", self.local.clone())?,
             Self::parse("consensus", self.consensus.clone())?,
@@ -327,7 +327,7 @@ impl ConfigGenModuleParams {
         serde_json::from_value(json).context("Invalid module params")
     }
 
-    pub fn from_typed<P: ModuleGenParams>(p: P) -> anyhow::Result<Self> {
+    pub fn from_typed<P: ModuleInitParams>(p: P) -> anyhow::Result<Self> {
         let (local, consensus) = p.to_parts();
         Ok(Self {
             local: Some(serde_json::to_value(local)?),
@@ -336,20 +336,20 @@ impl ConfigGenModuleParams {
     }
 }
 
-pub type CommonModuleGenRegistry = ModuleGenRegistry<DynCommonModuleGen>;
+pub type CommonModuleInitRegistry = ModuleInitRegistry<DynCommonModuleInit>;
 
 /// Registry that contains the config gen params for all modules
-pub type ServerModuleGenParamsRegistry = ModuleRegistry<ConfigGenModuleParams>;
+pub type ServerModuleConfigGenParamsRegistry = ModuleRegistry<ConfigGenModuleParams>;
 
-impl Eq for ServerModuleGenParamsRegistry {}
+impl Eq for ServerModuleConfigGenParamsRegistry {}
 
-impl PartialEq for ServerModuleGenParamsRegistry {
+impl PartialEq for ServerModuleConfigGenParamsRegistry {
     fn eq(&self, other: &Self) -> bool {
         self.iter_modules().eq(other.iter_modules())
     }
 }
 
-impl Serialize for ServerModuleGenParamsRegistry {
+impl Serialize for ServerModuleConfigGenParamsRegistry {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let modules: Vec<_> = self.iter_modules().collect();
         let mut serializer = serializer.serialize_map(Some(modules.len()))?;
@@ -361,7 +361,7 @@ impl Serialize for ServerModuleGenParamsRegistry {
     }
 }
 
-impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
+impl<'de> Deserialize<'de> for ServerModuleConfigGenParamsRegistry {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -377,9 +377,9 @@ impl<'de> Deserialize<'de> for ServerModuleGenParamsRegistry {
     }
 }
 
-impl<M> From<Vec<M>> for ModuleGenRegistry<M>
+impl<M> From<Vec<M>> for ModuleInitRegistry<M>
 where
-    M: AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static>,
+    M: AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static>,
 {
     fn from(value: Vec<M>) -> Self {
         Self(BTreeMap::from_iter(
@@ -388,9 +388,9 @@ where
     }
 }
 
-impl<M> FromIterator<M> for ModuleGenRegistry<M>
+impl<M> FromIterator<M> for ModuleInitRegistry<M>
 where
-    M: AsRef<maybe_add_send_sync!(dyn IDynCommonModuleGen + 'static)>,
+    M: AsRef<maybe_add_send_sync!(dyn IDynCommonModuleInit + 'static)>,
 {
     fn from_iter<T: IntoIterator<Item = M>>(iter: T) -> Self {
         Self(BTreeMap::from_iter(
@@ -399,7 +399,7 @@ where
     }
 }
 
-impl<M> ModuleGenRegistry<M> {
+impl<M> ModuleInitRegistry<M> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -407,7 +407,7 @@ impl<M> ModuleGenRegistry<M> {
     pub fn attach<T>(&mut self, gen: T)
     where
         T: Into<M> + 'static + Send + Sync,
-        M: AsRef<dyn IDynCommonModuleGen + 'static + Send + Sync>,
+        M: AsRef<dyn IDynCommonModuleInit + 'static + Send + Sync>,
     {
         let gen: M = gen.into();
         let kind = gen.as_ref().module_kind();
@@ -426,7 +426,7 @@ impl<M> ModuleGenRegistry<M> {
 }
 
 impl ModuleRegistry<ConfigGenModuleParams> {
-    pub fn attach_config_gen_params<T: ModuleGenParams>(
+    pub fn attach_config_gen_params<T: ModuleInitParams>(
         &mut self,
         id: ModuleInstanceId,
         kind: ModuleKind,
@@ -441,9 +441,9 @@ impl ModuleRegistry<ConfigGenModuleParams> {
     }
 }
 
-impl ServerModuleGenRegistry {
-    pub fn to_common(&self) -> CommonModuleGenRegistry {
-        ModuleGenRegistry(
+impl ServerModuleInitRegistry {
+    pub fn to_common(&self) -> CommonModuleInitRegistry {
+        ModuleInitRegistry(
             self.0
                 .iter()
                 .map(|(k, v)| (k.clone(), v.to_dyn_common()))
@@ -452,9 +452,9 @@ impl ServerModuleGenRegistry {
     }
 }
 
-impl<M> ModuleGenRegistry<M>
+impl<M> ModuleInitRegistry<M>
 where
-    M: AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static>,
+    M: AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static>,
 {
     #[deprecated(
         note = "You probably want `available_decoders` to support missing module kinds. If you really want a strict behavior, use `decoders_strict`"
@@ -506,7 +506,7 @@ where
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct EmptyGenParams {}
 
-pub trait ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
+pub trait ModuleInitParams: serde::Serialize + serde::de::DeserializeOwned {
     /// Locally configurable parameters for config generation
     type Local: DeserializeOwned + Serialize;
     /// Consensus parameters for config generation

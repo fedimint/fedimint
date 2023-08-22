@@ -10,11 +10,11 @@ use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::*;
 use fedimint_core::config::{
     ClientConfig, DkgPeerMsg, FederationId, JsonWithKind, PeerUrl, ServerModuleConfig,
-    ServerModuleGenRegistry, TypedServerModuleConfig,
+    ServerModuleInitRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleGen, MultiApiVersion, PeerHandle,
+    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
@@ -73,7 +73,7 @@ impl ServerConfig {
 
     pub(crate) fn supported_api_versions_summary(
         modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
-        module_inits: &ServerModuleGenRegistry,
+        module_inits: &ServerModuleInitRegistry,
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: Self::supported_api_versions(),
@@ -186,7 +186,7 @@ impl ServerConfigConsensus {
 
     pub fn to_client_config(
         &self,
-        module_config_gens: &ModuleGenRegistry<DynServerModuleGen>,
+        module_config_gens: &ModuleInitRegistry<DynServerModuleInit>,
     ) -> Result<ClientConfig, anyhow::Error> {
         let client = ClientConfig {
             federation_id: FederationId(self.auth_pk_set.public_key()),
@@ -369,7 +369,7 @@ impl ServerConfig {
     pub fn validate_config(
         &self,
         identity: &PeerId,
-        module_config_gens: &ServerModuleGenRegistry,
+        module_config_gens: &ServerModuleInitRegistry,
     ) -> anyhow::Result<()> {
         let peers = self.local.p2p_endpoints.clone();
         let consensus = self.consensus.clone();
@@ -413,7 +413,7 @@ impl ServerConfig {
 
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ConfigGenParams>,
-        registry: ServerModuleGenRegistry,
+        registry: ServerModuleInitRegistry,
     ) -> BTreeMap<PeerId, Self> {
         let mut rng = OsRng;
         let peer0 = &params[&PeerId::from(0)];
@@ -479,7 +479,7 @@ impl ServerConfig {
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
         params: &ConfigGenParams,
-        registry: ServerModuleGenRegistry,
+        registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> DkgResult<Self> {

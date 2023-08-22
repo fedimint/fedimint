@@ -7,7 +7,7 @@ use std::time::Duration;
 use async_stream::stream;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::gen::ClientModuleGen;
+use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -20,7 +20,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, ExtendsCommonModuleGen, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::contracts::ContractId;
@@ -329,12 +329,12 @@ pub struct GatewayClientGen {
     pub fees: RoutingFees,
 }
 
-impl ExtendsCommonModuleGen for GatewayClientGen {
+impl ExtendsCommonModuleInit for GatewayClientGen {
     type Common = LightningCommonGen;
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for GatewayClientGen {
+impl ClientModuleInit for GatewayClientGen {
     type Module = GatewayClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {

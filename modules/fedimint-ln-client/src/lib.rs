@@ -12,7 +12,7 @@ use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::Hash;
 use db::LightningGatewayKey;
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::gen::ClientModuleGen;
+use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -25,7 +25,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -526,12 +526,12 @@ pub enum LightningMeta {
 #[derive(Debug, Clone)]
 pub struct LightningClientGen;
 
-impl ExtendsCommonModuleGen for LightningClientGen {
+impl ExtendsCommonModuleInit for LightningClientGen {
     type Common = LightningCommonGen;
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for LightningClientGen {
+impl ClientModuleInit for LightningClientGen {
     type Module = LightningClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {

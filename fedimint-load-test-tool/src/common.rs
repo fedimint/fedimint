@@ -14,7 +14,7 @@ use fedimint_core::api::InviteCode;
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::CommonModuleGen;
+use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary};
 use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
 use fedimint_mint_client::{

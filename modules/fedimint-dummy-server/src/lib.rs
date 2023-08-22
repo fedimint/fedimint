@@ -11,8 +11,8 @@ use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseT
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
+    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -47,13 +47,13 @@ mod db;
 pub struct DummyGen;
 
 // TODO: Boilerplate-code
-impl ExtendsCommonModuleGen for DummyGen {
+impl ExtendsCommonModuleInit for DummyGen {
     type Common = DummyCommonGen;
 }
 
 /// Implementation of server module non-consensus functions
 #[async_trait]
-impl ServerModuleGen for DummyGen {
+impl ServerModuleInit for DummyGen {
     type Params = DummyGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
