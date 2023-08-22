@@ -103,11 +103,11 @@ jobs:
       - name: Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
         run: |
-          nix build -L .#ci.cli-test.all --keep-failed
+          nix build -L .#ci.test.all --keep-failed
 
       - name: Wasm Tests
         if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
-        run: nix build -L .#ci.wasm-tests --keep-failed
+        run: nix build -L .#ci.wasm-test --keep-failed
 
       - name: Prepare failed test build dirs
         if: always()

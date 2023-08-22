@@ -26,55 +26,55 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targe
 >&2 echo "Pre-building tests..."
 cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 
-function cli_test_reconnect() {
+function reconnect_test() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
 }
-export -f cli_test_reconnect
+export -f reconnect_test
 
-function cli_test_lightning_reconnect() {
+function lightning_reconnect_test() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/lightning-reconnect-test.sh
 }
-export -f cli_test_lightning_reconnect
+export -f lightning_reconnect_test
 
-function cli_test_latency() {
+function latency_test() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
 }
-export -f cli_test_latency
+export -f latency_test
 
-function cli_test_cli() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/cli-test.sh
+function devimint_cli_test() {
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
-export -f cli_test_cli
+export -f devimint_cli_test
 
-function cli_load_test_tool_test() {
+function load_test_tool_test() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/load-test-tool-test.sh
 }
-export -f cli_load_test_tool_test
+export -f load_test_tool_test
 
-function cli_test_rust_tests_bitcoind() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/rust-tests.sh
+function backend_test_bitcoind() {
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/backend-test.sh
 }
-export -f cli_test_rust_tests_bitcoind
+export -f backend_test_bitcoind
 
-function cli_test_rust_tests_electrs() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/rust-tests.sh
+function backend_test_electrs() {
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/backend-test.sh
 }
-export -f cli_test_rust_tests_electrs
+export -f backend_test_electrs
 
-function cli_test_rust_tests_esplora() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/rust-tests.sh
+function backend_test_esplora() {
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/backend-test.sh
 }
-export -f cli_test_rust_tests_esplora
+export -f backend_test_esplora
 
-function cli_test_wasm() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/wasm-tests.sh
+function wasm_test() {
+  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/wasm-test.sh
 }
-export -f cli_test_wasm
+export -f wasm_test
 
-function cli_test_always_success() {
+function always_success_test() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/always-success-test.sh
 }
-export -f cli_test_always_success
+export -f always_success_test
 
 export parallel_jobs='+0'
 
@@ -95,7 +95,7 @@ PATH="$(pwd)/scripts/dev/run-isolated-test/:$PATH"
 # --delay to let nix start extracting and bump the load
 # --memfree to make sure tests have enough memory to run
 # --nice to let you browse twitter without lag while the tests are running
-# NOTE: try to keep the slowest tests first, except 'cli_test_always_success',
+# NOTE: try to keep the slowest tests first, except 'always_success_test',
 # as it's used for failure test
 if parallel \
   --halt-on-error 1 \
@@ -106,15 +106,15 @@ if parallel \
   --jobs "$parallel_jobs" \
   --memfree 1G \
   --nice 15 ::: \
-  cli_test_always_success \
-  cli_test_rust_tests_bitcoind \
-  cli_test_rust_tests_electrs \
-  cli_test_rust_tests_esplora \
-  cli_test_latency \
-  cli_test_reconnect \
-  cli_test_lightning_reconnect \
-  cli_test_cli \
-  cli_load_test_tool_test ; then
+  always_success_test \
+  backend_test_bitcoind \
+  backend_test_electrs \
+  backend_test_esplora \
+  latency_test \
+  reconnect_test \
+  lightning_reconnect_test \
+  devimint_cli_test \
+  load_test_tool_test ; then
   >&2 echo "All tests successful"
 else
   >&2 echo "Some tests failed. Full job log:"
