@@ -3,7 +3,7 @@ use std::env;
 fn main() {
     let cdir = env::current_dir().expect("failed to get current directory");
     let include_path = cdir.join("proto");
-    let proto_path = include_path.join("gatewaylnrpc.proto");
+    let proto_path = include_path.join("gateway_lnrpc.proto");
 
     tonic_build::configure()
         .build_server(true)

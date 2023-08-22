@@ -7,8 +7,8 @@ pub mod rpc;
 pub mod types;
 pub mod utils;
 
-pub mod gatewaylnrpc {
-    tonic::include_proto!("gatewaylnrpc");
+pub mod gateway_lnrpc {
+    tonic::include_proto!("gateway_lnrpc");
 }
 
 use std::borrow::Cow;
@@ -48,8 +48,8 @@ use fedimint_logging::TracingSetup;
 use fedimint_mint_client::{MintClientGen, MintCommonGen};
 use fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
 use futures::stream::StreamExt;
-use gatewaylnrpc::intercept_htlc_response::Action;
-use gatewaylnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+use gateway_lnrpc::intercept_htlc_response::Action;
+use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningRpcError, RouteHtlcStream};
 use ng::pay::OutgoingPaymentError;
@@ -64,7 +64,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::gatewaylnrpc::intercept_htlc_response::Forward;
+use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lnd::GatewayLndClient;
 use crate::lnrpc_client::NetworkLnRpcClient;
 use crate::ng::GatewayExtPayStates;
@@ -194,7 +194,7 @@ impl Gatewayd {
 
         let decoders = self
             .registry
-            .decoders(DEFAULT_MODULE_KINDS.iter().cloned())?;
+            .available_decoders(DEFAULT_MODULE_KINDS.iter().cloned())?;
 
         let client_builder = StandardGatewayClientBuilder::new(
             self.data_dir.clone(),

@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{GatewayClientContext, GatewayClientStateMachines};
-use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Settle};
-use crate::gatewaylnrpc::InterceptHtlcResponse;
+use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Settle};
+use crate::gateway_lnrpc::InterceptHtlcResponse;
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 pub enum CompleteHtlcError {

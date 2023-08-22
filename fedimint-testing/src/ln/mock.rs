@@ -14,7 +14,7 @@ use lightning_invoice::{
     Currency, Description, Invoice, InvoiceBuilder, InvoiceDescription, SignedRawInvoice,
     DEFAULT_EXPIRY_TIME,
 };
-use ln_gateway::gatewaylnrpc::{
+use ln_gateway::gateway_lnrpc::{
     self, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
@@ -97,7 +97,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
         Ok(GetRouteHintsResponse {
-            route_hints: vec![gatewaylnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
+            route_hints: vec![gateway_lnrpc::get_route_hints_response::RouteHint { hops: vec![] }],
         })
     }
 

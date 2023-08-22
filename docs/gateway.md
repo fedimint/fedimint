@@ -31,7 +31,7 @@ A webserver daemon that runs all the business logic of a gateway. Think of this 
 
 A Lightning extension / plugin service that provides all the necessary Lightning functionalities the gateway webserver daemon.
 
-- Specification for such an extension and how it interfaces with **gatewayd** is defined in [gatewaylnrpc.proto](../gateway/ln-gateway/proto/gatewaylnrpc.proto) gRPC spec. [Read more about gRPCs here](https://grpc.io/docs/what-is-grpc/introduction/).
+- Specification for such an extension and how it interfaces with **gatewayd** is defined in [gateway_lnrpc.proto](../gateway/ln-gateway/proto/gateway_lnrpc.proto) gRPC spec. [Read more about gRPCs here](https://grpc.io/docs/what-is-grpc/introduction/).
 - The extension usually runs alongside a lightning node, or within the node as a plugin! It works specifically for that lightning node implementation
   - We have implemented [gateway-cln-extension](../gateway/ln-gateway/src/bin/cln_extension.rs) that works with for CLN nodes
   - **TODO:** help us implement a similar extension for [LND](https://github.com/lightningnetwork/lnd) nodes
