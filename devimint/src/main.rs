@@ -1129,6 +1129,7 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
 
     let mut env_string = String::new();
     for (var, value) in globals.vars() {
+        debug!(var, value, "Env variable set");
         writeln!(env_string, r#"export {var}="{value}""#)?; // hope that value doesn't contain a "
         std::env::set_var(var, value);
     }
