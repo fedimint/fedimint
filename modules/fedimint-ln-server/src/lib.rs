@@ -1146,7 +1146,9 @@ mod fedimint_migration_tests {
         OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
     use fedimint_ln_common::LightningCommonGen;
-    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64};
+    use fedimint_testing::db::{
+        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64,
+    };
     use futures::StreamExt;
     use lightning::routing::gossip::RoutingFees;
     use lightning_invoice::Invoice;
@@ -1268,8 +1270,8 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_migration_snapshots() {
-        prepare_snapshot(
+    async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
             "lightning-v0",
             |dbtx| {
                 Box::pin(async move {
@@ -1282,7 +1284,7 @@ mod fedimint_migration_tests {
                 <Lightning as ServerModule>::decoder(),
             )]),
         )
-        .await;
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]

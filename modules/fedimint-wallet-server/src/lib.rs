@@ -1541,7 +1541,9 @@ mod fedimint_migration_tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
-    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
+    use fedimint_testing::db::{
+        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32,
+    };
     use fedimint_wallet_common::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
         FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
@@ -1716,8 +1718,8 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_migration_snapshots() {
-        prepare_snapshot(
+    async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
             "wallet-v0",
             |dbtx| {
                 Box::pin(async move {
@@ -1730,7 +1732,7 @@ mod fedimint_migration_tests {
                 <Wallet as ServerModule>::decoder(),
             )]),
         )
-        .await;
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]

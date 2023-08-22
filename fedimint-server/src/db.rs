@@ -146,7 +146,9 @@ mod fedimint_migration_tests {
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
-    use fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
+    use fedimint_testing::db::{
+        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
+    };
     use futures::StreamExt;
     use rand::distributions::{Distribution, Standard};
     use rand::rngs::OsRng;
@@ -261,8 +263,8 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_migration_snapshots() {
-        prepare_snapshot(
+    async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
+        prepare_db_migration_snapshot(
             "global-v0",
             |dbtx| {
                 Box::pin(async move {
@@ -275,7 +277,7 @@ mod fedimint_migration_tests {
                 <Dummy as ServerModule>::decoder(),
             )]),
         )
-        .await;
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]
