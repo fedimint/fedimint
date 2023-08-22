@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package gatewaylnrpc;
+package gateway_lnrpc;
 
 /* 
  * GatewayLightning is a service that provides limited access and functionality

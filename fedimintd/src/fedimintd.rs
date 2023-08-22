@@ -247,7 +247,7 @@ async fn run(
     let module_kinds = module_gens_params
         .iter_modules()
         .map(|(id, kind, _)| (id, kind));
-    let decoders = module_gens.decoders(module_kinds.into_iter())?;
+    let decoders = module_gens.available_decoders(module_kinds.into_iter())?;
     let db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
         decoders.clone(),

@@ -14,12 +14,12 @@ use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
-use ln_gateway::gatewaylnrpc::gateway_lightning_server::{
+use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
-use ln_gateway::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
-use ln_gateway::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
-use ln_gateway::gatewaylnrpc::{
+use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
+use ln_gateway::gateway_lnrpc::{
     EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };

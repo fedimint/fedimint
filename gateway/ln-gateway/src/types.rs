@@ -1,15 +1,15 @@
-//! Map `gatewaylnrpc` protobuf types to rust types
+//! Map `gateway_lnrpc` protobuf types to rust types
 
 use anyhow::anyhow;
 use secp256k1::PublicKey;
 
-impl TryFrom<crate::gatewaylnrpc::get_route_hints_response::RouteHintHop>
+impl TryFrom<crate::gateway_lnrpc::get_route_hints_response::RouteHintHop>
     for fedimint_ln_common::route_hints::RouteHintHop
 {
     type Error = anyhow::Error;
 
     fn try_from(
-        hop: crate::gatewaylnrpc::get_route_hints_response::RouteHintHop,
+        hop: crate::gateway_lnrpc::get_route_hints_response::RouteHintHop,
     ) -> Result<Self, Self::Error> {
         let binding = hop.src_node_id.try_into();
         let slice: &[u8; 33] = match &binding {
@@ -29,12 +29,12 @@ impl TryFrom<crate::gatewaylnrpc::get_route_hints_response::RouteHintHop>
     }
 }
 
-impl TryFrom<crate::gatewaylnrpc::GetRouteHintsResponse>
+impl TryFrom<crate::gateway_lnrpc::GetRouteHintsResponse>
     for Vec<fedimint_ln_common::route_hints::RouteHint>
 {
     type Error = anyhow::Error;
 
-    fn try_from(res: crate::gatewaylnrpc::GetRouteHintsResponse) -> Result<Self, Self::Error> {
+    fn try_from(res: crate::gateway_lnrpc::GetRouteHintsResponse) -> Result<Self, Self::Error> {
         let mut route_hints = Vec::<fedimint_ln_common::route_hints::RouteHint>::new();
 
         for route_hint in res.route_hints {

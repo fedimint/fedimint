@@ -130,7 +130,7 @@ impl Fixtures {
         // TODO: Make construction easier
         let server_gens = ServerModuleGenRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
-        let decoders = server_gens.decoders(module_kinds).unwrap();
+        let decoders = server_gens.available_decoders(module_kinds).unwrap();
         let clients = self.clients.clone().into_iter();
 
         GatewayTest::new(
