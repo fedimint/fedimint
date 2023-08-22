@@ -13,7 +13,7 @@ use fedimint_core::Amount;
 use ldk_node::io::SqliteStore;
 use ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
 use lightning_invoice::Invoice;
-use ln_gateway::gatewaylnrpc::{
+use ln_gateway::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };

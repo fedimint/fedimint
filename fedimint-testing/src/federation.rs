@@ -96,7 +96,7 @@ impl FederationTest {
             let connections = network.connector(peer_id, reliability).into_dyn();
 
             let instances = config.consensus.iter_module_instances();
-            let decoders = server_gen.decoders(instances).unwrap();
+            let decoders = server_gen.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
 
             let server = ConsensusServer::new_with(

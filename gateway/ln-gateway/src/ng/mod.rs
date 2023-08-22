@@ -49,7 +49,7 @@ use self::pay::{
     OutgoingPaymentError,
 };
 use crate::db::FederationRegistrationKey;
-use crate::gatewaylnrpc::InterceptHtlcRequest;
+use crate::gateway_lnrpc::InterceptHtlcRequest;
 use crate::lnrpc_client::ILnRpcClient;
 use crate::ng::complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 

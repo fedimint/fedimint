@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{GatewayClientContext, GatewayClientStateMachines};
-use crate::gatewaylnrpc::{PayInvoiceRequest, PayInvoiceResponse};
+use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 use crate::lnrpc_client::LightningRpcError;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

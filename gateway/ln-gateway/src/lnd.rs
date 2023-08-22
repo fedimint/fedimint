@@ -20,9 +20,9 @@ use tonic_lnd::tonic::Code;
 use tonic_lnd::{connect, Client as LndClient};
 use tracing::{debug, error, info, trace, warn};
 
-use crate::gatewaylnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
-use crate::gatewaylnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
-use crate::gatewaylnrpc::{
+use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
+use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
+use crate::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };

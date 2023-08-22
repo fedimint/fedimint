@@ -13,8 +13,8 @@ use tonic::Request;
 use tracing::info;
 use url::Url;
 
-use crate::gatewaylnrpc::gateway_lightning_client::GatewayLightningClient;
-use crate::gatewaylnrpc::{
+use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
+use crate::gateway_lnrpc::{
     EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
