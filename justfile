@@ -92,6 +92,10 @@ typos-fix-all:
     # return 1
   fi
 
+# regenerate migration snapshots
+prepare_db_migration_snapshots +extra_args:
+  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=1 cargo test ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} prepare_db_migration_snapshots -- {{extra_args}}
+
 # run code formatters
 format:
   cargo fmt --all

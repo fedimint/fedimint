@@ -3,13 +3,14 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
-use anyhow::{format_err, Context};
+use anyhow::{bail, format_err, Context};
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_rocksdb::RocksDb;
 use futures::future::BoxFuture;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use tracing::debug;
 
 /// Get the project root (relative to closest Cargo.lock file)
 /// ```rust
@@ -39,20 +40,65 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 /// `prepare_fn` which is expected to populate the database with the appropriate
 /// data for testing a migration. If the snapshot directory already exists,
 /// this function will do nothing.
-pub async fn prepare_snapshot<F>(
+pub async fn prepare_db_migration_snapshot<F>(
     snapshot_name: &str,
     prepare_fn: F,
     decoders: ModuleDecoderRegistry,
-) where
+) -> anyhow::Result<()>
+where
     F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
 {
     let project_root = get_project_root().unwrap();
     let snapshot_dir = project_root.join("db/migrations").join(snapshot_name);
-    if !snapshot_dir.exists() {
-        let db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
+
+    async fn prepare<F>(
+        snapshot_dir: PathBuf,
+        prepare_fn: F,
+        decoders: ModuleDecoderRegistry,
+    ) -> anyhow::Result<()>
+    where
+        F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
+    {
+        let db = Database::new(
+            RocksDb::open(&snapshot_dir)
+                .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
+            decoders,
+        );
         let dbtx = db.begin_transaction().await;
         prepare_fn(dbtx).await;
+        Ok(())
     }
+
+    const ENV_VAR_NAME: &str = "FM_PREPARE_DB_MIGRATION_SNAPSHOTS";
+    match (
+        std::env::var_os(ENV_VAR_NAME)
+            .map(|s| s.to_string_lossy().into_owned())
+            .as_deref(),
+        snapshot_dir.exists(),
+    ) {
+        (Some("force"), true) => {
+            tokio::fs::remove_dir_all(&snapshot_dir).await?;
+            prepare(snapshot_dir, prepare_fn, decoders).await?;
+        }
+        (Some(_), true) => {
+            bail!("{ENV_VAR_NAME} set, but {} already exists already exists. Set to 'force' to overwrite.", snapshot_dir.display());
+        }
+        (Some(_), false) => {
+            debug!(dir = %snapshot_dir.display(), "Snapshot dir does not exist. Creating.");
+            prepare(snapshot_dir, prepare_fn, decoders).await?;
+        }
+        (None, true) => {
+            debug!(dir = %snapshot_dir.display(), "Snapshot dir already exist. Nothing to do.");
+        }
+        (None, false) => {
+            bail!(
+                "{ENV_VAR_NAME} not set, but {} doest not exist.",
+                snapshot_dir.display()
+            );
+        }
+    }
+
+    Ok(())
 }
 
 pub const STRING_64: &str = "0123456789012345678901234567890101234567890123456789012345678901";
