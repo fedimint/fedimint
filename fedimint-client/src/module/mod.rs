@@ -23,6 +23,7 @@ use crate::transaction::{ClientInput, ClientOutput};
 use crate::{Client, DynGlobalClientContext};
 
 pub mod init;
+pub mod recovery;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
