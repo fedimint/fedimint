@@ -15,11 +15,14 @@ fi
 # Flag to enable verbose build output from depndent processes (disabled by default)
 export FM_VERBOSE_OUTPUT=0
 
+source scripts/lib.sh
 source scripts/build.sh
 
 mkdir -p $FM_LOGS_DIR
+
 devimint dev-fed 2>$FM_LOGS_DIR/devimint-outer.log &
-echo $! >> $FM_PID_FILE
+auto_kill_last_cmd dev-fed
+
 eval "$(devimint env)"
 
 SHELL=$(which bash) tmuxinator local

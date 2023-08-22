@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+
 export RUST_LOG="${RUST_LOG:-info}"
+
+source ./scripts/lib.sh
 source ./scripts/build.sh
 
 devimint dev-fed &
-echo $! >> $FM_PID_FILE
+auto_kill_last_cmd
+
 eval "$(devimint env)"
 devimint wait
 

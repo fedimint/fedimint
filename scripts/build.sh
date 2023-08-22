@@ -16,13 +16,11 @@ else
 fi
 
 export FM_TEST_DIR
-export FM_PID_FILE="$FM_TEST_DIR/.pid"
 export FM_LOGS_DIR="$FM_TEST_DIR/logs"
 
 echo "Setting up env variables in $FM_TEST_DIR"
 
 mkdir -p "$FM_TEST_DIR"
-touch "$FM_PID_FILE"
 
 if [ -n "${FM_TEST_NAME:-}" ]; then
   # make it easy to identify which tmp dir belongs to which test
@@ -43,17 +41,3 @@ if [ -z "${SKIP_CARGO_BUILD:-}" ]; then
   cargo build --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
 fi
 export PATH="$PWD/target/${CARGO_PROFILE:-debug}:$PATH"
-
-
-# Function for killing processes stored in FM_PID_FILE in reverse-order they were created in
-function kill_fedimint_processes {
-  echo "Killing fedimint processes"
-  PIDS=$(cat $FM_PID_FILE | sed '1!G;h;$!d') # sed reverses order
-  if [ -n "$PIDS" ]
-  then
-    kill $PIDS 2>/dev/null
-  fi
-  rm -f $FM_PID_FILE
-}
-
-trap kill_fedimint_processes EXIT
