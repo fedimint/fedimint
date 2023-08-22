@@ -99,7 +99,7 @@ use fedimint_core::{
     TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
-use fedimint_derive_secret::DerivableSecret;
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::StreamExt;
 use module::DynClientModule;
 use rand::thread_rng;
@@ -144,6 +144,8 @@ pub mod secret;
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
+
+const EXTERNAL_SECRET_CHILD_ID: ChildId = ChildId((ModuleInstanceId::MAX as u64) + 1);
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
@@ -564,6 +566,14 @@ impl Client {
 
     fn root_secret(&self) -> DerivableSecret {
         self.inner.root_secret.clone()
+    }
+
+    /// Secret that is derived from the seed used by the client and cannot
+    /// collide with secrets used by the client itself. It's intended to be used
+    /// by integrators of the client library so they don't have to implement
+    /// their own secret derivation scheme.
+    pub fn external_secret(&self) -> DerivableSecret {
+        self.root_secret().child_key(EXTERNAL_SECRET_CHILD_ID)
     }
 
     /// Add funding and/or change to the transaction builder as needed, finalize
