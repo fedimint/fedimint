@@ -1,11 +1,11 @@
 use bitcoin::Network;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::ServerModuleGenParamsRegistry;
+use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::module::ServerModuleGen;
+use fedimint_core::module::ServerModuleInit;
 use fedimint_core::{Amount, Tiered};
 use fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -23,14 +23,14 @@ use url::Url;
 pub mod fedimintd;
 
 /// Generates the configuration for the modules configured in the server binary
-pub fn attach_default_module_gen_params(
+pub fn attach_default_module_init_params(
     bitcoin_rpc: BitcoinRpcConfig,
-    module_gen_params: &mut ServerModuleGenParamsRegistry,
+    module_init_params: &mut ServerModuleConfigGenParamsRegistry,
     max_denomination: Amount,
     network: Network,
     finality_delay: u32,
 ) {
-    module_gen_params
+    module_init_params
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),

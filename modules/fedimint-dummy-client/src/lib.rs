@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use anyhow::{format_err, Context as _};
 use fedimint_client::derivable_secret::DerivableSecret;
-use fedimint_client::module::gen::ClientModuleGen;
+use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
@@ -12,7 +12,7 @@ use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
@@ -316,13 +316,13 @@ async fn get_funds(dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
 pub struct DummyClientGen;
 
 // TODO: Boilerplate-code
-impl ExtendsCommonModuleGen for DummyClientGen {
+impl ExtendsCommonModuleInit for DummyClientGen {
     type Common = DummyCommonGen;
 }
 
 /// Generates the client module
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for DummyClientGen {
+impl ClientModuleInit for DummyClientGen {
     type Module = DummyClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {

@@ -13,7 +13,7 @@ use crate::api::{
     DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
     StatusResponse, WsFederationApi,
 };
-use crate::config::ServerModuleGenParamsRegistry;
+use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::module::{ApiAuth, ApiRequestErased};
@@ -264,8 +264,8 @@ pub struct ConfigGenParamsConsensus {
     pub peers: BTreeMap<PeerId, PeerServerParams>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
-    /// Config gen params (also contains local params from us)
-    pub modules: ServerModuleGenParamsRegistry,
+    /// Module init params (also contains local params from us)
+    pub modules: ServerModuleConfigGenParamsRegistry,
 }
 
 /// The config gen params response which includes our peer id
@@ -283,7 +283,7 @@ pub struct ConfigGenParamsRequest {
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
     /// Set the params (if leader) or just the local params (if follower)
-    pub modules: ServerModuleGenParamsRegistry,
+    pub modules: ServerModuleConfigGenParamsRegistry,
 }
 
 mod serde_tls_cert {

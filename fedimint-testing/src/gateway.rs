@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
 use fedimint_client_legacy::modules::ln::config::GatewayFee;
 use fedimint_core::config::FederationId;
@@ -74,7 +74,7 @@ impl GatewayTest {
         password: String,
         lightning: Box<dyn LightningTest>,
         decoders: ModuleDecoderRegistry,
-        registry: ClientModuleGenRegistry,
+        registry: ClientModuleInitRegistry,
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: Url = format!("http://{listen}").parse().unwrap();

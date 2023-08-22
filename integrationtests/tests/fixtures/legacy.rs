@@ -4,7 +4,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bitcoin::hashes::sha256::Hash as Sha256Hash;
 use bitcoin::{Address, Transaction as BitcoinTransaction, Txid};
-use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client_legacy::ln::incoming::ConfirmedInvoice;
 use fedimint_client_legacy::ln::outgoing::OutgoingContractAccount;
 use fedimint_client_legacy::mint::backup::Metadata;
@@ -49,7 +49,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> LegacyTestUser<T> {
     pub fn new(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
+        module_inits: ClientModuleInitRegistry,
         peers: Vec<PeerId>,
         db: Database,
     ) -> LegacyTestUser<T> {
@@ -67,7 +67,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> LegacyTestUser<T> {
         let client = Arc::new(block_on(Client::new_with_api(
             config.clone(),
             decoders,
-            module_gens,
+            module_inits,
             db,
             api,
             Default::default(),
@@ -359,7 +359,7 @@ impl ILegacyTestClient for LegacyTestUser<UserClientConfig> {
         Box::new(LegacyTestUser::new(
             self.config.clone(),
             self.client.decoders().clone(),
-            self.client.module_gens().clone(),
+            self.client.module_inits().clone(),
             peers,
             Database::new(MemDatabase::new(), module_decode_stubs()),
         ))

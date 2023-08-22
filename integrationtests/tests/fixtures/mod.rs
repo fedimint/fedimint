@@ -11,7 +11,7 @@ use anyhow::Context;
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen};
+use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, UserClientConfig};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
@@ -19,7 +19,8 @@ use fedimint_core::api::InviteCode;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{
-    ClientConfig, ServerModuleGenParamsRegistry, ServerModuleGenRegistry, META_FEDERATION_NAME_KEY,
+    ClientConfig, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
+    META_FEDERATION_NAME_KEY,
 };
 use fedimint_core::core::{
     DynModuleConsensusItem, ModuleInstanceId, LEGACY_HARDCODED_INSTANCE_ID_LN,
@@ -29,7 +30,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::epoch::SignedEpochOutcome;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiAuth, DynServerModuleGen, ModuleCommon, SerdeModuleEncoding};
+use fedimint_core::module::{ApiAuth, DynServerModuleInit, ModuleCommon, SerdeModuleEncoding};
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::{
@@ -139,32 +140,32 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     }
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-    let mut module_gens_params = ServerModuleGenParamsRegistry::default();
+    let mut module_inits_params = ServerModuleConfigGenParamsRegistry::default();
 
-    let client_module_inits = ClientModuleGenRegistry::from(vec![
-        DynClientModuleGen::from(WalletClientGen::default()),
-        DynClientModuleGen::from(MintClientGen),
-        DynClientModuleGen::from(LightningClientGen),
+    let client_module_inits = ClientModuleInitRegistry::from(vec![
+        DynClientModuleInit::from(WalletClientGen::default()),
+        DynClientModuleInit::from(MintClientGen),
+        DynClientModuleInit::from(LightningClientGen),
     ]);
 
     let decoders = module_decode_stubs();
 
-    let server_module_inits = ServerModuleGenRegistry::from(vec![
-        DynServerModuleGen::from(WalletGen),
-        DynServerModuleGen::from(MintGen),
-        DynServerModuleGen::from(LightningGen),
+    let server_module_inits = ServerModuleInitRegistry::from(vec![
+        DynServerModuleInit::from(WalletGen),
+        DynServerModuleInit::from(MintGen),
+        DynServerModuleInit::from(LightningGen),
     ]);
 
     let fixtures = match env::var("FM_TEST_USE_REAL_DAEMONS") {
         Ok(s) if s == "1" => {
-            fedimintd::attach_default_module_gen_params(
+            fedimintd::attach_default_module_init_params(
                 BitcoinRpcConfig::from_env_vars()?,
-                &mut module_gens_params,
+                &mut module_inits_params,
                 msats(MAX_MSAT_DENOMINATION),
                 bitcoin::network::constants::Network::Regtest,
                 10,
             );
-            let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
+            let params = gen_local(&peers, base_port, "test", module_inits_params).unwrap();
 
             info!("Testing with REAL Bitcoin and Lightning services");
             let mut config_task_group = task_group.make_subgroup().await;
@@ -231,15 +232,15 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
             let factory = FakeBitcoinFactory::register_new();
-            fedimintd::attach_default_module_gen_params(
+            fedimintd::attach_default_module_init_params(
                 factory.config.clone(),
-                &mut module_gens_params,
+                &mut module_inits_params,
                 msats(MAX_MSAT_DENOMINATION),
                 bitcoin::network::constants::Network::Regtest,
                 10,
             );
             let bitcoin_rpc = || factory.bitcoin.clone().into();
-            let params = gen_local(&peers, base_port, "test", module_gens_params).unwrap();
+            let params = gen_local(&peers, base_port, "test", module_inits_params).unwrap();
 
             let server_config =
                 ServerConfig::trusted_dealer_gen(&params, server_module_inits.clone());
@@ -301,7 +302,7 @@ pub fn gen_local(
     peers: &[PeerId],
     base_port: u16,
     federation_name: &str,
-    modules: ServerModuleGenParamsRegistry,
+    modules: ServerModuleConfigGenParamsRegistry,
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
     let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
         .iter()
@@ -369,7 +370,7 @@ pub fn peers(peers: &[u16]) -> Vec<PeerId> {
 async fn distributed_config(
     peers: &[PeerId],
     params: HashMap<PeerId, ConfigGenParams>,
-    registry: ServerModuleGenRegistry,
+    registry: ServerModuleInitRegistry,
     task_group: &mut TaskGroup,
 ) -> Cancellable<(BTreeMap<PeerId, ServerConfig>, ClientConfig)> {
     let configs: Vec<(PeerId, ServerConfig)> = join_all(peers.iter().map(|peer| {
@@ -974,7 +975,7 @@ impl FederationTest {
         database_gen: &impl Fn(ModuleDecoderRegistry) -> Database,
         bitcoin_gen: &impl Fn() -> DynBitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
-        module_inits: ServerModuleGenRegistry,
+        module_inits: ServerModuleInitRegistry,
         task_group: &mut TaskGroup,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {

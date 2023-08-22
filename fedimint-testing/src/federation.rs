@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, HashMap};
 
-use fedimint_client::module::gen::ClientModuleGenRegistry;
+use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::{
-    ClientConfig, FederationId, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
     META_FEDERATION_NAME_KEY,
 };
 use fedimint_core::core::ModuleInstanceId;
@@ -27,8 +27,8 @@ use tokio_rustls::rustls;
 /// Test fixture for a running fedimint federation
 pub struct FederationTest {
     configs: BTreeMap<PeerId, ServerConfig>,
-    server_gen: ServerModuleGenRegistry,
-    client_gen: ClientModuleGenRegistry,
+    server_init: ServerModuleInitRegistry,
+    client_init: ClientModuleInitRegistry,
     primary_client: ModuleInstanceId,
     _task: TaskGroup,
 }
@@ -43,7 +43,7 @@ impl FederationTest {
     pub async fn new_client(&self) -> Client {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
-            .to_client_config(&self.server_gen)
+            .to_client_config(&self.server_init)
             .unwrap();
 
         self.new_client_with_config(client_config).await
@@ -51,7 +51,7 @@ impl FederationTest {
 
     pub async fn new_client_with_config(&self, client_config: ClientConfig) -> Client {
         let mut client_builder = ClientBuilder::default();
-        client_builder.with_module_gens(self.client_gen.clone());
+        client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
@@ -70,7 +70,7 @@ impl FederationTest {
     pub fn id(&self) -> FederationId {
         self.configs[&PeerId::from(0)]
             .consensus
-            .to_client_config(&self.server_gen)
+            .to_client_config(&self.server_init)
             .unwrap()
             .federation_id
     }
@@ -78,16 +78,16 @@ impl FederationTest {
     pub(crate) async fn new(
         num_peers: u16,
         base_port: u16,
-        params: ServerModuleGenParamsRegistry,
-        server_gen: ServerModuleGenRegistry,
-        client_gen: ClientModuleGenRegistry,
+        params: ServerModuleConfigGenParamsRegistry,
+        server_init: ServerModuleInitRegistry,
+        client_init: ClientModuleInitRegistry,
         primary_client: ModuleInstanceId,
     ) -> Self {
         let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
         let params =
             local_config_gen_params(&peers, base_port, params).expect("Generates local config");
 
-        let configs = ServerConfig::trusted_dealer_gen(&params, server_gen.clone());
+        let configs = ServerConfig::trusted_dealer_gen(&params, server_init.clone());
         let network = MockNetwork::new();
 
         let mut task = TaskGroup::new();
@@ -96,13 +96,13 @@ impl FederationTest {
             let connections = network.connector(peer_id, reliability).into_dyn();
 
             let instances = config.consensus.iter_module_instances();
-            let decoders = server_gen.available_decoders(instances).unwrap();
+            let decoders = server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
 
             let server = ConsensusServer::new_with(
                 config.clone(),
                 db.clone(),
-                server_gen.clone(),
+                server_init.clone(),
                 connections,
                 DelayCalculator::TEST_DEFAULT,
                 &mut task,
@@ -120,8 +120,8 @@ impl FederationTest {
 
         Self {
             configs,
-            server_gen,
-            client_gen,
+            server_init,
+            client_init,
             primary_client,
             _task: task,
         }
@@ -134,7 +134,7 @@ impl FederationTest {
 pub fn local_config_gen_params(
     peers: &[PeerId],
     base_port: u16,
-    server_config_gen: ServerModuleGenParamsRegistry,
+    server_config_gen: ServerModuleConfigGenParamsRegistry,
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
     // Generate TLS cert and private key
     let tls_keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers

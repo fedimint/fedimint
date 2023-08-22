@@ -429,7 +429,7 @@ macro_rules! module_plugin_static_trait_define{
 #[macro_export]
 macro_rules! plugin_types_trait_impl_config {
     ($common_gen:ty, $gen:ty, $gen_local:ty, $gen_consensus:ty, $cfg:ty, $cfg_local:ty, $cfg_private:ty, $cfg_consensus:ty, $cfg_client:ty) => {
-        impl fedimint_core::config::ModuleGenParams for $gen {
+        impl fedimint_core::config::ModuleInitParams for $gen {
             type Local = $gen_local;
             type Consensus = $gen_consensus;
 
@@ -444,11 +444,11 @@ macro_rules! plugin_types_trait_impl_config {
 
         impl fedimint_core::config::TypedServerModuleConsensusConfig for $cfg_consensus {
             fn kind(&self) -> fedimint_core::core::ModuleKind {
-                <$common_gen as fedimint_core::module::CommonModuleGen>::KIND
+                <$common_gen as fedimint_core::module::CommonModuleInit>::KIND
             }
 
             fn version(&self) -> fedimint_core::module::ModuleConsensusVersion {
-                <$common_gen as fedimint_core::module::CommonModuleGen>::CONSENSUS_VERSION
+                <$common_gen as fedimint_core::module::CommonModuleInit>::CONSENSUS_VERSION
             }
         }
 
@@ -471,7 +471,7 @@ macro_rules! plugin_types_trait_impl_config {
 
             fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus) {
                 (
-                    <$common_gen as fedimint_core::module::CommonModuleGen>::KIND,
+                    <$common_gen as fedimint_core::module::CommonModuleInit>::KIND,
                     self.local,
                     self.private,
                     self.consensus,

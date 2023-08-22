@@ -28,7 +28,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
 use db::{FederationRegistrationKey, GatewayPublicKey};
-use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
+use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -36,7 +36,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::Database;
-use fedimint_core::module::CommonModuleGen;
+use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
 use fedimint_core::Amount;
@@ -128,7 +128,7 @@ pub struct GatewayOpts {
 }
 
 pub struct Gatewayd {
-    registry: ClientModuleGenRegistry,
+    registry: ClientModuleInitRegistry,
     lightning_mode: LightningMode,
     data_dir: PathBuf,
     listen: SocketAddr,
@@ -164,7 +164,7 @@ impl Gatewayd {
         );
 
         Ok(Self {
-            registry: ClientModuleGenRegistry::new(),
+            registry: ClientModuleInitRegistry::new(),
             lightning_mode: mode,
             data_dir,
             listen,
@@ -176,7 +176,7 @@ impl Gatewayd {
 
     pub fn with_module<T>(mut self, gen: T) -> Self
     where
-        T: ClientModuleGen + 'static + Send + Sync,
+        T: ClientModuleInit + 'static + Send + Sync,
     {
         self.registry.attach(gen);
         self

@@ -14,7 +14,7 @@ use fedimint_core::admin_client::{
 };
 use fedimint_core::api::{ServerStatus, StatusResponse};
 use fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ConfigGenModuleParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
@@ -382,7 +382,7 @@ pub struct ConfigGenSettings {
     /// How many API connections we will accept
     pub max_connections: u32,
     /// Registry for config gen
-    pub registry: ServerModuleGenRegistry,
+    pub registry: ServerModuleInitRegistry,
 }
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -511,7 +511,8 @@ impl ConfigGenState {
                 .map_err(|e| ApiError::bad_request(format!("Module params invalid {e:?}")))?;
             combined_params.push((id, kind.clone(), combined));
         }
-        consensus.modules = ServerModuleGenParamsRegistry::from_iter(combined_params.into_iter());
+        consensus.modules =
+            ServerModuleConfigGenParamsRegistry::from_iter(combined_params.into_iter());
 
         let local = ConfigGenParamsLocal {
             our_id: *our_id,
@@ -687,7 +688,7 @@ mod tests {
 
     use fedimint_core::admin_client::{ConfigGenParamsRequest, WsAdminClient};
     use fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
-    use fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+    use fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -706,8 +707,8 @@ mod tests {
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
-    use crate::config::{DynServerModuleGen, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
-    use crate::fedimint_core::module::ServerModuleGen;
+    use crate::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
+    use crate::fedimint_core::module::ServerModuleInit;
     use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
@@ -737,7 +738,7 @@ mod tests {
             let p2p_url = format!("fedimint://127.0.0.1:{}", port + 1)
                 .parse()
                 .expect("parses");
-            let mut modules = ServerModuleGenParamsRegistry::default();
+            let mut modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(0, DummyGen::kind(), DummyGenParams::default());
             let default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
@@ -751,7 +752,7 @@ mod tests {
                 api_url: api_url.clone(),
                 default_params,
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-                registry: ServerModuleGenRegistry::from(vec![DynServerModuleGen::from(DummyGen)]),
+                registry: ServerModuleInitRegistry::from(vec![DynServerModuleInit::from(DummyGen)]),
             };
             let dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
@@ -840,7 +841,7 @@ mod tests {
 
         /// Sets local param to name and unique consensus amount for testing
         async fn set_config_gen_params(&self) {
-            let mut modules = ServerModuleGenParamsRegistry::default();
+            let mut modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(
                 0,
                 DummyGen::kind(),

@@ -14,7 +14,9 @@ use std::{fs, result};
 
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-use fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry, IClientModuleGen};
+use fedimint_client::module::init::{
+    ClientModuleInit, ClientModuleInitRegistry, IClientModuleInit,
+};
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::{ClientBuilder, ClientSecret};
@@ -290,18 +292,18 @@ impl Opts {
     fn load_decoders(
         &self,
         cfg: &ClientConfig,
-        module_gens: &ClientModuleGenRegistry,
+        module_inits: &ClientModuleInitRegistry,
     ) -> ModuleDecoderRegistry {
         ModuleDecoderRegistry::new(cfg.clone().modules.into_iter().filter_map(
             |(id, module_cfg)| {
                 let kind = module_cfg.kind().clone();
-                module_gens.get(&kind).map(|module_gen| {
+                module_inits.get(&kind).map(|module_init| {
                     (
                         id,
                         kind,
-                        IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(
-                            module_gen,
-                        )),
+                        IClientModuleInit::decoder(
+                            AsRef::<dyn IClientModuleInit + 'static>::as_ref(module_init),
+                        ),
                     )
                 })
             },
@@ -311,11 +313,11 @@ impl Opts {
 
     async fn build_client_ng(
         &self,
-        module_gens: &ClientModuleGenRegistry,
+        module_inits: &ClientModuleInitRegistry,
         invite_code: Option<InviteCode>,
     ) -> CliResult<fedimint_client::Client> {
         let client_builder = self
-            .build_client_ng_builder(module_gens, invite_code)
+            .build_client_ng_builder(module_inits, invite_code)
             .await?;
         client_builder
             .build::<PlainRootSecretStrategy>()
@@ -325,13 +327,13 @@ impl Opts {
 
     async fn build_client_ng_builder(
         &self,
-        module_gens: &ClientModuleGenRegistry,
+        module_inits: &ClientModuleInitRegistry,
         invite_code: Option<InviteCode>,
     ) -> CliResult<fedimint_client::ClientBuilder> {
         let db = self.load_rocks_db()?;
 
         let mut client_builder = ClientBuilder::default();
-        client_builder.with_module_gens(module_gens.clone());
+        client_builder.with_module_inits(module_inits.clone());
         client_builder.with_primary_module(1);
         if let Some(invite_code) = invite_code {
             client_builder.with_invite_code(invite_code);
@@ -465,7 +467,7 @@ struct PayRequest {
 }
 
 pub struct FedimintCli {
-    module_gens: ClientModuleGenRegistry,
+    module_inits: ClientModuleInitRegistry,
     invite_code: Option<InviteCode>,
 }
 
@@ -486,16 +488,16 @@ impl FedimintCli {
         debug!("Starting fedimint-cli (version: {CODE_VERSION})");
 
         Ok(Self {
-            module_gens: ClientModuleGenRegistry::new(),
+            module_inits: ClientModuleInitRegistry::new(),
             invite_code: None,
         })
     }
 
     pub fn with_module<T>(mut self, gen: T) -> Self
     where
-        T: ClientModuleGen + 'static + Send + Sync,
+        T: ClientModuleInit + 'static + Send + Sync,
     {
-        self.module_gens.attach(gen);
+        self.module_inits.attach(gen);
         self
     }
 
@@ -527,7 +529,7 @@ impl FedimintCli {
 
                 // Build client and store config in DB
                 let _client = cli
-                    .build_client_ng(&self.module_gens, Some(invite.clone()))
+                    .build_client_ng(&self.module_inits, Some(invite.clone()))
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failed to build client")?;
 
@@ -542,7 +544,7 @@ impl FedimintCli {
             }),
             Command::Client(ClientCmd::Restore { secret }) => {
                 let (client, metadata) = cli
-                    .build_client_ng_builder(&self.module_gens, None)
+                    .build_client_ng_builder(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
                     .build_restoring_from_backup(ClientSecret::<PlainRootSecretStrategy>::new(
@@ -562,7 +564,7 @@ impl FedimintCli {
             }
             Command::Client(command) => {
                 let client = cli
-                    .build_client_ng(&self.module_gens, None)
+                    .build_client_ng(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 let config = client.get_config().clone();
@@ -574,7 +576,7 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::Audit) => {
                 let user = cli
-                    .build_client_ng(&self.module_gens, None)
+                    .build_client_ng(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
 
@@ -589,7 +591,7 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::Status) => {
                 let user = cli
-                    .build_client_ng(&self.module_gens, None)
+                    .build_client_ng(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
 
@@ -601,12 +603,12 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::LastEpoch) => {
                 let user = cli
-                    .build_client_ng(&self.module_gens, None)
+                    .build_client_ng(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 let cfg = user.get_config().clone();
 
-                let decoders = cli.load_decoders(&cfg, &self.module_gens);
+                let decoders = cli.load_decoders(&cfg, &self.module_inits);
                 let client = cli.admin_client(&cfg)?;
                 let last_epoch = client
                     .fetch_last_epoch_history(cfg.epoch_pk, &decoders)
@@ -617,12 +619,12 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::ForceEpoch { hex_outcome }) => {
                 let user = cli
-                    .build_client_ng(&self.module_gens, None)
+                    .build_client_ng(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 let cfg = user.get_config();
 
-                let decoders = cli.load_decoders(cfg, &self.module_gens);
+                let decoders = cli.load_decoders(cfg, &self.module_inits);
                 let outcome: SignedEpochOutcome = Decodable::consensus_decode_hex(
                     &hex_outcome,
                     &decoders,
@@ -636,7 +638,7 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::SignalUpgrade) => {
                 let user = cli
-                    .build_client_ng(&self.module_gens, None)
+                    .build_client_ng(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
 
@@ -654,7 +656,7 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "Invalid JSON-RPC parameters")?;
                 let params = ApiRequestErased::new(params);
                 let ws_api: Arc<_> = WsFederationApi::from_config(
-                    cli.build_client_ng(&self.module_gens, None)
+                    cli.build_client_ng(&self.module_inits, None)
                         .await?
                         .get_config(),
                 )
@@ -685,7 +687,7 @@ impl FedimintCli {
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => {
                 task::timeout(Duration::from_secs(30), async move {
-                    let client = cli.build_client_ng(&self.module_gens, None).await?;
+                    let client = cli.build_client_ng(&self.module_inits, None).await?;
                     loop {
                         let (_, instance) = client
                             .get_first_module::<WalletClientModule>(&fedimint_wallet_client::KIND);
@@ -726,7 +728,7 @@ impl FedimintCli {
             }),
             Command::Dev(DevCmd::EpochCount) => {
                 let count = cli
-                    .build_client_ng(&self.module_gens, None)
+                    .build_client_ng(&self.module_inits, None)
                     .await?
                     .api()
                     .fetch_epoch_count()
@@ -780,7 +782,7 @@ impl FedimintCli {
 
                 let tx = fedimint_core::transaction::Transaction::from_bytes(
                     &bytes,
-                    cli.build_client_ng(&self.module_gens, None)
+                    cli.build_client_ng(&self.module_inits, None)
                         .await?
                         .decoders(),
                 )
