@@ -1149,6 +1149,8 @@
 <a href="#1149" id="1149">1149</a>
 <a href="#1150" id="1150">1150</a>
 <a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -2088,7 +2090,9 @@
     <span class="kw">use </span>fedimint_mint_common::{
         MintCommonGen, MintOutputBlindSignatures, MintOutputSignatureShare, Nonce,
     };
-    <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_32, BYTE_8};
+    <span class="kw">use </span>fedimint_testing::db::{
+        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
+    };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2176,8 +2180,8 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>prepare_migration_snapshots() {
-        prepare_snapshot(
+    </span><span class="kw">async fn </span>prepare_db_migration_snapshots() -&gt; anyhow::Result&lt;()&gt; {
+        prepare_db_migration_snapshot(
             <span class="string">&quot;mint-v0&quot;</span>,
             |dbtx| {
                 Box::pin(<span class="kw">async move </span>{
@@ -2190,8 +2194,8 @@
                 &lt;Mint <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
-        .<span class="kw">await</span>;
-    }
+        .<span class="kw">await
+    </span>}
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_migrations() {

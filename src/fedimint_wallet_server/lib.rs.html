@@ -1870,6 +1870,8 @@
 <a href="#1870" id="1870">1870</a>
 <a href="#1871" id="1871">1871</a>
 <a href="#1872" id="1872">1872</a>
+<a href="#1873" id="1873">1873</a>
+<a href="#1874" id="1874">1874</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -3413,7 +3415,9 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
     <span class="kw">use </span>fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};
-    <span class="kw">use </span>fedimint_testing::db::{prepare_snapshot, validate_migrations, BYTE_20, BYTE_32};
+    <span class="kw">use </span>fedimint_testing::db::{
+        prepare_db_migration_snapshot, validate_migrations, BYTE_20, BYTE_32,
+    };
     <span class="kw">use </span>fedimint_wallet_common::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
         FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
@@ -3588,8 +3592,8 @@
     }
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    </span><span class="kw">async fn </span>prepare_migration_snapshots() {
-        prepare_snapshot(
+    </span><span class="kw">async fn </span>prepare_db_migration_snapshots() -&gt; anyhow::Result&lt;()&gt; {
+        prepare_db_migration_snapshot(
             <span class="string">&quot;wallet-v0&quot;</span>,
             |dbtx| {
                 Box::pin(<span class="kw">async move </span>{
@@ -3602,8 +3606,8 @@
                 &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
-        .<span class="kw">await</span>;
-    }
+        .<span class="kw">await
+    </span>}
 
     <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
     </span><span class="kw">async fn </span>test_migrations() -&gt; anyhow::Result&lt;()&gt; {

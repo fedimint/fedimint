@@ -136,18 +136,65 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::read_dir;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::{env, fs, io};
 
-<span class="kw">use </span>anyhow::{format_err, Context};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::RngCore;
+<span class="kw">use </span>tracing::debug;
 
 <span class="doccomment">/// Get the project root (relative to closest Cargo.lock file)
 /// ```rust
@@ -177,20 +224,65 @@
 /// `prepare_fn` which is expected to populate the database with the appropriate
 /// data for testing a migration. If the snapshot directory already exists,
 /// this function will do nothing.
-</span><span class="kw">pub async fn </span>prepare_snapshot&lt;F&gt;(
+</span><span class="kw">pub async fn </span>prepare_db_migration_snapshot&lt;F&gt;(
     snapshot_name: <span class="kw-2">&amp;</span>str,
     prepare_fn: F,
     decoders: ModuleDecoderRegistry,
-) <span class="kw">where
+) -&gt; anyhow::Result&lt;()&gt;
+<span class="kw">where
     </span>F: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, ()&gt;,
 {
     <span class="kw">let </span>project_root = get_project_root().unwrap();
     <span class="kw">let </span>snapshot_dir = project_root.join(<span class="string">&quot;db/migrations&quot;</span>).join(snapshot_name);
-    <span class="kw">if </span>!snapshot_dir.exists() {
-        <span class="kw">let </span>db = Database::new(RocksDb::open(snapshot_dir).unwrap(), decoders);
+
+    <span class="kw">async fn </span>prepare&lt;F&gt;(
+        snapshot_dir: PathBuf,
+        prepare_fn: F,
+        decoders: ModuleDecoderRegistry,
+    ) -&gt; anyhow::Result&lt;()&gt;
+    <span class="kw">where
+        </span>F: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; BoxFuture&lt;<span class="lifetime">&#39;a</span>, ()&gt;,
+    {
+        <span class="kw">let </span>db = Database::new(
+            RocksDb::open(<span class="kw-2">&amp;</span>snapshot_dir)
+                .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;Preparing snapshot in {}&quot;</span>, snapshot_dir.display()))<span class="question-mark">?</span>,
+            decoders,
+        );
         <span class="kw">let </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         prepare_fn(dbtx).<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(())
     }
+
+    <span class="kw">const </span>ENV_VAR_NAME: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_PREPARE_DB_MIGRATION_SNAPSHOTS&quot;</span>;
+    <span class="kw">match </span>(
+        std::env::var_os(ENV_VAR_NAME)
+            .map(|s| s.to_string_lossy().into_owned())
+            .as_deref(),
+        snapshot_dir.exists(),
+    ) {
+        (<span class="prelude-val">Some</span>(<span class="string">&quot;force&quot;</span>), <span class="bool-val">true</span>) =&gt; {
+            tokio::fs::remove_dir_all(<span class="kw-2">&amp;</span>snapshot_dir).<span class="kw">await</span><span class="question-mark">?</span>;
+            prepare(snapshot_dir, prepare_fn, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="bool-val">true</span>) =&gt; {
+            <span class="macro">bail!</span>(<span class="string">&quot;{ENV_VAR_NAME} set, but {} already exists already exists. Set to &#39;force&#39; to overwrite.&quot;</span>, snapshot_dir.display());
+        }
+        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="bool-val">false</span>) =&gt; {
+            <span class="macro">debug!</span>(dir = %snapshot_dir.display(), <span class="string">&quot;Snapshot dir does not exist. Creating.&quot;</span>);
+            prepare(snapshot_dir, prepare_fn, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        (<span class="prelude-val">None</span>, <span class="bool-val">true</span>) =&gt; {
+            <span class="macro">debug!</span>(dir = %snapshot_dir.display(), <span class="string">&quot;Snapshot dir already exist. Nothing to do.&quot;</span>);
+        }
+        (<span class="prelude-val">None</span>, <span class="bool-val">false</span>) =&gt; {
+            <span class="macro">bail!</span>(
+                <span class="string">&quot;{ENV_VAR_NAME} not set, but {} doest not exist.&quot;</span>,
+                snapshot_dir.display()
+            );
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">pub const </span>STRING_64: <span class="kw-2">&amp;</span>str = <span class="string">&quot;0123456789012345678901234567890101234567890123456789012345678901&quot;</span>;

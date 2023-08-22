@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["BYTE_20","BYTE_32","BYTE_8","STRING_64"],"fn":["copy_directory","get_project_root","open_temp_db_and_copy","prepare_snapshot","validate_migrations"]};
+window.SIDEBAR_ITEMS = {"constant":["BYTE_20","BYTE_32","BYTE_8","STRING_64"],"fn":["copy_directory","get_project_root","open_temp_db_and_copy","prepare_db_migration_snapshot","validate_migrations"]};
