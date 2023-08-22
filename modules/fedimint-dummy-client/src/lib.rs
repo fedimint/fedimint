@@ -6,6 +6,7 @@ use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
 use db::DbKeyPrefix;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
@@ -57,6 +58,7 @@ impl Context for DummyClientContext {}
 impl ClientModule for DummyClientModule {
     type Init = DummyClientInit;
     type Common = DummyModuleTypes;
+    type Backup = NoModuleBackup;
     type ModuleStateMachineContext = DummyClientContext;
     type States = DummyStateMachine;
 

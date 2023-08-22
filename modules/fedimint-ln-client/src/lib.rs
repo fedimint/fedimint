@@ -16,6 +16,7 @@ use bitcoin_hashes::{sha256, Hash};
 use db::{DbKeyPrefix, LightningGatewayKey, PaymentResult, PaymentResultKey};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -331,6 +332,7 @@ pub struct LightningClientModule {
 impl ClientModule for LightningClientModule {
     type Init = LightningClientInit;
     type Common = LightningModuleTypes;
+    type Backup = NoModuleBackup;
     type ModuleStateMachineContext = LightningClientContext;
     type States = LightningClientStateMachines;
 

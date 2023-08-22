@@ -1,12 +1,13 @@
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
+use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::Result;
 use bitcoin::secp256k1;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
@@ -16,6 +17,7 @@ use tracing::{debug, info, warn};
 
 use super::Client;
 use crate::get_decoded_client_secret;
+use crate::module::recovery::DynModuleBackup;
 use crate::secret::DeriveableSecretClientExt;
 
 /// Backup metadata
@@ -61,14 +63,15 @@ impl Metadata {
 }
 
 /// Client state backup
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct ClientBackup {
     /// Session count taken right before taking the backup
     session_count: u64,
     /// Application metadata
     metadata: Metadata,
+    // TODO: remove redundant ModuleInstanceId
     /// Module specific-backup (if supported)
-    modules: BTreeMap<ModuleInstanceId, Vec<u8>>,
+    modules: BTreeMap<ModuleInstanceId, DynModuleBackup>,
 }
 
 impl ClientBackup {
@@ -78,31 +81,51 @@ impl ClientBackup {
         ((len.saturating_sub(1) / padding_alignment) + 1) * padding_alignment
     }
 
-    /// Encode `self` to a padded (but still plaintext) message
-    fn encode(&self) -> Result<Vec<u8>> {
-        let mut bytes = self.consensus_encode_to_vec()?;
-
-        let padding_size = Self::get_alignment_size(bytes.len()) - bytes.len();
-
-        bytes.extend(std::iter::repeat(0u8).take(padding_size));
-
-        Ok(bytes)
-    }
-
-    /// Decode from a plaintexet (possibly aligned) message
-    fn decode(msg: &[u8]) -> Result<Self> {
-        Ok(Decodable::consensus_decode(
-            &mut &msg[..],
-            &ModuleDecoderRegistry::default(),
-        )?)
-    }
-
     /// Encrypt with a key and turn into [`EncryptedClientBackup`]
     pub fn encrypt_to(&self, key: &fedimint_aead::LessSafeKey) -> Result<EncryptedClientBackup> {
-        let encoded = self.encode()?;
+        let encoded = Encodable::consensus_encode_to_vec(self)?;
 
         let encrypted = fedimint_aead::encrypt(encoded, key)?;
         Ok(EncryptedClientBackup(encrypted))
+    }
+}
+
+impl Encodable for ClientBackup {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> std::result::Result<usize, Error> {
+        let mut len = 0;
+        len += self.session_count.consensus_encode(writer)?;
+        len += self.metadata.consensus_encode(writer)?;
+        len += self.modules.consensus_encode(writer)?;
+
+        // FIXME: this still leaks some information about the backup size if the padding
+        // is so short that its length is encoded as 1 byte instead of 3.
+        let estimated_len = len + 3;
+
+        // Hide small changes in backup size for privacy
+        let alignment_size = Self::get_alignment_size(estimated_len); // +3 for most likely padding len len
+        let padding = vec![0u8; alignment_size - estimated_len];
+        len += padding.consensus_encode(writer)?;
+
+        Ok(len)
+    }
+}
+
+impl Decodable for ClientBackup {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> std::result::Result<Self, DecodeError> {
+        let session_count = u64::consensus_decode(r, modules)?;
+        let metadata = Metadata::consensus_decode(r, modules)?;
+        let module_backups =
+            BTreeMap::<ModuleInstanceId, DynModuleBackup>::consensus_decode(r, modules)?;
+        let _padding = Vec::<u8>::consensus_decode(r, modules)?;
+
+        Ok(Self {
+            session_count,
+            metadata,
+            modules: module_backups,
+        })
     }
 }
 
@@ -110,9 +133,16 @@ impl ClientBackup {
 pub struct EncryptedClientBackup(Vec<u8>);
 
 impl EncryptedClientBackup {
-    pub fn decrypt_with(mut self, key: &fedimint_aead::LessSafeKey) -> Result<ClientBackup> {
+    pub fn decrypt_with(
+        mut self,
+        key: &fedimint_aead::LessSafeKey,
+        decoders: &ModuleDecoderRegistry,
+    ) -> Result<ClientBackup> {
         let decrypted = fedimint_aead::decrypt(&mut self.0, key)?;
-        ClientBackup::decode(decrypted)
+        Ok(ClientBackup::consensus_decode(
+            &mut Cursor::new(decrypted),
+            decoders,
+        )?)
     }
 
     pub fn into_backup_request(self, keypair: &KeyPair) -> Result<SignedBackupRequest> {
@@ -143,9 +173,9 @@ impl Client {
         for (id, kind, module) in self.modules.iter_modules() {
             debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Preparing module backup");
             if module.supports_backup() {
-                let backup = module.backup().await?;
+                let backup = module.backup(id).await?;
 
-                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, size=backup.len(), "Prepared module backup");
+                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Prepared module backup");
                 modules.insert(id, backup);
             } else {
                 info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Module does not support backup");
@@ -256,7 +286,7 @@ impl Client {
             if !module.supports_backup() {
                 continue;
             }
-            let module_backup = backup.as_ref().and_then(|b| b.modules.get(&id));
+            let module_backup = backup.as_ref().and_then(|b| b.modules.get(&id)).cloned();
 
             info!(
                 target: LOG_CLIENT_RECOVERY,
@@ -264,7 +294,7 @@ impl Client {
                 module_id = id,
                 "Starting recovery from backup for module"
             );
-            module.restore(module_backup.map(Vec::as_slice)).await?;
+            module.restore(id, module_backup).await?;
         }
 
         Ok(metadata)
@@ -279,7 +309,7 @@ impl Client {
             .into_iter()
             .filter_map(|backup| {
                 match EncryptedClientBackup(backup.data)
-                    .decrypt_with(&self.get_derived_backup_encryption_key())
+                    .decrypt_with(&self.get_derived_backup_encryption_key(), self.decoders())
                 {
                     Ok(valid) => Some(valid),
                     Err(e) => {
