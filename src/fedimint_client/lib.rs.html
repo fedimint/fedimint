@@ -1698,6 +1698,16 @@
 <a href="#1698" id="1698">1698</a>
 <a href="#1699" id="1699">1699</a>
 <a href="#1700" id="1700">1700</a>
+<a href="#1701" id="1701">1701</a>
+<a href="#1702" id="1702">1702</a>
+<a href="#1703" id="1703">1703</a>
+<a href="#1704" id="1704">1704</a>
+<a href="#1705" id="1705">1705</a>
+<a href="#1706" id="1706">1706</a>
+<a href="#1707" id="1707">1707</a>
+<a href="#1708" id="1708">1708</a>
+<a href="#1709" id="1709">1709</a>
+<a href="#1710" id="1710">1710</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1799,7 +1809,7 @@
     TransactionId,
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
-<span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
+<span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>module::DynClientModule;
 <span class="kw">use </span>rand::thread_rng;
@@ -1844,6 +1854,8 @@
 </span><span class="kw">pub mod </span>sm;
 <span class="doccomment">/// Structs and interfaces to construct Fedimint transactions
 </span><span class="kw">pub mod </span>transaction;
+
+<span class="kw">const </span>EXTERNAL_SECRET_CHILD_ID: ChildId = ChildId((ModuleInstanceId::MAX <span class="kw">as </span>u64) + <span class="number">1</span>);
 
 <span class="kw">pub type </span>InstancelessDynClientInput = ClientInput&lt;
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IInput + <span class="lifetime">&#39;static</span>)&gt;,
@@ -2264,6 +2276,14 @@
 
     <span class="kw">fn </span>root_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DerivableSecret {
         <span class="self">self</span>.inner.root_secret.clone()
+    }
+
+    <span class="doccomment">/// Secret that is derived from the seed used by the client and cannot
+    /// collide with secrets used by the client itself. It&#39;s intended to be used
+    /// by integrators of the client library so they don&#39;t have to implement
+    /// their own secret derivation scheme.
+    </span><span class="kw">pub fn </span>external_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DerivableSecret {
+        <span class="self">self</span>.root_secret().child_key(EXTERNAL_SECRET_CHILD_ID)
     }
 
     <span class="doccomment">/// Add funding and/or change to the transaction builder as needed, finalize
