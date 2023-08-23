@@ -15,6 +15,7 @@ use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -338,6 +339,17 @@ impl ConsensusApi {
         })
     }
 
+    async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
+        let mut dbtx = self.db.begin_transaction().await;
+        let mut audit = Audit::default();
+        for (module_instance_id, _, module) in self.modules.iter_modules() {
+            module
+                .audit(&mut dbtx.with_module_prefix(module_instance_id), &mut audit)
+                .await
+        }
+        Ok(AuditSummary::from_audit(&audit))
+    }
+
     async fn handle_backup_request(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
@@ -531,6 +543,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     server: ServerStatus::ConsensusRunning,
                     federation: Some(consensus_status)
                 })
+            }
+        },
+        api_endpoint! {
+            "audit",
+            async |fedimint: &ConsensusApi, context, _v: ()| -> AuditSummary {
+                check_auth(context)?;
+                Ok(fedimint.get_federation_audit().await?)
             }
         },
         api_endpoint! {

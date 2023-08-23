@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use bitcoin_hashes::sha256;
+use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::task::MaybeSend;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::PublicKey;
@@ -192,6 +193,12 @@ impl WsAdminClient {
     /// Returns the status of the server
     pub async fn status(&self) -> FederationResult<StatusResponse> {
         self.request("status", ApiRequestErased::default()).await
+    }
+
+    /// Show an audit across all modules
+    pub async fn audit(&self, auth: ApiAuth) -> FederationResult<AuditSummary> {
+        self.request("audit", ApiRequestErased::default().with_auth(auth))
+            .await
     }
 
     /// Check auth credentials
