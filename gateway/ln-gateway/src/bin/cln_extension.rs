@@ -20,8 +20,8 @@ use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
 use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Server;
 use tonic::Status;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 
 #[derive(Parser)]
 pub struct ClnExtensionOpts {
@@ -302,7 +302,7 @@ impl GatewayLightning for ClnRpcService {
             }))
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
-        let pubkey_to_incoming_capcity = match listfunds_response {
+        let pubkey_to_incoming_capacity = match listfunds_response {
             cln_rpc::Response::ListFunds(listfunds) => listfunds
                 .channels
                 .into_iter()
@@ -311,8 +311,8 @@ impl GatewayLightning for ClnRpcService {
             err => panic!("CLN received unexpected response: {err:?}"),
         };
         active_peer_channels.sort_by(|a, b| {
-            let a_incoming = pubkey_to_incoming_capcity.get(&a.0).unwrap().msat();
-            let b_incoming = pubkey_to_incoming_capcity.get(&b.0).unwrap().msat();
+            let a_incoming = pubkey_to_incoming_capacity.get(&a.0).unwrap().msat();
+            let b_incoming = pubkey_to_incoming_capacity.get(&b.0).unwrap().msat();
             b_incoming.cmp(&a_incoming)
         });
         active_peer_channels.truncate(num_route_hints as usize);
@@ -354,7 +354,7 @@ impl GatewayLightning for ClnRpcService {
                 htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
             };
 
-            trace!("Constructed route hint {:?}", route_hint_hop);
+            debug!("Constructed route hint {:?}", route_hint_hop);
             route_hints.push(RouteHint {
                 hops: vec![route_hint_hop],
             });

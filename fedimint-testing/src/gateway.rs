@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -24,8 +25,6 @@ use url::Url;
 use crate::federation::FederationTest;
 use crate::fixtures::test_dir;
 use crate::ln::LightningTest;
-
-pub const NUM_INVOICE_ROUTE_HINTS: usize = 2;
 
 /// Fixture for creating a gateway
 pub struct GatewayTest {
@@ -77,6 +76,7 @@ impl GatewayTest {
         lightning: Box<dyn LightningTest>,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleInitRegistry,
+        num_route_hints: usize,
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: Url = format!("http://{listen}").parse().unwrap();
@@ -111,7 +111,7 @@ impl GatewayTest {
             clients.clone(),
             scid_to_federation.clone(),
             tg.clone(),
-            NUM_INVOICE_ROUTE_HINTS,
+            num_route_hints,
         )
         .await
         .unwrap();
@@ -134,6 +134,21 @@ impl GatewayTest {
             gateway,
             node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
             listening_addr,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum LightningNodeName {
+    Cln,
+    Lnd,
+}
+
+impl Display for LightningNodeName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            LightningNodeName::Cln => write!(f, "cln"),
+            LightningNodeName::Lnd => write!(f, "lnd"),
         }
     }
 }

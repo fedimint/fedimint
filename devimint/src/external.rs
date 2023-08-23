@@ -1,5 +1,4 @@
 use std::env;
-use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -13,6 +12,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{block_in_place, sleep};
 use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
+use fedimint_testing::gateway::LightningNodeName;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tonic_lnd::lnrpc::GetInfoRequest;
@@ -387,21 +387,6 @@ impl LightningNode {
         match self {
             LightningNode::Cln(_) => LightningNodeName::Cln,
             LightningNode::Lnd(_) => LightningNodeName::Lnd,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum LightningNodeName {
-    Cln,
-    Lnd,
-}
-
-impl Display for LightningNodeName {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        match self {
-            LightningNodeName::Cln => write!(f, "cln"),
-            LightningNodeName::Lnd => write!(f, "lnd"),
         }
     }
 }

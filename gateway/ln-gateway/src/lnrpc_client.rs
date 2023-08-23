@@ -15,8 +15,8 @@ use url::Url;
 
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 pub type RouteHtlcStream<'a> =
     BoxStream<'a, std::result::Result<InterceptHtlcRequest, tonic::Status>>;
