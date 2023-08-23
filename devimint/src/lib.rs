@@ -102,7 +102,7 @@ impl Gatewayd {
     }
 
     pub async fn stop_lightning_node(&mut self) -> Result<()> {
-        tracing::info!("Stoppng lightning node");
+        tracing::info!("Stopping lightning node");
         match self.ln.take() {
             Some(LightningNode::Lnd(lnd)) => lnd.terminate().await,
             Some(LightningNode::Cln(cln)) => cln.terminate().await,

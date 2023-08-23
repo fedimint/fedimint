@@ -10,8 +10,9 @@ use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::{bitcoin, RpcApi};
 use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::task::sleep;
+use fedimint_core::task::{block_in_place, sleep};
 use fedimint_logging::LOG_DEVIMINT;
+use futures::executor::block_on;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tonic_lnd::lnrpc::GetInfoRequest;
@@ -19,7 +20,7 @@ use tonic_lnd::Client as LndClient;
 use tracing::{info, warn};
 
 use crate::cmd;
-use crate::util::{poll, ProcessHandle, ProcessManager};
+use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 
 #[derive(Clone)]
@@ -115,10 +116,45 @@ impl Bitcoind {
     }
 }
 
+const GATEWAY_CLN_EXTENSION: &str = "gateway-cln-extension";
+
+pub struct LightningdProcessHandle(ProcessHandle);
+
+impl LightningdProcessHandle {
+    async fn terminate(&self) -> Result<()> {
+        if self.0.is_running().await {
+            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", GATEWAY_CLN_EXTENSION);
+            if let Err(e) = stop_plugins.out_string().await {
+                warn!(
+                    LOG_DEVIMINT,
+                    "failed to terminate lightningd plugins: {e:?}"
+                );
+            }
+            self.0.terminate().await
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Drop for LightningdProcessHandle {
+    fn drop(&mut self) {
+        // cln don't like to be killed and may leave running processes. So let's
+        // terminate it in a controlled way
+        block_in_place(move || {
+            block_on(async move {
+                if let Err(e) = self.terminate().await {
+                    warn!(LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
+                }
+            })
+        });
+    }
+}
+
 #[derive(Clone)]
 pub struct Lightningd {
     pub(crate) rpc: Arc<Mutex<ClnRpc>>,
-    pub(crate) process: ProcessHandle,
+    pub(crate) process: Arc<LightningdProcessHandle>,
     pub(crate) bitcoind: Bitcoind,
 }
 
@@ -136,12 +172,12 @@ impl Lightningd {
         Ok(Self {
             bitcoind,
             rpc: Arc::new(Mutex::new(rpc)),
-            process,
+            process: Arc::new(LightningdProcessHandle(process)),
         })
     }
 
     pub async fn start(process_mgr: &ProcessManager, cln_dir: &Path) -> Result<ProcessHandle> {
-        let extension_path = cmd!("which", "gateway-cln-extension")
+        let extension_path = cmd!("which", GATEWAY_CLN_EXTENSION)
             .out_string()
             .await
             .context("gateway-cln-extension not on path")?;

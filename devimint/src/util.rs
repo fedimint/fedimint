@@ -38,11 +38,17 @@ impl ProcessHandle {
     pub async fn terminate(&self) -> Result<()> {
         let mut inner = self.0.lock().await;
         if let Some(mut child) = inner.child.take() {
-            info!(LOG_DEVIMINT, "sending SIGTERM to {}", inner.name);
+            info!(
+                LOG_DEVIMINT,
+                "sending SIGTERM to {} and waiting for it to exit", inner.name
+            );
             send_sigterm(&child);
             child.wait().await?;
         }
         Ok(())
+    }
+    pub async fn is_running(&self) -> bool {
+        self.0.lock().await.child.is_some()
     }
 }
 
@@ -342,5 +348,53 @@ pub trait JsonValueExt {
 impl JsonValueExt for serde_json::Value {
     fn to_typed<T: DeserializeOwned>(self) -> Result<T> {
         Ok(serde_json::from_value(self)?)
+    }
+}
+
+fn get_command_for_alias(alias: &str, default: &str) -> Command {
+    // try to use alias if set
+    let cli = std::env::var(alias)
+        .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
+        .unwrap_or_else(|_| vec![default.into()]);
+    let mut cmd = tokio::process::Command::new(&cli[0]);
+    cmd.args(&cli[1..]);
+    Command {
+        cmd,
+        args_debug: cli,
+    }
+}
+
+pub struct FedimintCli;
+impl FedimintCli {
+    pub async fn cmd(self) -> Command {
+        get_command_for_alias("FM_MINT_CLIENT", "fedimint-cli")
+    }
+}
+
+pub struct LnCli;
+impl LnCli {
+    pub async fn cmd(self) -> Command {
+        get_command_for_alias("FM_LNCLI", "lncli")
+    }
+}
+
+pub struct ClnLightningCli;
+impl ClnLightningCli {
+    pub async fn cmd(self) -> Command {
+        get_command_for_alias("FM_LIGHTNING_CLI", "lightning-cli")
+    }
+}
+
+pub struct GatewayClnCli;
+impl GatewayClnCli {
+    pub async fn cmd(self) -> Command {
+        get_command_for_alias("FM_GWCLI_CLN", "gateway-cln")
+    }
+}
+
+pub struct GatewayLndCli;
+impl GatewayLndCli {
+    pub async fn cmd(self) -> Command {
+        get_command_for_alias("FM_GWCLI_LND", "gateway-lnd")
     }
 }
