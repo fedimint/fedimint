@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Audit","AuditItem"]};
+window.SIDEBAR_ITEMS = {"fn":["calculate_net_assets","generate_module_summaries"],"struct":["Audit","AuditItem","AuditSummary","ModuleSummary"]};

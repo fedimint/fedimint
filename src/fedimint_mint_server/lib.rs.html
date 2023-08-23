@@ -1151,6 +1151,11 @@
 <a href="#1151" id="1151">1151</a>
 <a href="#1152" id="1152">1152</a>
 <a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1759,12 +1764,17 @@
 
     <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
         audit
-            .add_items(dbtx, <span class="kw-2">&amp;</span>MintAuditItemKeyPrefix, |k, v| <span class="kw">match </span>k {
-                MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; -(v.msats <span class="kw">as </span>i64),
-                MintAuditItemKey::IssuanceTotal =&gt; -(v.msats <span class="kw">as </span>i64),
-                MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; v.msats <span class="kw">as </span>i64,
-                MintAuditItemKey::RedemptionTotal =&gt; v.msats <span class="kw">as </span>i64,
-            })
+            .add_items(
+                dbtx,
+                common::KIND.as_str(),
+                <span class="kw-2">&amp;</span>MintAuditItemKeyPrefix,
+                |k, v| <span class="kw">match </span>k {
+                    MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; -(v.msats <span class="kw">as </span>i64),
+                    MintAuditItemKey::IssuanceTotal =&gt; -(v.msats <span class="kw">as </span>i64),
+                    MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; v.msats <span class="kw">as </span>i64,
+                    MintAuditItemKey::RedemptionTotal =&gt; v.msats <span class="kw">as </span>i64,
+                },
+            )
             .<span class="kw">await</span>;
     }
 

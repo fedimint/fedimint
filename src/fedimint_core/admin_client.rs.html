@@ -305,10 +305,18 @@
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::task::MaybeSend;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::PublicKey;
@@ -499,6 +507,12 @@
     <span class="doccomment">/// Returns the status of the server
     </span><span class="kw">pub async fn </span>status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;StatusResponse&gt; {
         <span class="self">self</span>.request(<span class="string">&quot;status&quot;</span>, ApiRequestErased::default()).<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Show an audit across all modules
+    </span><span class="kw">pub async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;AuditSummary&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;audit&quot;</span>, ApiRequestErased::default().with_auth(auth))
+            .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Check auth credentials

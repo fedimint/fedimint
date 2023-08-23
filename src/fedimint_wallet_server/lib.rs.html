@@ -1894,6 +1894,19 @@
 <a href="#1894" id="1894">1894</a>
 <a href="#1895" id="1895">1895</a>
 <a href="#1896" id="1896">1896</a>
+<a href="#1897" id="1897">1897</a>
+<a href="#1898" id="1898">1898</a>
+<a href="#1899" id="1899">1899</a>
+<a href="#1900" id="1900">1900</a>
+<a href="#1901" id="1901">1901</a>
+<a href="#1902" id="1902">1902</a>
+<a href="#1903" id="1903">1903</a>
+<a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2467,20 +2480,33 @@
     </span>}
 
     <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        <span class="kw">let </span>module_name = common::KIND.as_str().to_string();
         audit
-            .add_items(dbtx, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| v.amount.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>)
+            .add_items(dbtx, <span class="kw-2">&amp;</span>module_name, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| {
+                v.amount.to_sat() <span class="kw">as </span>i64 * <span class="number">1000
+            </span>})
             .<span class="kw">await</span>;
         audit
-            .add_items(dbtx, <span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey, |<span class="kw">_</span>, v| <span class="kw">match </span>v.rbf {
-                <span class="prelude-val">None </span>=&gt; v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>,
-                <span class="prelude-val">Some</span>(rbf) =&gt; rbf.fees.amount().to_sat() <span class="kw">as </span>i64 * -<span class="number">1000</span>,
-            })
+            .add_items(
+                dbtx,
+                <span class="kw-2">&amp;</span>module_name,
+                <span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey,
+                |<span class="kw">_</span>, v| <span class="kw">match </span>v.rbf {
+                    <span class="prelude-val">None </span>=&gt; v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>,
+                    <span class="prelude-val">Some</span>(rbf) =&gt; rbf.fees.amount().to_sat() <span class="kw">as </span>i64 * -<span class="number">1000</span>,
+                },
+            )
             .<span class="kw">await</span>;
         audit
-            .add_items(dbtx, <span class="kw-2">&amp;</span>PendingTransactionPrefixKey, |<span class="kw">_</span>, v| <span class="kw">match </span>v.rbf {
-                <span class="prelude-val">None </span>=&gt; v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>,
-                <span class="prelude-val">Some</span>(rbf) =&gt; rbf.fees.amount().to_sat() <span class="kw">as </span>i64 * -<span class="number">1000</span>,
-            })
+            .add_items(
+                dbtx,
+                <span class="kw-2">&amp;</span>module_name,
+                <span class="kw-2">&amp;</span>PendingTransactionPrefixKey,
+                |<span class="kw">_</span>, v| <span class="kw">match </span>v.rbf {
+                    <span class="prelude-val">None </span>=&gt; v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>,
+                    <span class="prelude-val">Some</span>(rbf) =&gt; rbf.fees.amount().to_sat() <span class="kw">as </span>i64 * -<span class="number">1000</span>,
+                },
+            )
             .<span class="kw">await</span>;
     }
 

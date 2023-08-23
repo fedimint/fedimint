@@ -634,6 +634,25 @@
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
 <a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -651,6 +670,7 @@
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+<span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -974,6 +994,17 @@
         })
     }
 
+    <span class="kw">async fn </span>get_federation_audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;AuditSummary&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
+        <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+            module
+                .audit(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id), <span class="kw-2">&amp;mut </span>audit)
+                .<span class="kw">await
+        </span>}
+        <span class="prelude-val">Ok</span>(AuditSummary::from_audit(<span class="kw-2">&amp;</span>audit))
+    }
+
     <span class="kw">async fn </span>handle_backup_request(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1167,6 +1198,13 @@
                     server: ServerStatus::ConsensusRunning,
                     federation: <span class="prelude-val">Some</span>(consensus_status)
                 })
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;audit&quot;</span>,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; AuditSummary {
+                check_auth(context)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(fedimint.get_federation_audit().<span class="kw">await</span><span class="question-mark">?</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{

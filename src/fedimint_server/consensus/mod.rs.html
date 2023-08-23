@@ -779,7 +779,7 @@
 
         <span class="kw">let </span>audit = <span class="self">self</span>.audit().<span class="kw">await</span>;
 
-        <span class="kw">if </span>audit.sum().milli_sat &lt; <span class="number">0 </span>{
+        <span class="kw">if </span>audit.net_assets().milli_sat &lt; <span class="number">0 </span>{
             <span class="macro">panic!</span>(<span class="string">&quot;Balance sheet of the fed has gone negative, this should never happen! {audit}&quot;</span>)
         }
 

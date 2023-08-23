@@ -838,6 +838,24 @@
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
 <a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -1220,6 +1238,9 @@
 
     <span class="doccomment">/// Signal a consensus upgrade
     </span>SignalUpgrade,
+
+    <span class="doccomment">/// Show an audit across all modules
+    </span>Audit,
 }
 
 <span class="attr">#[derive(Debug, Clone, Subcommand)]
@@ -1407,6 +1428,21 @@
                     client::handle_ng_command(command, config, client)
                         .<span class="kw">await
                         </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
+                ))
+            }
+            Command::Admin(AdminCmd::Audit) =&gt; {
+                <span class="kw">let </span>user = cli
+                    .build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_gens, <span class="prelude-val">None</span>)
+                    .<span class="kw">await
+                    </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
+
+                <span class="kw">let </span>audit = cli
+                    .admin_client(user.get_config())<span class="question-mark">?
+                    </span>.audit(cli.auth()<span class="question-mark">?</span>)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(
+                    serde_json::to_value(audit)
+                        .map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;invalid response&quot;</span>)<span class="question-mark">?</span>,
                 ))
             }
             Command::Admin(AdminCmd::Status) =&gt; {

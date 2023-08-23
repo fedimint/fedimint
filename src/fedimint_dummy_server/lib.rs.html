@@ -487,7 +487,7 @@
 };
 <span class="kw">use </span>fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
-    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION, KIND,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
@@ -873,7 +873,7 @@
 
     <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
         audit
-            .add_items(dbtx, <span class="kw-2">&amp;</span>DummyFundsPrefixV1, |k, v| <span class="kw">match </span>k {
+            .add_items(dbtx, KIND.as_str(), <span class="kw-2">&amp;</span>DummyFundsPrefixV1, |k, v| <span class="kw">match </span>k {
                 <span class="comment">// the fed&#39;s test account is considered an asset (positive)
                 // should be the bitcoin we own in a real module
                 </span>DummyFundsKeyV1(key) <span class="kw">if </span>key == fed_public_key() =&gt; v.msats <span class="kw">as </span>i64,
