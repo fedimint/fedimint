@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
-use std::vec;
 
 use anyhow::{bail, Context, Result};
 use bitcoin::secp256k1;
 use devimint::cmd;
+use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::TransactionBuilder;
@@ -293,52 +293,4 @@ pub async fn remint_denomination(
             .await?;
     }
     Ok(())
-}
-
-fn get_command_for_alias(alias: &str, default: &str) -> devimint::util::Command {
-    // try to use alias if set
-    let cli = std::env::var(alias)
-        .map(|s| s.split_whitespace().map(ToOwned::to_owned).collect())
-        .unwrap_or_else(|_| vec![default.into()]);
-    let mut cmd = tokio::process::Command::new(&cli[0]);
-    cmd.args(&cli[1..]);
-    devimint::util::Command {
-        cmd,
-        args_debug: cli,
-    }
-}
-
-pub struct FedimintCli;
-impl FedimintCli {
-    pub async fn cmd(self) -> devimint::util::Command {
-        get_command_for_alias("FM_MINT_CLIENT", "fedimint-cli")
-    }
-}
-
-pub struct LnCli;
-impl LnCli {
-    pub async fn cmd(self) -> devimint::util::Command {
-        get_command_for_alias("FM_LNCLI", "lncli")
-    }
-}
-
-pub struct ClnLightningCli;
-impl ClnLightningCli {
-    pub async fn cmd(self) -> devimint::util::Command {
-        get_command_for_alias("FM_LIGHTNING_CLI", "lightning-cli")
-    }
-}
-
-pub struct GatewayClnCli;
-impl GatewayClnCli {
-    pub async fn cmd(self) -> devimint::util::Command {
-        get_command_for_alias("FM_GWCLI_CLN", "gateway-cln")
-    }
-}
-
-pub struct GatewayLndCli;
-impl GatewayLndCli {
-    pub async fn cmd(self) -> devimint::util::Command {
-        get_command_for_alias("FM_GWCLI_LND", "gateway-lnd")
-    }
 }

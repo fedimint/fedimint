@@ -12,6 +12,7 @@ use common::{
     lnd_create_invoice, lnd_wait_invoice_payment, parse_ecash, reissue_notes,
 };
 use devimint::cmd;
+use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::Client;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::module::ApiRequestErased;
@@ -27,7 +28,6 @@ use tracing::{debug, info, warn};
 
 use crate::common::{
     build_client, do_spend_notes, remint_denomination, switch_default_gateway, try_get_notes_cli,
-    GatewayClnCli, GatewayLndCli,
 };
 pub mod common;
 
