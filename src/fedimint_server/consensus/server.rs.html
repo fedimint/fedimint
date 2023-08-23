@@ -673,6 +673,7 @@
 <a href="#673" id="673">673</a>
 <a href="#674" id="674">674</a>
 <a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{max, min};
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
@@ -687,6 +688,7 @@
 <span class="kw">use </span>fedimint_core::epoch::{
     ConsensusItem, EpochOutcome, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
+<span class="kw">use </span>fedimint_core::fmt_utils::OptStracktrace;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
@@ -939,7 +941,7 @@
                 <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == our_hash =&gt; <span class="kw">break</span>,
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;ERROR {:?}&quot;</span>, e)
+                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Could not check consensus config hash: {}&quot;</span>, OptStracktrace(e))
                 }
             }
             sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
