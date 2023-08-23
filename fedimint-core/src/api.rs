@@ -896,7 +896,8 @@ impl<C: JsonRpcClient> FederationPeer<C> {
                         // Warn instead of Error because we will probably retry connecting later
                         warn!(
                             target: LOG_NET_API,
-                            %err, "unable to connect to server");
+                            peer_id = %self.peer_id,
+                            %err, "Unable to connect to peer");
                         return Err(err)?;
                     }
                 }

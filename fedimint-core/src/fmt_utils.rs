@@ -12,6 +12,27 @@ pub fn rust_log_full_enabled() -> bool {
     RUST_LOG_FULL.with(|x| *x)
 }
 
+/// Optional stacktrace formatting for errors.
+///
+/// Automatically use `Display` (no stacktrace) or `Debug` depending on
+/// `RUST_LOG_FULL` env variable.
+///
+/// Meant for logging errors.
+pub struct OptStracktrace<T>(pub T);
+
+impl<T> fmt::Display for OptStracktrace<T>
+where
+    T: fmt::Debug + fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if rust_log_full_enabled() {
+            fmt::Debug::fmt(&self.0, f)
+        } else {
+            fmt::Display::fmt(&self.0, f)
+        }
+    }
+}
+
 /// Use for displaying bytes in the logs
 ///
 /// Will truncate values longer than 64 bytes, unless `RUST_LOG_FULL`
