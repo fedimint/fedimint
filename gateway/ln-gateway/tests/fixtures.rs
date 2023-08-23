@@ -25,7 +25,7 @@ pub async fn fixtures() -> (
     fixtures = fixtures.with_module(LightningClientGen, LightningGen, ln_params);
 
     let lnd = fixtures.lnd().await;
-    let gateway = fixtures.new_gateway(lnd).await;
+    let gateway = fixtures.new_gateway(lnd, 0).await;
     let client = gateway.get_rpc().await;
 
     let fed1 = fixtures.new_fed().await;

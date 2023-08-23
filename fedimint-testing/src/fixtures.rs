@@ -128,7 +128,11 @@ impl Fixtures {
     }
 
     /// Starts a new gateway with a given lightning node
-    pub async fn new_gateway(&self, ln: Box<dyn LightningTest>) -> GatewayTest {
+    pub async fn new_gateway(
+        &self,
+        ln: Box<dyn LightningTest>,
+        num_route_hints: usize,
+    ) -> GatewayTest {
         // TODO: Make construction easier
         let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
@@ -144,6 +148,7 @@ impl Fixtures {
                 // Remove LN module because the gateway adds one
                 client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
             })),
+            num_route_hints,
         )
         .await
     }

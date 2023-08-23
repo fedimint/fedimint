@@ -177,7 +177,7 @@ impl Gatewayd {
             api_addr,
             password,
             fees,
-            num_route_hints: num_route_hints.unwrap_or(2),
+            num_route_hints: num_route_hints.unwrap_or(0),
         })
     }
 
@@ -413,8 +413,8 @@ impl Gateway {
             num_route_hints,
         };
 
-        gw.register_clients_timer().await;
         gw.load_clients().await?;
+        gw.register_clients_timer().await;
         Ok(gw)
     }
 
@@ -479,11 +479,15 @@ impl Gateway {
         lnrpc: &dyn ILnRpcClient,
         num_route_hints: usize,
     ) -> Result<(Vec<RouteHint>, PublicKey, String)> {
-        let route_hints: Vec<RouteHint> = lnrpc
-            .routehints(num_route_hints)
-            .await?
-            .try_into()
-            .expect("Could not parse route hints");
+        let route_hints: Vec<RouteHint> = if num_route_hints > 0 {
+            lnrpc
+                .routehints(num_route_hints)
+                .await?
+                .try_into()
+                .expect("Could not parse route hints")
+        } else {
+            vec![]
+        };
 
         let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
         let node_pub_key = PublicKey::from_slice(&pub_key)
@@ -510,7 +514,8 @@ impl Gateway {
                     }
                 };
 
-            if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
+            if num_route_hints == 0 || !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES
+            {
                 return Ok((route_hints, node_pub_key, alias));
             }
 
@@ -534,6 +539,11 @@ impl Gateway {
         self.task_group
             .spawn("register clients", move |handle| async move {
                 while !handle.is_shutting_down() {
+                    // Allow a 15% buffer of the TTL before the re-registering gateway
+                    // with the federations.
+                    let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
+                    sleep(registration_delay).await;
+
                     match Self::fetch_lightning_route_info(lnrpc.clone(), num_route_hints).await {
                         Ok((route_hints, _, _)) => {
                             for (federation_id, client) in clients.read().await.iter() {
@@ -557,11 +567,6 @@ impl Gateway {
                             );
                         }
                     }
-
-                    // Allow a 15% buffer of the TTL before the re-registering gateway
-                    // with the federations.
-                    let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
-                    sleep(registration_delay).await;
                 }
             })
             .await;

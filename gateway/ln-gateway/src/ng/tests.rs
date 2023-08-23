@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,7 +28,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, NUM_INVOICE_ROUTE_HINTS};
+use fedimint_testing::gateway::{GatewayTest, LightningNodeName};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Invoice;
@@ -69,7 +68,7 @@ where
     for (gateway_ln, other_node) in vec![(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
         let user_client = fed.new_client().await;
-        let mut gateway = fixtures.new_gateway(gateway_ln).await;
+        let mut gateway = fixtures.new_gateway(gateway_ln, 0).await;
         gateway.connect_fed(&fed).await;
         let bitcoin = fixtures.bitcoin();
         f(gateway, other_node, fed, user_client, bitcoin).await?;
@@ -499,7 +498,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let node = fixtures.lnd().await;
     let fed = fixtures.new_fed().await;
     let user_client = fed.new_client().await;
-    let mut gateway_test = fixtures.new_gateway(node).await;
+    let mut gateway_test = fixtures.new_gateway(node, 0).await;
     gateway_test.connect_fed(&fed).await;
     let gateway = gateway_test.remove_client(&fed).await;
 
@@ -593,39 +592,32 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    gateway_test(
-        |mut gateway, other_lightning_node, fed, user_client, bitcoin| async move {
-            let mut expected_pub_keys: HashSet<PublicKey> = HashSet::new();
-            expected_pub_keys.insert(gateway.node_pub_key);
-            let GetNodeInfoResponse { pub_key, alias: _ } = other_lightning_node.info().await?;
-            let other_pub_key = PublicKey::from_slice(&pub_key)?;
-            expected_pub_keys.insert(other_pub_key);
+    let fixtures = fixtures();
+    let lnd = fixtures.lnd().await;
+    let cln = fixtures.cln().await;
 
-            let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
-            expected_pub_keys.insert(ldk.node_pub_key);
+    let GetNodeInfoResponse { pub_key, alias: _ } = lnd.info().await?;
+    let lnd_public_key = PublicKey::from_slice(&pub_key)?;
 
-            ldk.open_channel(
-                Amount::from_msats(5000000),
-                gateway.node_pub_key,
-                gateway.listening_addr.clone(),
-                bitcoin.lock_exclusive().await,
-            )
-            .await?;
+    let GetNodeInfoResponse { pub_key, alias: _ } = cln.info().await?;
+    let cln_public_key = PublicKey::from_slice(&pub_key)?;
+    let all_keys = vec![lnd_public_key, cln_public_key];
 
-            // Spawn another LDK Node and open a smaller channel that should be filtered out
-            // when the invoice is generated.
-            let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
+    for gateway_type in vec![LightningNodeName::Cln, LightningNodeName::Lnd] {
+        for num_route_hints in 0..=1 {
+            let gateway_ln = match gateway_type {
+                LightningNodeName::Cln => fixtures.cln().await,
+                LightningNodeName::Lnd => fixtures.lnd().await,
+            };
 
-            ldk.open_channel(
-                Amount::from_msats(3000000),
-                gateway.node_pub_key,
-                gateway.listening_addr.clone(),
-                bitcoin.lock_exclusive().await,
-            )
-            .await?;
-            let ldk_node2 = ldk.node_pub_key;
+            let GetNodeInfoResponse { pub_key, alias: _ } = gateway_ln.info().await?;
+            let public_key = PublicKey::from_slice(&pub_key)?;
 
-            // Re-register the gateway with the federation so it has the updated route hints
+            tracing::info!("Creating federation with gateway type {gateway_type}. Number of route hints: {num_route_hints}");
+
+            let fed = fixtures.new_fed().await;
+            let user_client = fed.new_client().await;
+            let mut gateway = fixtures.new_gateway(gateway_ln, num_route_hints).await;
             gateway.connect_fed(&fed).await;
 
             let invoice_amount = sats(100);
@@ -634,22 +626,53 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                 .await?;
             let route_hints = invoice.route_hints();
 
-            // Verify that the invoice has `NUM_INVOICE_ROUTE_HINTS` and that
-            // the pubkeys for each hop in the route hints are in our `expected_pub_keys`
-            // set.
-            assert_eq!(route_hints.len(), NUM_INVOICE_ROUTE_HINTS);
-            route_hints
-                .iter()
-                .flat_map(|route_hint| route_hint.0.clone())
-                .map(|hop| hop.src_node_id)
-                .for_each(|src_node| {
-                    assert!(expected_pub_keys.contains(&src_node));
-                });
+            match num_route_hints {
+                0 => {
+                    // If there's no additional route hints, we're expecting a single route hint
+                    // with a single hop on the invoice, where the hop is the
+                    // public key of the gateway lightning node
+                    assert_eq!(
+                        route_hints.len(),
+                        1,
+                        "Found {} route hints when 1 was expected for {gateway_type} gateway",
+                        route_hints.len()
+                    );
+                    let route_hint = route_hints.get(0).unwrap();
+                    assert_eq!(
+                        route_hint.0.len(),
+                        1,
+                        "Found {} hops when 1 was expected for {gateway_type} gateway",
+                        route_hint.0.len()
+                    );
+                    let route_hint_pub_key = route_hint.0.get(0).unwrap().src_node_id;
+                    assert_eq!(
+                        route_hint_pub_key, public_key,
+                        "Public key of route hint hop did not match expected public key"
+                    );
+                }
+                _ => {
+                    // If there's more than one route hint, we're expecting the invoice to contain
+                    // `num_route_hints`. Each should have 2 hops.
+                    assert_eq!(route_hints.len(), num_route_hints, "Found {} route hints when {num_route_hints} was expected for {gateway_type} gateway", route_hints.len());
 
-            assert!(!expected_pub_keys.contains(&ldk_node2));
+                    for route_hint in route_hints {
+                        assert_eq!(
+                            route_hint.0.len(),
+                            2,
+                            "Found {} hops when 2 was expected for {gateway_type} gateway",
+                            route_hint.0.len()
+                        );
+                        for hop in route_hint.0 {
+                            assert!(
+                                all_keys.contains(&hop.src_node_id),
+                                "Public key of route hint hop did not match expected public key"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-            Ok(())
-        },
-    )
-    .await
+    Ok(())
 }

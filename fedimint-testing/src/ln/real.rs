@@ -419,14 +419,14 @@ impl LdkLightningTest {
         })?;
         let pub_key = node.node_id();
 
-        // Add 1 BTC to LDK's onchain wallet so it can open channels
+        // Add 20 BTC to LDK's onchain wallet so it can open channels
         let address = node.new_onchain_address().map_err(|e| {
             error!("Failed to get onchain address from LDK Node: {e:?}");
             LightningRpcError::FailedToConnect
         })?;
-        let btc_amount = bitcoin::Amount::from_sat(100000000);
-        bitcoin.send_and_mine_block(&address, btc_amount).await;
+        let btc_amount = bitcoin::Amount::from_sat(2000000000);
         bitcoin.mine_blocks(1).await;
+        bitcoin.send_and_mine_block(&address, btc_amount).await;
 
         let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
         node.start().map_err(|e| {
@@ -617,9 +617,11 @@ impl LdkLightningTest {
 
             match response {
                 LdkMessage::MineBlocksResponse => {
-                    bitcoin.mine_blocks(3).await;
+                    info!("Mining 6 blocks to open channel");
+                    bitcoin.mine_blocks(6).await;
                 }
                 LdkMessage::OpenChannelResponse => {
+                    info!("Successfully opened channel to {node_pubkey}");
                     return Ok(());
                 }
                 _ => {
