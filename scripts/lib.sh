@@ -11,5 +11,5 @@ function auto_kill_last_cmd() {
 
   # For shellcheck - we want these expanded right away
   # shellcheck disable=SC2064
-  trap ">&2 echo 'Auto-killing ${1:-}(PID: $pid)'; kill $pid" EXIT  
+  trap ">&2 echo 'Auto-killing ${1:-}(PID: $pid) and waiting it to finish...'; kill $pid; wait $pid" EXIT  
 }
