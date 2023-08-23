@@ -16,7 +16,9 @@ if [ "${RUST_LOG,,}" = "none" ]; then
 else
   devimint external-daemons &
 fi
-auto_kill_last_cmd external-daemons
+pid=$!
+kill_on_exit $pid external-daemons
+PIDS+=( "$pid" )
 
 STATUS=$(devimint wait)
 if [ "$STATUS" = "ERROR" ]
@@ -72,3 +74,6 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
 fi
 
 echo "fm success: rust-tests"
+
+kill "${PIDS[@]}"
+wait "${PIDS[@]}"

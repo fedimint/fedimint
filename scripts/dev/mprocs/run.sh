@@ -16,7 +16,12 @@ source scripts/build.sh
 mkdir -p $FM_LOGS_DIR
 
 devimint dev-fed 2>$FM_LOGS_DIR/devimint-outer.log &
-auto_kill_last_cmd dev-fed
+pid=$!
+kill_on_exit $pid dev-fed
+PIDS+=( "$pid" )
+
 eval "$(devimint env)"
 
 mprocs -c misc/mprocs.yaml
+kill "${PIDS[@]}"
+wait "${PIDS[@]}"
