@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::bail;
+use anyhow::anyhow;
 use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, OperationId,
@@ -18,6 +19,7 @@ use fedimint_core::{
     TransactionId,
 };
 
+use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput};
 use crate::{Client, DynGlobalClientContext};
@@ -32,6 +34,10 @@ pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Common module types shared between client and server
     type Common: ModuleCommon;
+
+    /// Data stored in regular backups so that restoring doesn't have to start
+    /// from epoch 0
+    type Backup: ModuleBackup;
 
     /// Data and API clients available to state machine transitions of this
     /// module
@@ -82,7 +88,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _executor: Executor<DynGlobalClientContext>,
         _api: DynGlobalApi,
         _module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> anyhow::Result<Self::Backup> {
         anyhow::bail!("Backup not supported");
     }
 
@@ -93,7 +99,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _module_instance_id: ModuleInstanceId,
         _executor: Executor<DynGlobalClientContext>,
         _api: DynGlobalApi,
-        _snapshot: Option<&[u8]>,
+        _snapshot: Option<Self::Backup>,
     ) -> anyhow::Result<()> {
         anyhow::bail!("Backup not supported");
     }
@@ -280,7 +286,7 @@ pub trait IClientModule: Debug {
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>>;
+    ) -> anyhow::Result<DynModuleBackup>;
 
     async fn restore(
         &self,
@@ -289,7 +295,7 @@ pub trait IClientModule: Debug {
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
-        snapshot: Option<&[u8]>,
+        snapshot: Option<DynModuleBackup>,
     ) -> anyhow::Result<()>;
 
     async fn wipe(
@@ -387,8 +393,11 @@ where
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>> {
-        <T as ClientModule>::backup(self, dbtx, executor, api, module_instance_id).await
+    ) -> anyhow::Result<DynModuleBackup> {
+        Ok(DynModuleBackup::from_typed(
+            module_instance_id,
+            <T as ClientModule>::backup(self, dbtx, executor, api, module_instance_id).await?,
+        ))
     }
 
     async fn restore(
@@ -398,9 +407,30 @@ where
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
-        snapshot: Option<&[u8]>,
+        snapshot: Option<DynModuleBackup>,
     ) -> anyhow::Result<()> {
-        <T as ClientModule>::restore(self, dbtx, module_instance_id, executor, api, snapshot).await
+        let typed_snapshot = snapshot
+            .map(|snapshot| {
+                snapshot.as_any().downcast_ref().cloned().ok_or_else(|| {
+                    // TODO: should the error be caught earlier?
+                    anyhow!(
+                        "Snapshot is not for this module: expected instance {}, got instance {}",
+                        module_instance_id,
+                        snapshot.module_instance_id()
+                    )
+                })
+            })
+            .transpose()?;
+
+        <T as ClientModule>::restore(
+            self,
+            dbtx,
+            module_instance_id,
+            executor,
+            api,
+            typed_snapshot,
+        )
+        .await
     }
 
     async fn wipe(

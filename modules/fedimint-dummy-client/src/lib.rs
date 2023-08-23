@@ -222,6 +222,7 @@ impl Context for DummyClientContext {}
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for DummyClientModule {
     type Common = DummyModuleTypes;
+    type Backup = ();
     type ModuleStateMachineContext = DummyClientContext;
     type States = DummyStateMachine;
 

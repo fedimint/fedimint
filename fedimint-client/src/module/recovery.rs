@@ -4,11 +4,7 @@ use std::fmt::Debug;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{
-    maybe_add_send_sync, module_plugin_dyn_newtype_clone_passhthrough,
-    module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_encode_decode,
-    module_plugin_dyn_newtype_eq_passthrough,
-};
+use fedimint_core::{maybe_add_send_sync, module_plugin_dyn_newtype_clone_passthrough, module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough};
 
 pub trait IModuleBackup: Debug + DynEncodable {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
@@ -75,7 +71,7 @@ module_plugin_dyn_newtype_define! {
 
 module_plugin_dyn_newtype_encode_decode!(DynModuleBackup);
 
-module_plugin_dyn_newtype_clone_passhthrough!(DynModuleBackup);
+module_plugin_dyn_newtype_clone_passthrough!(DynModuleBackup);
 
 module_plugin_dyn_newtype_eq_passthrough!(DynModuleBackup);
 

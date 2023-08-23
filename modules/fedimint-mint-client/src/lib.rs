@@ -672,6 +672,7 @@ impl Context for MintClientContext {}
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for MintClientModule {
     type Common = MintModuleTypes;
+    type Backup = EcashBackup;
     type ModuleStateMachineContext = MintClientContext;
     type States = MintClientStateMachines;
 
@@ -764,12 +765,9 @@ impl ClientModule for MintClientModule {
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<Vec<u8>> {
-        let backup = self
-            .prepare_plaintext_ecash_backup(dbtx, executor, api, module_instance_id)
-            .await?;
-
-        Ok(backup.consensus_encode_to_vec()?)
+    ) -> anyhow::Result<EcashBackup> {
+        self.prepare_plaintext_ecash_backup(dbtx, executor, api, module_instance_id)
+            .await
     }
 
     async fn restore(
@@ -779,7 +777,7 @@ impl ClientModule for MintClientModule {
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
-        snapshot: Option<&[u8]>,
+        snapshot: Option<EcashBackup>,
     ) -> anyhow::Result<()> {
         if !Self::get_all_spendable_notes(&mut dbtx.with_module_prefix(module_instance_id))
             .await
@@ -805,15 +803,10 @@ impl ClientModule for MintClientModule {
             bail!("Found existing active state machines. Mint module recovery must be started on an empty state.")
         }
 
-        let snapshot = snapshot
-            .map(|mut s| EcashBackup::consensus_decode(&mut s, &Default::default()))
-            .transpose()?
-            .unwrap_or(EcashBackup::new_empty());
-
         let current_block_count = api.fetch_block_count().await?;
         let state = MintRestoreInProgressState::from_backup(
             current_block_count,
-            snapshot,
+            snapshot.unwrap_or(EcashBackup::new_empty()),
             30,
             self.cfg.tbs_pks.clone(),
             self.cfg.peer_tbs_pks.clone(),

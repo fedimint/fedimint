@@ -440,6 +440,7 @@ pub struct GatewayClientModule {
 
 impl ClientModule for GatewayClientModule {
     type Common = LightningModuleTypes;
+    type Backup = ();
     type ModuleStateMachineContext = GatewayClientContext;
     type States = GatewayClientStateMachines;
 

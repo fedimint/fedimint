@@ -16,6 +16,7 @@ use tracing::{debug, info, warn};
 
 use super::Client;
 use crate::get_decoded_client_secret;
+use crate::module::recovery::DynModuleBackup;
 use crate::secret::DeriveableSecretClientExt;
 
 /// Backup metadata
@@ -61,14 +62,15 @@ impl Metadata {
 }
 
 /// Client state backup
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+#[derive(PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct ClientBackup {
     /// Epoch count taken right before taking the backup
     fedimint_block_count: u64,
     /// Application metadata
     metadata: Metadata,
+    // TODO: remove redundant ModuleInstanceId
     /// Module specific-backup (if supported)
-    modules: BTreeMap<ModuleInstanceId, Vec<u8>>,
+    modules: BTreeMap<ModuleInstanceId, DynModuleBackup>,
 }
 
 impl ClientBackup {
@@ -153,7 +155,7 @@ impl Client {
                     )
                     .await?;
 
-                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, size=backup.len(), "Prepared module backup");
+                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Prepared module backup");
                 modules.insert(id, backup);
             } else {
                 info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Module does not support backup");
@@ -267,7 +269,7 @@ impl Client {
             if !module.supports_backup() {
                 continue;
             }
-            let module_backup = backup.as_ref().and_then(|b| b.modules.get(&id));
+            let module_backup = backup.as_ref().and_then(|b| b.modules.get(&id)).cloned();
 
             info!(
                 target: LOG_CLIENT_RECOVERY,
@@ -281,7 +283,7 @@ impl Client {
                     id,
                     self.inner.executor.clone(),
                     self.inner.api.clone(),
-                    module_backup.map(Vec::as_slice),
+                    module_backup,
                 )
                 .await?;
         }

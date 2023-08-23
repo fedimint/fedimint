@@ -1,3 +1,4 @@
+use fedimint_client::module::recovery::ModuleBackup;
 use fedimint_client::sm::Executor;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
@@ -17,7 +18,7 @@ pub mod recovery;
 ///
 /// Used to speed up and improve privacy of ecash recovery,
 /// by avoiding scanning the whole history.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct EcashBackup {
     spendable_notes: TieredMulti<SpendableNote>,
     pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
@@ -36,6 +37,8 @@ impl EcashBackup {
         }
     }
 }
+
+impl ModuleBackup for EcashBackup {}
 
 impl MintClientModule {
     pub async fn prepare_plaintext_ecash_backup(

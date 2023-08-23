@@ -522,6 +522,7 @@ pub struct WalletClientModule {
 
 impl ClientModule for WalletClientModule {
     type Common = WalletModuleTypes;
+    type Backup = ();
     type ModuleStateMachineContext = WalletClientContext;
     type States = WalletClientStates;
 

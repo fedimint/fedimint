@@ -712,6 +712,7 @@ pub struct LightningClientModule {
 
 impl ClientModule for LightningClientModule {
     type Common = LightningModuleTypes;
+    type Backup = ();
     type ModuleStateMachineContext = LightningClientContext;
     type States = LightningClientStateMachines;
 
