@@ -2,6 +2,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use fedimint_client::Client;
+use fedimint_core::task::sleep;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{sats, Amount, Feerate};
 use fedimint_dummy_client::DummyClientGen;
@@ -9,11 +10,15 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_wallet_client::{DepositState, WalletClientExt, WalletClientGen, WithdrawState};
+use fedimint_wallet_client::api::WalletFederationApi;
+use fedimint_wallet_client::{
+    DepositState, WalletClientExt, WalletClientGen, WalletClientModule, WithdrawState,
+};
 use fedimint_wallet_common::config::WalletGenParams;
 use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletGen;
 use futures::stream::StreamExt;
+use tracing::info;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -60,6 +65,25 @@ async fn peg_in<'a>(
     Ok(balance_sub)
 }
 
+async fn await_consensus_to_catch_up(client: &Client, block_count: u64) -> anyhow::Result<()> {
+    let (_, instance) =
+        client.get_first_module::<WalletClientModule>(&fedimint_wallet_client::KIND);
+    loop {
+        let current_consensus = client
+            .api()
+            .with_module(instance.id)
+            .fetch_consensus_block_count()
+            .await?;
+        if current_consensus < block_count {
+            info!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}");
+            sleep(Duration::from_secs(1)).await;
+        } else {
+            break;
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -69,6 +93,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
 
     let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
@@ -105,6 +130,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let bitcoin = fixtures.bitcoin();
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
 
     let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
@@ -146,6 +172,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
 
     let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
