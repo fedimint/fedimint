@@ -500,6 +500,22 @@
 <a href="#500" id="500">500</a>
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fs;
 
@@ -682,6 +698,8 @@
 
     <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">&quot;Peg-in&quot;</span>);
+        <span class="comment">// Some blocks must always be mined first before pegin
+        </span><span class="self">self</span>.await_minimum_blocks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit_address = deposit[<span class="string">&quot;address&quot;</span>].as_str().unwrap();
         <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">&quot;operation_id&quot;</span>].as_str().unwrap();
@@ -699,6 +717,8 @@
 
     <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in gateway funds&quot;</span>);
+        <span class="comment">// Some blocks must always be mined first before pegin
+        </span><span class="self">self</span>.await_minimum_blocks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>fed_id = <span class="self">self</span>.federation_id().<span class="kw">await</span>;
         <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
             .out_json()
@@ -731,19 +751,30 @@
             .to_string()
     }
 
-    <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.client().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>bitcoind_block_count = <span class="self">self</span>.bitcoind.client().get_blockchain_info()<span class="question-mark">?</span>.blocks;
+        <span class="kw">let </span>expected = bitcoind_block_count.saturating_sub(finality_delay.into());
+        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-block-count&quot;</span>, expected)
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(expected)
+    }
+
+    <span class="kw">pub async fn </span>await_minimum_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="comment">// TODO: optimize this
+        </span><span class="self">self</span>.generate_epochs(<span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>get_finality_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u32, anyhow::Error&gt; {
+        <span class="kw">let </span>client: fedimint_client_legacy::Client&lt;UserClientConfig&gt; = <span class="self">self</span>.client().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = client
             .config_ref()
             .<span class="number">0
             </span>.get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)<span class="question-mark">?</span>;
         <span class="kw">let </span>finality_delay = wallet_cfg.finality_delay;
-        <span class="kw">let </span>bitcoind_block_count = <span class="self">self</span>.bitcoind.client().get_blockchain_info()<span class="question-mark">?</span>.blocks;
-        <span class="kw">let </span>expected = bitcoind_block_count - (finality_delay <span class="kw">as </span>u64);
-        <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;dev&quot;</span>, <span class="string">&quot;wait-block-count&quot;</span>, expected)
-            .run()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(finality_delay)
     }
 
     <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -783,8 +814,9 @@
     }
 
     <span class="kw">pub async fn </span>generate_epochs(<span class="kw-2">&amp;</span><span class="self">self</span>, epochs: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..epochs {
-            <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.bitcoind.mine_blocks(finality_delay.into()).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())

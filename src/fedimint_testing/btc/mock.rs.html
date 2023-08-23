@@ -305,6 +305,12 @@
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -329,6 +335,7 @@
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::{Amount, Feerate};
 <span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>tracing::debug;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">super</span>::BitcoinTest;
@@ -409,6 +416,11 @@
     }
 
     <span class="kw">fn </span>mine_block(blocks: <span class="kw-2">&amp;mut </span>Vec&lt;Block&gt;, pending: <span class="kw-2">&amp;mut </span>Vec&lt;Transaction&gt;) {
+        <span class="macro">debug!</span>(
+            <span class="string">&quot;Mining block: {} transactions, {} blocks&quot;</span>,
+            pending.len(),
+            blocks.len()
+        );
         <span class="kw">let </span>root = BlockHash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>]);
         <span class="comment">// all blocks need at least one transaction
         </span><span class="kw">if </span>pending.is_empty() {

@@ -1730,6 +1730,8 @@
 <a href="#1730" id="1730">1730</a>
 <a href="#1731" id="1731">1731</a>
 <a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -2471,7 +2473,9 @@
 
     <span class="kw">async fn </span>await_consensus_block_count_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, requested_count: u64) -&gt; u64 {
         <span class="kw">loop </span>{
-            <span class="kw">match </span><span class="self">self</span>.context.api.fetch_consensus_block_count().<span class="kw">await </span>{
+            <span class="kw">let </span>current_count = <span class="self">self</span>.context.api.fetch_consensus_block_count().<span class="kw">await</span>;
+            <span class="macro">debug!</span>(target: LOG_WALLET, <span class="string">&quot;awaiting consensus block count: {:?}/{}&quot;</span>, current_count, requested_count);
+            <span class="kw">match </span>current_count {
                 <span class="prelude-val">Ok</span>(current_count) <span class="kw">if </span>requested_count &lt;= current_count =&gt; <span class="kw">return </span>current_count,
                 <span class="kw">_ </span>=&gt; sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>,
             }

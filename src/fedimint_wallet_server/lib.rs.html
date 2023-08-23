@@ -1872,6 +1872,28 @@
 <a href="#1872" id="1872">1872</a>
 <a href="#1873" id="1873">1873</a>
 <a href="#1874" id="1874">1874</a>
+<a href="#1875" id="1875">1875</a>
+<a href="#1876" id="1876">1876</a>
+<a href="#1877" id="1877">1877</a>
+<a href="#1878" id="1878">1878</a>
+<a href="#1879" id="1879">1879</a>
+<a href="#1880" id="1880">1880</a>
+<a href="#1881" id="1881">1881</a>
+<a href="#1882" id="1882">1882</a>
+<a href="#1883" id="1883">1883</a>
+<a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
+<a href="#1890" id="1890">1890</a>
+<a href="#1891" id="1891">1891</a>
+<a href="#1892" id="1892">1892</a>
+<a href="#1893" id="1893">1893</a>
+<a href="#1894" id="1894">1894</a>
+<a href="#1895" id="1895">1895</a>
+<a href="#1896" id="1896">1896</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2195,12 +2217,18 @@
             .collect::&lt;Vec&lt;WalletConsensusItem&gt;&gt;()
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>block_count_proposal = <span class="self">self
-            </span>.block_count()
-            .<span class="kw">await
-            </span>.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
+        <span class="kw">let </span>block_count = <span class="self">self</span>.block_count().<span class="kw">await</span>;
+        <span class="kw">let </span>block_count_proposal = block_count.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
+        <span class="kw">let </span>consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
-        <span class="kw">if </span>block_count_proposal != <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
+        <span class="macro">debug!</span>(
+            <span class="question-mark">?</span>block_count_proposal,
+            <span class="question-mark">?</span>block_count,
+            <span class="question-mark">?</span>consensus_block_count,
+            <span class="string">&quot;Considering proposing block count&quot;
+        </span>);
+
+        <span class="kw">if </span><span class="prelude-val">Some</span>(block_count_proposal) != consensus_block_count {
             items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
@@ -2229,10 +2257,16 @@
                     </span>.unwrap_or(<span class="number">0</span>);
 
                 <span class="kw">if </span>block_count &lt; current_vote {
+                    <span class="macro">debug!</span>(<span class="question-mark">?</span>peer_id, <span class="question-mark">?</span>block_count, <span class="string">&quot;Received outdated block count vote&quot;</span>);
                     <span class="macro">bail!</span>(<span class="string">&quot;Block count vote decreased&quot;</span>);
                 }
 
                 <span class="kw">if </span>block_count == current_vote {
+                    <span class="macro">debug!</span>(
+                        <span class="question-mark">?</span>peer_id,
+                        <span class="question-mark">?</span>block_count,
+                        <span class="string">&quot;Received redundant block count vote&quot;
+                    </span>);
                     <span class="macro">bail!</span>(<span class="string">&quot;Block height vote is redundant&quot;</span>);
                 }
 
@@ -2243,14 +2277,21 @@
 
                 <span class="kw">let </span>new_consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
-                <span class="comment">// only sync from the first non-default consensus block count
-                </span><span class="kw">if </span>new_consensus_block_count &gt; old_consensus_block_count {
-                    <span class="self">self</span>.sync_up_to_consensus_height(
-                        dbtx,
-                        old_consensus_block_count,
-                        new_consensus_block_count,
-                    )
-                    .<span class="kw">await</span>;
+                <span class="macro">debug!</span>(
+                    <span class="question-mark">?</span>peer_id,
+                    <span class="question-mark">?</span>current_vote,
+                    <span class="question-mark">?</span>block_count,
+                    <span class="question-mark">?</span>old_consensus_block_count,
+                    <span class="question-mark">?</span>new_consensus_block_count,
+                    <span class="string">&quot;Received block count vote&quot;
+                </span>);
+
+                <span class="comment">// only sync when we have a consensus block count
+                </span><span class="kw">match </span>(old_consensus_block_count, new_consensus_block_count) {
+                    (<span class="prelude-val">Some</span>(old), <span class="prelude-val">Some</span>(new)) <span class="kw">if </span>new &gt; old =&gt; {
+                        <span class="self">self</span>.sync_up_to_consensus_height(dbtx, old, new).<span class="kw">await</span>;
+                    }
+                    <span class="kw">_ </span>=&gt; {}
                 }
             }
             WalletConsensusItem::Feerate(feerate) =&gt; {
@@ -2448,7 +2489,8 @@
             <span class="macro">api_endpoint! </span>{
                 <span class="string">&quot;block_count&quot;</span>,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; u32 {
-                    <span class="prelude-val">Ok</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
+                    <span class="comment">// TODO: perhaps change this to an Option
+                    </span><span class="prelude-val">Ok</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>.unwrap_or_default())
                 }
             },
             <span class="macro">api_endpoint! </span>{
@@ -2669,20 +2711,22 @@
             .unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee)
     }
 
-    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u32 {
+    <span class="kw">pub async fn </span>consensus_block_count(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
         <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.total();
 
         <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
             .<span class="kw">await
-            </span>.map(|(.., count)| count)
+            </span>.map(|(.., count)| <span class="prelude-val">Some</span>(count))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(counts.len() &lt;= peer_count);
-
         <span class="kw">while </span>counts.len() &lt; peer_count {
-            counts.push(<span class="number">0</span>);
+            counts.push(<span class="prelude-val">None</span>);
         }
 
         counts.sort_unstable();
