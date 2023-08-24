@@ -1441,6 +1441,7 @@ impl ClientBuilder {
 
                 let module = module_init
                     .init(
+                        config.federation_id,
                         module_config,
                         db.clone(),
                         module_instance,

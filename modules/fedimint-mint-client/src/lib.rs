@@ -29,6 +29,7 @@ use fedimint_client::sm::{
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
@@ -465,6 +466,7 @@ impl ClientModuleInit for MintClientGen {
 
     async fn init(
         &self,
+        _federation_id: FederationId,
         cfg: MintClientConfig,
         _db: Database,
         _api_version: ApiVersion,

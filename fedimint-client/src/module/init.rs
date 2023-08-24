@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
-use fedimint_core::config::{ClientModuleConfig, ModuleInitRegistry};
+use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::{
@@ -30,6 +30,7 @@ pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
+        federation_id: FederationId,
         cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
         db: Database,
         api_version: ApiVersion,
@@ -54,6 +55,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
+        federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
         // FIXME: don't make modules aware of their instance id
@@ -88,6 +90,7 @@ where
 
     async fn init(
         &self,
+        federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -100,6 +103,7 @@ where
         let typed_cfg: &<<T as fedimint_core::module::ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
             .init(
+                federation_id,
                 typed_cfg.clone(),
                 db,
                 api_version,

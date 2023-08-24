@@ -21,6 +21,7 @@ use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -437,6 +438,7 @@ impl ClientModuleInit for WalletClientGen {
 
     async fn init(
         &self,
+        _federation_id: FederationId,
         cfg: WalletClientConfig,
         _db: Database,
         _api_version: ApiVersion,
