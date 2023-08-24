@@ -9,7 +9,7 @@ use anyhow::{bail, Context};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use common::{
     cln_create_invoice, cln_wait_invoice_payment, gateway_pay_invoice, get_note_summary,
-    lnd_create_invoice, lnd_wait_invoice_payment, parse_ecash, reissue_notes,
+    lnd_create_invoice, lnd_wait_invoice_payment, reissue_notes,
 };
 use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
@@ -17,8 +17,8 @@ use fedimint_client::Client;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::BoxFuture;
-use fedimint_core::{Amount, TieredMulti};
-use fedimint_mint_client::SpendableNote;
+use fedimint_core::Amount;
+use fedimint_mint_client::OOBNotes;
 use lightning_invoice::Invoice;
 use serde::{Deserialize, Serialize};
 use tokio::fs::OpenOptions;
@@ -103,8 +103,11 @@ struct LoadTestArgs {
     )]
     invite_code: Option<String>,
 
-    #[arg(long, value_parser = parse_ecash, help = "Notes for the test. If none, will call fedimint-cli spend")]
-    initial_notes: Option<TieredMulti<SpendableNote>>,
+    #[arg(
+        long,
+        help = "Notes for the test. If none, will call fedimint-cli spend"
+    )]
+    initial_notes: Option<OOBNotes>,
 
     #[arg(
         long,
@@ -315,7 +318,7 @@ async fn run_load_test(
     archive_dir: Option<PathBuf>,
     users: u16,
     invite_code: Option<InviteCode>,
-    initial_notes: TieredMulti<SpendableNote>,
+    initial_notes: OOBNotes,
     generate_invoice_with: Option<LnInvoiceGeneration>,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
@@ -365,10 +368,10 @@ async fn run_load_test(
     for u in 0..users {
         users_notes.insert(u, Vec::with_capacity(notes_per_user.into()));
         for _ in 0..notes_per_user {
-            let (_, notes) = do_spend_notes(&coordinator, note_denomination).await?;
-            let user_amount = notes.total_amount();
+            let (_, oob_notes) = do_spend_notes(&coordinator, note_denomination).await?;
+            let user_amount = oob_notes.total_amount();
             info!("Giving {user_amount} to user {u}");
-            users_notes.get_mut(&u).unwrap().push(notes);
+            users_notes.get_mut(&u).unwrap().push(oob_notes);
         }
     }
     let mut users_invoices = HashMap::new();
@@ -388,12 +391,12 @@ async fn run_load_test(
         .enumerate()
         .map(|(u, client)| {
             let u = u as u16;
-            let notes = users_notes.remove(&u).unwrap();
+            let oob_notes = users_notes.remove(&u).unwrap();
             let invoices = users_invoices.remove(&u).unwrap_or_default();
             let event_sender = event_sender.clone();
             let f: BoxFuture<_> = Box::pin(do_user_task(
                 client,
-                notes,
+                oob_notes,
                 generated_invoices_per_user,
                 ln_payment_sleep,
                 invoice_amount,
@@ -411,7 +414,7 @@ async fn run_load_test(
 #[allow(clippy::too_many_arguments)]
 async fn do_user_task(
     client: Client,
-    notes: Vec<TieredMulti<SpendableNote>>,
+    oob_notes: Vec<OOBNotes>,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
     invoice_amount: Amount,
@@ -419,9 +422,9 @@ async fn do_user_task(
     generate_invoice_with: Option<LnInvoiceGeneration>,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
-    for note in notes {
-        let amount = note.total_amount();
-        reissue_notes(&client, note, &event_sender)
+    for oob_note in oob_notes {
+        let amount = oob_note.total_amount();
+        reissue_notes(&client, oob_note, &event_sender)
             .await
             .map_err(|e| anyhow::anyhow!("while reissuing initial {amount}: {e}"))?;
     }

@@ -12,13 +12,11 @@ use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::api::InviteCode;
 use fedimint_core::core::IntoDynInstance;
-use fedimint_core::encoding::Decodable;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary};
+use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
 use fedimint_mint_client::{
-    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, SpendableNote,
+    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, OOBNotes,
 };
 use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
@@ -28,23 +26,20 @@ use tracing::info;
 
 use crate::MetricEvent;
 
-pub async fn get_notes_cli(amount: &Amount) -> anyhow::Result<TieredMulti<SpendableNote>> {
+pub async fn get_notes_cli(amount: &Amount) -> anyhow::Result<OOBNotes> {
     cmd!(FedimintCli, "spend", amount.msats.to_string())
         .out_json()
         .await?["notes"]
         .as_str()
-        .map(parse_ecash)
+        .map(OOBNotes::from_str)
         .transpose()?
         .context("missing notes output")
 }
 
-pub async fn try_get_notes_cli(
-    amount: &Amount,
-    tries: usize,
-) -> anyhow::Result<TieredMulti<SpendableNote>> {
+pub async fn try_get_notes_cli(amount: &Amount, tries: usize) -> anyhow::Result<OOBNotes> {
     for _ in 0..tries {
         match get_notes_cli(amount).await {
-            Ok(notes) => return Ok(notes),
+            Ok(oob_notes) => return Ok(oob_notes),
             Err(e) => {
                 info!("Failed to get notes from cli: {e}, trying again after a second...");
                 fedimint_core::task::sleep(Duration::from_secs(1)).await;
@@ -56,11 +51,11 @@ pub async fn try_get_notes_cli(
 
 pub async fn reissue_notes(
     client: &Client,
-    notes: TieredMulti<SpendableNote>,
+    oob_notes: OOBNotes,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
-    let operation_id = client.reissue_external_notes(notes, ()).await?;
+    let operation_id = client.reissue_external_notes(oob_notes, ()).await?;
     let mut updates = client
         .subscribe_reissue_external_notes(operation_id)
         .await?
@@ -80,8 +75,8 @@ pub async fn reissue_notes(
 pub async fn do_spend_notes(
     client: &Client,
     amount: Amount,
-) -> anyhow::Result<(OperationId, TieredMulti<SpendableNote>)> {
-    let (operation_id, notes) = client
+) -> anyhow::Result<(OperationId, OOBNotes)> {
+    let (operation_id, oob_notes) = client
         .spend_notes(amount, Duration::from_secs(600), ())
         .await?;
     let mut updates = client
@@ -97,7 +92,7 @@ pub async fn do_spend_notes(
             }
         }
     }
-    Ok((operation_id, notes))
+    Ok((operation_id, oob_notes))
 }
 
 pub async fn await_spend_notes_finish(
@@ -140,14 +135,6 @@ pub async fn build_client(
     }
     let client = client_builder.build::<PlainRootSecretStrategy>().await?;
     Ok(client)
-}
-
-pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
-    let bytes = base64::decode(s)?;
-    Ok(Decodable::consensus_decode(
-        &mut std::io::Cursor::new(bytes),
-        &ModuleDecoderRegistry::default(),
-    )?)
 }
 
 pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Invoice, String)> {
