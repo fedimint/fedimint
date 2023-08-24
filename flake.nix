@@ -175,18 +175,18 @@
           # as a very last step.
           rustPackageOutputsFinal = craneLib: builtins.mapAttrs (name: package: replaceGitHash { inherit name package; placeholder = craneLib.gitHashPlaceholderValue; }) (rustPackageOutputs craneLib);
 
-          # All tests, grouped together, so we can `nix build -L .#cli-test.<name>` or `nix build -L .#ci.cli-test.<name>`, etc.
-          cli-test = craneLib: {
-            all = craneLib.cliTestsAll;
-            reconnect = craneLib.cliTestReconnect;
-            latency = craneLib.cliTestLatency;
-            cli = craneLib.cliTestCli;
+          # All tests, grouped together, so we can `nix build -L .#test.<name>` or `nix build -L .#ci.test.<name>`, etc.
+          test = craneLib: {
+            all = craneLib.ciTestAll;
+            reconnect = craneLib.reconnectTest;
+            latency = craneLib.latencyTest;
+            devimintCli = craneLib.devimintClitTest;
             load-test-tool = craneLib.cliLoadTestToolTest;
-            rust-tests = craneLib.cliRustTests;
+            backend-test = craneLib.backendTests;
             always-fail = craneLib.cliTestAlwaysFail;
           };
 
-          wasm-tests = { craneLibNative, craneLibCross }: craneLibCross.wasmTests {
+          wasm-test = { craneLibNative, craneLibCross }: craneLibCross.wasmTest {
             nativeWorkspaceBuild = craneLibNative.workspaceBuild;
             wasmTarget = toolchain.crossTargets.wasm32-unknown-unknown;
           };
@@ -246,16 +246,16 @@
               # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
               # recursing into `cargoArtifacts` to do the same. This way a debug build depends on debug build of all dependencies.
               # See https://github.com/ipetkov/crane/discussions/140#discussioncomment-3857137 for more info.
-              debug = (workspaceOutputs craneLibDebug) // { cli-test = cli-test craneLibDebug; } // (packages craneLibDebug);
+              debug = (workspaceOutputs craneLibDebug) // { test = test craneLibDebug; } // (packages craneLibDebug);
 
               ci = (workspaceOutputs craneLibCi) // {
-                wasm-tests = wasm-tests {
+                wasm-test = wasm-test {
                   craneLibCross = (craneLibCross "wasm32-unknown-unknown").overrideScope' (self: prev: {
                     commonProfile = "ci";
                   });
                   craneLibNative = craneLibCi;
                 };
-                cli-test = cli-test craneLibCi;
+                test = test craneLibCi;
               } // (packages craneLibCi);
 
               cross = builtins.mapAttrs
