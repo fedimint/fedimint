@@ -14,8 +14,9 @@ use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::{sha256, Hash};
 use db::{DbKeyPrefix, LightningGatewayKey, PaymentResult, PaymentResultKey};
-use fedimint_client::derivable_secret::ChildId;
+use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client::module::recovery::NoRecoveringModule;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -680,6 +681,7 @@ impl ExtendsCommonModuleInit for LightningClientGen {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for LightningClientGen {
     type Module = LightningClientModule;
+    type RecoveringModule = NoRecoveringModule<Self::Module>;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -698,6 +700,14 @@ impl ClientModuleInit for LightningClientGen {
             secp,
             module_api: args.module_api().clone(),
         })
+    }
+
+    async fn init_recovering(
+        &self,
+        _cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
+        _module_root_secret: DerivableSecret,
+    ) -> anyhow::Result<Self::RecoveringModule> {
+        Ok(NoRecoveringModule::default())
     }
 }
 

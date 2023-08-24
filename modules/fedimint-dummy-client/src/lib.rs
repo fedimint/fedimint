@@ -6,6 +6,7 @@ use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
 use db::DbKeyPrefix;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client::module::recovery::NoRecoveringModule;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
@@ -30,6 +31,7 @@ use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 use threshold_crypto::{PublicKey, Signature};
+use fedimint_client::derivable_secret::DerivableSecret;
 
 use crate::api::DummyFederationApi;
 use crate::db::DummyClientFundsKeyV0;
@@ -384,6 +386,7 @@ impl ExtendsCommonModuleInit for DummyClientGen {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for DummyClientGen {
     type Module = DummyClientModule;
+    type RecoveringModule = NoRecoveringModule<Self::Module>;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -399,5 +402,13 @@ impl ClientModuleInit for DummyClientGen {
                 .to_secp_key(&Secp256k1::new()),
             notifier: args.notifier().clone(),
         })
+    }
+
+    async fn init_recovering(
+        &self,
+        _cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
+        _module_root_secret: DerivableSecret,
+    ) -> anyhow::Result<Self::RecoveringModule> {
+        Ok(NoRecoveringModule::default())
     }
 }

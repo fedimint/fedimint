@@ -6,8 +6,9 @@ use std::time::Duration;
 
 use async_stream::stream;
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::derivable_secret::ChildId;
+use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client::module::recovery::NoRecoveringModule;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -20,7 +21,8 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationI
 use fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, MultiApiVersion,
+    TransactionItemAmount,
 };
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -372,6 +374,7 @@ impl ExtendsCommonModuleInit for GatewayClientGen {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for GatewayClientGen {
     type Module = GatewayClientModule;
+    type RecoveringModule = NoRecoveringModule<Self::Module>;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -396,6 +399,14 @@ impl ClientModuleInit for GatewayClientGen {
             mint_channel_id: self.mint_channel_id,
             fees: self.fees,
         })
+    }
+
+    async fn init_recovering(
+        &self,
+        _cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
+        _module_root_secret: DerivableSecret,
+    ) -> anyhow::Result<Self::RecoveringModule> {
+        Ok(NoRecoveringModule::default())
     }
 }
 

@@ -1,9 +1,12 @@
 use std::any::Any;
 use std::fmt::Debug;
+use std::io::{Error, Read, Write};
+use std::marker::PhantomData;
 
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::ModuleDatabaseTransaction;
-use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync,
@@ -11,7 +14,7 @@ use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync,
     module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough
 };
 
-use crate::module::{ClientModule, DynClientModule};
+use crate::module::ClientModule;
 use crate::sm::DynState;
 use crate::DynGlobalClientContext;
 
@@ -119,10 +122,8 @@ pub trait RecoveringModule:
 
     async fn finalize(
         self,
-    ) -> (
-        Self::ClientModule,
-        Vec<<Self::ClientModule as ClientModule>::States>,
-    );
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> Vec<<Self::ClientModule as ClientModule>::States>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -143,8 +144,9 @@ pub trait IRecoveringModule: Debug + DynEncodable {
 
     async fn finalize(
         self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> (DynClientModule, Vec<DynState<DynGlobalClientContext>>);
+    ) -> Vec<DynState<DynGlobalClientContext>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -188,8 +190,9 @@ impl IRecoveringModule for ::fedimint_core::core::DynUnknown {
 
     async fn finalize(
         self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _module_instance_id: ModuleInstanceId,
-    ) -> (DynClientModule, Vec<DynState<DynGlobalClientContext>>) {
+    ) -> Vec<DynState<DynGlobalClientContext>> {
         unimplemented!()
     }
 }
@@ -265,16 +268,14 @@ where
 
     async fn finalize(
         self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> (DynClientModule, Vec<DynState<DynGlobalClientContext>>) {
-        let (client, states) = RecoveringModule::finalize(self).await;
-        let dyn_client = DynClientModule::from(client);
-        let dyn_states = states
+    ) -> Vec<DynState<DynGlobalClientContext>> {
+        RecoveringModule::finalize(self, dbtx)
+            .await
             .into_iter()
             .map(|state| DynState::from_typed(module_instance_id, state))
-            .collect();
-
-        (dyn_client, dyn_states)
+            .collect()
     }
 }
 
@@ -287,3 +288,78 @@ module_plugin_dyn_newtype_encode_decode!(DynRecoveringModule);
 module_plugin_dyn_newtype_clone_passthrough!(DynRecoveringModule);
 
 module_plugin_dyn_newtype_eq_passthrough!(DynRecoveringModule);
+
+#[derive(Debug)]
+pub struct NoRecoveringModule<T>(PhantomData<T>);
+
+impl<T> Clone for NoRecoveringModule<T> {
+    fn clone(&self) -> Self {
+        NoRecoveringModule(PhantomData)
+    }
+}
+
+impl<T> Default for NoRecoveringModule<T> {
+    fn default() -> Self {
+        NoRecoveringModule(PhantomData)
+    }
+}
+
+impl<T> PartialEq for NoRecoveringModule<T> {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl<T> Eq for NoRecoveringModule<T> {}
+
+impl<T> std::hash::Hash for NoRecoveringModule<T> {
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {}
+}
+
+impl<T> Encodable for NoRecoveringModule<T> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        ().consensus_encode(writer)
+    }
+}
+
+impl<T> Decodable for NoRecoveringModule<T> {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        <()>::consensus_decode(r, modules).map(|_| NoRecoveringModule(PhantomData))
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T: ClientModule> RecoveringModule for NoRecoveringModule<T> {
+    type ClientModule = T;
+
+    async fn process_ci(
+        &mut self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _ci: <<Self::ClientModule as ClientModule>::Common as ModuleCommon>::ConsensusItem,
+    ) {
+    }
+
+    async fn process_input(
+        &mut self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _input: <<Self::ClientModule as ClientModule>::Common as ModuleCommon>::Input,
+    ) {
+    }
+
+    async fn process_output(
+        &mut self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _output: <<Self::ClientModule as ClientModule>::Common as ModuleCommon>::Output,
+    ) {
+    }
+
+    async fn finalize(
+        self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+    ) -> Vec<<Self::ClientModule as ClientModule>::States> {
+        vec![]
+    }
+}

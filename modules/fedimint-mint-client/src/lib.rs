@@ -23,6 +23,7 @@ use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client::module::recovery::NoRecoveringModule;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
@@ -597,6 +598,7 @@ impl ExtendsCommonModuleInit for MintClientGen {
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for MintClientGen {
     type Module = MintClientModule;
+    type RecoveringModule = NoRecoveringModule<Self::Module>;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
@@ -613,6 +615,14 @@ impl ClientModuleInit for MintClientGen {
             notifier: args.notifier().clone(),
             cancel_oob_payment_bc,
         })
+    }
+
+    async fn init_recovering(
+        &self,
+        _cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
+        _module_root_secret: DerivableSecret,
+    ) -> anyhow::Result<Self::RecoveringModule> {
+        Ok(NoRecoveringModule::default())
     }
 }
 

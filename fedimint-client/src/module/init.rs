@@ -12,6 +12,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
 
+use crate::module::recovery::RecoveringModule;
 use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
 use crate::DynGlobalClientContext;
@@ -82,6 +83,7 @@ where
 #[apply(async_trait_maybe_send!)]
 pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
     type Module: ClientModule;
+    type RecoveringModule: RecoveringModule<ClientModule = Self::Module>;
 
     /// Api versions of the corresponding server side module's API
     /// that this client module implementation can use.
@@ -89,6 +91,16 @@ pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
 
     /// Initialize a [`ClientModule`] instance from its config
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
+
+    /// Initialize a [`RecoveringModule`] instance from the module config and
+    /// secret. The method should only be called if no ongoing recovery has been
+    /// persisted to disk.
+    #[allow(clippy::too_many_arguments)]
+    async fn init_recovering(
+        &self,
+        cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
+        module_root_secret: DerivableSecret,
+    ) -> anyhow::Result<Self::RecoveringModule>;
 }
 
 #[apply(async_trait_maybe_send!)]
