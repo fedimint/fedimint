@@ -161,12 +161,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     Ok(())
 }
 
-// FIXME: This test is flaky, it fails with:
-// left: `Amount { msats: 3270000 }`,
-// right: `Amount { msats: 2540000 }`',
-// modules/fedimint-wallet-tests/tests/tests.rs:222:5
 #[tokio::test(flavor = "multi_thread")]
-#[ignore]
 async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -221,10 +216,17 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
         bitcoin.mine_block_and_get_received(&address).await,
         sats(PEG_OUT_AMOUNT_SATS)
     );
-
     let balance_after_rbf_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - total_fees.to_sat());
-    assert_eq!(client.get_balance().await, balance_after_rbf_peg_out);
-    assert_eq!(balance_sub.ok().await?, balance_after_rbf_peg_out);
+    let current_balance = client.get_balance().await;
+    assert_eq!(balance_sub.ok().await?, current_balance);
+    // So we don't know which transaction will get mined first, it could be any one
+    // of the two, so we accept both
+    if current_balance != balance_after_rbf_peg_out
+        && current_balance != balance_after_normal_peg_out
+    {
+        bail!(
+            "Balance is {current_balance}, expected {balance_after_rbf_peg_out} or {balance_after_normal_peg_out}")
+    }
     Ok(())
 }
