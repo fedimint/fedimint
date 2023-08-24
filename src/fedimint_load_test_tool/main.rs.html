@@ -768,6 +768,7 @@
     lnd_create_invoice, lnd_wait_invoice_payment, parse_ecash, reissue_notes,
 };
 <span class="kw">use </span>devimint::cmd;
+<span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -783,7 +784,6 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::common::{
     build_client, do_spend_notes, remint_denomination, switch_default_gateway, try_get_notes_cli,
-    GatewayClnCli, GatewayLndCli,
 };
 <span class="kw">pub mod </span>common;
 
