@@ -9,6 +9,7 @@ use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair};
 use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::module::{
@@ -332,6 +333,7 @@ impl ClientModuleInit for DummyClientGen {
 
     async fn init(
         &self,
+        _federation_id: FederationId,
         cfg: DummyClientConfig,
         _db: Database,
         _api_version: ApiVersion,
