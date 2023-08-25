@@ -185,7 +185,7 @@ impl WalletClientExt for Client {
             .await
             .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
 
-        if operation_log_entry.operation_type() != WalletCommonGen::KIND.as_str() {
+        if operation_log_entry.operation_module_kind() != WalletCommonGen::KIND.as_str() {
             bail!("Operation is not a wallet operation");
         }
 
@@ -334,7 +334,7 @@ impl WalletClientExt for Client {
             .await
             .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
 
-        if operation.operation_type() != WalletCommonGen::KIND.as_str() {
+        if operation.operation_module_kind() != WalletCommonGen::KIND.as_str() {
             bail!("Operation is not a wallet operation");
         }
 

@@ -501,7 +501,7 @@ async fn mint_operation(
         .await
         .ok_or(anyhow!("Operation not found"))?;
 
-    if operation.operation_type() != MintCommonGen::KIND.as_str() {
+    if operation.operation_module_kind() != MintCommonGen::KIND.as_str() {
         bail!("Operation is not a mint operation");
     }
 

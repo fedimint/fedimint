@@ -389,7 +389,7 @@ pub async fn ln_operation(
         .await
         .ok_or(anyhow::anyhow!("Operation not found"))?;
 
-    if operation.operation_type() != LightningCommonGen::KIND.as_str() {
+    if operation.operation_module_kind() != LightningCommonGen::KIND.as_str() {
         bail!("Operation is not a lightning operation");
     }
 
