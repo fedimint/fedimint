@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
 
-use fedimint_bitcoind::create_bitcoind;
+use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -41,6 +41,7 @@ pub struct Fixtures {
     primary_client: ModuleInstanceId,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
+    dyn_bitcoin_rpc: DynBitcoindRpc,
     id: ModuleInstanceId,
 }
 
@@ -58,21 +59,24 @@ impl Fixtures {
             false => 1,
         };
         let task_group = TaskGroup::new();
-        let (bitcoin, config): (Arc<dyn BitcoinTest>, BitcoinRpcConfig) = match real_testing {
-            true => {
-                let rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
-                let bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
-                let bitcoincore_url = env::var("FM_TEST_BITCOIND_RPC")
-                    .expect("Must have bitcoind RPC defined for real tests")
-                    .parse()
-                    .expect("Invalid bitcoind RPC URL");
-                let bitcoin = RealBitcoinTest::new(&bitcoincore_url, bitcoin_rpc);
-                (Arc::new(bitcoin), rpc_config)
-            }
-            false => {
-                let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
-                (Arc::new(bitcoin), config)
-            }
+        let (dyn_bitcoin_rpc, bitcoin, config): (
+            DynBitcoindRpc,
+            Arc<dyn BitcoinTest>,
+            BitcoinRpcConfig,
+        ) = if real_testing {
+            let rpc_config = BitcoinRpcConfig::from_env_vars().unwrap();
+            let dyn_bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
+            let bitcoincore_url = env::var("FM_TEST_BITCOIND_RPC")
+                .expect("Must have bitcoind RPC defined for real tests")
+                .parse()
+                .expect("Invalid bitcoind RPC URL");
+            let bitcoin = RealBitcoinTest::new(&bitcoincore_url, dyn_bitcoin_rpc.clone());
+            (dyn_bitcoin_rpc, Arc::new(bitcoin), rpc_config)
+        } else {
+            let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
+            let dyn_bitcoin_rpc = DynBitcoindRpc::from(bitcoin.clone());
+            let bitcoin = Arc::new(bitcoin);
+            (dyn_bitcoin_rpc, bitcoin, config)
         };
 
         Self {
@@ -83,6 +87,7 @@ impl Fixtures {
             primary_client: 0,
             bitcoin_rpc: config,
             bitcoin,
+            dyn_bitcoin_rpc,
             id: 0,
         }
         .with_module(client, server, params)
@@ -201,6 +206,10 @@ impl Fixtures {
     /// Get a test bitcoin fixture
     pub fn bitcoin(&self) -> Arc<dyn BitcoinTest> {
         self.bitcoin.clone()
+    }
+
+    pub fn dyn_bitcoin_rpc(&self) -> DynBitcoindRpc {
+        self.dyn_bitcoin_rpc.clone()
     }
 }
 
