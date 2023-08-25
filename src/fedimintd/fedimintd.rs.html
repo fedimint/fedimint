@@ -308,11 +308,11 @@
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::module::ServerModuleGen;
+<span class="kw">use </span>fedimint_core::module::ServerModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::write_overwrite;
 <span class="kw">use </span>fedimint_core::{timing, Amount};
@@ -328,7 +328,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 <span class="kw">use </span>url::Url;
 
-<span class="kw">use </span><span class="kw">crate</span>::attach_default_module_gen_params;
+<span class="kw">use </span><span class="kw">crate</span>::attach_default_module_init_params;
 
 <span class="doccomment">/// Time we will wait before forcefully shutting down tasks
 </span><span class="kw">const </span>SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
@@ -408,8 +408,8 @@
 /// }
 /// ```
 </span><span class="kw">pub struct </span>Fedimintd {
-    <span class="kw">pub </span>server_gens: ServerModuleGenRegistry,
-    <span class="kw">pub </span>server_gen_params: ServerModuleGenParamsRegistry,
+    <span class="kw">pub </span>server_gens: ServerModuleInitRegistry,
+    <span class="kw">pub </span>server_gen_params: ServerModuleConfigGenParamsRegistry,
 }
 
 <span class="kw">impl </span>Fedimintd {
@@ -425,27 +425,27 @@
         <span class="macro">info!</span>(<span class="string">&quot;Starting fedimintd (version: {CODE_VERSION})&quot;</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            server_gens: ServerModuleGenRegistry::new(),
-            server_gen_params: ServerModuleGenParamsRegistry::default(),
+            server_gens: ServerModuleInitRegistry::new(),
+            server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
         })
     }
 
     <span class="kw">pub fn </span>with_module&lt;T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, gen: T) -&gt; <span class="self">Self
     </span><span class="kw">where
-        </span>T: ServerModuleGen + <span class="lifetime">&#39;static </span>+ Send + Sync,
+        </span>T: ServerModuleInit + <span class="lifetime">&#39;static </span>+ Send + Sync,
     {
         <span class="self">self</span>.server_gens.attach(gen);
         <span class="self">self
     </span>}
 
-    <span class="kw">pub fn </span>with_extra_module_gens_params&lt;P&gt;(
+    <span class="kw">pub fn </span>with_extra_module_inits_params&lt;P&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>,
         id: ModuleInstanceId,
         kind: ModuleKind,
         params: P,
     ) -&gt; <span class="self">Self
     </span><span class="kw">where
-        </span>P: ModuleGenParams,
+        </span>P: ModuleInitParams,
     {
         <span class="self">self</span>.server_gen_params
             .attach_config_gen_params(id, kind, params);
@@ -534,21 +534,21 @@
 <span class="kw">async fn </span>run(
     opts: ServerOpts,
     task_group: TaskGroup,
-    module_gens: ServerModuleGenRegistry,
-    <span class="kw-2">mut </span>module_gens_params: ServerModuleGenParamsRegistry,
+    module_inits: ServerModuleInitRegistry,
+    <span class="kw-2">mut </span>module_inits_params: ServerModuleConfigGenParamsRegistry,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    attach_default_module_gen_params(
+    attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
-        <span class="kw-2">&amp;mut </span>module_gens_params,
+        <span class="kw-2">&amp;mut </span>module_inits_params,
         opts.max_denomination,
         opts.network,
         opts.finality_delay,
     );
 
-    <span class="kw">let </span>module_kinds = module_gens_params
+    <span class="kw">let </span>module_kinds = module_inits_params
         .iter_modules()
         .map(|(id, kind, <span class="kw">_</span>)| (id, kind));
-    <span class="kw">let </span>decoders = module_gens.available_decoders(module_kinds.into_iter())<span class="question-mark">?</span>;
+    <span class="kw">let </span>decoders = module_inits.available_decoders(module_kinds.into_iter())<span class="question-mark">?</span>;
     <span class="kw">let </span>db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
         decoders.clone(),
@@ -562,7 +562,7 @@
     };
     <span class="kw">let </span>default_params = ConfigGenParamsRequest {
         meta: BTreeMap::new(),
-        modules: module_gens_params,
+        modules: module_inits_params,
     };
     <span class="kw">let </span><span class="kw-2">mut </span>api = FedimintServer {
         data_dir: opts.data_dir,
@@ -574,7 +574,7 @@
             api_url: opts.api_url,
             default_params,
             max_connections: fedimint_server::config::max_connections(),
-            registry: module_gens,
+            registry: module_inits,
         },
         db,
     };

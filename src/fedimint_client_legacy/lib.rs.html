@@ -1758,7 +1758,7 @@
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::api::{
     DynGlobalApi, FederationError, GlobalFederationApi, OutputOutcomeError, PeerError,
     WsFederationApi,
@@ -1772,7 +1772,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::SignedEpochOutcome;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon};
+<span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, sleep, MaybeSend};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
@@ -1916,8 +1916,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.context.decoders
     }
 
-    <span class="kw">pub fn </span>module_gens(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientModuleGenRegistry {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.context.module_gens
+    <span class="kw">pub fn </span>module_inits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientModuleInitRegistry {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.context.module_inits
     }
 
     <span class="kw">pub fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;ClientContext&gt; {
@@ -2027,18 +2027,18 @@
     <span class="kw">pub async fn </span>new(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
+        module_inits: ClientModuleInitRegistry,
         db: Database,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>api = WsFederationApi::from_config(config.as_ref());
-        <span class="self">Self</span>::new_with_api(config, decoders, module_gens, db, api.into(), secp).<span class="kw">await
+        <span class="self">Self</span>::new_with_api(config, decoders, module_inits, db, api.into(), secp).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>new_with_api(
         config: T,
         decoders: ModuleDecoderRegistry,
-        module_gens: ClientModuleGenRegistry,
+        module_inits: ClientModuleInitRegistry,
         db: Database,
         api: DynGlobalApi,
         secp: Secp256k1&lt;All&gt;,
@@ -2049,7 +2049,7 @@
             config,
             context: Arc::new(ClientContext {
                 decoders,
-                module_gens,
+                module_inits,
                 db,
                 api,
                 secp,

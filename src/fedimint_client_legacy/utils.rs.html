@@ -107,7 +107,7 @@
 
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
 <span class="kw">use </span>bitcoin_hashes::hex::FromHex;
-<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -172,7 +172,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientContext {
     <span class="kw">pub </span>decoders: ModuleDecoderRegistry,
-    <span class="kw">pub </span>module_gens: ClientModuleGenRegistry,
+    <span class="kw">pub </span>module_inits: ClientModuleInitRegistry,
     <span class="kw">pub </span>db: Database,
     <span class="kw">pub </span>api: DynGlobalApi,
     <span class="kw">pub </span>secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,

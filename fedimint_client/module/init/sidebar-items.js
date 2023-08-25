@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DynClientModuleInit"],"trait":["ClientModuleInit","IClientModuleInit"],"type":["ClientModuleInitRegistry"]};

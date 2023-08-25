@@ -171,9 +171,9 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>bytes::Bytes;
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::IDatabase;
-<span class="kw">use </span>fedimint_core::module::DynServerModuleGen;
+<span class="kw">use </span>fedimint_core::module::DynServerModuleInit;
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
@@ -306,13 +306,13 @@
                 <span class="prelude-val">None </span>=&gt; Vec::new(),
             };
 
-            <span class="kw">let </span>module_gens = ServerModuleGenRegistry::from(<span class="kw">if </span>options.no_modules {
+            <span class="kw">let </span>module_inits = ServerModuleInitRegistry::from(<span class="kw">if </span>options.no_modules {
                 <span class="macro">vec!</span>[]
             } <span class="kw">else </span>{
                 <span class="macro">vec!</span>[
-                    DynServerModuleGen::from(WalletGen),
-                    DynServerModuleGen::from(MintGen),
-                    DynServerModuleGen::from(LightningGen),
+                    DynServerModuleInit::from(WalletGen),
+                    DynServerModuleInit::from(MintGen),
+                    DynServerModuleInit::from(LightningGen),
                 ]
             });
 
@@ -320,7 +320,7 @@
                 cfg_dir,
                 options.database,
                 password,
-                module_gens,
+                module_inits,
                 modules,
                 prefix_names,
             );

@@ -214,6 +214,8 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -221,13 +223,15 @@
 <span class="kw">use </span>std::{env, fs};
 
 <span class="kw">use </span>fedimint_bitcoind::create_bitcoind;
-<span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen};
+<span class="kw">use </span>fedimint_client::module::init::{
+    ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
+};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::module::{DynServerModuleGen, IServerModuleGen};
+<span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>tempfile::TempDir;
@@ -249,9 +253,9 @@
 <span class="doccomment">/// A tool for easily writing fedimint integration tests
 </span><span class="kw">pub struct </span>Fixtures {
     num_peers: u16,
-    clients: Vec&lt;DynClientModuleGen&gt;,
-    servers: Vec&lt;DynServerModuleGen&gt;,
-    params: ServerModuleGenParamsRegistry,
+    clients: Vec&lt;DynClientModuleInit&gt;,
+    servers: Vec&lt;DynServerModuleInit&gt;,
+    params: ServerModuleConfigGenParamsRegistry,
     primary_client: ModuleInstanceId,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt;,
@@ -260,9 +264,9 @@
 
 <span class="kw">impl </span>Fixtures {
     <span class="kw">pub fn </span>new_primary(
-        client: <span class="kw">impl </span>IClientModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        server: <span class="kw">impl </span>IServerModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        params: <span class="kw">impl </span>ModuleGenParams,
+        client: <span class="kw">impl </span>IClientModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        params: <span class="kw">impl </span>ModuleInitParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="comment">// Ensure tracing has been set once
         </span><span class="kw">let _ </span>= TracingSetup::default().init();
@@ -310,14 +314,14 @@
     </span><span class="doccomment">/// Add a module to the fed
     </span><span class="kw">pub fn </span>with_module(
         <span class="kw-2">mut </span><span class="self">self</span>,
-        client: <span class="kw">impl </span>IClientModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        server: <span class="kw">impl </span>IServerModuleGen + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        params: <span class="kw">impl </span>ModuleGenParams,
+        client: <span class="kw">impl </span>IClientModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        server: <span class="kw">impl </span>IServerModuleInit + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        params: <span class="kw">impl </span>ModuleInitParams,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.params
             .attach_config_gen_params(<span class="self">self</span>.id, server.module_kind(), params);
-        <span class="self">self</span>.clients.push(DynClientModuleGen::from(client));
-        <span class="self">self</span>.servers.push(DynServerModuleGen::from(server));
+        <span class="self">self</span>.clients.push(DynClientModuleInit::from(client));
+        <span class="self">self</span>.servers.push(DynServerModuleInit::from(server));
         <span class="self">self</span>.id += <span class="number">1</span>;
 
         <span class="self">self
@@ -334,8 +338,8 @@
             num_peers,
             BASE_PORT.fetch_add(num_peers * <span class="number">2</span>, Ordering::Relaxed),
             <span class="self">self</span>.params.clone(),
-            ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone()),
-            ClientModuleGenRegistry::from(<span class="self">self</span>.clients.clone()),
+            ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
+            ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
             <span class="self">self</span>.primary_client,
         )
         .<span class="kw">await
@@ -344,7 +348,7 @@
     <span class="doccomment">/// Starts a new gateway with a given lightning node
     </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, ln: Box&lt;<span class="kw">dyn </span>LightningTest&gt;) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier
-        </span><span class="kw">let </span>server_gens = ServerModuleGenRegistry::from(<span class="self">self</span>.servers.clone());
+        </span><span class="kw">let </span>server_gens = ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone());
         <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
         <span class="kw">let </span>decoders = server_gens.available_decoders(module_kinds).unwrap();
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.clone().into_iter();
@@ -354,7 +358,7 @@
             rand::random::&lt;u64&gt;().to_string(),
             ln,
             decoders,
-            ClientModuleGenRegistry::from_iter(clients.filter(|client| {
+            ClientModuleInitRegistry::from_iter(clients.filter(|client| {
                 <span class="comment">// Remove LN module because the gateway adds one
                 </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">&quot;ln&quot;</span>)
             })),

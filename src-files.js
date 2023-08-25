@@ -7,7 +7,7 @@ var srcIndex = JSON.parse('{\
 "fedimint_bitcoind":["",[],["bitcoincore.rs","electrum.rs","esplora.rs","lib.rs"]],\
 "fedimint_build":["",[],["lib.rs"]],\
 "fedimint_cli":["",[],["main.rs"]],\
-"fedimint_client":["",[["module",[],["gen.rs","mod.rs"]],["sm",[],["dbtx.rs","executor.rs","mod.rs","notifier.rs","state.rs","util.rs"]],["transaction",[],["builder.rs","mod.rs","sm.rs"]]],["backup.rs","db.rs","lib.rs","oplog.rs","secret.rs"]],\
+"fedimint_client":["",[["module",[],["init.rs","mod.rs"]],["sm",[],["dbtx.rs","executor.rs","mod.rs","notifier.rs","state.rs","util.rs"]],["transaction",[],["builder.rs","mod.rs","sm.rs"]]],["backup.rs","db.rs","lib.rs","oplog.rs","secret.rs"]],\
 "fedimint_client_legacy":["",[["api",[],["fake.rs"]],["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["backup.rs","db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","db.rs","lib.rs","outcome.rs","transaction.rs","utils.rs"]],\
 "fedimint_core":["",[["core",[],["backup.rs","client.rs","server.rs"]],["db",[],["mem_impl.rs","mod.rs","notifications.rs"]],["encoding",[],["as_hex.rs","btc.rs","mod.rs","secp256k1.rs","tbs.rs","tls.rs"]],["hex",[],["mod.rs","serde.rs"]],["module",[],["audit.rs","mod.rs","registry.rs","version.rs"]],["net",[["peers",[],["fake.rs"]]],["mod.rs","peers.rs"]],["util",[],["broadcaststream.rs","mod.rs"]]],["admin_client.rs","api.rs","backup.rs","bitcoinrpc.rs","cancellable.rs","config.rs","core.rs","epoch.rs","fmt_utils.rs","lib.rs","macros.rs","outcome.rs","query.rs","task.rs","tiered.rs","tiered_multi.rs","time.rs","timing.rs","transaction.rs","txoproof.rs"]],\
 "fedimint_dbtool":["",[],["dump.rs","main.rs"]],\

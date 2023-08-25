@@ -89,12 +89,12 @@
 <a href="#89" id="89">89</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
+<span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-<span class="kw">use </span>fedimint_core::module::ServerModuleGen;
+<span class="kw">use </span>fedimint_core::module::ServerModuleInit;
 <span class="kw">use </span>fedimint_core::{Amount, Tiered};
 <span class="kw">use </span>fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -112,14 +112,14 @@
 </span><span class="kw">pub mod </span>fedimintd;
 
 <span class="doccomment">/// Generates the configuration for the modules configured in the server binary
-</span><span class="kw">pub fn </span>attach_default_module_gen_params(
+</span><span class="kw">pub fn </span>attach_default_module_init_params(
     bitcoin_rpc: BitcoinRpcConfig,
-    module_gen_params: <span class="kw-2">&amp;mut </span>ServerModuleGenParamsRegistry,
+    module_init_params: <span class="kw-2">&amp;mut </span>ServerModuleConfigGenParamsRegistry,
     max_denomination: Amount,
     network: Network,
     finality_delay: u32,
 ) {
-    module_gen_params
+    module_init_params
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
             WalletGen::kind(),

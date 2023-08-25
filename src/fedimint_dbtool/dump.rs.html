@@ -467,7 +467,7 @@
 <span class="kw">use </span>fedimint_client_legacy::ln::db <span class="kw">as </span>ClientLightningRange;
 <span class="kw">use </span>fedimint_client_legacy::mint::db <span class="kw">as </span>ClientMintRange;
 <span class="kw">use </span>fedimint_client_legacy::wallet::db <span class="kw">as </span>ClientWalletRange;
-<span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::notifications::Notifications;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -502,7 +502,7 @@
     modules: Vec&lt;String&gt;,
     prefixes: Vec&lt;String&gt;,
     cfg: <span class="prelude-ty">Option</span>&lt;ServerConfig&gt;,
-    module_inits: ServerModuleGenRegistry,
+    module_inits: ServerModuleInitRegistry,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt; {
@@ -510,7 +510,7 @@
         cfg_dir: PathBuf,
         data_dir: String,
         password: String,
-        module_gens: ServerModuleGenRegistry,
+        module_inits: ServerModuleInitRegistry,
         modules: Vec&lt;String&gt;,
         prefixes: Vec&lt;String&gt;,
     ) -&gt; DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt; {
@@ -541,7 +541,7 @@
         }
 
         <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).unwrap();
-        <span class="kw">let </span>decoders = module_gens
+        <span class="kw">let </span>decoders = module_inits
             .available_decoders(cfg.iter_module_instances())
             .unwrap()
             .with_fallback();
@@ -553,7 +553,7 @@
             modules,
             prefixes,
             cfg: <span class="prelude-val">Some</span>(cfg),
-            module_inits: module_gens,
+            module_inits,
         }
     }
 }

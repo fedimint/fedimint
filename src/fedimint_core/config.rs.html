@@ -901,7 +901,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
-    CoreConsensusVersion, DynCommonModuleGen, DynServerModuleGen, IDynCommonModuleGen,
+    CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
 };
 <span class="kw">use crate</span>::{maybe_add_send_sync, PeerId};
@@ -1158,15 +1158,15 @@
 }
 
 <span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>ModuleGenRegistry&lt;M&gt;(BTreeMap&lt;ModuleKind, M&gt;);
+</span><span class="kw">pub struct </span>ModuleInitRegistry&lt;M&gt;(BTreeMap&lt;ModuleKind, M&gt;);
 
-<span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleGenRegistry&lt;M&gt; {
+<span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleInitRegistry&lt;M&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(Default::default())
     }
 }
 
-<span class="doccomment">/// Type erased `ModuleGenParams` used to generate the `ServerModuleConfig`
+<span class="doccomment">/// Type erased `ModuleInitParams` used to generate the `ServerModuleConfig`
 /// during config gen
 </span><span class="attr">#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ConfigGenModuleParams {
@@ -1174,7 +1174,7 @@
     <span class="kw">pub </span>consensus: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
 }
 
-<span class="kw">pub type </span>ServerModuleGenRegistry = ModuleGenRegistry&lt;DynServerModuleGen&gt;;
+<span class="kw">pub type </span>ServerModuleInitRegistry = ModuleInitRegistry&lt;DynServerModuleInit&gt;;
 
 <span class="kw">impl </span>ConfigGenModuleParams {
     <span class="kw">pub fn </span>new(local: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;, consensus: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;) -&gt; <span class="self">Self </span>{
@@ -1183,7 +1183,7 @@
 
     <span class="doccomment">/// Converts the JSON into typed version, errors unless both `local` and
     /// `consensus` values are defined
-    </span><span class="kw">pub fn </span>to_typed&lt;P: ModuleGenParams&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;P&gt; {
+    </span><span class="kw">pub fn </span>to_typed&lt;P: ModuleInitParams&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;P&gt; {
         <span class="prelude-val">Ok</span>(P::from_parts(
             <span class="self">Self</span>::parse(<span class="string">&quot;local&quot;</span>, <span class="self">self</span>.local.clone())<span class="question-mark">?</span>,
             <span class="self">Self</span>::parse(<span class="string">&quot;consensus&quot;</span>, <span class="self">self</span>.consensus.clone())<span class="question-mark">?</span>,
@@ -1198,7 +1198,7 @@
         serde_json::from_value(json).context(<span class="string">&quot;Invalid module params&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>from_typed&lt;P: ModuleGenParams&gt;(p: P) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">pub fn </span>from_typed&lt;P: ModuleInitParams&gt;(p: P) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>(local, consensus) = p.to_parts();
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             local: <span class="prelude-val">Some</span>(serde_json::to_value(local)<span class="question-mark">?</span>),
@@ -1207,20 +1207,20 @@
     }
 }
 
-<span class="kw">pub type </span>CommonModuleGenRegistry = ModuleGenRegistry&lt;DynCommonModuleGen&gt;;
+<span class="kw">pub type </span>CommonModuleInitRegistry = ModuleInitRegistry&lt;DynCommonModuleInit&gt;;
 
 <span class="doccomment">/// Registry that contains the config gen params for all modules
-</span><span class="kw">pub type </span>ServerModuleGenParamsRegistry = ModuleRegistry&lt;ConfigGenModuleParams&gt;;
+</span><span class="kw">pub type </span>ServerModuleConfigGenParamsRegistry = ModuleRegistry&lt;ConfigGenModuleParams&gt;;
 
-<span class="kw">impl </span>Eq <span class="kw">for </span>ServerModuleGenParamsRegistry {}
+<span class="kw">impl </span>Eq <span class="kw">for </span>ServerModuleConfigGenParamsRegistry {}
 
-<span class="kw">impl </span>PartialEq <span class="kw">for </span>ServerModuleGenParamsRegistry {
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>ServerModuleConfigGenParamsRegistry {
     <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
         <span class="self">self</span>.iter_modules().eq(other.iter_modules())
     }
 }
 
-<span class="kw">impl </span>Serialize <span class="kw">for </span>ServerModuleGenParamsRegistry {
+<span class="kw">impl </span>Serialize <span class="kw">for </span>ServerModuleConfigGenParamsRegistry {
     <span class="kw">fn </span>serialize&lt;S: Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
         <span class="kw">let </span>modules: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self</span>.iter_modules().collect();
         <span class="kw">let </span><span class="kw-2">mut </span>serializer = serializer.serialize_map(<span class="prelude-val">Some</span>(modules.len()))<span class="question-mark">?</span>;
@@ -1232,7 +1232,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>ServerModuleGenParamsRegistry {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>ServerModuleConfigGenParamsRegistry {
     <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
     <span class="kw">where
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
@@ -1248,9 +1248,9 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; From&lt;Vec&lt;M&gt;&gt; <span class="kw">for </span>ModuleGenRegistry&lt;M&gt;
+<span class="kw">impl</span>&lt;M&gt; From&lt;Vec&lt;M&gt;&gt; <span class="kw">for </span>ModuleInitRegistry&lt;M&gt;
 <span class="kw">where
-    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
+    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
 {
     <span class="kw">fn </span>from(value: Vec&lt;M&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(BTreeMap::from_iter(
@@ -1259,9 +1259,9 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; FromIterator&lt;M&gt; <span class="kw">for </span>ModuleGenRegistry&lt;M&gt;
+<span class="kw">impl</span>&lt;M&gt; FromIterator&lt;M&gt; <span class="kw">for </span>ModuleInitRegistry&lt;M&gt;
 <span class="kw">where
-    </span>M: AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static</span>)&gt;,
+    </span>M: AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">&#39;static</span>)&gt;,
 {
     <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = M&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(BTreeMap::from_iter(
@@ -1270,7 +1270,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; ModuleGenRegistry&lt;M&gt; {
+<span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt; {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         Default::default()
     }
@@ -1278,7 +1278,7 @@
     <span class="kw">pub fn </span>attach&lt;T&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, gen: T)
     <span class="kw">where
         </span>T: Into&lt;M&gt; + <span class="lifetime">&#39;static </span>+ Send + Sync,
-        M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleGen + <span class="lifetime">&#39;static </span>+ Send + Sync&gt;,
+        M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">&#39;static </span>+ Send + Sync&gt;,
     {
         <span class="kw">let </span>gen: M = gen.into();
         <span class="kw">let </span>kind = gen.as_ref().module_kind();
@@ -1297,7 +1297,7 @@
 }
 
 <span class="kw">impl </span>ModuleRegistry&lt;ConfigGenModuleParams&gt; {
-    <span class="kw">pub fn </span>attach_config_gen_params&lt;T: ModuleGenParams&gt;(
+    <span class="kw">pub fn </span>attach_config_gen_params&lt;T: ModuleInitParams&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         id: ModuleInstanceId,
         kind: ModuleKind,
@@ -1312,9 +1312,9 @@
     </span>}
 }
 
-<span class="kw">impl </span>ServerModuleGenRegistry {
-    <span class="kw">pub fn </span>to_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CommonModuleGenRegistry {
-        ModuleGenRegistry(
+<span class="kw">impl </span>ServerModuleInitRegistry {
+    <span class="kw">pub fn </span>to_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CommonModuleInitRegistry {
+        ModuleInitRegistry(
             <span class="self">self</span>.<span class="number">0
                 </span>.iter()
                 .map(|(k, v)| (k.clone(), v.to_dyn_common()))
@@ -1323,9 +1323,9 @@
     }
 }
 
-<span class="kw">impl</span>&lt;M&gt; ModuleGenRegistry&lt;M&gt;
+<span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt;
 <span class="kw">where
-    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleGen + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
+    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">&#39;static</span>&gt;,
 {
     <span class="attr">#[deprecated(
         note = <span class="string">&quot;You probably want `available_decoders` to support missing module kinds. If you really want a strict behavior, use `decoders_strict`&quot;
@@ -1377,7 +1377,7 @@
 </span><span class="attr">#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>EmptyGenParams {}
 
-<span class="kw">pub trait </span>ModuleGenParams: serde::Serialize + serde::de::DeserializeOwned {
+<span class="kw">pub trait </span>ModuleInitParams: serde::Serialize + serde::de::DeserializeOwned {
     <span class="doccomment">/// Locally configurable parameters for config generation
     </span><span class="kw">type </span>Local: DeserializeOwned + Serialize;
     <span class="doccomment">/// Consensus parameters for config generation

@@ -197,13 +197,13 @@
 <a href="#197" id="197">197</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
-<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::config::{
-    ClientConfig, FederationId, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
     META_FEDERATION_NAME_KEY,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
@@ -224,8 +224,8 @@
 <span class="doccomment">/// Test fixture for a running fedimint federation
 </span><span class="kw">pub struct </span>FederationTest {
     configs: BTreeMap&lt;PeerId, ServerConfig&gt;,
-    server_gen: ServerModuleGenRegistry,
-    client_gen: ClientModuleGenRegistry,
+    server_init: ServerModuleInitRegistry,
+    client_init: ClientModuleInitRegistry,
     primary_client: ModuleInstanceId,
     _task: TaskGroup,
 }
@@ -240,7 +240,7 @@
     </span><span class="kw">pub async fn </span>new_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Client {
         <span class="kw">let </span>client_config = <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
             .consensus
-            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
+            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
             .unwrap();
 
         <span class="self">self</span>.new_client_with_config(client_config).<span class="kw">await
@@ -248,7 +248,7 @@
 
     <span class="kw">pub async fn </span>new_client_with_config(<span class="kw-2">&amp;</span><span class="self">self</span>, client_config: ClientConfig) -&gt; Client {
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
-        client_builder.with_module_gens(<span class="self">self</span>.client_gen.clone());
+        client_builder.with_module_inits(<span class="self">self</span>.client_init.clone());
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);
         client_builder.with_config(client_config);
         client_builder.with_database(MemDatabase::new());
@@ -267,7 +267,7 @@
     </span><span class="kw">pub fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
         <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
             .consensus
-            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_gen)
+            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
             .unwrap()
             .federation_id
     }
@@ -275,16 +275,16 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
         num_peers: u16,
         base_port: u16,
-        params: ServerModuleGenParamsRegistry,
-        server_gen: ServerModuleGenRegistry,
-        client_gen: ClientModuleGenRegistry,
+        params: ServerModuleConfigGenParamsRegistry,
+        server_init: ServerModuleInitRegistry,
+        client_init: ClientModuleInitRegistry,
         primary_client: ModuleInstanceId,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peers = (<span class="number">0</span>..num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>params =
             local_config_gen_params(<span class="kw-2">&amp;</span>peers, base_port, params).expect(<span class="string">&quot;Generates local config&quot;</span>);
 
-        <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, server_gen.clone());
+        <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, server_init.clone());
         <span class="kw">let </span>network = MockNetwork::new();
 
         <span class="kw">let </span><span class="kw-2">mut </span>task = TaskGroup::new();
@@ -293,13 +293,13 @@
             <span class="kw">let </span>connections = network.connector(peer_id, reliability).into_dyn();
 
             <span class="kw">let </span>instances = config.consensus.iter_module_instances();
-            <span class="kw">let </span>decoders = server_gen.available_decoders(instances).unwrap();
+            <span class="kw">let </span>decoders = server_init.available_decoders(instances).unwrap();
             <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
             <span class="kw">let </span>server = ConsensusServer::new_with(
                 config.clone(),
                 db.clone(),
-                server_gen.clone(),
+                server_init.clone(),
                 connections,
                 DelayCalculator::TEST_DEFAULT,
                 <span class="kw-2">&amp;mut </span>task,
@@ -317,8 +317,8 @@
 
         <span class="self">Self </span>{
             configs,
-            server_gen,
-            client_gen,
+            server_init,
+            client_init,
             primary_client,
             _task: task,
         }
@@ -331,7 +331,7 @@
 </span><span class="kw">pub fn </span>local_config_gen_params(
     peers: <span class="kw-2">&amp;</span>[PeerId],
     base_port: u16,
-    server_config_gen: ServerModuleGenParamsRegistry,
+    server_config_gen: ServerModuleConfigGenParamsRegistry,
 ) -&gt; anyhow::Result&lt;HashMap&lt;PeerId, ConfigGenParams&gt;&gt; {
     <span class="comment">// Generate TLS cert and private key
     </span><span class="kw">let </span>tls_keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers

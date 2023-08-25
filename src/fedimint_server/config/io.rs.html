@@ -129,7 +129,7 @@
 <span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key, LessSafeKey};
-<span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 
@@ -200,7 +200,7 @@
     server: <span class="kw-2">&amp;</span>ServerConfig,
     path: PathBuf,
     password: <span class="kw-2">&amp;</span>str,
-    module_config_gens: <span class="kw-2">&amp;</span>ServerModuleGenRegistry,
+    module_config_gens: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>salt = fs::read_to_string(path.join(SALT_FILE))<span class="question-mark">?</span>;
     <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;

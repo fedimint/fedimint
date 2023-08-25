@@ -866,7 +866,7 @@
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>client::StandardGatewayClientBuilder;
 <span class="kw">use </span>db::{FederationRegistrationKey, GatewayPublicKey};
-<span class="kw">use </span>fedimint_client::module::gen::{ClientModuleGen, ClientModuleGenRegistry};
+<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::api::{FederationError, InviteCode};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
@@ -874,7 +874,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::module::CommonModuleGen;
+<span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::Amount;
@@ -966,7 +966,7 @@
 }
 
 <span class="kw">pub struct </span>Gatewayd {
-    registry: ClientModuleGenRegistry,
+    registry: ClientModuleInitRegistry,
     lightning_mode: LightningMode,
     data_dir: PathBuf,
     listen: SocketAddr,
@@ -1002,7 +1002,7 @@
         );
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            registry: ClientModuleGenRegistry::new(),
+            registry: ClientModuleInitRegistry::new(),
             lightning_mode: mode,
             data_dir,
             listen,
@@ -1014,7 +1014,7 @@
 
     <span class="kw">pub fn </span>with_module&lt;T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, gen: T) -&gt; <span class="self">Self
     </span><span class="kw">where
-        </span>T: ClientModuleGen + <span class="lifetime">&#39;static </span>+ Send + Sync,
+        </span>T: ClientModuleInit + <span class="lifetime">&#39;static </span>+ Send + Sync,
     {
         <span class="self">self</span>.registry.attach(gen);
         <span class="self">self

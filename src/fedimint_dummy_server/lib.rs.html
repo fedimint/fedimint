@@ -474,8 +474,8 @@
 <span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleGen,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleGen,
+    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
@@ -510,13 +510,13 @@
 </span><span class="kw">pub struct </span>DummyGen;
 
 <span class="comment">// TODO: Boilerplate-code
-</span><span class="kw">impl </span>ExtendsCommonModuleGen <span class="kw">for </span>DummyGen {
+</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>DummyGen {
     <span class="kw">type </span>Common = DummyCommonGen;
 }
 
 <span class="doccomment">/// Implementation of server module non-consensus functions
 </span><span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ServerModuleGen <span class="kw">for </span>DummyGen {
+</span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>DummyGen {
     <span class="kw">type </span>Params = DummyGenParams;
     <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 

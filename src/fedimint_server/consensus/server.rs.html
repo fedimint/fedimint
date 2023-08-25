@@ -682,7 +682,7 @@
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsFederationApi};
 <span class="kw">use </span>fedimint_core::cancellable::Cancellable;
-<span class="kw">use </span>fedimint_core::config::ServerModuleGenRegistry;
+<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::{apply_migrations, Database};
 <span class="kw">use </span>fedimint_core::encoding::DecodeError;
 <span class="kw">use </span>fedimint_core::epoch::{
@@ -785,7 +785,7 @@
     </span><span class="kw">pub async fn </span>new(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ServerModuleGenRegistry,
+        module_inits: ServerModuleInitRegistry,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>connector: PeerConnector&lt;EpochMessage&gt; =
@@ -808,7 +808,7 @@
     </span><span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ServerModuleGenRegistry,
+        module_inits: ServerModuleInitRegistry,
         connector: PeerConnector&lt;EpochMessage&gt;,
         delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,

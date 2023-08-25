@@ -1017,7 +1017,7 @@
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>plugin_types_trait_impl_config {
     (<span class="macro-nonterminal">$common_gen</span>:ty, <span class="macro-nonterminal">$gen</span>:ty, <span class="macro-nonterminal">$gen_local</span>:ty, <span class="macro-nonterminal">$gen_consensus</span>:ty, <span class="macro-nonterminal">$cfg</span>:ty, <span class="macro-nonterminal">$cfg_local</span>:ty, <span class="macro-nonterminal">$cfg_private</span>:ty, <span class="macro-nonterminal">$cfg_consensus</span>:ty, <span class="macro-nonterminal">$cfg_client</span>:ty) =&gt; {
-        <span class="kw">impl </span>fedimint_core::config::ModuleGenParams <span class="kw">for </span><span class="macro-nonterminal">$gen </span>{
+        <span class="kw">impl </span>fedimint_core::config::ModuleInitParams <span class="kw">for </span><span class="macro-nonterminal">$gen </span>{
             <span class="kw">type </span>Local = <span class="macro-nonterminal">$gen_local</span>;
             <span class="kw">type </span>Consensus = <span class="macro-nonterminal">$gen_consensus</span>;
 
@@ -1032,11 +1032,11 @@
 
         <span class="kw">impl </span>fedimint_core::config::TypedServerModuleConsensusConfig <span class="kw">for </span><span class="macro-nonterminal">$cfg_consensus </span>{
             <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::core::ModuleKind {
-                &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleGen&gt;::KIND
+                &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleInit&gt;::KIND
             }
 
             <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::module::ModuleConsensusVersion {
-                &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleGen&gt;::CONSENSUS_VERSION
+                &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleInit&gt;::CONSENSUS_VERSION
             }
         }
 
@@ -1059,7 +1059,7 @@
 
             <span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Local, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus) {
                 (
-                    &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleGen&gt;::KIND,
+                    &lt;<span class="macro-nonterminal">$common_gen </span><span class="kw">as </span>fedimint_core::module::CommonModuleInit&gt;::KIND,
                     <span class="self">self</span>.local,
                     <span class="self">self</span>.private,
                     <span class="self">self</span>.consensus,

@@ -1038,6 +1038,7 @@
 <a href="#1038" id="1038">1038</a>
 <a href="#1039" id="1039">1039</a>
 <a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1054,7 +1055,7 @@
 };
 <span class="kw">use </span>fedimint_core::api::{ServerStatus, StatusResponse};
 <span class="kw">use </span>fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ConfigGenModuleParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -1422,7 +1423,7 @@
     <span class="doccomment">/// How many API connections we will accept
     </span><span class="kw">pub </span>max_connections: u32,
     <span class="doccomment">/// Registry for config gen
-    </span><span class="kw">pub </span>registry: ServerModuleGenRegistry,
+    </span><span class="kw">pub </span>registry: ServerModuleInitRegistry,
 }
 
 <span class="doccomment">/// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -1551,7 +1552,8 @@
                 .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Module params invalid {e:?}&quot;</span>)))<span class="question-mark">?</span>;
             combined_params.push((id, kind.clone(), combined));
         }
-        consensus.modules = ServerModuleGenParamsRegistry::from_iter(combined_params.into_iter());
+        consensus.modules =
+            ServerModuleConfigGenParamsRegistry::from_iter(combined_params.into_iter());
 
         <span class="kw">let </span>local = ConfigGenParamsLocal {
             our_id: <span class="kw-2">*</span>our_id,
@@ -1727,7 +1729,7 @@
 
     <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsRequest, WsAdminClient};
     <span class="kw">use </span>fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
-    <span class="kw">use </span>fedimint_core::config::{ServerModuleGenParamsRegistry, ServerModuleGenRegistry};
+    <span class="kw">use </span>fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1746,8 +1748,8 @@
 
     <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, PLAINTEXT_PASSWORD};
-    <span class="kw">use </span><span class="kw">crate</span>::config::{DynServerModuleGen, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
-    <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::module::ServerModuleGen;
+    <span class="kw">use </span><span class="kw">crate</span>::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
+    <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::module::ServerModuleInit;
     <span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
 
     <span class="doccomment">/// Helper in config API tests for simulating a guardian&#39;s client and server
@@ -1777,7 +1779,7 @@
             <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;fedimint://127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>)
                 .parse()
                 .expect(<span class="string">&quot;parses&quot;</span>);
-            <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleGenParamsRegistry::default();
+            <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(<span class="number">0</span>, DummyGen::kind(), DummyGenParams::default());
             <span class="kw">let </span>default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
@@ -1791,7 +1793,7 @@
                 api_url: api_url.clone(),
                 default_params,
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-                registry: ServerModuleGenRegistry::from(<span class="macro">vec!</span>[DynServerModuleGen::from(DummyGen)]),
+                registry: ServerModuleInitRegistry::from(<span class="macro">vec!</span>[DynServerModuleInit::from(DummyGen)]),
             };
             <span class="kw">let </span>dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect(<span class="string">&quot;Unable to create test dir&quot;</span>);
@@ -1880,7 +1882,7 @@
 
         <span class="doccomment">/// Sets local param to name and unique consensus amount for testing
         </span><span class="kw">async fn </span>set_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-            <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleGenParamsRegistry::default();
+            <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(
                 <span class="number">0</span>,
                 DummyGen::kind(),

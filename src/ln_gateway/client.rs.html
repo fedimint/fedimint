@@ -126,7 +126,7 @@
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGenRegistry;
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_client::ClientBuilder;
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, InviteCode, WsFederationApi};
@@ -143,14 +143,14 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>StandardGatewayClientBuilder {
     work_dir: PathBuf,
-    registry: ClientModuleGenRegistry,
+    registry: ClientModuleInitRegistry,
     primary_module: ModuleInstanceId,
 }
 
 <span class="kw">impl </span>StandardGatewayClientBuilder {
     <span class="kw">pub fn </span>new(
         work_dir: PathBuf,
-        registry: ClientModuleGenRegistry,
+        registry: ClientModuleInitRegistry,
         primary_module: ModuleInstanceId,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
@@ -181,7 +181,7 @@
         });
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
-        client_builder.with_module_gens(registry);
+        client_builder.with_module_inits(registry);
         client_builder.with_primary_module(<span class="self">self</span>.primary_module);
         client_builder.with_config(config.config);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(old_client) = old_client {

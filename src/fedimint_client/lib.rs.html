@@ -1716,7 +1716,7 @@
 //!
 //! ## Module Clients
 //! Module clients have to at least implement the [`module::ClientModule`] trait
-//! and a factory struct implementing [`module::gen::ClientModuleGen`]. The
+//! and a factory struct implementing [`module::init::ClientModuleInit`]. The
 //! `ClientModule` trait defines the module types (tx inputs, outputs, etc.) as
 //! well as the module&#39;s [state machines](sm::State).
 //!
@@ -1791,7 +1791,7 @@
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     InviteCode, WsFederationApi,
 };
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -1821,8 +1821,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
 <span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
-<span class="kw">use </span><span class="kw">crate</span>::module::gen::{
-    ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
+<span class="kw">use </span><span class="kw">crate</span>::module::init::{
+    ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
 <span class="kw">use </span><span class="kw">crate</span>::module::{ClientModule, ClientModuleRegistry, IClientModule, StateGenerator};
 <span class="kw">use </span><span class="kw">crate</span>::oplog::OperationLog;
@@ -2519,7 +2519,7 @@
             .discover_api_version_set(
                 <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(
                     <span class="self">self</span>.get_config(),
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.inner.module_gens,
+                    <span class="kw-2">&amp;</span><span class="self">self</span>.inner.module_inits,
                 )
                 .<span class="kw">await</span>,
             )
@@ -2530,12 +2530,12 @@
     /// the best API version to use (supported by most guardians).
     </span><span class="kw">pub async fn </span>discover_common_api_version_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
-        client_module_gen: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+        client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
         <span class="prelude-val">Ok</span>(api
             .discover_api_version_set(
-                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_gen).<span class="kw">await</span>,
+                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_init).<span class="kw">await</span>,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
@@ -2543,7 +2543,7 @@
     <span class="doccomment">/// [`SupportedApiVersionsSummary`] that the client and its modules support
     </span><span class="kw">pub async fn </span>supported_api_versions_summary_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
-        client_module_gen: <span class="kw-2">&amp;</span>ClientModuleGenRegistry,
+        client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
     ) -&gt; SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
@@ -2555,15 +2555,15 @@
                 .modules
                 .iter()
                 .filter_map(|(<span class="kw-2">&amp;</span>module_instance_id, module_config)| {
-                    client_module_gen
+                    client_module_init
                         .get(module_config.kind())
-                        .map(|module_gen| {
+                        .map(|module_init| {
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
                                     core_consensus: config.consensus_version,
                                     module_consensus: module_config.version,
-                                    api: module_gen.supported_api_versions(),
+                                    api: module_init.supported_api_versions(),
                                 },
                             )
                         })
@@ -2579,7 +2579,7 @@
     /// complete every time a [`Client`] is being built.
     </span><span class="kw">async fn </span>load_and_refresh_common_api_version_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
-        module_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry&lt;DynClientModuleGen&gt;,
+        module_inits: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
         db: <span class="kw-2">&amp;</span>Database,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
@@ -2591,7 +2591,7 @@
         </span>{
             <span class="macro">debug!</span>(<span class="string">&quot;Found existing cached common api versions&quot;</span>);
             <span class="kw">let </span>config = config.clone();
-            <span class="kw">let </span>module_gens = module_gens.clone();
+            <span class="kw">let </span>module_inits = module_inits.clone();
             <span class="kw">let </span>api = api.clone();
             <span class="kw">let </span>db = db.clone();
             <span class="comment">// Separate task group, because we actually don&#39;t want to be waiting for this to
@@ -2599,7 +2599,7 @@
             </span>TaskGroup::new()
                 .spawn(<span class="string">&quot;refresh_common_api_version_static&quot;</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) =
-                        <span class="self">Self</span>::refresh_common_api_version_static(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>module_gens, <span class="kw-2">&amp;</span>api, <span class="kw-2">&amp;</span>db)
+                        <span class="self">Self</span>::refresh_common_api_version_static(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>module_inits, <span class="kw-2">&amp;</span>api, <span class="kw-2">&amp;</span>db)
                             .<span class="kw">await
                     </span>{
                         <span class="macro">warn!</span>(<span class="string">&quot;Failed to discover common api versions: {e}&quot;</span>);
@@ -2611,19 +2611,19 @@
         }
 
         <span class="macro">debug!</span>(<span class="string">&quot;No existing cached common api versions found, waiting for initial discovery&quot;</span>);
-        <span class="self">Self</span>::refresh_common_api_version_static(config, module_gens, api, db).<span class="kw">await
+        <span class="self">Self</span>::refresh_common_api_version_static(config, module_inits, api, db).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>refresh_common_api_version_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
-        module_gens: <span class="kw-2">&amp;</span>ModuleGenRegistry&lt;DynClientModuleGen&gt;,
+        module_inits: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
         db: <span class="kw-2">&amp;</span>Database,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Refreshing common api versions&quot;</span>);
 
         <span class="kw">let </span>common_api_versions =
-            Client::discover_common_api_version_static(config, module_gens, api).<span class="kw">await</span><span class="question-mark">?</span>;
+            Client::discover_common_api_version_static(config, module_inits, api).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(<span class="string">&quot;Updating the cached common api versions&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
@@ -2658,7 +2658,7 @@
     federation_meta: BTreeMap&lt;String, String&gt;,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
-    module_gens: ClientModuleGenRegistry,
+    module_inits: ClientModuleInitRegistry,
     executor: Executor&lt;DynGlobalClientContext&gt;,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
@@ -2917,7 +2917,7 @@
 
 <span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>ClientBuilder {
-    module_gens: ClientModuleGenRegistry,
+    module_inits: ClientModuleInitRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
     config_source: <span class="prelude-ty">Option</span>&lt;ConfigSource&gt;,
     db: <span class="prelude-ty">Option</span>&lt;DatabaseSource&gt;,
@@ -2937,13 +2937,13 @@
 
 <span class="kw">impl </span>ClientBuilder {
     <span class="doccomment">/// Replace module generator registry entirely
-    </span><span class="kw">pub fn </span>with_module_gens(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_gens: ClientModuleGenRegistry) {
-        <span class="self">self</span>.module_gens = module_gens;
+    </span><span class="kw">pub fn </span>with_module_inits(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_inits: ClientModuleInitRegistry) {
+        <span class="self">self</span>.module_inits = module_inits;
     }
 
     <span class="doccomment">/// Make module generator available when reading the config
-    </span><span class="kw">pub fn </span>with_module&lt;M: ClientModuleGen&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_gen: M) {
-        <span class="self">self</span>.module_gens.attach(module_gen);
+    </span><span class="kw">pub fn </span>with_module&lt;M: ClientModuleInit&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module_init: M) {
+        <span class="self">self</span>.module_inits.attach(module_init);
     }
 
     <span class="doccomment">/// Uses this invite code to connect to the federation
@@ -3090,7 +3090,7 @@
                 <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config_source.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens,
+                    <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
                     config
                         .modules
                         .iter()
@@ -3127,7 +3127,7 @@
 
         <span class="kw">let </span>common_api_versions = Client::load_and_refresh_common_api_version_static(
             <span class="kw-2">&amp;</span>config,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.module_gens,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
             <span class="kw-2">&amp;</span>api,
             <span class="kw-2">&amp;</span>db,
         )
@@ -3139,7 +3139,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();
             <span class="kw">for </span>(module_instance, module_config) <span class="kw">in </span>config.modules.clone() {
                 <span class="kw">let </span>kind = module_config.kind().clone();
-                <span class="kw">let </span><span class="prelude-val">Some</span>(module_gen) = <span class="self">self</span>.module_gens.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
+                <span class="kw">let </span><span class="prelude-val">Some</span>(module_init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
                     <span class="macro">warn!</span>(<span class="string">&quot;Module kind {kind} of instance {module_instance} not found in module gens, skipping&quot;</span>);
                     <span class="kw">continue</span>;
                 };
@@ -3149,7 +3149,7 @@
                     <span class="kw">continue</span>;
                 };
 
-                <span class="kw">let </span>module = module_gen
+                <span class="kw">let </span>module = module_init
                     .init(
                         module_config,
                         db.clone(),
@@ -3194,7 +3194,7 @@
             federation_meta: config.meta,
             primary_module_instance,
             modules,
-            module_gens: <span class="self">self</span>.module_gens.clone(),
+            module_inits: <span class="self">self</span>.module_inits.clone(),
             executor,
             api,
             secp_ctx: Secp256k1::new(),
@@ -3398,7 +3398,7 @@
 }
 
 <span class="kw">pub fn </span>client_decoders&lt;<span class="lifetime">&#39;a</span>&gt;(
-    registry: <span class="kw-2">&amp;</span>ModuleGenRegistry&lt;DynClientModuleGen&gt;,
+    registry: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
     module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>ModuleKind)&gt;,
 ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
@@ -3412,7 +3412,7 @@
             id,
             (
                 kind.clone(),
-                IClientModuleGen::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleGen + <span class="lifetime">&#39;static</span>&gt;::as_ref(init)),
+                IClientModuleInit::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleInit + <span class="lifetime">&#39;static</span>&gt;::as_ref(init)),
             ),
         );
     }

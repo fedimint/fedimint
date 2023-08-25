@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["attach_default_module_gen_params","default_esplora_server"],"mod":["fedimintd"]};
+window.SIDEBAR_ITEMS = {"fn":["attach_default_module_init_params","default_esplora_server"],"mod":["fedimintd"]};

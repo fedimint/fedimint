@@ -516,6 +516,9 @@
 <a href="#516" id="516">516</a>
 <a href="#517" id="517">517</a>
 <a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fs;
 
@@ -524,7 +527,7 @@
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 <span class="kw">use </span>fedimint_core::api::ServerStatus;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::config::ServerModuleGenParamsRegistry;
+<span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::module::ApiAuth;
@@ -532,7 +535,7 @@
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>fedimint_testing::federation::local_config_gen_params;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
-<span class="kw">use </span>fedimintd::attach_default_module_gen_params;
+<span class="kw">use </span>fedimintd::attach_default_module_init_params;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>url::Url;
@@ -602,8 +605,11 @@
         <span class="kw">let </span><span class="kw-2">mut </span>vars = BTreeMap::new();
 
         <span class="kw">let </span>peers: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..servers).map(|id| PeerId::from(id <span class="kw">as </span>u16)).collect();
-        <span class="kw">let </span>params: HashMap&lt;PeerId, ConfigGenParams&gt; =
-            local_config_gen_params(<span class="kw-2">&amp;</span>peers, BASE_PORT, ServerModuleGenParamsRegistry::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>params: HashMap&lt;PeerId, ConfigGenParams&gt; = local_config_gen_params(
+            <span class="kw-2">&amp;</span>peers,
+            BASE_PORT,
+            ServerModuleConfigGenParamsRegistry::default(),
+        )<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>admin_clients: BTreeMap&lt;PeerId, WsAdminClient&gt; = BTreeMap::new();
         <span class="kw">for </span>(peer, peer_params) <span class="kw">in </span><span class="kw-2">&amp;</span>params {
@@ -652,12 +658,12 @@
         <span class="kw">let </span>decoders = module_decode_stubs();
         cfg.<span class="number">0 </span>= cfg.<span class="number">0</span>.redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), module_decode_stubs());
-        <span class="kw">let </span>module_gens = ClientModuleGenRegistry::from(<span class="macro">vec!</span>[
-            DynClientModuleGen::from(WalletClientGen::default()),
-            DynClientModuleGen::from(MintClientGen),
-            DynClientModuleGen::from(LightningClientGen),
+        <span class="kw">let </span>module_inits = ClientModuleInitRegistry::from(<span class="macro">vec!</span>[
+            DynClientModuleInit::from(WalletClientGen::default()),
+            DynClientModuleInit::from(MintClientGen),
+            DynClientModuleInit::from(LightningClientGen),
         ]);
-        <span class="kw">let </span>client = UserClient::new(cfg, decoders, module_gens, db, Default::default()).<span class="kw">await</span>;
+        <span class="kw">let </span>client = UserClient::new(cfg, decoders, module_inits, db, Default::default()).<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(client)
     }
 
@@ -1006,9 +1012,9 @@
 <span class="kw">async fn </span>set_config_gen_params(
     client: <span class="kw-2">&amp;</span>WsAdminClient,
     auth: ApiAuth,
-    <span class="kw-2">mut </span>server_gen_params: ServerModuleGenParamsRegistry,
+    <span class="kw-2">mut </span>server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    attach_default_module_gen_params(
+    attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
         <span class="kw-2">&amp;mut </span>server_gen_params,
         Amount::from_sats(<span class="number">100_000_000</span>),

@@ -1044,7 +1044,7 @@
 <span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>db::LightningGatewayKey;
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
@@ -1057,7 +1057,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -1558,12 +1558,12 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>LightningClientGen;
 
-<span class="kw">impl </span>ExtendsCommonModuleGen <span class="kw">for </span>LightningClientGen {
+<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>LightningClientGen {
     <span class="kw">type </span>Common = LightningCommonGen;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ClientModuleGen <span class="kw">for </span>LightningClientGen {
+</span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>LightningClientGen {
     <span class="kw">type </span>Module = LightningClientModule;
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {

@@ -1168,8 +1168,8 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleGen, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleGen, SupportedModuleApiVersions, TransactionItemAmount,
+    ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
+    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, TaskGroup};
@@ -1212,12 +1212,12 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintGen;
 
-<span class="kw">impl </span>ExtendsCommonModuleGen <span class="kw">for </span>MintGen {
+<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>MintGen {
     <span class="kw">type </span>Common = MintCommonGen;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ServerModuleGen <span class="kw">for </span>MintGen {
+</span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>MintGen {
     <span class="kw">type </span>Params = MintGenParams;
     <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
@@ -1924,7 +1924,7 @@
     <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
-    <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleGen};
+    <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
     <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule};
     <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
     <span class="kw">use </span>fedimint_mint_common::{MintInput, Nonce, Note};
@@ -2088,7 +2088,7 @@
     <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
     <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_core::module::{CommonModuleGen, DynServerModuleGen};
+    <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     <span class="kw">use </span>fedimint_core::time::now;
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, ServerModule, TieredMulti, TransactionId};
     <span class="kw">use </span>fedimint_mint_common::db::{
@@ -2212,7 +2212,7 @@
         validate_migrations(
             <span class="string">&quot;mint&quot;</span>,
             |db| <span class="kw">async move </span>{
-                <span class="kw">let </span>module = DynServerModuleGen::from(MintGen);
+                <span class="kw">let </span>module = DynServerModuleInit::from(MintGen);
                 apply_migrations(
                     <span class="kw-2">&amp;</span>db,
                     module.module_kind().to_string(),

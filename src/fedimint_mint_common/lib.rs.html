@@ -271,7 +271,7 @@
 <span class="kw">use </span>config::MintClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
+<span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Amount, OutPoint, PeerId, TieredMulti};
 <span class="kw">use </span>impl_tools::autoimpl;
@@ -370,7 +370,7 @@
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>MintCommonGen;
 
-<span class="kw">impl </span>CommonModuleGen <span class="kw">for </span>MintCommonGen {
+<span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>MintCommonGen {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 

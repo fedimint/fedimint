@@ -1509,7 +1509,7 @@
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
-<span class="kw">use </span>fedimint_client::module::gen::ClientModuleGen;
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
@@ -1526,7 +1526,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
@@ -1940,12 +1940,12 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintClientGen;
 
-<span class="kw">impl </span>ExtendsCommonModuleGen <span class="kw">for </span>MintClientGen {
+<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>MintClientGen {
     <span class="kw">type </span>Common = MintCommonGen;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ClientModuleGen <span class="kw">for </span>MintClientGen {
+</span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>MintClientGen {
     <span class="kw">type </span>Module = MintClientModule;
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
