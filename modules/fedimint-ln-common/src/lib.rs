@@ -26,7 +26,7 @@ use fedimint_client::Client;
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::task::timeout;
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use lightning::routing::gossip::RoutingFees;
@@ -221,7 +221,7 @@ impl std::fmt::Display for LightningConsensusItem {
 #[derive(Debug)]
 pub struct LightningCommonGen;
 
-impl CommonModuleGen for LightningCommonGen {
+impl CommonModuleInit for LightningCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 

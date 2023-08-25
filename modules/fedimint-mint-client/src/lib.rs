@@ -19,7 +19,7 @@ use anyhow::{anyhow, bail, Context as AnyhowContext};
 use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
-use fedimint_client::module::gen::ClientModuleGen;
+use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
@@ -36,7 +36,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
@@ -450,12 +450,12 @@ pub enum MintMetaVariants {
 #[derive(Debug, Clone)]
 pub struct MintClientGen;
 
-impl ExtendsCommonModuleGen for MintClientGen {
+impl ExtendsCommonModuleInit for MintClientGen {
     type Common = MintCommonGen;
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for MintClientGen {
+impl ClientModuleInit for MintClientGen {
     type Module = MintClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {

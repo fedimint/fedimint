@@ -141,7 +141,7 @@ mod fedimint_migration_tests {
         SignedEpochOutcome,
     };
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::module::CommonModuleGen;
+    use fedimint_core::module::CommonModuleInit;
     use fedimint_core::transaction::Transaction;
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};

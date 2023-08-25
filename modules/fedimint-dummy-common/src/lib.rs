@@ -4,7 +4,7 @@ use config::DummyClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::SerdeSignatureShare;
-use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
@@ -72,7 +72,7 @@ plugin_types_trait_impl_common!(
 #[derive(Debug)]
 pub struct DummyCommonGen;
 
-impl CommonModuleGen for DummyCommonGen {
+impl CommonModuleInit for DummyCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 

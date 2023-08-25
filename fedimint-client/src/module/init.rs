@@ -2,11 +2,11 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
-use fedimint_core::config::{ClientModuleConfig, ModuleGenRegistry};
+use fedimint_core::config::{ClientModuleConfig, ModuleInitRegistry};
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, IDynCommonModuleGen, MultiApiVersion,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, IDynCommonModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
@@ -16,10 +16,10 @@ use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
 use crate::DynGlobalClientContext;
 
-pub type ClientModuleGenRegistry = ModuleGenRegistry<DynClientModuleGen>;
+pub type ClientModuleInitRegistry = ModuleInitRegistry<DynClientModuleInit>;
 
 #[apply(async_trait_maybe_send!)]
-pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
+pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
     type Module: ClientModule;
 
     /// Api versions of the corresponding server side module's API
@@ -30,7 +30,7 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
-        cfg: <<Self as ExtendsCommonModuleGen>::Common as CommonModuleGen>::ClientConfig,
+        cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
         db: Database,
         api_version: ApiVersion,
         module_root_secret: DerivableSecret,
@@ -41,14 +41,14 @@ pub trait ClientModuleGen: ExtendsCommonModuleGen + Sized {
 }
 
 #[apply(async_trait_maybe_send!)]
-pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync {
+pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSync {
     fn decoder(&self) -> Decoder;
 
     fn module_kind(&self) -> ModuleKind;
 
-    fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static);
+    fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static);
 
-    /// See [`ClientModuleGen::supported_api_versions`]
+    /// See [`ClientModuleInit::supported_api_versions`]
     fn supported_api_versions(&self) -> MultiApiVersion;
 
     #[allow(clippy::too_many_arguments)]
@@ -66,24 +66,24 @@ pub trait IClientModuleGen: IDynCommonModuleGen + Debug + MaybeSend + MaybeSync 
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T> IClientModuleGen for T
+impl<T> IClientModuleInit for T
 where
-    T: ClientModuleGen + 'static + MaybeSend + Sync,
+    T: ClientModuleInit + 'static + MaybeSend + Sync,
 {
     fn decoder(&self) -> Decoder {
         T::Module::decoder()
     }
 
     fn module_kind(&self) -> ModuleKind {
-        <Self as ExtendsCommonModuleGen>::Common::KIND
+        <Self as ExtendsCommonModuleInit>::Common::KIND
     }
 
-    fn as_common(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
+    fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
         self
     }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
-        <Self as ClientModuleGen>::supported_api_versions(self)
+        <Self as ClientModuleInit>::supported_api_versions(self)
     }
 
     async fn init(
@@ -97,7 +97,7 @@ where
         notifier: Notifier<DynGlobalClientContext>,
         api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule> {
-        let typed_cfg: &<<T as fedimint_core::module::ExtendsCommonModuleGen>::Common as CommonModuleGen>::ClientConfig = cfg.cast()?;
+        let typed_cfg: &<<T as fedimint_core::module::ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
             .init(
                 typed_cfg.clone(),
@@ -115,17 +115,17 @@ where
 
 dyn_newtype_define!(
     #[derive(Clone)]
-    pub DynClientModuleGen(Arc<IClientModuleGen>)
+    pub DynClientModuleInit(Arc<IClientModuleInit>)
 );
 
-impl AsRef<dyn IDynCommonModuleGen + Send + Sync + 'static> for DynClientModuleGen {
-    fn as_ref(&self) -> &(dyn IDynCommonModuleGen + Send + Sync + 'static) {
+impl AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static> for DynClientModuleInit {
+    fn as_ref(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
         self.inner.as_common()
     }
 }
 
-impl AsRef<dyn IClientModuleGen + 'static> for DynClientModuleGen {
-    fn as_ref(&self) -> &(dyn IClientModuleGen + 'static) {
+impl AsRef<dyn IClientModuleInit + 'static> for DynClientModuleInit {
+    fn as_ref(&self) -> &(dyn IClientModuleInit + 'static) {
         self.inner.as_ref()
     }
 }

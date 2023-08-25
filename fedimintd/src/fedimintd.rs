@@ -7,11 +7,11 @@ use clap::Parser;
 use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::config::{
-    ModuleGenParams, ServerModuleGenParamsRegistry, ServerModuleGenRegistry,
+    ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
-use fedimint_core::module::ServerModuleGen;
+use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::write_overwrite;
 use fedimint_core::{timing, Amount};
@@ -27,7 +27,7 @@ use tokio::select;
 use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::attach_default_module_gen_params;
+use crate::attach_default_module_init_params;
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -107,8 +107,8 @@ pub struct ServerOpts {
 /// }
 /// ```
 pub struct Fedimintd {
-    pub server_gens: ServerModuleGenRegistry,
-    pub server_gen_params: ServerModuleGenParamsRegistry,
+    pub server_gens: ServerModuleInitRegistry,
+    pub server_gen_params: ServerModuleConfigGenParamsRegistry,
 }
 
 impl Fedimintd {
@@ -124,27 +124,27 @@ impl Fedimintd {
         info!("Starting fedimintd (version: {CODE_VERSION})");
 
         Ok(Self {
-            server_gens: ServerModuleGenRegistry::new(),
-            server_gen_params: ServerModuleGenParamsRegistry::default(),
+            server_gens: ServerModuleInitRegistry::new(),
+            server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
         })
     }
 
     pub fn with_module<T>(mut self, gen: T) -> Self
     where
-        T: ServerModuleGen + 'static + Send + Sync,
+        T: ServerModuleInit + 'static + Send + Sync,
     {
         self.server_gens.attach(gen);
         self
     }
 
-    pub fn with_extra_module_gens_params<P>(
+    pub fn with_extra_module_inits_params<P>(
         mut self,
         id: ModuleInstanceId,
         kind: ModuleKind,
         params: P,
     ) -> Self
     where
-        P: ModuleGenParams,
+        P: ModuleInitParams,
     {
         self.server_gen_params
             .attach_config_gen_params(id, kind, params);
@@ -233,21 +233,21 @@ impl Fedimintd {
 async fn run(
     opts: ServerOpts,
     task_group: TaskGroup,
-    module_gens: ServerModuleGenRegistry,
-    mut module_gens_params: ServerModuleGenParamsRegistry,
+    module_inits: ServerModuleInitRegistry,
+    mut module_inits_params: ServerModuleConfigGenParamsRegistry,
 ) -> anyhow::Result<()> {
-    attach_default_module_gen_params(
+    attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
-        &mut module_gens_params,
+        &mut module_inits_params,
         opts.max_denomination,
         opts.network,
         opts.finality_delay,
     );
 
-    let module_kinds = module_gens_params
+    let module_kinds = module_inits_params
         .iter_modules()
         .map(|(id, kind, _)| (id, kind));
-    let decoders = module_gens.available_decoders(module_kinds.into_iter())?;
+    let decoders = module_inits.available_decoders(module_kinds.into_iter())?;
     let db = Database::new(
         fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
         decoders.clone(),
@@ -261,7 +261,7 @@ async fn run(
     };
     let default_params = ConfigGenParamsRequest {
         meta: BTreeMap::new(),
-        modules: module_gens_params,
+        modules: module_inits_params,
     };
     let mut api = FedimintServer {
         data_dir: opts.data_dir,
@@ -273,7 +273,7 @@ async fn run(
             api_url: opts.api_url,
             default_params,
             max_connections: fedimint_server::config::max_connections(),
-            registry: module_gens,
+            registry: module_inits,
         },
         db,
     };

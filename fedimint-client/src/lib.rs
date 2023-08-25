@@ -6,7 +6,7 @@
 //!
 //! ## Module Clients
 //! Module clients have to at least implement the [`module::ClientModule`] trait
-//! and a factory struct implementing [`module::gen::ClientModuleGen`]. The
+//! and a factory struct implementing [`module::init::ClientModuleInit`]. The
 //! `ClientModule` trait defines the module types (tx inputs, outputs, etc.) as
 //! well as the module's [state machines](sm::State).
 //!
@@ -81,7 +81,7 @@ use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     InviteCode, WsFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId, ModuleGenRegistry};
+use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -111,8 +111,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
 use crate::db::ClientSecretKey;
-use crate::module::gen::{
-    ClientModuleGen, ClientModuleGenRegistry, DynClientModuleGen, IClientModuleGen,
+use crate::module::init::{
+    ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
 use crate::module::{ClientModule, ClientModuleRegistry, IClientModule, StateGenerator};
 use crate::oplog::OperationLog;
@@ -809,7 +809,7 @@ impl Client {
             .discover_api_version_set(
                 &Self::supported_api_versions_summary_static(
                     self.get_config(),
-                    &self.inner.module_gens,
+                    &self.inner.module_inits,
                 )
                 .await,
             )
@@ -820,12 +820,12 @@ impl Client {
     /// the best API version to use (supported by most guardians).
     pub async fn discover_common_api_version_static(
         config: &ClientConfig,
-        client_module_gen: &ClientModuleGenRegistry,
+        client_module_init: &ClientModuleInitRegistry,
         api: &DynGlobalApi,
     ) -> anyhow::Result<ApiVersionSet> {
         Ok(api
             .discover_api_version_set(
-                &Self::supported_api_versions_summary_static(config, client_module_gen).await,
+                &Self::supported_api_versions_summary_static(config, client_module_init).await,
             )
             .await?)
     }
@@ -833,7 +833,7 @@ impl Client {
     /// [`SupportedApiVersionsSummary`] that the client and its modules support
     pub async fn supported_api_versions_summary_static(
         config: &ClientConfig,
-        client_module_gen: &ClientModuleGenRegistry,
+        client_module_init: &ClientModuleInitRegistry,
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
@@ -845,15 +845,15 @@ impl Client {
                 .modules
                 .iter()
                 .filter_map(|(&module_instance_id, module_config)| {
-                    client_module_gen
+                    client_module_init
                         .get(module_config.kind())
-                        .map(|module_gen| {
+                        .map(|module_init| {
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
                                     core_consensus: config.consensus_version,
                                     module_consensus: module_config.version,
-                                    api: module_gen.supported_api_versions(),
+                                    api: module_init.supported_api_versions(),
                                 },
                             )
                         })
@@ -869,7 +869,7 @@ impl Client {
     /// complete every time a [`Client`] is being built.
     async fn load_and_refresh_common_api_version_static(
         config: &ClientConfig,
-        module_gens: &ModuleGenRegistry<DynClientModuleGen>,
+        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
         api: &DynGlobalApi,
         db: &Database,
     ) -> anyhow::Result<ApiVersionSet> {
@@ -881,7 +881,7 @@ impl Client {
         {
             debug!("Found existing cached common api versions");
             let config = config.clone();
-            let module_gens = module_gens.clone();
+            let module_inits = module_inits.clone();
             let api = api.clone();
             let db = db.clone();
             // Separate task group, because we actually don't want to be waiting for this to
@@ -889,7 +889,7 @@ impl Client {
             TaskGroup::new()
                 .spawn("refresh_common_api_version_static", |_| async move {
                     if let Err(e) =
-                        Self::refresh_common_api_version_static(&config, &module_gens, &api, &db)
+                        Self::refresh_common_api_version_static(&config, &module_inits, &api, &db)
                             .await
                     {
                         warn!("Failed to discover common api versions: {e}");
@@ -901,19 +901,19 @@ impl Client {
         }
 
         debug!("No existing cached common api versions found, waiting for initial discovery");
-        Self::refresh_common_api_version_static(config, module_gens, api, db).await
+        Self::refresh_common_api_version_static(config, module_inits, api, db).await
     }
 
     async fn refresh_common_api_version_static(
         config: &ClientConfig,
-        module_gens: &ModuleGenRegistry<DynClientModuleGen>,
+        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
         api: &DynGlobalApi,
         db: &Database,
     ) -> anyhow::Result<ApiVersionSet> {
         debug!("Refreshing common api versions");
 
         let common_api_versions =
-            Client::discover_common_api_version_static(config, module_gens, api).await?;
+            Client::discover_common_api_version_static(config, module_inits, api).await?;
 
         debug!("Updating the cached common api versions");
         let mut dbtx = db.begin_transaction().await;
@@ -948,7 +948,7 @@ struct ClientInner {
     federation_meta: BTreeMap<String, String>,
     primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
-    module_gens: ClientModuleGenRegistry,
+    module_inits: ClientModuleInitRegistry,
     executor: Executor<DynGlobalClientContext>,
     api: DynGlobalApi,
     root_secret: DerivableSecret,
@@ -1207,7 +1207,7 @@ impl TransactionUpdates {
 
 #[derive(Default)]
 pub struct ClientBuilder {
-    module_gens: ClientModuleGenRegistry,
+    module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
     config_source: Option<ConfigSource>,
     db: Option<DatabaseSource>,
@@ -1227,13 +1227,13 @@ pub enum DatabaseSource {
 
 impl ClientBuilder {
     /// Replace module generator registry entirely
-    pub fn with_module_gens(&mut self, module_gens: ClientModuleGenRegistry) {
-        self.module_gens = module_gens;
+    pub fn with_module_inits(&mut self, module_inits: ClientModuleInitRegistry) {
+        self.module_inits = module_inits;
     }
 
     /// Make module generator available when reading the config
-    pub fn with_module<M: ClientModuleGen>(&mut self, module_gen: M) {
-        self.module_gens.attach(module_gen);
+    pub fn with_module<M: ClientModuleInit>(&mut self, module_init: M) {
+        self.module_inits.attach(module_init);
     }
 
     /// Uses this invite code to connect to the federation
@@ -1380,7 +1380,7 @@ impl ClientBuilder {
                 let config = get_config(&db, self.config_source.clone()).await?;
 
                 let mut decoders = client_decoders(
-                    &self.module_gens,
+                    &self.module_inits,
                     config
                         .modules
                         .iter()
@@ -1417,7 +1417,7 @@ impl ClientBuilder {
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
             &config,
-            &self.module_gens,
+            &self.module_inits,
             &api,
             &db,
         )
@@ -1429,7 +1429,7 @@ impl ClientBuilder {
             let mut modules = ClientModuleRegistry::default();
             for (module_instance, module_config) in config.modules.clone() {
                 let kind = module_config.kind().clone();
-                let Some(module_gen) = self.module_gens.get(&kind) else {
+                let Some(module_init) = self.module_inits.get(&kind) else {
                     warn!("Module kind {kind} of instance {module_instance} not found in module gens, skipping");
                     continue;
                 };
@@ -1439,7 +1439,7 @@ impl ClientBuilder {
                     continue;
                 };
 
-                let module = module_gen
+                let module = module_init
                     .init(
                         module_config,
                         db.clone(),
@@ -1484,7 +1484,7 @@ impl ClientBuilder {
             federation_meta: config.meta,
             primary_module_instance,
             modules,
-            module_gens: self.module_gens.clone(),
+            module_inits: self.module_inits.clone(),
             executor,
             api,
             secp_ctx: Secp256k1::new(),
@@ -1688,7 +1688,7 @@ where
 }
 
 pub fn client_decoders<'a>(
-    registry: &ModuleGenRegistry<DynClientModuleGen>,
+    registry: &ModuleInitRegistry<DynClientModuleInit>,
     module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
 ) -> anyhow::Result<ModuleDecoderRegistry> {
     let mut modules = BTreeMap::new();
@@ -1702,7 +1702,7 @@ pub fn client_decoders<'a>(
             id,
             (
                 kind.clone(),
-                IClientModuleGen::decoder(AsRef::<dyn IClientModuleGen + 'static>::as_ref(init)),
+                IClientModuleInit::decoder(AsRef::<dyn IClientModuleInit + 'static>::as_ref(init)),
             ),
         );
     }

@@ -12,7 +12,7 @@ use async_stream::stream;
 use bitcoin::{Address, Network};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::gen::ClientModuleGen;
+use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -25,7 +25,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleGen, ExtendsCommonModuleGen, ModuleCommon, MultiApiVersion,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
 use fedimint_core::task::TaskGroup;
@@ -422,12 +422,12 @@ impl WalletClientGen {
     }
 }
 
-impl ExtendsCommonModuleGen for WalletClientGen {
+impl ExtendsCommonModuleInit for WalletClientGen {
     type Common = WalletCommonGen;
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleGen for WalletClientGen {
+impl ClientModuleInit for WalletClientGen {
     type Module = WalletClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {

@@ -3,7 +3,7 @@ One way to think of Fedimint is as a framework for building federated applicatio
 In order to build such an application, you need to fork the `fedimint` git repo. Create a new crate in the `modules` folder - you can use the [`fedimint-dummy-*`](https://github.com/fedimint/fedimint/tree/master/modules) crates as inspiration. Next `impl` two traits:
 
 * [ServerModule](https://github.com/fedimint/fedimint/blob/3a808c44c94856c80d4b716ed853a882e83cb5c3/fedimint-core/src/module/mod.rs#L737-L892): defines how your module will interact with Fedimint consensus.
-* [ServerModuleGen](https://github.com/fedimint/fedimint/blob/3a808c44c94856c80d4b716ed853a882e83cb5c3/fedimint-core/src/module/mod.rs#L517-L585): defines how configuration for your module will be generated.
+* [ServerModuleInit](https://github.com/fedimint/fedimint/blob/3a808c44c94856c80d4b716ed853a882e83cb5c3/fedimint-core/src/module/mod.rs#L517-L585): defines how configuration for your module will be generated.
 
 Lastly, plug your module into [fedimintd](https://github.com/fedimint/fedimint/blob/master/fedimintd/src/bin/main.rs)
 

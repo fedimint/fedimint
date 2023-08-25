@@ -5,9 +5,9 @@ use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
-use fedimint_core::config::ServerModuleGenRegistry;
+use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::IDatabase;
-use fedimint_core::module::DynServerModuleGen;
+use fedimint_core::module::DynServerModuleInit;
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
@@ -140,13 +140,13 @@ async fn main() -> Result<()> {
                 None => Vec::new(),
             };
 
-            let module_gens = ServerModuleGenRegistry::from(if options.no_modules {
+            let module_inits = ServerModuleInitRegistry::from(if options.no_modules {
                 vec![]
             } else {
                 vec![
-                    DynServerModuleGen::from(WalletGen),
-                    DynServerModuleGen::from(MintGen),
-                    DynServerModuleGen::from(LightningGen),
+                    DynServerModuleInit::from(WalletGen),
+                    DynServerModuleInit::from(MintGen),
+                    DynServerModuleInit::from(LightningGen),
                 ]
             });
 
@@ -154,7 +154,7 @@ async fn main() -> Result<()> {
                 cfg_dir,
                 options.database,
                 password,
-                module_gens,
+                module_inits,
                 modules,
                 prefix_names,
             );

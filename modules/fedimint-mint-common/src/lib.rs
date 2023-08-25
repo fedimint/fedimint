@@ -4,7 +4,7 @@ pub use common::{BackupRequest, SignedBackupRequest};
 use config::MintClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{CommonModuleGen, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{plugin_types_trait_impl_common, Amount, OutPoint, PeerId, TieredMulti};
 use impl_tools::autoimpl;
@@ -103,7 +103,7 @@ pub struct BlindNonce(pub tbs::BlindedMessage);
 #[derive(Debug)]
 pub struct MintCommonGen;
 
-impl CommonModuleGen for MintCommonGen {
+impl CommonModuleInit for MintCommonGen {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
