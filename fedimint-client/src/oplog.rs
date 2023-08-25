@@ -39,7 +39,7 @@ impl OperationLog {
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry {
-                operation_type: operation_type.to_string(),
+                operation_module_kind: operation_type.to_string(),
                 meta: serde_json::to_value(operation_meta)
                     .expect("Can only fail if meta is not serializable"),
                 outcome: None,
@@ -153,15 +153,16 @@ impl OperationLog {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OperationLogEntry {
-    operation_type: String,
+    operation_module_kind: String,
     meta: serde_json::Value,
     // TODO: probably change all that JSON to Dyn-types
     pub(crate) outcome: Option<serde_json::Value>,
 }
 
 impl OperationLogEntry {
-    pub fn operation_type(&self) -> &str {
-        &self.operation_type
+    /// Returns the kind of the module that generated the operation
+    pub fn operation_module_kind(&self) -> &str {
+        &self.operation_module_kind
     }
 
     pub fn meta<M: DeserializeOwned>(&self) -> M {
@@ -205,7 +206,7 @@ impl OperationLogEntry {
 impl Encodable for OperationLogEntry {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut len = 0;
-        len += self.operation_type.consensus_encode(writer)?;
+        len += self.operation_module_kind.consensus_encode(writer)?;
         len += serde_json::to_string(&self.meta)
             .expect("JSON serialization should not fail")
             .consensus_encode(writer)?;
@@ -237,7 +238,7 @@ impl Decodable for OperationLogEntry {
             .transpose()?;
 
         Ok(OperationLogEntry {
-            operation_type,
+            operation_module_kind: operation_type,
             meta,
             outcome,
         })
@@ -311,7 +312,7 @@ mod tests {
     #[test]
     fn test_operation_log_entry_serde() {
         let op_log = OperationLogEntry {
-            operation_type: "test".to_string(),
+            operation_module_kind: "test".to_string(),
             meta: serde_json::to_value(()).unwrap(),
             outcome: None,
         };
@@ -333,7 +334,7 @@ mod tests {
         };
 
         let op_log = OperationLogEntry {
-            operation_type: "test".to_string(),
+            operation_module_kind: "test".to_string(),
             meta: serde_json::to_value(meta.clone()).unwrap(),
             outcome: None,
         };
