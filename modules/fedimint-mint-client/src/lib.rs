@@ -262,8 +262,8 @@ impl MintClientExt for Client {
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::reissue_external_notes extra_meta is serializable");
-        let operation_meta_gen = move |txid, _| MintMeta {
-            variant: MintMetaVariants::Reissuance {
+        let operation_meta_gen = move |txid, _| MintOperationMeta {
+            variant: MintOperationMetaVariants::Reissuance {
                 out_point: OutPoint { txid, out_idx: 0 },
             },
             amount,
@@ -287,8 +287,8 @@ impl MintClientExt for Client {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<ReissueExternalNotesState>> {
         let operation = mint_operation(self, operation_id).await?;
-        let out_point = match operation.meta::<MintMeta>().variant {
-            MintMetaVariants::Reissuance { out_point } => out_point,
+        let out_point = match operation.meta::<MintOperationMeta>().variant {
+            MintOperationMetaVariants::Reissuance { out_point } => out_point,
             _ => bail!("Operation is not a reissuance"),
         };
         let client = self.clone();
@@ -363,8 +363,8 @@ impl MintClientExt for Client {
                                 dbtx,
                                 operation_id,
                                 MintCommonGen::KIND.as_str(),
-                                MintMeta {
-                                    variant: MintMetaVariants::SpendOOB {
+                                MintOperationMeta {
+                                    variant: MintOperationMetaVariants::SpendOOB {
                                         requested_amount: min_amount,
                                         oob_notes: oob_notes.clone(),
                                     },
@@ -431,8 +431,8 @@ impl MintClientExt for Client {
     ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>> {
         let operation = mint_operation(self, operation_id).await?;
         if !matches!(
-            operation.meta::<MintMeta>().variant,
-            MintMetaVariants::SpendOOB { .. }
+            operation.meta::<MintOperationMeta>().variant,
+            MintOperationMetaVariants::SpendOOB { .. }
         ) {
             bail!("Operation is not a out-of-band spend");
         };
@@ -509,14 +509,14 @@ async fn mint_operation(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MintMeta {
-    pub variant: MintMetaVariants,
+pub struct MintOperationMeta {
+    pub variant: MintOperationMetaVariants,
     pub amount: Amount,
     pub extra_meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MintMetaVariants {
+pub enum MintOperationMetaVariants {
     Reissuance {
         out_point: OutPoint,
     },

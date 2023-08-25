@@ -165,6 +165,11 @@ impl OperationLogEntry {
         &self.operation_module_kind
     }
 
+    /// Returns the meta data of the operation. This is a JSON value that can be
+    /// either returned as a [`serde_json::Value`] or deserialized into a
+    /// specific type. The specific type should be named `<Module>OperationMeta`
+    /// in the module's client crate. The module can be determined by calling
+    /// [`OperationLogEntry::operation_module_kind`].
     pub fn meta<M: DeserializeOwned>(&self) -> M {
         serde_json::from_value(self.meta.clone()).expect("JSON deserialization should not fail")
     }
