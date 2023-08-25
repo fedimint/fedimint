@@ -281,19 +281,6 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -308,13 +295,11 @@
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::core::IntoDynInstance;
-<span class="kw">use </span>fedimint_core::encoding::Decodable;
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
 <span class="kw">use </span>fedimint_mint_client::{
-    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, SpendableNote,
+    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, OOBNotes,
 };
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>futures::StreamExt;
@@ -324,23 +309,20 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::MetricEvent;
 
-<span class="kw">pub async fn </span>get_notes_cli(amount: <span class="kw-2">&amp;</span>Amount) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
+<span class="kw">pub async fn </span>get_notes_cli(amount: <span class="kw-2">&amp;</span>Amount) -&gt; anyhow::Result&lt;OOBNotes&gt; {
     <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;spend&quot;</span>, amount.msats.to_string())
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;notes&quot;</span>]
         .as_str()
-        .map(parse_ecash)
+        .map(OOBNotes::from_str)
         .transpose()<span class="question-mark">?
         </span>.context(<span class="string">&quot;missing notes output&quot;</span>)
 }
 
-<span class="kw">pub async fn </span>try_get_notes_cli(
-    amount: <span class="kw-2">&amp;</span>Amount,
-    tries: usize,
-) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
+<span class="kw">pub async fn </span>try_get_notes_cli(amount: <span class="kw-2">&amp;</span>Amount, tries: usize) -&gt; anyhow::Result&lt;OOBNotes&gt; {
     <span class="kw">for _ in </span><span class="number">0</span>..tries {
         <span class="kw">match </span>get_notes_cli(amount).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(notes) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(notes),
+            <span class="prelude-val">Ok</span>(oob_notes) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(oob_notes),
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">info!</span>(<span class="string">&quot;Failed to get notes from cli: {e}, trying again after a second...&quot;</span>);
                 fedimint_core::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
@@ -352,11 +334,11 @@
 
 <span class="kw">pub async fn </span>reissue_notes(
     client: <span class="kw-2">&amp;</span>Client,
-    notes: TieredMulti&lt;SpendableNote&gt;,
+    oob_notes: OOBNotes,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>m = fedimint_core::time::now();
-    <span class="kw">let </span>operation_id = client.reissue_external_notes(notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>operation_id = client.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>updates = client
         .subscribe_reissue_external_notes(operation_id)
         .<span class="kw">await</span><span class="question-mark">?
@@ -376,8 +358,8 @@
 <span class="kw">pub async fn </span>do_spend_notes(
     client: <span class="kw-2">&amp;</span>Client,
     amount: Amount,
-) -&gt; anyhow::Result&lt;(OperationId, TieredMulti&lt;SpendableNote&gt;)&gt; {
-    <span class="kw">let </span>(operation_id, notes) = client
+) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
+    <span class="kw">let </span>(operation_id, oob_notes) = client
         .spend_notes(amount, Duration::from_secs(<span class="number">600</span>), ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>updates = client
@@ -393,7 +375,7 @@
             }
         }
     }
-    <span class="prelude-val">Ok</span>((operation_id, notes))
+    <span class="prelude-val">Ok</span>((operation_id, oob_notes))
 }
 
 <span class="kw">pub async fn </span>await_spend_notes_finish(
@@ -436,14 +418,6 @@
     }
     <span class="kw">let </span>client = client_builder.build::&lt;PlainRootSecretStrategy&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(client)
-}
-
-<span class="kw">pub fn </span>parse_ecash(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-    <span class="kw">let </span>bytes = base64::decode(s)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Decodable::consensus_decode(
-        <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
-        <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-    )<span class="question-mark">?</span>)
 }
 
 <span class="kw">pub async fn </span>lnd_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Invoice, String)&gt; {

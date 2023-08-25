@@ -129,11 +129,15 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
-<span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ModuleInitRegistry};
+<span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::{
@@ -161,6 +165,7 @@
     </span><span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: FederationId,
         cfg: &lt;&lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig,
         db: Database,
         api_version: ApiVersion,
@@ -185,6 +190,7 @@
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
         <span class="comment">// FIXME: don&#39;t make modules aware of their instance id
@@ -219,6 +225,7 @@
 
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
         instance_id: ModuleInstanceId,
@@ -231,6 +238,7 @@
         <span class="kw">let </span>typed_cfg: <span class="kw-2">&amp;</span>&lt;&lt;T <span class="kw">as </span>fedimint_core::module::ExtendsCommonModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig = cfg.cast()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.init(
+                federation_id,
                 typed_cfg.clone(),
                 db,
                 api_version,

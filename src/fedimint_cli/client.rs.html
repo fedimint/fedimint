@@ -485,14 +485,6 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::{Duration, UNIX_EPOCH};
@@ -509,14 +501,12 @@
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::contracts::ContractId;
 <span class="kw">use </span>fedimint_ln_client::{
     InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
 };
-<span class="kw">use </span>fedimint_mint_client::{
-    parse_ecash, serialize_ecash, MintClientExt, MintClientModule, SpendableNote,
-};
+<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -550,10 +540,7 @@
     <span class="doccomment">/// Display wallet info (holdings, tiers)
     </span>Info,
     <span class="doccomment">/// Reissue notes received from a third party to avoid double spends
-    </span>Reissue {
-        <span class="attr">#[clap(value_parser = parse_ecash)]
-        </span>notes: TieredMulti&lt;SpendableNote&gt;,
-    },
+    </span>Reissue { oob_notes: OOBNotes },
     <span class="doccomment">/// Prepare notes to send to a third party as a payment
     </span>Spend {
         <span class="attr">#[clap(value_parser = parse_fedimint_amount)]
@@ -561,10 +548,7 @@
     },
     <span class="doccomment">/// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
-    </span>Validate {
-        <span class="attr">#[clap(value_parser = parse_ecash)]
-        </span>notes: TieredMulti&lt;SpendableNote&gt;,
-    },
+    </span>Validate { oob_notes: OOBNotes },
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
         <span class="attr">#[clap(long, value_parser = parse_fedimint_amount)]
@@ -643,10 +627,10 @@
 ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">match </span>command {
         ClientCmd::Info =&gt; get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>,
-        ClientCmd::Reissue { notes } =&gt; {
-            <span class="kw">let </span>amount = notes.total_amount();
+        ClientCmd::Reissue { oob_notes } =&gt; {
+            <span class="kw">let </span>amount = oob_notes.total_amount();
 
-            <span class="kw">let </span>operation_id = client.reissue_external_notes(notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>operation_id = client.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client
                 .subscribe_reissue_external_notes(operation_id)
                 .<span class="kw">await
@@ -670,11 +654,11 @@
             <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation}&quot;</span>);
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
-                <span class="string">&quot;notes&quot;</span>: serialize_ecash(<span class="kw-2">&amp;</span>notes),
+                <span class="string">&quot;notes&quot;</span>: notes,
             }))
         }
-        ClientCmd::Validate { notes } =&gt; {
-            <span class="kw">let </span>amount = client.validate_notes(notes).<span class="kw">await</span><span class="question-mark">?</span>;
+        ClientCmd::Validate { oob_notes } =&gt; {
+            <span class="kw">let </span>amount = client.validate_notes(oob_notes).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">&quot;amount_msat&quot;</span>: amount,

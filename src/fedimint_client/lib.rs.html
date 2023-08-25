@@ -1708,6 +1708,7 @@
 <a href="#1708" id="1708">1708</a>
 <a href="#1709" id="1709">1709</a>
 <a href="#1710" id="1710">1710</a>
+<a href="#1711" id="1711">1711</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3151,6 +3152,7 @@
 
                 <span class="kw">let </span>module = module_init
                     .init(
+                        config.federation_id,
                         module_config,
                         db.clone(),
                         module_instance,

@@ -754,6 +754,9 @@
 <a href="#754" id="754">754</a>
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -765,7 +768,7 @@
 <span class="kw">use </span>clap::{Args, Parser, Subcommand, ValueEnum};
 <span class="kw">use </span>common::{
     cln_create_invoice, cln_wait_invoice_payment, gateway_pay_invoice, get_note_summary,
-    lnd_create_invoice, lnd_wait_invoice_payment, parse_ecash, reissue_notes,
+    lnd_create_invoice, lnd_wait_invoice_payment, reissue_notes,
 };
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
@@ -773,8 +776,8 @@
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::util::BoxFuture;
-<span class="kw">use </span>fedimint_core::{Amount, TieredMulti};
-<span class="kw">use </span>fedimint_mint_client::SpendableNote;
+<span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::fs::OpenOptions;
@@ -859,8 +862,11 @@
     </span>)]
     </span>invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
-    <span class="attr">#[arg(long, value_parser = parse_ecash, help = <span class="string">&quot;Notes for the test. If none, will call fedimint-cli spend&quot;</span>)]
-    </span>initial_notes: <span class="prelude-ty">Option</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt;,
+    <span class="attr">#[arg(
+        long,
+        help = <span class="string">&quot;Notes for the test. If none, will call fedimint-cli spend&quot;
+    </span>)]
+    </span>initial_notes: <span class="prelude-ty">Option</span>&lt;OOBNotes&gt;,
 
     <span class="attr">#[arg(
         long,
@@ -1071,7 +1077,7 @@
     archive_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     users: u16,
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-    initial_notes: TieredMulti&lt;SpendableNote&gt;,
+    initial_notes: OOBNotes,
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
@@ -1121,10 +1127,10 @@
     <span class="kw">for </span>u <span class="kw">in </span><span class="number">0</span>..users {
         users_notes.insert(u, Vec::with_capacity(notes_per_user.into()));
         <span class="kw">for _ in </span><span class="number">0</span>..notes_per_user {
-            <span class="kw">let </span>(<span class="kw">_</span>, notes) = do_spend_notes(<span class="kw-2">&amp;</span>coordinator, note_denomination).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>user_amount = notes.total_amount();
+            <span class="kw">let </span>(<span class="kw">_</span>, oob_notes) = do_spend_notes(<span class="kw-2">&amp;</span>coordinator, note_denomination).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>user_amount = oob_notes.total_amount();
             <span class="macro">info!</span>(<span class="string">&quot;Giving {user_amount} to user {u}&quot;</span>);
-            users_notes.get_mut(<span class="kw-2">&amp;</span>u).unwrap().push(notes);
+            users_notes.get_mut(<span class="kw-2">&amp;</span>u).unwrap().push(oob_notes);
         }
     }
     <span class="kw">let </span><span class="kw-2">mut </span>users_invoices = HashMap::new();
@@ -1144,12 +1150,12 @@
         .enumerate()
         .map(|(u, client)| {
             <span class="kw">let </span>u = u <span class="kw">as </span>u16;
-            <span class="kw">let </span>notes = users_notes.remove(<span class="kw-2">&amp;</span>u).unwrap();
+            <span class="kw">let </span>oob_notes = users_notes.remove(<span class="kw-2">&amp;</span>u).unwrap();
             <span class="kw">let </span>invoices = users_invoices.remove(<span class="kw-2">&amp;</span>u).unwrap_or_default();
             <span class="kw">let </span>event_sender = event_sender.clone();
             <span class="kw">let </span>f: BoxFuture&lt;<span class="kw">_</span>&gt; = Box::pin(do_user_task(
                 client,
-                notes,
+                oob_notes,
                 generated_invoices_per_user,
                 ln_payment_sleep,
                 invoice_amount,
@@ -1167,7 +1173,7 @@
 <span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">async fn </span>do_user_task(
     client: Client,
-    notes: Vec&lt;TieredMulti&lt;SpendableNote&gt;&gt;,
+    oob_notes: Vec&lt;OOBNotes&gt;,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
     invoice_amount: Amount,
@@ -1175,9 +1181,9 @@
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">for </span>note <span class="kw">in </span>notes {
-        <span class="kw">let </span>amount = note.total_amount();
-        reissue_notes(<span class="kw-2">&amp;</span>client, note, <span class="kw-2">&amp;</span>event_sender)
+    <span class="kw">for </span>oob_note <span class="kw">in </span>oob_notes {
+        <span class="kw">let </span>amount = oob_note.total_amount();
+        reissue_notes(<span class="kw-2">&amp;</span>client, oob_note, <span class="kw-2">&amp;</span>event_sender)
             .<span class="kw">await
             </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;while reissuing initial {amount}: {e}&quot;</span>))<span class="question-mark">?</span>;
     }
