@@ -14,14 +14,12 @@ use fedimint_client::Client;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::time::now;
-use fedimint_core::{Amount, ParseAmountError, TieredMulti, TieredSummary};
+use fedimint_core::{Amount, ParseAmountError, TieredSummary};
 use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_client::{
     InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
 };
-use fedimint_mint_client::{
-    parse_ecash, serialize_ecash, MintClientExt, MintClientModule, SpendableNote,
-};
+use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -55,10 +53,7 @@ pub enum ClientCmd {
     /// Display wallet info (holdings, tiers)
     Info,
     /// Reissue notes received from a third party to avoid double spends
-    Reissue {
-        #[clap(value_parser = parse_ecash)]
-        notes: TieredMulti<SpendableNote>,
-    },
+    Reissue { oob_notes: OOBNotes },
     /// Prepare notes to send to a third party as a payment
     Spend {
         #[clap(value_parser = parse_fedimint_amount)]
@@ -66,10 +61,7 @@ pub enum ClientCmd {
     },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
-    Validate {
-        #[clap(value_parser = parse_ecash)]
-        notes: TieredMulti<SpendableNote>,
-    },
+    Validate { oob_notes: OOBNotes },
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
         #[clap(long, value_parser = parse_fedimint_amount)]
@@ -148,10 +140,10 @@ pub async fn handle_ng_command(
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
-        ClientCmd::Reissue { notes } => {
-            let amount = notes.total_amount();
+        ClientCmd::Reissue { oob_notes } => {
+            let amount = oob_notes.total_amount();
 
-            let operation_id = client.reissue_external_notes(notes, ()).await?;
+            let operation_id = client.reissue_external_notes(oob_notes, ()).await?;
             let mut updates = client
                 .subscribe_reissue_external_notes(operation_id)
                 .await
@@ -175,11 +167,11 @@ pub async fn handle_ng_command(
             info!("Spend e-cash operation: {operation}");
 
             Ok(json!({
-                "notes": serialize_ecash(&notes),
+                "notes": notes,
             }))
         }
-        ClientCmd::Validate { notes } => {
-            let amount = client.validate_notes(notes).await?;
+        ClientCmd::Validate { oob_notes } => {
+            let amount = client.validate_notes(oob_notes).await?;
 
             Ok(json!({
                 "amount_msat": amount,

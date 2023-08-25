@@ -541,6 +541,7 @@ impl ClientModuleInit for LightningClientGen {
 
     async fn init(
         &self,
+        _federation_id: FederationId,
         cfg: LightningClientConfig,
         _db: Database,
         _api_version: ApiVersion,

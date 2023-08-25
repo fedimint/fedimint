@@ -11,7 +11,8 @@ mod output;
 
 use std::cmp::Ordering;
 use std::ffi;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -29,6 +30,7 @@ use fedimint_client::sm::{
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
@@ -73,6 +75,63 @@ const MINT_BACKUP_RESTORE_OPERATION_ID: OperationId = OperationId([0x01; 32]);
 
 pub const LOG_TARGET: &str = "client::module::mint";
 
+/// An encapsulation of [`FederationId`] and e-cash notes in the form of
+/// [`TieredMulti<SpendableNote>`] for the purpose of spending e-cash
+/// out-of-band. Also used for validating and reissuing such out-of-band notes.
+#[derive(Clone, Debug, Decodable, Encodable)]
+pub struct OOBNotes {
+    pub federation_id: FederationId,
+    pub notes: TieredMulti<SpendableNote>,
+}
+
+impl FromStr for OOBNotes {
+    type Err = anyhow::Error;
+
+    /// Decode a set of out-of-band e-cash notes from a base64 string.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = base64::decode(s)?;
+        Ok(Decodable::consensus_decode(
+            &mut std::io::Cursor::new(bytes),
+            &ModuleDecoderRegistry::default(),
+        )?)
+    }
+}
+
+impl Display for OOBNotes {
+    /// Base64 encode a set of e-cash notes for out-of-band spending.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut bytes = Vec::new();
+        Encodable::consensus_encode(self, &mut bytes).expect("encodes correctly");
+        f.write_str(&base64::encode(&bytes))
+    }
+}
+
+impl Serialize for OOBNotes {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for OOBNotes {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+impl OOBNotes {
+    /// Returns the total value of all notes in msat as `Amount`
+    pub fn total_amount(&self) -> Amount {
+        self.notes.total_amount()
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 pub trait MintClientExt {
     /// Try to reissue e-cash notes received from a third party to receive them
@@ -80,7 +139,7 @@ pub trait MintClientExt {
     /// [`MintClientExt::subscribe_reissue_external_notes`].
     async fn reissue_external_notes<M: Serialize + Send>(
         &self,
-        notes: TieredMulti<SpendableNote>,
+        oob_notes: OOBNotes,
         extra_meta: M,
     ) -> anyhow::Result<OperationId>;
 
@@ -107,12 +166,14 @@ pub trait MintClientExt {
         min_amount: Amount,
         try_cancel_after: Duration,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, TieredMulti<SpendableNote>)>;
+    ) -> anyhow::Result<(OperationId, OOBNotes)>;
 
     /// Validate the given notes and return the total amount of the notes.
-    /// Validation checks that the note has a valid signature and that the spend
-    /// key is correct.
-    async fn validate_notes(&self, notes: TieredMulti<SpendableNote>) -> anyhow::Result<Amount>;
+    /// Validation checks that:
+    /// - the federation ID is correct
+    /// - the note has a valid signature
+    /// - the spend key is correct.
+    async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount>;
 
     /// Try to cancel a spend operation started with
     /// [`MintClientExt::spend_notes`]. If the e-cash notes have already been
@@ -176,10 +237,17 @@ pub enum SpendOOBState {
 impl MintClientExt for Client {
     async fn reissue_external_notes<M: Serialize + Send>(
         &self,
-        notes: TieredMulti<SpendableNote>,
+        oob_notes: OOBNotes,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let OOBNotes {
+            federation_id,
+            notes,
+        } = oob_notes;
+        if federation_id != mint.federation_id {
+            bail!("Federation ID does not match");
+        }
 
         let operation_id = OperationId(
             notes
@@ -262,7 +330,7 @@ impl MintClientExt for Client {
         min_amount: Amount,
         try_cancel_after: Duration,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, TieredMulti<SpendableNote>)> {
+    ) -> anyhow::Result<(OperationId, OOBNotes)> {
         let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::spend_notes extra_meta is serializable");
@@ -279,6 +347,10 @@ impl MintClientExt for Client {
                                 try_cancel_after,
                             )
                             .await?;
+                        let oob_notes = OOBNotes {
+                            federation_id: mint.federation_id,
+                            notes,
+                        };
 
                         let dyn_states = states
                             .into_iter()
@@ -294,15 +366,15 @@ impl MintClientExt for Client {
                                 MintMeta {
                                     variant: MintMetaVariants::SpendOOB {
                                         requested_amount: min_amount,
-                                        notes: notes.clone(),
+                                        oob_notes: oob_notes.clone(),
                                     },
-                                    amount: notes.total_amount(),
+                                    amount: oob_notes.total_amount(),
                                     extra_meta,
                                 },
                             )
                             .await;
 
-                        Ok((operation_id, notes))
+                        Ok((operation_id, oob_notes))
                     })
                 },
                 Some(100),
@@ -316,8 +388,16 @@ impl MintClientExt for Client {
             })
     }
 
-    async fn validate_notes(&self, notes: TieredMulti<SpendableNote>) -> anyhow::Result<Amount> {
+    async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount> {
         let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let OOBNotes {
+            federation_id,
+            notes,
+        } = oob_notes;
+        if federation_id != mint.federation_id {
+            bail!("Federation ID does not match");
+        }
+
         let tbs_pks = &mint.cfg.tbs_pks;
 
         for (idx, (amt, note)) in notes.iter_items().enumerate() {
@@ -442,8 +522,7 @@ pub enum MintMetaVariants {
     },
     SpendOOB {
         requested_amount: Amount,
-        #[serde(with = "serde_ecash")]
-        notes: TieredMulti<SpendableNote>,
+        oob_notes: OOBNotes,
     },
 }
 
@@ -465,6 +544,7 @@ impl ClientModuleInit for MintClientGen {
 
     async fn init(
         &self,
+        federation_id: FederationId,
         cfg: MintClientConfig,
         _db: Database,
         _api_version: ApiVersion,
@@ -475,6 +555,7 @@ impl ClientModuleInit for MintClientGen {
     ) -> anyhow::Result<Self::Module> {
         let (cancel_oob_payment_bc, _) = tokio::sync::broadcast::channel(16);
         Ok(MintClientModule {
+            federation_id,
             cfg,
             secret: module_root_secret,
             secp: Secp256k1::new(),
@@ -486,6 +567,7 @@ impl ClientModuleInit for MintClientGen {
 
 #[derive(Debug)]
 pub struct MintClientModule {
+    federation_id: FederationId,
     cfg: MintClientConfig,
     secret: DerivableSecret,
     secp: Secp256k1<All>,
@@ -565,12 +647,14 @@ impl ClientModule for MintClientModule {
                     ));
                 }
 
-                let notes = parse_ecash(args[1].to_string_lossy().as_ref())
+                let oob_notes = args[1]
+                    .to_string_lossy()
+                    .parse::<OOBNotes>()
                     .map_err(|e| anyhow::format_err!("invalid notes format: {e}"))?;
 
-                let amount = notes.total_amount();
+                let amount = oob_notes.total_amount();
 
-                let operation_id = client.reissue_external_notes(notes, ()).await?;
+                let operation_id = client.reissue_external_notes(oob_notes, ()).await?;
                 let mut updates = client
                     .subscribe_reissue_external_notes(operation_id)
                     .await
@@ -1267,50 +1351,6 @@ impl State for MintClientStateMachines {
 pub struct SpendableNote {
     pub note: Note,
     pub spend_key: KeyPair,
-}
-
-/// Base64 encode a set of e-cash notes. See also [`parse_ecash`].
-pub fn serialize_ecash(ecash: &TieredMulti<SpendableNote>) -> String {
-    let mut bytes = Vec::new();
-    Encodable::consensus_encode(ecash, &mut bytes).expect("encodes correctly");
-    base64::encode(&bytes)
-}
-
-/// Decode a set of e-cash notes from a base64 string. See also
-/// [`serialize_ecash`].
-pub fn parse_ecash(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
-    let bytes = base64::decode(s)?;
-    Ok(Decodable::consensus_decode(
-        &mut std::io::Cursor::new(bytes),
-        &ModuleDecoderRegistry::default(),
-    )?)
-}
-
-/// `serde` impl for `TieredMulti<SpendableNote>` sets of e-cash notes using
-/// [`serialize_ecash`] and [`parse_ecash`].
-pub mod serde_ecash {
-    use fedimint_core::TieredMulti;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    use crate::{parse_ecash, serialize_ecash, SpendableNote};
-
-    pub fn serialize<S>(
-        ecash: &TieredMulti<SpendableNote>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&serialize_ecash(ecash))
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<TieredMulti<SpendableNote>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        parse_ecash(&s).map_err(serde::de::Error::custom)
-    }
 }
 
 /// An index used to deterministically derive [`Note`]s
