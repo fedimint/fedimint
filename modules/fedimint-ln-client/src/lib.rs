@@ -275,7 +275,7 @@ impl LightningClientExt for Client {
         };
 
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |txid, change_outpoint| LightningMeta::Pay {
+        let operation_meta_gen = |txid, change_outpoint| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: 0 },
             invoice: invoice.clone(),
             change_outpoint,
@@ -325,7 +325,7 @@ impl LightningClientExt for Client {
             )
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |txid, _| LightningMeta::Receive {
+        let operation_meta_gen = |txid, _| LightningOperationMeta::Receive {
             out_point: OutPoint { txid, out_idx: 0 },
             invoice: invoice.clone(),
         };
@@ -354,8 +354,8 @@ impl LightningClientExt for Client {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = ln_operation(self, operation_id).await?;
-        let (out_point, invoice) = match operation.meta::<LightningMeta>() {
-            LightningMeta::Receive { out_point, invoice } => (out_point, invoice),
+        let (out_point, invoice) = match operation.meta::<LightningOperationMeta>() {
+            LightningOperationMeta::Receive { out_point, invoice } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
 
@@ -408,8 +408,8 @@ impl LightningClientExt for Client {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
         let operation = ln_operation(self, operation_id).await?;
-        let (out_point, _, change_outpoint) = match operation.meta::<LightningMeta>() {
-            LightningMeta::Pay {
+        let (out_point, _, change_outpoint) = match operation.meta::<LightningOperationMeta>() {
+            LightningOperationMeta::Pay {
                 out_point,
                 invoice,
                 change_outpoint,
@@ -511,7 +511,7 @@ impl LightningClientExt for Client {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LightningMeta {
+pub enum LightningOperationMeta {
     Pay {
         out_point: OutPoint,
         invoice: Invoice,

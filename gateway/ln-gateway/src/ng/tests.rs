@@ -16,7 +16,7 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{
     LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
-    LightningMeta, LnPayState, PayType,
+    LightningOperationMeta, LnPayState, PayType,
 };
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningGenParams;
@@ -434,7 +434,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 state_machines,
             };
             let tx = TransactionBuilder::new().with_output(client_output.into_dyn(instance.id));
-            let operation_meta_gen = |txid, _| LightningMeta::Receive {
+            let operation_meta_gen = |txid, _| LightningOperationMeta::Receive {
                 out_point: OutPoint { txid, out_idx: 0 },
                 invoice: invoice.clone(),
             };
