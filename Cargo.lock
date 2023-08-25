@@ -2105,6 +2105,7 @@ name = "fedimint-wallet-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-trait",
  "bitcoin 0.29.2",
  "erased-serde",
@@ -2121,6 +2122,7 @@ dependencies = [
  "fedimint-wallet-common",
  "fedimint-wallet-server",
  "futures",
+ "miniscript",
  "tokio",
  "tracing",
 ]

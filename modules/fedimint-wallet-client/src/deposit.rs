@@ -191,7 +191,7 @@ async fn await_btc_transaction_confirmed(
     loop {
         // TODO: make everything subscriptions
         // Wait for confirmation
-        let consensus_height = match global_context
+        let consensus_block_count = match global_context
             .module_api()
             .fetch_consensus_block_count()
             .await
@@ -203,28 +203,32 @@ async fn await_btc_transaction_confirmed(
                 continue;
             }
         };
-        debug!(consensus_height, "Fetched consensus height");
+        debug!(consensus_block_count, "Fetched consensus block count");
 
-        let confirmation_height = match context
+        let confirmation_block_count = match context
             .rpc
             .get_tx_block_height(&waiting_state.btc_transaction.txid())
             .await
         {
-            Ok(confirmation_height) => confirmation_height,
+            Ok(Some(confirmation_height)) => Some(confirmation_height + 1),
+            Ok(None) => None,
             Err(e) => {
-                warn!("Failed to fetch confirmation height: {e}");
+                warn!("Failed to fetch confirmation height: {e:?}");
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
                 continue;
             }
         };
 
-        debug!(?confirmation_height, "Fetched confirmation height");
+        debug!(
+            ?confirmation_block_count,
+            "Fetched confirmation block count"
+        );
 
-        if !confirmation_height
-            .map(|confirmation_height| consensus_height >= confirmation_height)
+        if !confirmation_block_count
+            .map(|confirmation_block_count| consensus_block_count >= confirmation_block_count)
             .unwrap_or(false)
         {
-            trace!("Not confirmed yet, confirmation height={confirmation_height:?}, consensus_height={consensus_height}");
+            trace!("Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}");
             sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
             continue;
         }
@@ -237,7 +241,7 @@ async fn await_btc_transaction_confirmed(
         {
             Ok(txout_proof) => txout_proof,
             Err(e) => {
-                warn!("Failed to fetch confirmation height: {e}");
+                warn!("Failed to fetch transaction proof: {e:?}");
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
                 continue;
             }

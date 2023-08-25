@@ -393,7 +393,18 @@ impl ServerModule for Wallet {
                 // only sync when we have a consensus block count
                 match (old_consensus_block_count, new_consensus_block_count) {
                     (Some(old), Some(new)) if new > old => {
-                        self.sync_up_to_consensus_height(dbtx, old, new).await;
+                        if old > 0 {
+                            let new_height = new - 1;
+                            let old_height = old - 1;
+                            self.sync_up_to_consensus_height(dbtx, old_height, new_height)
+                                .await;
+                        } else {
+                            info!(
+                                ?new,
+                                ?old,
+                                "Not syncing up to consensus block count because we are at block 0"
+                            );
+                        }
                     }
                     _ => {}
                 }
@@ -893,7 +904,7 @@ impl Wallet {
 
         for height in (old_height + 1)..=(new_height) {
             if height % 100 == 0 {
-                debug!("Caught up to block {}", height);
+                debug!("Caught up to block {height}");
             }
 
             // TODO: use batching for mainnet syncing

@@ -12,6 +12,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{task, Amount};
 use lazy_static::lazy_static;
+use tracing::trace;
 use url::Url;
 
 use crate::btc::BitcoinTest;
@@ -56,10 +57,12 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                 .client
                 .get_block_header_info(block_hash)
                 .expect("rpc failed");
+            let expected_block_count = last_mined_block.height as u64 + 1;
             // waits for the rpc client to catch up to bitcoind
-            while self.rpc.get_block_count().await.expect("rpc failed")
-                < last_mined_block.height as u64
-            {}
+            while self.rpc.get_block_count().await.expect("rpc failed") < expected_block_count {
+                trace!("Waiting for blocks to be mined");
+                sleep(Duration::from_millis(200)).await;
+            }
         };
     }
 

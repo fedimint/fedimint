@@ -18,7 +18,7 @@ use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tonic_lnd::lnrpc::policy_update_request::Scope;
 use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
 use tonic_lnd::Client as LndClient;
-use tracing::{info, warn};
+use tracing::{info, trace, warn};
 
 use crate::cmd;
 use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
@@ -80,7 +80,13 @@ impl Bitcoind {
         info!(block_num, "Mining bitcoin blocks");
         let client = self.client();
         let addr = client.get_new_address(None, None)?;
+        let initial_block_count = client.get_block_count()?;
         client.generate_to_address(block_num, &addr)?;
+        while client.get_block_count()? < initial_block_count + block_num {
+            trace!(LOG_DEVIMINT, "Waiting for blocks to be mined");
+            sleep(Duration::from_millis(200)).await;
+        }
+
         Ok(())
     }
 
