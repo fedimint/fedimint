@@ -6,7 +6,7 @@ use std::iter::once;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{bail, ensure, format_err};
+use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::Hash;
@@ -274,10 +274,28 @@ impl LightningClientExt for Client {
             (PayType::Lightning(operation_id), output, contract_id)
         };
 
+        // TODO: return fee from create_outgoing_output or even let user supply
+        // it/bounds for it
+        let fee = match &output.output {
+            LightningOutput::Contract(contract) => {
+                let fee_msat = contract
+                    .amount
+                    .msats
+                    .checked_sub(
+                        invoice
+                            .amount_milli_satoshis()
+                            .ok_or(anyhow::anyhow!("MissingInvoiceAmount"))?,
+                    )
+                    .expect("Contract amount should be greater or equal than invoice amount");
+                Amount::from_msats(fee_msat)
+            }
+            _ => unreachable!("User client will only create contract outputs on spend"),
+        };
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |txid, change_outpoint| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: 0 },
             invoice: invoice.clone(),
+            fee,
             change_outpoint,
         };
 
@@ -413,6 +431,7 @@ impl LightningClientExt for Client {
                 out_point,
                 invoice,
                 change_outpoint,
+                ..
             } => (out_point, invoice, change_outpoint),
             _ => bail!("Operation is not a lightning payment"),
         };
@@ -515,6 +534,7 @@ pub enum LightningOperationMeta {
     Pay {
         out_point: OutPoint,
         invoice: Invoice,
+        fee: Amount,
         change_outpoint: Option<OutPoint>,
     },
     Receive {
@@ -654,7 +674,7 @@ impl LightningClientModule {
         // Compute amount to lock in the outgoing contract
         let invoice_amount_msat = invoice
             .amount_milli_satoshis()
-            .ok_or(anyhow::anyhow!("MissingInvoiceAmount"))?;
+            .context("MissingInvoiceAmount")?;
 
         let fees = gateway.fees;
         let base_fee = fees.base_msat as u64;
