@@ -151,6 +151,25 @@ impl OperationLog {
     }
 }
 
+/// Represents an operation triggered by a user, typically related to sending or
+/// receiving money.
+///
+/// There are three levels of introspection possible for `OperationLogEntry`s:
+///   1. The [`OperationLogEntry::operation_module_kind`] function returns the
+///      kind of the module that created the operation.
+///   2. The [`OperationLogEntry::meta`] function returns static meta data that
+///      was associated with the operation when it was created. Modules define
+///      their own meta structures, so the module kind has to be used to
+///      determine the structure of the meta data.
+///   3. To find out the current state of the operation there is a two-step
+///      process:
+///     * First, the [`OperationLogEntry::outcome`] function returns the outcome
+///       if the operation finished **and** the update subscription stream has
+///       been processed till its end at least once.
+///     * If that isn't the case, the [`OperationLogEntry::outcome`] method will
+///       return `None` and the appropriate update subscription function has to
+///       be called. See the respective client extension trait for these
+///       functions.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OperationLogEntry {
     operation_module_kind: String,
@@ -177,6 +196,20 @@ impl OperationLogEntry {
     /// Returns the last state update of the operation, if any was cached yet.
     /// If this hasn't been the case yet and `None` is returned subscribe to the
     /// appropriate update stream.
+    ///
+    /// ## Determining the return type
+    /// [`OperationLogEntry::meta`] should tell you the which operation type of
+    /// a given module the outcome belongs to. The operation type will have a
+    /// corresponding `async fn subscribe_type(&self, operation_id:
+    /// OperationId) -> anyhow::Result<UpdateStreamOrOutcome<TypeState>>;`
+    /// function that returns a `UpdateStreamOrOutcome<S>` where `S` is the
+    /// high-level state the operation is in. If this state is terminal, i.e.
+    /// the stream closes after returning it, it will be cached as the `outcome`
+    /// of the operation.
+    ///
+    /// This means the type to be used for deserializing the outcome is `S`,
+    /// often called `<OperationType>State`. Alternatively one can also use
+    /// [`serde_json::Value`] to get the unstructured data.
     pub fn outcome<D: DeserializeOwned>(&self) -> Option<D> {
         self.outcome.as_ref().map(|outcome| {
             serde_json::from_value(outcome.clone()).expect("JSON deserialization should not fail")
