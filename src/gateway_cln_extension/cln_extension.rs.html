@@ -619,8 +619,30 @@
 <a href="#619" id="619">619</a>
 <a href="#620" id="620">620</a>
 <a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
-<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -641,8 +663,8 @@
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -652,7 +674,7 @@
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tonic::transport::Server;
 <span class="kw">use </span>tonic::Status;
-<span class="kw">use </span>tracing::{debug, error, info, trace, warn};
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="attr">#[derive(Parser)]
 </span><span class="kw">pub struct </span>ClnExtensionOpts {
@@ -864,8 +886,9 @@
 
     <span class="kw">async fn </span>get_route_hints(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _request: tonic::Request&lt;EmptyRequest&gt;,
+        request: tonic::Request&lt;GetRouteHintsRequest&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetRouteHintsResponse&gt;, Status&gt; {
+        <span class="kw">let </span>GetRouteHintsRequest { num_route_hints } = request.into_inner();
         <span class="kw">let </span>node_info = <span class="self">self
             </span>.info()
             .<span class="kw">await
@@ -890,7 +913,7 @@
         }
         .map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>active_peer_channels = peers
+        <span class="kw">let </span><span class="kw-2">mut </span>active_peer_channels = peers
             .into_iter()
             .flat_map(|peer| peer.channels.into_iter().map(<span class="kw">move </span>|chan| (peer.id, chan)))
             .filter_map(|(peer_id, chan)| {
@@ -915,6 +938,27 @@
             <span class="string">&quot;Found {} active channels to use as route hints&quot;</span>,
             active_peer_channels.len()
         );
+
+        <span class="kw">let </span>listfunds_response = client
+            .call(cln_rpc::Request::ListFunds(model::ListfundsRequest {
+                spent: <span class="prelude-val">None</span>,
+            }))
+            .<span class="kw">await
+            </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>pubkey_to_incoming_capacity = <span class="kw">match </span>listfunds_response {
+            cln_rpc::Response::ListFunds(listfunds) =&gt; listfunds
+                .channels
+                .into_iter()
+                .map(|chan| (chan.peer_id, chan.amount_msat - chan.our_amount_msat))
+                .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
+            err =&gt; <span class="macro">panic!</span>(<span class="string">&quot;CLN received unexpected response: {err:?}&quot;</span>),
+        };
+        active_peer_channels.sort_by(|a, b| {
+            <span class="kw">let </span>a_incoming = pubkey_to_incoming_capacity.get(<span class="kw-2">&amp;</span>a.<span class="number">0</span>).unwrap().msat();
+            <span class="kw">let </span>b_incoming = pubkey_to_incoming_capacity.get(<span class="kw-2">&amp;</span>b.<span class="number">0</span>).unwrap().msat();
+            b_incoming.cmp(<span class="kw-2">&amp;</span>a_incoming)
+        });
+        active_peer_channels.truncate(num_route_hints <span class="kw">as </span>usize);
 
         <span class="kw">let </span><span class="kw-2">mut </span>route_hints = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(peer_id, scid) <span class="kw">in </span>active_peer_channels {
@@ -953,7 +997,7 @@
                 htlc_maximum_msat: channel.htlc_maximum_msat.map(|amt| amt.msat()),
             };
 
-            <span class="macro">trace!</span>(<span class="string">&quot;Constructed route hint {:?}&quot;</span>, route_hint_hop);
+            <span class="macro">debug!</span>(<span class="string">&quot;Constructed route hint {:?}&quot;</span>, route_hint_hop);
             route_hints.push(RouteHint {
                 hops: <span class="macro">vec!</span>[route_hint_hop],
             });

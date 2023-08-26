@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["GatewayTest"]};
+window.SIDEBAR_ITEMS = {"enum":["LightningNodeName"],"struct":["GatewayTest"]};

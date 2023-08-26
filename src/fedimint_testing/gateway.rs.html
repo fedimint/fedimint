@@ -134,7 +134,26 @@
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -211,6 +230,7 @@
         lightning: Box&lt;<span class="kw">dyn </span>LightningTest&gt;,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleInitRegistry,
+        num_route_hints: usize,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>address: Url = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
@@ -245,6 +265,7 @@
             clients.clone(),
             scid_to_federation.clone(),
             tg.clone(),
+            num_route_hints,
         )
         .<span class="kw">await
         </span>.unwrap();
@@ -267,6 +288,21 @@
             gateway,
             node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
             listening_addr,
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub enum </span>LightningNodeName {
+    Cln,
+    Lnd,
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>LightningNodeName {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::result::Result&lt;(), std::fmt::Error&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            LightningNodeName::Cln =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;cln&quot;</span>),
+            LightningNodeName::Lnd =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;lnd&quot;</span>),
         }
     }
 }

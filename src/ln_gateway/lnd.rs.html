@@ -517,6 +517,14 @@
 <a href="#517" id="517">517</a>
 <a href="#518" id="518">518</a>
 <a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -808,14 +816,17 @@
         });
     }
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>routehints(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        num_route_hints: usize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
             <span class="self">self</span>.macaroon.clone(),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>channels = client
+        <span class="kw">let </span><span class="kw-2">mut </span>channels = client
             .lightning()
             .list_channels(ListChannelsRequest {
                 active_only: <span class="bool-val">true</span>,
@@ -828,10 +839,15 @@
             </span>.map_err(|status| LightningRpcError::FailedToGetRouteHints {
                 failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to list channels {status:?}&quot;</span>),
             })<span class="question-mark">?
-            </span>.into_inner();
+            </span>.into_inner()
+            .channels;
+
+        <span class="comment">// Take the channels with the largest incoming capacity
+        </span>channels.sort_by(|a, b| b.remote_balance.cmp(<span class="kw-2">&amp;</span>a.remote_balance));
+        channels.truncate(num_route_hints);
 
         <span class="kw">let </span><span class="kw-2">mut </span>route_hints: Vec&lt;RouteHint&gt; = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>chan <span class="kw">in </span>channels.channels {
+        <span class="kw">for </span>chan <span class="kw">in </span>channels.iter() {
             <span class="kw">let </span>info = client
                 .lightning()
                 .get_chan_info(ChanInfoRequest {

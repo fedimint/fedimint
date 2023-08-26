@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["GATEWAY_CLN_EXTENSION"],"enum":["LightningNode","LightningNodeName"],"fn":["external_daemons","open_channel"],"struct":["Bitcoind","Electrs","Esplora","ExternalDaemons","Lightningd","LightningdProcessHandle","Lnd"]};
+window.SIDEBAR_ITEMS = {"constant":["GATEWAY_CLN_EXTENSION"],"enum":["LightningNode"],"fn":["external_daemons","open_channel"],"struct":["Bitcoind","Electrs","Esplora","ExternalDaemons","Lightningd","LightningdProcessHandle","Lnd"]};

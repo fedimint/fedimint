@@ -746,6 +746,17 @@
 <a href="#746" id="746">746</a>
 <a href="#747" id="747">747</a>
 <a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::TcpListener;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -859,8 +870,11 @@
         <span class="self">self</span>.lnrpc.info().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
-        <span class="self">self</span>.lnrpc.routehints().<span class="kw">await
+    <span class="kw">async fn </span>routehints(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        num_route_hints: usize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
+        <span class="self">self</span>.lnrpc.routehints(num_route_hints).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>pay(
@@ -1008,8 +1022,11 @@
         <span class="self">self</span>.lnrpc.info().<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
-        <span class="self">self</span>.lnrpc.routehints().<span class="kw">await
+    <span class="kw">async fn </span>routehints(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        num_route_hints: usize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
+        <span class="self">self</span>.lnrpc.routehints(num_route_hints).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>pay(
@@ -1101,7 +1118,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LdkLightningTest {
-    node_pub_key: PublicKey,
+    <span class="kw">pub </span>node_pub_key: PublicKey,
     alias: String,
     ldk_node_sender: Arc&lt;Mutex&lt;std::sync::mpsc::Sender&lt;LdkMessage&gt;&gt;&gt;,
     listening_address: String,
@@ -1161,14 +1178,14 @@
         })<span class="question-mark">?</span>;
         <span class="kw">let </span>pub_key = node.node_id();
 
-        <span class="comment">// Add 1 BTC to LDK&#39;s onchain wallet so it can open channels
+        <span class="comment">// Add 20 BTC to LDK&#39;s onchain wallet so it can open channels
         </span><span class="kw">let </span>address = node.new_onchain_address().map_err(|e| {
             <span class="macro">error!</span>(<span class="string">&quot;Failed to get onchain address from LDK Node: {e:?}&quot;</span>);
             LightningRpcError::FailedToConnect
         })<span class="question-mark">?</span>;
-        <span class="kw">let </span>btc_amount = bitcoin::Amount::from_sat(<span class="number">100000000</span>);
-        bitcoin.send_and_mine_block(<span class="kw-2">&amp;</span>address, btc_amount).<span class="kw">await</span>;
+        <span class="kw">let </span>btc_amount = bitcoin::Amount::from_sat(<span class="number">2000000000</span>);
         bitcoin.mine_blocks(<span class="number">1</span>).<span class="kw">await</span>;
+        bitcoin.send_and_mine_block(<span class="kw-2">&amp;</span>address, btc_amount).<span class="kw">await</span>;
 
         <span class="kw">let </span>(sender, receiver) = std::sync::mpsc::channel::&lt;LdkMessage&gt;();
         node.start().map_err(|e| {
@@ -1359,9 +1376,11 @@
 
             <span class="kw">match </span>response {
                 LdkMessage::MineBlocksResponse =&gt; {
-                    bitcoin.mine_blocks(<span class="number">3</span>).<span class="kw">await</span>;
+                    <span class="macro">info!</span>(<span class="string">&quot;Mining 6 blocks to open channel&quot;</span>);
+                    bitcoin.mine_blocks(<span class="number">6</span>).<span class="kw">await</span>;
                 }
                 LdkMessage::OpenChannelResponse =&gt; {
+                    <span class="macro">info!</span>(<span class="string">&quot;Successfully opened channel to {node_pubkey}&quot;</span>);
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
                 <span class="kw">_ </span>=&gt; {
@@ -1397,7 +1416,10 @@
         })
     }
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>routehints(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _num_route_hints: usize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">&quot;Unsupported: we dont currently support route hints for LDK Node&quot;</span>)
     }
 

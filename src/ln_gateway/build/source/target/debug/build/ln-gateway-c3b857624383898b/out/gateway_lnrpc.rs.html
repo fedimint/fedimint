@@ -795,12 +795,24 @@
 <a href="#795" id="795">795</a>
 <a href="#796" id="796">796</a>
 <a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
 </pre></div><pre class="rust"><code><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyRequest {}
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyResponse {}
+<span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>GetRouteHintsRequest {
+    <span class="attr">#[prost(uint64, tag = <span class="string">&quot;1&quot;</span>)]
+    </span><span class="kw">pub </span>num_route_hints: u64,
+}
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>GetNodeInfoResponse {
@@ -1080,7 +1092,7 @@
         <span class="doccomment">/// GetRouteHints returns the route hints to the associated lightning node
         </span><span class="kw">pub async fn </span>get_route_hints(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-            request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::EmptyRequest&gt;,
+            request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::GetRouteHintsRequest&gt;,
         ) -&gt; std::result::Result&lt;
             tonic::Response&lt;<span class="kw">super</span>::GetRouteHintsResponse&gt;,
             tonic::Status,
@@ -1207,7 +1219,7 @@
         <span class="doccomment">/// GetRouteHints returns the route hints to the associated lightning node
         </span><span class="kw">async fn </span>get_route_hints(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            request: tonic::Request&lt;<span class="kw">super</span>::EmptyRequest&gt;,
+            request: tonic::Request&lt;<span class="kw">super</span>::GetRouteHintsRequest&gt;,
         ) -&gt; std::result::Result&lt;
             tonic::Response&lt;<span class="kw">super</span>::GetRouteHintsResponse&gt;,
             tonic::Status,
@@ -1375,7 +1387,7 @@
                     </span><span class="kw">struct </span>GetRouteHintsSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
                     <span class="kw">impl</span>&lt;
                         T: GatewayLightning,
-                    &gt; tonic::server::UnaryService&lt;<span class="kw">super</span>::EmptyRequest&gt;
+                    &gt; tonic::server::UnaryService&lt;<span class="kw">super</span>::GetRouteHintsRequest&gt;
                     <span class="kw">for </span>GetRouteHintsSvc&lt;T&gt; {
                         <span class="kw">type </span>Response = <span class="kw">super</span>::GetRouteHintsResponse;
                         <span class="kw">type </span>Future = BoxFuture&lt;
@@ -1384,7 +1396,7 @@
                         &gt;;
                         <span class="kw">fn </span>call(
                             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-                            request: tonic::Request&lt;<span class="kw">super</span>::EmptyRequest&gt;,
+                            request: tonic::Request&lt;<span class="kw">super</span>::GetRouteHintsRequest&gt;,
                         ) -&gt; <span class="self">Self</span>::Future {
                             <span class="kw">let </span>inner = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
                             <span class="kw">let </span>fut = <span class="kw">async move </span>{

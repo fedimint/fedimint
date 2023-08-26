@@ -216,6 +216,11 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -346,7 +351,11 @@
     </span>}
 
     <span class="doccomment">/// Starts a new gateway with a given lightning node
-    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, ln: Box&lt;<span class="kw">dyn </span>LightningTest&gt;) -&gt; GatewayTest {
+    </span><span class="kw">pub async fn </span>new_gateway(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ln: Box&lt;<span class="kw">dyn </span>LightningTest&gt;,
+        num_route_hints: usize,
+    ) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier
         </span><span class="kw">let </span>server_gens = ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone());
         <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
@@ -362,6 +371,7 @@
                 <span class="comment">// Remove LN module because the gateway adds one
                 </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">&quot;ln&quot;</span>)
             })),
+            num_route_hints,
         )
         .<span class="kw">await
     </span>}

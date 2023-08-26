@@ -138,6 +138,9 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -235,7 +238,10 @@
         })
     }
 
-    <span class="kw">async fn </span>routehints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>routehints(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _num_route_hints: usize,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse {
             route_hints: <span class="macro">vec!</span>[gateway_lnrpc::get_route_hints_response::RouteHint { hops: <span class="macro">vec!</span>[] }],
         })
