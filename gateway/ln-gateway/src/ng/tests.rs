@@ -28,14 +28,16 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::GatewayTest;
+use fedimint_testing::gateway::{GatewayTest, LightningNodeName};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Invoice;
+use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
+use secp256k1::PublicKey;
 use url::Url;
 
 fn fixtures() -> Fixtures {
@@ -66,7 +68,7 @@ where
     for (gateway_ln, other_node) in vec![(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
         let user_client = fed.new_client().await;
-        let mut gateway = fixtures.new_gateway(gateway_ln).await;
+        let mut gateway = fixtures.new_gateway(gateway_ln, 0).await;
         gateway.connect_fed(&fed).await;
         let bitcoin = fixtures.bitcoin();
         f(gateway, other_node, fed, user_client, bitcoin).await?;
@@ -496,7 +498,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let node = fixtures.lnd().await;
     let fed = fixtures.new_fed().await;
     let user_client = fed.new_client().await;
-    let mut gateway_test = fixtures.new_gateway(node).await;
+    let mut gateway_test = fixtures.new_gateway(node, 0).await;
     gateway_test.connect_fed(&fed).await;
     let gateway = gateway_test.remove_client(&fed).await;
 
@@ -582,4 +584,95 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
         },
     )
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
+    if !Fixtures::is_real_test() {
+        return Ok(());
+    }
+
+    let fixtures = fixtures();
+    let lnd = fixtures.lnd().await;
+    let cln = fixtures.cln().await;
+
+    let GetNodeInfoResponse { pub_key, alias: _ } = lnd.info().await?;
+    let lnd_public_key = PublicKey::from_slice(&pub_key)?;
+
+    let GetNodeInfoResponse { pub_key, alias: _ } = cln.info().await?;
+    let cln_public_key = PublicKey::from_slice(&pub_key)?;
+    let all_keys = vec![lnd_public_key, cln_public_key];
+
+    for gateway_type in vec![LightningNodeName::Cln, LightningNodeName::Lnd] {
+        for num_route_hints in 0..=1 {
+            let gateway_ln = match gateway_type {
+                LightningNodeName::Cln => fixtures.cln().await,
+                LightningNodeName::Lnd => fixtures.lnd().await,
+            };
+
+            let GetNodeInfoResponse { pub_key, alias: _ } = gateway_ln.info().await?;
+            let public_key = PublicKey::from_slice(&pub_key)?;
+
+            tracing::info!("Creating federation with gateway type {gateway_type}. Number of route hints: {num_route_hints}");
+
+            let fed = fixtures.new_fed().await;
+            let user_client = fed.new_client().await;
+            let mut gateway = fixtures.new_gateway(gateway_ln, num_route_hints).await;
+            gateway.connect_fed(&fed).await;
+
+            let invoice_amount = sats(100);
+            let (_invoice_op, invoice) = user_client
+                .create_bolt11_invoice(invoice_amount, "description".into(), None)
+                .await?;
+            let route_hints = invoice.route_hints();
+
+            match num_route_hints {
+                0 => {
+                    // If there's no additional route hints, we're expecting a single route hint
+                    // with a single hop on the invoice, where the hop is the
+                    // public key of the gateway lightning node
+                    assert_eq!(
+                        route_hints.len(),
+                        1,
+                        "Found {} route hints when 1 was expected for {gateway_type} gateway",
+                        route_hints.len()
+                    );
+                    let route_hint = route_hints.get(0).unwrap();
+                    assert_eq!(
+                        route_hint.0.len(),
+                        1,
+                        "Found {} hops when 1 was expected for {gateway_type} gateway",
+                        route_hint.0.len()
+                    );
+                    let route_hint_pub_key = route_hint.0.get(0).unwrap().src_node_id;
+                    assert_eq!(
+                        route_hint_pub_key, public_key,
+                        "Public key of route hint hop did not match expected public key"
+                    );
+                }
+                _ => {
+                    // If there's more than one route hint, we're expecting the invoice to contain
+                    // `num_route_hints`. Each should have 2 hops.
+                    assert_eq!(route_hints.len(), num_route_hints, "Found {} route hints when {num_route_hints} was expected for {gateway_type} gateway", route_hints.len());
+
+                    for route_hint in route_hints {
+                        assert_eq!(
+                            route_hint.0.len(),
+                            2,
+                            "Found {} hops when 2 was expected for {gateway_type} gateway",
+                            route_hint.0.len()
+                        );
+                        for hop in route_hint.0 {
+                            assert!(
+                                all_keys.contains(&hop.src_node_id),
+                                "Public key of route hint hop did not match expected public key"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

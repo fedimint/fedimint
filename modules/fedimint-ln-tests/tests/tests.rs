@@ -24,7 +24,7 @@ fn fixtures() -> Fixtures {
 /// Setup a gateway connected to the fed and client
 async fn gateway(fixtures: &Fixtures, fed: &FederationTest) {
     let lnd = fixtures.lnd().await;
-    let mut gateway = fixtures.new_gateway(lnd).await;
+    let mut gateway = fixtures.new_gateway(lnd, 0).await;
     gateway.connect_fed(fed).await;
 }
 
@@ -33,8 +33,8 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
-    let mut gateway1 = fixtures.new_gateway(fixtures.lnd().await).await;
-    let mut gateway2 = fixtures.new_gateway(fixtures.cln().await).await;
+    let mut gateway1 = fixtures.new_gateway(fixtures.lnd().await, 0).await;
+    let mut gateway2 = fixtures.new_gateway(fixtures.cln().await, 0).await;
 
     // Client selects a gateway by default
     gateway1.connect_fed(&fed).await;

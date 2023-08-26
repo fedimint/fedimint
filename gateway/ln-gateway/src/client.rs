@@ -100,8 +100,7 @@ impl StandardGatewayClientBuilder {
         mut dbtx: DatabaseTransaction<'_>,
     ) -> Result<()> {
         let id = config.config.federation_id;
-        dbtx.insert_new_entry(&FederationIdKey { id }, &config)
-            .await;
+        dbtx.insert_entry(&FederationIdKey { id }, &config).await;
         dbtx.commit_tx_result()
             .await
             .map_err(GatewayError::DatabaseError)

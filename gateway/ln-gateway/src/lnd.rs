@@ -289,14 +289,17 @@ impl ILnRpcClient for GatewayLndClient {
         });
     }
 
-    async fn routehints(&self) -> Result<GetRouteHintsResponse, LightningRpcError> {
+    async fn routehints(
+        &self,
+        num_route_hints: usize,
+    ) -> Result<GetRouteHintsResponse, LightningRpcError> {
         let mut client = Self::connect(
             self.address.clone(),
             self.tls_cert.clone(),
             self.macaroon.clone(),
         )
         .await?;
-        let channels = client
+        let mut channels = client
             .lightning()
             .list_channels(ListChannelsRequest {
                 active_only: true,
@@ -309,10 +312,15 @@ impl ILnRpcClient for GatewayLndClient {
             .map_err(|status| LightningRpcError::FailedToGetRouteHints {
                 failure_reason: format!("Failed to list channels {status:?}"),
             })?
-            .into_inner();
+            .into_inner()
+            .channels;
+
+        // Take the channels with the largest incoming capacity
+        channels.sort_by(|a, b| b.remote_balance.cmp(&a.remote_balance));
+        channels.truncate(num_route_hints);
 
         let mut route_hints: Vec<RouteHint> = vec![];
-        for chan in channels.channels {
+        for chan in channels.iter() {
             let info = client
                 .lightning()
                 .get_chan_info(ChanInfoRequest {
