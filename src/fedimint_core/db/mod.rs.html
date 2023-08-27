@@ -4687,7 +4687,7 @@
 
         alt_dbtx.commit_tx().<span class="kw">await</span>;
 
-        <span class="comment">// verfiy test_module_dbtx can only see key/value pairs from its own module
+        <span class="comment">// verify test_module_dbtx can only see key/value pairs from its own module
         </span><span class="kw">let </span><span class="kw-2">mut </span>test_dbtx = db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
         <span class="macro">assert_eq!</span>(
