@@ -28,7 +28,6 @@
     flake-utils.lib.eachDefaultSystem
       (system:
         let
-
           pkgs-unstable = import nixpkgs-unstable {
             inherit system;
           };
@@ -38,6 +37,20 @@
             overlays = [
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
+                # TODO: switch to mainstream after https://github.com/crate-ci/typos/pull/708 is released
+                typos = prev.rustPlatform.buildRustPackage {
+                  pname = "typos";
+                  version = "1.16.9-stdin-inputs";
+
+                  src = prev.fetchFromGitHub {
+                    owner = "dpc";
+                    repo = "typos";
+                    rev = "04059e022c800ef0e1d6376f3a94923b0b697990";
+                    hash = "sha256-5OLq9uevJW1dTGMAkCGx2PyAyemmoiSIJ9DRGiL6gpM=";
+                  };
+
+                  cargoHash = "sha256-wD6D3v6QxMNmULGZY8hSpcXPipzeV00TqyvUgUi4hrI=";
+                };
               })
             ];
           };

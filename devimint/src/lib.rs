@@ -201,6 +201,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     cmd!(fed, "join-federation", fed.invite_code()?)
         .run()
         .await?;
+    info!(LOG_DEVIMINT, "await gateways registered");
     fed.await_gateways_registered().await?;
     info!(LOG_DEVIMINT, "gateways registered");
     fed.use_gateway(&gw_cln).await?;

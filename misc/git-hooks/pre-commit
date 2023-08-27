@@ -194,7 +194,7 @@ export -f check_cargo_lock
 function check_typos() {
   set -eo pipefail
 
-  if ! echo "$git_ls_nonbinary_files" | parallel typos {} ; then
+  if ! echo "$git_ls_nonbinary_files" | typos --stdin-paths ; then
     >&2 echo "Typos found: Valid new words can be added to '_typos.toml'"
     return 1
   fi
