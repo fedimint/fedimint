@@ -72,7 +72,7 @@ typos:
   git_ls_files="$(git ls-files)"
   git_ls_nonbinary_files="$(echo "$git_ls_files" | xargs file --mime | grep -v "; charset=binary" | cut -d: -f1)"
 
-  if ! echo "$git_ls_nonbinary_files" | parallel typos {} ; then
+  if ! echo "$git_ls_nonbinary_files" | typos --stdin-paths ; then
     >&2 echo "Typos found: Valid new words can be added to '_typos.toml'"
     return 1
   fi
@@ -86,7 +86,7 @@ typos-fix-all:
   git_ls_files="$(git ls-files)"
   git_ls_nonbinary_files="$(echo "$git_ls_files" | xargs file --mime | grep -v "; charset=binary" | cut -d: -f1)"
 
-  if ! echo "$git_ls_nonbinary_files" | parallel typos -w {} ; then
+  if ! echo "$git_ls_nonbinary_files" | typos --stdin-paths -w  ; then
     >&2 echo "Typos found: Valid new words can be added to '_typos.toml'"
     # TODO: not enforcing anything right, just being annoying in the CLI
     # return 1
