@@ -60,7 +60,7 @@ impl MintClient {
         // TODO: If the client attempts any operations between while the recovery is
         // working, the recovery code will most probably miss them, which might
         // lead to incorrect state. We should probably lock everything in some
-        // way during recovery for corectness.
+        // way during recovery for correctness.
         let snapshot = match self
             .restore_current_state_from_backup(&mut task_group, backup, gap_limit)
             .await?
