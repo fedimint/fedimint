@@ -32,11 +32,9 @@ fi
 
 export git_ls_files
 git_ls_files="$(git ls-files)"
-export git_ls_nonbinary_files
-git_ls_nonbinary_files="$(echo "$git_ls_files" | xargs file --mime | grep -v "; charset=binary" | cut -d: -f1)"
 
 export git_ls_nonbinary_files
-git_ls_nonbinary_files="$(echo "$git_ls_files" | xargs file --mime | grep -v "; charset=binary" | cut -d: -f1)"
+git_ls_nonbinary_files="$(echo "$git_ls_files" |  grep -v -E "^db/|\.png\$|\.ods\$")"
 
 function check_forbidden_dependencies() {
   set -eo pipefail
@@ -201,14 +199,16 @@ function check_typos() {
 }
 export -f check_typos
 
-parallel ::: \
+parallel \
+  --jobs 16 \
+  ::: \
   check_semgrep_all \
   check_semgrep_log \
+  check_typos \
   check_nix \
   check_cargo_fmt \
   check_dbg \
   check_shellcheck \
   check_eof \
   check_forbidden_dependencies \
-  check_cargo_lock \
-  check_typos
+  check_cargo_lock
