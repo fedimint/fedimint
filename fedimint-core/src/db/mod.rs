@@ -2149,7 +2149,7 @@ mod test_utils {
 
         alt_dbtx.commit_tx().await;
 
-        // verfiy test_module_dbtx can only see key/value pairs from its own module
+        // verify test_module_dbtx can only see key/value pairs from its own module
         let mut test_dbtx = db.begin_transaction().await;
         let mut test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
         assert_eq!(

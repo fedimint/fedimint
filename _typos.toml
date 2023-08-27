@@ -1,2 +1,4 @@
 [default.extend-words]
 substituters = "substituters"
+# trips on some base64 string in the test
+wel = "wel"
