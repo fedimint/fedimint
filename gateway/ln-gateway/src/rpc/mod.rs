@@ -56,7 +56,7 @@ pub struct WithdrawPayload {
 }
 
 /// Information about one of the feds we are connected to
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FederationInfo {
     /// Unique identifier of the fed
     pub federation_id: FederationId,
@@ -64,7 +64,7 @@ pub struct FederationInfo {
     pub config: ClientConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
