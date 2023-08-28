@@ -498,10 +498,11 @@
                   shellcheck
                   git
                   parallel
-                  semgrep
                   typos
                   moreutils-ts
                   nix
+                ] ++ lib.optionals (!pkgs.stdenv.isDarwin) [
+                  semgrep
                 ];
               };
 
