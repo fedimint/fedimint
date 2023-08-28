@@ -361,6 +361,7 @@
                     toolchain.fenixToolchainRustfmt
                     cargo-llvm-cov
                     pkgs.cargo-udeps
+                    pkgs.cargo-audit
                     pkgs.parallel
                     pkgs.just
                     typos
