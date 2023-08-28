@@ -133,7 +133,7 @@ craneLib.overrideScope' (self: prev: {
     # we carefully optimize our debug symbols on cargo level,
     # and in case of errors and panics, would like to see the
     # line numbers etc.
-    dontStrip = true;
+    dontStrip = !pkgs.stdenv.isDarwin;
 
 
     # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
