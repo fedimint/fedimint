@@ -1,9 +1,9 @@
 [build]
-rustflags = ["--cfg", "tokio_unstable"]
-
-[target.x86_64-unknown-linux-gnu]
-linker = "clang"
 rustflags = ["-C", "link-arg=-Wl,--compress-debug-sections=zlib,-fuse-ld=lld", "--cfg", "tokio_unstable"]
+
+# wasm: doesn't like lld
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "tokio_unstable"]
 
 # mold is currently broken on MacOS
 # [target.aarch64-apple-darwin]
