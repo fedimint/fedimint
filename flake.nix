@@ -119,7 +119,7 @@
               inherit name;
 
               dontUnpack = true;
-              dontStrip = true;
+              dontStrip = !pkgs.stdenv.isDarwin;
 
               installPhase = ''
                 cp -a ${package} $out
@@ -146,7 +146,7 @@
               name = bin;
 
               dontUnpack = true;
-              dontStrip = true;
+              dontStrip = !pkgs.stdenv.isDarwin;
 
               installPhase = ''
                 mkdir -p $out/bin
