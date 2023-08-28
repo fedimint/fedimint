@@ -399,9 +399,17 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
                 })
                 .await;
 
-            if let Ok(info) = chan_info {
-                if info.into_inner().node1_policy.is_some() {
-                    return Ok(true);
+            match chan_info {
+                Ok(info) => {
+                    let edge = info.into_inner();
+                    if edge.node1_policy.is_some() {
+                        return Ok(true);
+                    } else {
+                        warn!(?edge, "Empty chan info");
+                    }
+                }
+                Err(e) => {
+                    warn!(%e, "Getting chan info failed")
                 }
             }
         }
