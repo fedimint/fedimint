@@ -398,11 +398,15 @@
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::unreachable;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
+<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::fs::OpenOptions;
@@ -703,24 +707,26 @@
     </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;&gt;,
 {
     <span class="kw">let </span>start = fedimint_core::time::now();
-    <span class="kw">let </span><span class="kw-2">mut </span>last_time = start;
-    <span class="kw">loop </span>{
+    <span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0</span>.. {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = f().<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">break </span><span class="prelude-val">Ok</span>(output);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(output);
         }
-        <span class="comment">// report every 20 seconds
-        </span><span class="kw">let </span>now = fedimint_core::time::now();
-        <span class="kw">if </span>now.duration_since(last_time).unwrap_or_default() &gt; Duration::from_secs(<span class="number">20</span>) {
-            <span class="kw">let </span>total_duration = now.duration_since(start).unwrap_or_default();
+        <span class="kw">let </span>duration = now().duration_since(start).unwrap_or_default();
+        <span class="kw">if </span>Duration::from_secs(<span class="number">10</span>) &lt;= duration {
             <span class="macro">warn!</span>(
                 LOG_DEVIMINT,
-                <span class="string">&quot;waiting {name} for over {} seconds&quot;</span>,
-                total_duration.as_secs()
+                name,
+                attempt = attempt,
+                duration_secs = %duration.as_secs(),
+                <span class="string">&quot;Value not ready&quot;</span>,
             );
-            last_time = now;
         }
-        task::sleep(POLL_INTERVAL).<span class="kw">await</span>;
+        <span class="kw">let </span>delay =
+            (<span class="number">2 </span>* attempt * POLL_INTERVAL).clamp(Duration::from_millis(<span class="number">10</span>), Duration::from_secs(<span class="number">30</span>));
+        task::sleep(delay).<span class="kw">await</span>;
     }
+
+    <span class="macro">unreachable!</span>()
 }
 
 <span class="comment">// used to add `cmd` method.
