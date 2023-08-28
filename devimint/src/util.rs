@@ -3,6 +3,7 @@ use std::unreachable;
 
 use anyhow::bail;
 use fedimint_core::task::{self, block_in_place};
+use fedimint_core::time::now;
 use futures::executor::block_on;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
@@ -303,24 +304,26 @@ where
     Fut: Future<Output = Result<Option<R>>>,
 {
     let start = fedimint_core::time::now();
-    let mut last_time = start;
-    loop {
+    for attempt in 0.. {
         if let Some(output) = f().await? {
-            break Ok(output);
+            return Ok(output);
         }
-        // report every 20 seconds
-        let now = fedimint_core::time::now();
-        if now.duration_since(last_time).unwrap_or_default() > Duration::from_secs(20) {
-            let total_duration = now.duration_since(start).unwrap_or_default();
+        let duration = now().duration_since(start).unwrap_or_default();
+        if Duration::from_secs(10) <= duration {
             warn!(
                 LOG_DEVIMINT,
-                "waiting {name} for over {} seconds",
-                total_duration.as_secs()
+                name,
+                attempt = attempt,
+                duration_secs = %duration.as_secs(),
+                "Value not ready",
             );
-            last_time = now;
         }
-        task::sleep(POLL_INTERVAL).await;
+        let delay =
+            (2 * attempt * POLL_INTERVAL).clamp(Duration::from_millis(10), Duration::from_secs(30));
+        task::sleep(delay).await;
     }
+
+    unreachable!()
 }
 
 // used to add `cmd` method.
