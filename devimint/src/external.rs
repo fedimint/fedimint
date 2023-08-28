@@ -15,7 +15,8 @@ use fedimint_testing::gateway::LightningNodeName;
 use futures::executor::block_on;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
-use tonic_lnd::lnrpc::GetInfoRequest;
+use tonic_lnd::lnrpc::policy_update_request::Scope;
+use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{info, warn};
 
@@ -330,6 +331,7 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
     bitcoind.mine_blocks(10).await?;
 
     let lnd_pubkey = lnd.pub_key().await?;
+    let cln_pubkey = cln.pub_key().await?;
 
     cln.request(cln_rpc::model::ConnectRequest {
         id: lnd_pubkey.parse()?,
@@ -373,6 +375,57 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
     })
     .await?;
     bitcoind.mine_blocks(10).await?;
+
+    poll("Wait for channel update", || async {
+        let mut lnd_client = lnd.client.lock().await;
+        let channels = lnd_client
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: true,
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        if let Some(channel) = channels
+            .channels
+            .iter()
+            .find(|channel| channel.remote_pubkey == cln_pubkey)
+        {
+            let chan_info = lnd_client
+                .lightning()
+                .get_chan_info(ChanInfoRequest {
+                    chan_id: channel.chan_id,
+                })
+                .await;
+
+            if let Ok(info) = chan_info {
+                if info.into_inner().node1_policy.is_some() {
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    })
+    .await?;
+
+    lnd.client
+        .lock()
+        .await
+        .lightning()
+        .update_channel_policy(PolicyUpdateRequest {
+            min_htlc_msat: 1,
+            scope: Some(Scope::Global(true)),
+            time_lock_delta: 80,
+            base_fee_msat: 0,
+            fee_rate: 0.0,
+            fee_rate_ppm: 0,
+            max_htlc_msat: 10000000000,
+            min_htlc_msat_specified: true,
+        })
+        .await?;
+
     Ok(())
 }
 
