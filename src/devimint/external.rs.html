@@ -542,6 +542,12 @@
 <a href="#542" id="542">542</a>
 <a href="#543" id="543">543</a>
 <a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -562,7 +568,7 @@
 <span class="kw">use </span>tonic_lnd::lnrpc::policy_update_request::Scope;
 <span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
-<span class="kw">use </span>tracing::{info, warn};
+<span class="kw">use </span>tracing::{info, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::cmd;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
@@ -624,7 +630,13 @@
         <span class="macro">info!</span>(block_num, <span class="string">&quot;Mining bitcoin blocks&quot;</span>);
         <span class="kw">let </span>client = <span class="self">self</span>.client();
         <span class="kw">let </span>addr = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>initial_block_count = client.get_block_count()<span class="question-mark">?</span>;
         client.generate_to_address(block_num, <span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>;
+        <span class="kw">while </span>client.get_block_count()<span class="question-mark">? </span>&lt; initial_block_count + block_num {
+            <span class="macro">trace!</span>(LOG_DEVIMINT, <span class="string">&quot;Waiting for blocks to be mined&quot;</span>);
+            sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await</span>;
+        }
+
         <span class="prelude-val">Ok</span>(())
     }
 

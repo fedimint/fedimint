@@ -325,6 +325,10 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
@@ -518,7 +522,7 @@
     <span class="kw">loop </span>{
         <span class="comment">// TODO: make everything subscriptions
         // Wait for confirmation
-        </span><span class="kw">let </span>consensus_height = <span class="kw">match </span>global_context
+        </span><span class="kw">let </span>consensus_block_count = <span class="kw">match </span>global_context
             .module_api()
             .fetch_consensus_block_count()
             .<span class="kw">await
@@ -530,28 +534,32 @@
                 <span class="kw">continue</span>;
             }
         };
-        <span class="macro">debug!</span>(consensus_height, <span class="string">&quot;Fetched consensus height&quot;</span>);
+        <span class="macro">debug!</span>(consensus_block_count, <span class="string">&quot;Fetched consensus block count&quot;</span>);
 
-        <span class="kw">let </span>confirmation_height = <span class="kw">match </span>context
+        <span class="kw">let </span>confirmation_block_count = <span class="kw">match </span>context
             .rpc
             .get_tx_block_height(<span class="kw-2">&amp;</span>waiting_state.btc_transaction.txid())
             .<span class="kw">await
         </span>{
-            <span class="prelude-val">Ok</span>(confirmation_height) =&gt; confirmation_height,
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(confirmation_height)) =&gt; <span class="prelude-val">Some</span>(confirmation_height + <span class="number">1</span>),
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">None</span>,
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch confirmation height: {e}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch confirmation height: {e:?}&quot;</span>);
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
                 <span class="kw">continue</span>;
             }
         };
 
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>confirmation_height, <span class="string">&quot;Fetched confirmation height&quot;</span>);
+        <span class="macro">debug!</span>(
+            <span class="question-mark">?</span>confirmation_block_count,
+            <span class="string">&quot;Fetched confirmation block count&quot;
+        </span>);
 
-        <span class="kw">if </span>!confirmation_height
-            .map(|confirmation_height| consensus_height &gt;= confirmation_height)
+        <span class="kw">if </span>!confirmation_block_count
+            .map(|confirmation_block_count| consensus_block_count &gt;= confirmation_block_count)
             .unwrap_or(<span class="bool-val">false</span>)
         {
-            <span class="macro">trace!</span>(<span class="string">&quot;Not confirmed yet, confirmation height={confirmation_height:?}, consensus_height={consensus_height}&quot;</span>);
+            <span class="macro">trace!</span>(<span class="string">&quot;Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}&quot;</span>);
             sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
             <span class="kw">continue</span>;
         }
@@ -564,7 +572,7 @@
         </span>{
             <span class="prelude-val">Ok</span>(txout_proof) =&gt; txout_proof,
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch confirmation height: {e}&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">&quot;Failed to fetch transaction proof: {e:?}&quot;</span>);
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
                 <span class="kw">continue</span>;
             }

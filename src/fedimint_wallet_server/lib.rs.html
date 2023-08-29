@@ -1907,6 +1907,17 @@
 <a href="#1907" id="1907">1907</a>
 <a href="#1908" id="1908">1908</a>
 <a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2302,7 +2313,18 @@
                 <span class="comment">// only sync when we have a consensus block count
                 </span><span class="kw">match </span>(old_consensus_block_count, new_consensus_block_count) {
                     (<span class="prelude-val">Some</span>(old), <span class="prelude-val">Some</span>(new)) <span class="kw">if </span>new &gt; old =&gt; {
-                        <span class="self">self</span>.sync_up_to_consensus_height(dbtx, old, new).<span class="kw">await</span>;
+                        <span class="kw">if </span>old &gt; <span class="number">0 </span>{
+                            <span class="kw">let </span>new_height = new - <span class="number">1</span>;
+                            <span class="kw">let </span>old_height = old - <span class="number">1</span>;
+                            <span class="self">self</span>.sync_up_to_consensus_height(dbtx, old_height, new_height)
+                                .<span class="kw">await</span>;
+                        } <span class="kw">else </span>{
+                            <span class="macro">info!</span>(
+                                <span class="question-mark">?</span>new,
+                                <span class="question-mark">?</span>old,
+                                <span class="string">&quot;Not syncing up to consensus block count because we are at block 0&quot;
+                            </span>);
+                        }
                     }
                     <span class="kw">_ </span>=&gt; {}
                 }
@@ -2802,7 +2824,7 @@
 
         <span class="kw">for </span>height <span class="kw">in </span>(old_height + <span class="number">1</span>)..=(new_height) {
             <span class="kw">if </span>height % <span class="number">100 </span>== <span class="number">0 </span>{
-                <span class="macro">debug!</span>(<span class="string">&quot;Caught up to block {}&quot;</span>, height);
+                <span class="macro">debug!</span>(<span class="string">&quot;Caught up to block {height}&quot;</span>);
             }
 
             <span class="comment">// TODO: use batching for mainnet syncing
