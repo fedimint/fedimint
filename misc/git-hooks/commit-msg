@@ -2,6 +2,11 @@
 
 set -eu
 
+if [ -z "${IN_NIX_SHELL:-}" ]; then
+  >&2 echo "Workaround: restart in 'nix develop' shell"
+  exec nix develop .#lint --command "$0" "$@"
+fi
+
 # Sanitize file first, by removing leading lines that are empty or start with a hash,
 # as `convco` currently does not do it automatically (but git will)
 # TODO: next release of convco should be able to do it automatically
