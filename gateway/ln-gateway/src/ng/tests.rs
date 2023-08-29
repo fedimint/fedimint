@@ -652,23 +652,38 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                 }
                 _ => {
                     // If there's more than one route hint, we're expecting the invoice to contain
-                    // `num_route_hints`. Each should have 2 hops.
-                    assert_eq!(route_hints.len(), num_route_hints, "Found {} route hints when {num_route_hints} was expected for {gateway_type} gateway", route_hints.len());
+                    // `num_route_hints` + 1. There should be one single-hop route hint and the rest
+                    // two-hop route hints.
+                    assert_eq!(
+                        route_hints.len(),
+                        num_route_hints + 1,
+                        "Found {} route hints when {} was expected for {gateway_type} gateway",
+                        route_hints.len(),
+                        num_route_hints + 1
+                    );
 
+                    let mut num_one_hops = 0;
                     for route_hint in route_hints {
-                        assert_eq!(
-                            route_hint.0.len(),
-                            2,
-                            "Found {} hops when 2 was expected for {gateway_type} gateway",
-                            route_hint.0.len()
-                        );
-                        for hop in route_hint.0 {
-                            assert!(
-                                all_keys.contains(&hop.src_node_id),
-                                "Public key of route hint hop did not match expected public key"
-                            );
+                        if route_hint.0.len() == 1 {
+                            // If there's only one hop, it should contain the gateway's public key
+                            let route_hint_pub_key = route_hint.0.get(0).unwrap().src_node_id;
+                            assert_eq!(route_hint_pub_key, public_key);
+                            num_one_hops += 1;
+                        } else {
+                            // If there's > 1 hop, it should exist in `all_keys`
+                            for hop in route_hint.0 {
+                                assert!(
+                                    all_keys.contains(&hop.src_node_id),
+                                    "Public key of route hint hop did not match expected public key"
+                                );
+                            }
                         }
                     }
+
+                    assert_eq!(
+                        num_one_hops, 1,
+                        "Found incorrect number of one hop route hints"
+                    );
                 }
             }
         }
