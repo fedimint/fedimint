@@ -1,29 +1,28 @@
-use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
-use fedimint_client_legacy::modules::ln::config::GatewayFee;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::TaskGroup;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::StandardGatewayClientBuilder;
+use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::rpc_server::run_webserver;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::Gateway;
 use secp256k1::PublicKey;
 use tempfile::TempDir;
-use tokio::sync::RwLock;
 use url::Url;
 
 use crate::federation::FederationTest;
-use crate::fixtures::test_dir;
+use crate::fixtures::{test_dir, Fixtures};
+use crate::ln::mock::FakeLightningTest;
+use crate::ln::real::{ClnLightningTest, LndLightningTest};
 use crate::ln::LightningTest;
 
 /// Fixture for creating a gateway
@@ -86,46 +85,39 @@ impl GatewayTest {
         let client_builder: StandardGatewayClientBuilder =
             StandardGatewayClientBuilder::new(path.clone(), registry, 0);
 
-        let listening_addr = lightning.listening_address();
-        let info = lightning.info().await.unwrap();
+        let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> =
+            match Fixtures::is_real_test() {
+                true => Arc::new(RealLightningBuilder {
+                    node_type: lightning.lightning_node_type(),
+                }),
+                false => Arc::new(FakeLightningBuilder {}),
+            };
 
-        let mut tg = TaskGroup::new();
-        // Create the stream to route HTLCs. We cannot create the Gateway until the
-        // stream to the lightning node has been setup.
-        let (stream, ln_client) = lightning.route_htlcs(&mut tg).await.unwrap();
+        let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
 
-        let clients = Arc::new(RwLock::new(BTreeMap::new()));
-        let scid_to_federation = Arc::new(RwLock::new(BTreeMap::new()));
-
-        // Create gateway with the client created from `route_htlcs`
-        let gateway = Gateway::new(
-            ln_client.clone(),
-            client_builder.clone(),
-            GatewayFee(RoutingFees {
+        let gateway = Gateway::new_with_custom_registry(
+            lightning_builder,
+            client_builder,
+            listen,
+            address.clone(),
+            password.clone(),
+            RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
-            })
-            .0,
-            Database::new(MemDatabase::new(), decoders.clone()),
-            address.clone(),
-            clients.clone(),
-            scid_to_federation.clone(),
-            tg.clone(),
+            },
             num_route_hints,
+            gateway_db,
         )
         .await
-        .unwrap();
-
-        run_webserver(password.clone(), listen, gateway.clone())
+        .expect("Failed to create gateway");
+        gateway
+            .clone()
+            .run()
             .await
-            .expect("Failed to start webserver");
+            .expect("Failed to start gateway");
 
-        // Spawn new thread to listen for HTLCs
-        tg.spawn("Subscribe to intercepted HTLCs", move |handle| async move {
-            Gateway::handle_htlc_stream(stream, ln_client, handle, scid_to_federation, clients)
-                .await;
-        })
-        .await;
+        let listening_addr = lightning.listening_address();
+        let info = lightning.info().await.unwrap();
 
         Self {
             password,
@@ -138,17 +130,47 @@ impl GatewayTest {
     }
 }
 
-#[derive(Debug)]
-pub enum LightningNodeName {
+#[derive(Debug, Clone)]
+pub enum LightningNodeType {
     Cln,
     Lnd,
+    Ldk,
 }
 
-impl Display for LightningNodeName {
+impl Display for LightningNodeType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            LightningNodeName::Cln => write!(f, "cln"),
-            LightningNodeName::Lnd => write!(f, "lnd"),
+            LightningNodeType::Cln => write!(f, "cln"),
+            LightningNodeType::Lnd => write!(f, "lnd"),
+            LightningNodeType::Ldk => write!(f, "ldk"),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct RealLightningBuilder {
+    node_type: LightningNodeType,
+}
+
+#[async_trait]
+impl LightningBuilder for RealLightningBuilder {
+    async fn build(&self) -> Box<dyn ILnRpcClient> {
+        match &self.node_type {
+            LightningNodeType::Cln => Box::new(ClnLightningTest::new().await),
+            LightningNodeType::Lnd => Box::new(LndLightningTest::new().await),
+            _ => {
+                unimplemented!("Unsupported Lightning implementation");
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct FakeLightningBuilder;
+
+#[async_trait]
+impl LightningBuilder for FakeLightningBuilder {
+    async fn build(&self) -> Box<dyn ILnRpcClient> {
+        Box::new(FakeLightningTest::new())
     }
 }

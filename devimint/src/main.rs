@@ -18,6 +18,7 @@ use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
+use ln_gateway::rpc::GatewayInfo;
 use tokio::fs;
 use tokio::net::TcpStream;
 use tracing::{debug, info, warn};
@@ -844,18 +845,12 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
         let mut info_cmd = cmd!(gw, "info");
         assert!(info_cmd.run().await.is_ok());
 
-        // Verify that after stopping the lightning node, info no longer returns since
-        // the lightning node is unreachable.
+        // Verify that after stopping the lightning node, info no longer returns the
+        // node public key since the lightning node is unreachable.
         gw.stop_lightning_node().await?;
-        let info_fut = info_cmd.run();
-
-        // CLN will timeout when trying to retrieve the info, LND will return an
-        // explicit error
-        let expected_timeout_or_failure = tokio::time::timeout(Duration::from_secs(3), info_fut)
-            .await
-            .map_err(Into::into)
-            .and_then(|result| result);
-        assert!(expected_timeout_or_failure.is_err());
+        let lightning_info = info_cmd.out_json().await?;
+        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)?;
+        assert!(gateway_info.lightning_pub_key.is_none());
     }
 
     // Restart both lightning nodes
@@ -907,11 +902,9 @@ async fn do_try_create_and_pay_invoice(
     // info again.
     poll("Waiting for info to succeed after restart", || async {
         let mut info_cmd = cmd!(gw, "info");
-        Ok(info_cmd
-            .run()
-            .await
-            .map_err(|e| warn!("Info command not ready yet, retrying: {e}"))
-            .is_ok())
+        let lightning_info = info_cmd.out_json().await?;
+        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)?;
+        Ok(gateway_info.lightning_pub_key.is_some())
     })
     .await?;
 
