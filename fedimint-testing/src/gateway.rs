@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_client::module::init::ClientModuleInitRegistry;
@@ -9,12 +10,13 @@ use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::sleep;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
-use ln_gateway::Gateway;
+use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
 use url::Url;
@@ -115,6 +117,26 @@ impl GatewayTest {
             .run()
             .await
             .expect("Failed to start gateway");
+
+        // Wait for the gateway to be in the running state
+        let mut gateway_state_iterations = 0;
+        loop {
+            if let GatewayState::Running {
+                lnrpc: _,
+                lightning_public_key: _,
+                lightning_alias: _,
+            } = gateway.state.read().await.clone()
+            {
+                break;
+            }
+
+            if gateway_state_iterations > 9 {
+                panic!("Gateway did not start running after 10 attempts");
+            }
+
+            gateway_state_iterations += 1;
+            sleep(Duration::from_millis(100)).await;
+        }
 
         let listening_addr = lightning.listening_address();
         let info = lightning.info().await.unwrap();

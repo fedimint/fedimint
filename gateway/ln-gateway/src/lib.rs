@@ -158,7 +158,7 @@ pub struct Gateway {
     api_addr: Url,
     password: String,
     num_route_hints: usize,
-    state: Arc<RwLock<GatewayState>>,
+    pub state: Arc<RwLock<GatewayState>>,
     client_builder: StandardGatewayClientBuilder,
     gateway_db: Database,
     clients: Arc<RwLock<BTreeMap<FederationId, fedimint_client::Client>>>,
