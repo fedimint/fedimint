@@ -209,7 +209,7 @@ impl ServerConfigConsensus {
     }
 }
 
-pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion(0);
+pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion(1);
 
 impl ServerConfig {
     /// Api versions supported by this server
