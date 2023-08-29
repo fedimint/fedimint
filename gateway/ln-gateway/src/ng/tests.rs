@@ -28,7 +28,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, LightningNodeName};
+use fedimint_testing::gateway::{GatewayTest, LightningNodeType};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Invoice;
@@ -603,11 +603,12 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
     let cln_public_key = PublicKey::from_slice(&pub_key)?;
     let all_keys = vec![lnd_public_key, cln_public_key];
 
-    for gateway_type in vec![LightningNodeName::Cln, LightningNodeName::Lnd] {
+    for gateway_type in vec![LightningNodeType::Cln, LightningNodeType::Lnd] {
         for num_route_hints in 0..=1 {
             let gateway_ln = match gateway_type {
-                LightningNodeName::Cln => fixtures.cln().await,
-                LightningNodeName::Lnd => fixtures.lnd().await,
+                LightningNodeType::Cln => fixtures.cln().await,
+                LightningNodeType::Lnd => fixtures.lnd().await,
+                LightningNodeType::Ldk => unimplemented!("LDK Node is not supported as a gateway"),
             };
 
             let GetNodeInfoResponse { pub_key, alias: _ } = gateway_ln.info().await?;

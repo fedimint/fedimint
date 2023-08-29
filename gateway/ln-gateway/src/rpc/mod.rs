@@ -67,8 +67,8 @@ pub struct FederationInfo {
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
-    pub lightning_pub_key: String,
-    pub lightning_alias: String,
+    pub lightning_pub_key: Option<String>,
+    pub lightning_alias: Option<String>,
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
     pub route_hints: Vec<route_hints::RouteHint>,

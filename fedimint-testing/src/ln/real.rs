@@ -29,6 +29,7 @@ use tracing::{error, info, warn};
 use url::Url;
 
 use crate::btc::BitcoinTest;
+use crate::gateway::LightningNodeType;
 use crate::ln::LightningTest;
 
 const DEFAULT_ESPLORA_SERVER: &str = "http://127.0.0.1:50002";
@@ -103,6 +104,10 @@ impl LightningTest for ClnLightningTest {
     fn listening_address(&self) -> String {
         "127.0.0.1:9000".to_string()
     }
+
+    fn lightning_node_type(&self) -> LightningNodeType {
+        LightningNodeType::Cln
+    }
 }
 
 #[async_trait]
@@ -141,7 +146,8 @@ impl ILnRpcClient for ClnLightningTest {
 }
 
 impl ClnLightningTest {
-    pub async fn new(dir: &str) -> ClnLightningTest {
+    pub async fn new() -> ClnLightningTest {
+        let dir = env::var("FM_TEST_DIR").expect("Real tests require FM_TEST_DIR");
         let socket_cln = PathBuf::from(dir).join("cln/regtest/lightning-rpc");
         let rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).await.unwrap()));
 
@@ -245,6 +251,10 @@ impl LightningTest for LndLightningTest {
 
     fn listening_address(&self) -> String {
         "127.0.0.1:9734".to_string()
+    }
+
+    fn lightning_node_type(&self) -> LightningNodeType {
+        LightningNodeType::Lnd
     }
 }
 
@@ -755,5 +765,9 @@ impl LightningTest for LdkLightningTest {
 
     fn listening_address(&self) -> String {
         self.listening_address.clone()
+    }
+
+    fn lightning_node_type(&self) -> LightningNodeType {
+        LightningNodeType::Ldk
     }
 }

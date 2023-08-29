@@ -18,8 +18,10 @@ use crate::gateway_lnrpc::{
     EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
-pub type RouteHtlcStream<'a> =
-    BoxStream<'a, std::result::Result<InterceptHtlcRequest, tonic::Status>>;
+use crate::lnd::GatewayLndClient;
+use crate::LightningMode;
+pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
+pub type RouteHtlcStream<'a> = BoxStream<'a, HtlcResult>;
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
@@ -194,5 +196,33 @@ impl ILnRpcClient for NetworkLnRpcClient {
             }
         })?;
         Ok(res.into_inner())
+    }
+}
+
+#[async_trait]
+pub trait LightningBuilder {
+    async fn build(&self) -> Box<dyn ILnRpcClient>;
+}
+
+#[derive(Clone)]
+pub struct GatewayLightningBuilder {
+    pub lightning_mode: LightningMode,
+}
+
+#[async_trait]
+impl LightningBuilder for GatewayLightningBuilder {
+    async fn build(&self) -> Box<dyn ILnRpcClient> {
+        match self.lightning_mode.clone() {
+            LightningMode::Cln { cln_extension_addr } => {
+                Box::new(NetworkLnRpcClient::new(cln_extension_addr).await)
+            }
+            LightningMode::Lnd {
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+            } => Box::new(
+                GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
+            ),
+        }
     }
 }

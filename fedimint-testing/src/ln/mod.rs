@@ -3,7 +3,6 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::KeyPair;
-use fedimint_client_legacy::modules::ln::contracts::Preimage;
 use fedimint_core::{Amount, BitcoinHash};
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
@@ -12,6 +11,7 @@ use rand::rngs::OsRng;
 use secp256k1_zkp::SecretKey;
 
 use self::mock::INVALID_INVOICE_DESCRIPTION;
+use crate::gateway::LightningNodeType;
 
 pub mod mock;
 pub mod real;
@@ -43,7 +43,7 @@ pub trait LightningTest: ILnRpcClient {
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
-            .payment_hash(sha256::Hash::hash(&Preimage([0; 32]).0))
+            .payment_hash(sha256::Hash::hash(&[0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -59,4 +59,6 @@ pub trait LightningTest: ILnRpcClient {
     fn is_shared(&self) -> bool;
 
     fn listening_address(&self) -> String;
+
+    fn lightning_node_type(&self) -> LightningNodeType;
 }
