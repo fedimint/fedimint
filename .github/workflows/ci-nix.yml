@@ -4,13 +4,15 @@ name: "CI (nix)"
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
+  # Triggers the workflow on push or pull request events but only for the "main" branch and release tags
   push:
-    branches: [ "main", "master", "devel" ]
+    branches: [ "main", "master", "devel", "releases/v*" ]
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
   pull_request:
-    branches: [ "main", "master", "devel" ]
+    branches: [ "main", "master", "devel", "releases/v*" ]
   merge_group:
-    branches: [ "main", "master", "devel" ]
+    branches: [ "main", "master", "devel", "releases/v*" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -304,6 +306,14 @@ jobs:
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+
+      - name: Publish tagged release
+        if: github.ref_type == 'tag'
+        run: |
+          nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
     if: github.ref == 'refs/heads/master'
