@@ -12,21 +12,23 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.66"
+assert_matches = "1.5.0"
 async-trait = "0.1.64"
 bitcoin = "0.29.2"
 erased-serde = "0.3"
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
-fedimint-wallet-common = { path = "../fedimint-wallet-common" }
-fedimint-wallet-client = { path = "../fedimint-wallet-client" }
-fedimint-wallet-server = { path = "../fedimint-wallet-server" }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
-fedimint-testing ={ path = "../../fedimint-testing" }
-fedimint-server = { path = "../../fedimint-server" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
-tokio = { version = "1.26.0", features = ["sync"] }
+fedimint-server = { path = "../../fedimint-server" }
+fedimint-testing ={ path = "../../fedimint-testing" }
+fedimint-wallet-client = { path = "../fedimint-wallet-client" }
+fedimint-wallet-common = { path = "../fedimint-wallet-common" }
+fedimint-wallet-server = { path = "../fedimint-wallet-server" }
 futures = "0.3.28"
+miniscript = { version = "9.0.2" }
+tokio = { version = "1.26.0", features = ["sync"] }
 tracing = "0.1.37"
