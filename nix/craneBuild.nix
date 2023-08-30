@@ -11,10 +11,11 @@ craneLib.overrideScope' (self: prev: {
     doCheck = false;
   });
 
-  workspaceBuild = self.cargoBuild (prev.commonArgs // {
+  workspaceBuild = self.mkCargoDerivation (prev.commonArgs // {
+    pnameSuffix = "-workspace-build";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
-    cargoExtraArgs = "--locked --workspace --all-targets";
+    buildPhaseCargoCommand = "cargo build --workspace --all-targets --locked --profile $CARGO_PROFILE; cargo test --no-run  --locked --workspace --all-targets --profile $CARGO_PROFILE";
     doCheck = false;
   });
 
@@ -38,6 +39,7 @@ craneLib.overrideScope' (self: prev: {
   });
 
   workspaceDoc = self.mkCargoDerivation (self.commonArgs // {
+    pnameSuffix = "-workspace-docs";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
     preConfigure = ''
@@ -162,6 +164,7 @@ craneLib.overrideScope' (self: prev: {
     # won't start other tests.
     buildPhaseCargoCommand = ''
       patchShebangs ./scripts
+      export FM_CARGO_DENY_COMPILATION=1
       ./scripts/tests/test-ci-all.sh || exit 1
       sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
       echo "Verifying failure detection..."
