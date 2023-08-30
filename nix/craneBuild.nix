@@ -98,7 +98,7 @@ craneLib.overrideScope' (self: prev: {
 
   # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
   workspaceDepsCov = self.buildDepsOnly (self.commonArgsDepsOnly // {
-    pnameSuffix = "-lcov-deps";
+    pname = "fedimint-workspace-lcov";
     version = "0.0.1";
     buildPhaseCargoCommand = "cargo llvm-cov --locked --workspace --all-targets --profile $CARGO_PROFILE --no-report";
     cargoBuildCommand = "dontuse";
@@ -108,7 +108,7 @@ craneLib.overrideScope' (self: prev: {
   });
 
   workspaceCov = self.buildPackage (self.commonArgs // {
-    pnameSuffix = "-lcov";
+    pname = "fedimint-workspace-lcov";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDepsCov;
     buildPhaseCargoCommand = "mkdir -p $out ; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo llvm-cov --locked --workspace --all-targets --profile $CARGO_PROFILE --lcov --tests --output-path $out/lcov.info --  --test-threads=$(($(nproc) * 2))";

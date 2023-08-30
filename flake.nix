@@ -401,7 +401,7 @@
                     wl-clipboard
                   ];
 
-                  RUST_SRC_PATH = "${toolchain.fenixChannel.rust-src}/lib/rustlib/src/rust/library";
+                  RUST_SRC_PATH = "${toolchain.fenixStableChannel.rust-src}/lib/rustlib/src/rust/library";
 
                   shellHook = ''
                     # auto-install git hooks

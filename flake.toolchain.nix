@@ -122,61 +122,65 @@ let
         };
       };
 
-  fenixChannel = fenix.packages.${system}.stable;
-  fenixChannelNightly = fenix.packages.${system}.latest;
+  fenixPkgs = fenix.packages.${system};
+  fenixStableChannel = fenix.packages.${system}.stable;
+  fenixNightlyChannel = fenix.packages.${system}.latest;
 
-  fenixToolchain = (fenixChannel.withComponents [
-    "rustc"
-    "cargo"
-    "clippy"
-    "rust-analysis"
-    "rust-src"
-    "llvm-tools-preview"
-  ]);
-
-  fenixToolchainNightly = (fenixChannelNightly.withComponents [
-    "rustc"
-    "cargo"
-    "clippy"
-    "rust-analysis"
-    "rust-src"
-    "llvm-tools-preview"
-  ]);
-
-  fenixToolchainDocNightly = fenixChannelNightly.withComponents [
-    "cargo"
-    "rustc"
+  # Note: we need to wrap an already fully combined toolchains, so that llvm-tools-preview etc. are in the same derivation, as cargo depends on it
+  wrapRustc = toolchain: pkgs.writeShellScriptBin "rustc" "exec ${pkgs.bash}/bin/bash ${./scripts/dev/rustc-wrapper/rustc} ${toolchain}/bin/rustc \"$@\"";
+  wrapToolchain = toolchain: fenixPkgs.combine [
+    (wrapRustc toolchain)
+    toolchain
   ];
 
-  fenixToolchainRustfmt = (fenixChannelNightly.withComponents [
-    "rustfmt"
-  ]);
-
-  fenixToolchainCargoFmt = (fenixChannelNightly.withComponents [
+  fenixToolchain = wrapToolchain (fenixStableChannel.withComponents [
+    "rustc"
     "cargo"
+    "clippy"
+    "rust-analysis"
+    "rust-src"
+    "llvm-tools-preview"
+  ]);
+
+
+  fenixToolchainNightly = wrapToolchain (fenixNightlyChannel.withComponents [
+    "rustc"
+    "cargo"
+    "clippy"
+    "rust-analysis"
+    "rust-src"
+    "llvm-tools-preview"
+  ]);
+
+  fenixToolchainDocNightly = wrapToolchain (fenixNightlyChannel.withComponents [
+    "cargo"
+    "rustc"
+  ]);
+
+  fenixToolchainRustfmt = fenixNightlyChannel.withComponents [
     "rustfmt"
-  ]);
+  ];
 
-  fenixToolchainCrossAll = with fenix.packages.${system}; combine ([
-    stable.cargo
-    stable.rustc
+  fenixToolchainCargoFmt = fenixNightlyChannel.withComponents [
+    "rustfmt"
+    "cargo"
+  ];
+
+  fenixToolchainCrossAll = wrapToolchain (fenixPkgs.combine ([
+    fenixStableChannel.cargo
+    fenixStableChannel.rustc
   ] ++ (lib.attrsets.mapAttrsToList
-    (attr: target: targets.${target.name}.stable.rust-std)
-    crossTargets));
-
-  fenixToolchainCrossWasm = with fenix.packages.${system}; combine ([
-    stable.cargo
-    stable.rustc
-    targets.wasm32-unknown-unknown.stable.rust-std
-  ]);
+    (attr: target: fenixPkgs.${target.name}.stable.rust-std)
+    crossTargets)));
 
   fenixToolchainCross = builtins.mapAttrs
-    (attr: target: with fenix.packages.${system}; combine [
-      stable.cargo
-      stable.rustc
-      targets.${target.name}.stable.rust-std
-    ])
-    crossTargets
-  ;
+    (attr: target: wrapToolchain (fenixPkgs.combine [
+      fenixStableChannel.cargo
+      fenixStableChannel.rustc
+      fenixPkgs.targets.${target.name}.stable.rust-std
+    ]))
+    crossTargets;
+
+  fenixToolchainCrossWasm = fenixToolchainCross.wasm32-unknown-unknown;
 in
-{ inherit crossTargets androidCrossEnvVars wasm32CrossEnvVars fenixToolchain fenixToolchainNightly fenixChannel fenixToolchainRustfmt fenixToolchainCargoFmt fenixToolchainDocNightly fenixToolchainCrossAll fenixToolchainCrossWasm fenixToolchainCross; }
+{ inherit crossTargets androidCrossEnvVars wasm32CrossEnvVars fenixToolchain fenixToolchainNightly fenixToolchainRustfmt fenixToolchainCargoFmt fenixToolchainDocNightly fenixToolchainCrossAll fenixToolchainCrossWasm fenixToolchainCross fenixStableChannel; }
