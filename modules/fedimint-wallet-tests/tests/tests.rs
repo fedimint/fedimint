@@ -58,6 +58,7 @@ async fn peg_in<'a>(
     assert_eq!(balance_sub.ok().await?, sats(0));
 
     let (op, address) = client.get_deposit_address(valid_until).await?;
+    info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(&address, bsats(PEG_IN_AMOUNT_SATS))
         .await;
@@ -65,7 +66,7 @@ async fn peg_in<'a>(
         .get_tx_block_height(&tx.txid())
         .await?
         .context("expected tx to be mined")?;
-    info!(?height, "Peg-in transaction mined");
+    info!(?height, ?tx, "Peg-in transaction mined");
     let sub = client.subscribe_deposit_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, DepositState::WaitingForTransaction);
@@ -76,6 +77,7 @@ async fn peg_in<'a>(
     assert_eq!(sub.ok().await?, DepositState::Claimed);
     assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
+    info!(?height, ?tx, "Peg-in transaction claimed");
 
     Ok(balance_sub)
 }
@@ -108,6 +110,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     // Avoid other tests from interfering here
     let bitcoin = bitcoin.lock_exclusive().await;
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    info!("Starting test sanity_check_bitcoin_blocks");
 
     let finality_delay = 10; // TODO: get from config
     let initial_block_count = dyn_bitcoin_rpc.get_block_count().await?;
@@ -146,7 +149,9 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    info!("Starting test on_chain_peg_in_and_peg_out_happy_case");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
@@ -155,6 +160,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let mut balance_sub =
         peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
 
+    info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
@@ -186,7 +192,9 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    info!("Starting test peg_out_fail_refund");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
@@ -195,6 +203,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let mut balance_sub =
         peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
 
+    info!("Peg-in finished for test peg_out_fail_refund");
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
@@ -231,6 +240,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     // Need lock to keep tx in mempool from getting mined
     let bitcoin = bitcoin.lock_exclusive().await;
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    info!("Starting test peg_outs_support_rbf");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
@@ -239,6 +249,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     let mut balance_sub =
         peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
 
+    info!("Peg-in finished for test peg_outs_support_rbf");
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
     let fees = client.get_withdraw_fee(address.clone(), peg_out).await?;
@@ -303,6 +314,8 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
     let db = Database::new(MemDatabase::new(), Default::default());
     let mut task_group = fedimint_core::task::TaskGroup::new();
+    info!("Starting test peg_ins_that_are_unconfirmed_are_rejected");
+
     let (wallet_server_cfg, _) = build_wallet_server_configs(server_bitcoin_rpc_config)?;
 
     let module_instance_id = 1;

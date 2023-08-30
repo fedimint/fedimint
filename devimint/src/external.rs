@@ -77,7 +77,7 @@ impl Bitcoind {
     }
 
     pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
-        info!(block_num, "Mining bitcoin blocks");
+        info!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let client = self.client();
         let addr = client.get_new_address(None, None)?;
         let initial_block_count = client.get_block_count()?;
@@ -85,15 +85,17 @@ impl Bitcoind {
         while tokio::task::block_in_place(|| client.get_block_count())?
             < initial_block_count + block_num
         {
-            trace!(LOG_DEVIMINT, "Waiting for blocks to be mined");
+            trace!(target: LOG_DEVIMINT, ?block_num, "Waiting for blocks to be mined");
             sleep(Duration::from_millis(200)).await;
         }
+
+        trace!(target: LOG_DEVIMINT, ?block_num, "Mined blocks");
 
         Ok(())
     }
 
     pub async fn send_to(&self, addr: String, amount: u64) -> Result<bitcoin::Txid> {
-        info!(amount, addr, "Sending funds from bitcoind");
+        info!(target: LOG_DEVIMINT, amount, addr, "Sending funds from bitcoind");
         let amount = bitcoin::Amount::from_sat(amount);
         let tx = self.client().send_to_address(
             &bitcoin::Address::from_str(&addr)?,

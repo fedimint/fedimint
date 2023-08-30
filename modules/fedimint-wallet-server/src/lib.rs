@@ -949,12 +949,33 @@ impl Wallet {
                 .map(|(key, transaction)| (key.0, transaction))
                 .collect::<HashMap<Txid, PendingTransaction>>()
                 .await;
+            let pending_transactions_len = pending_transactions.len();
 
+            debug!(
+                ?height,
+                ?pending_transactions_len,
+                "Recognizing change UTXOs"
+            );
             for (txid, tx) in &pending_transactions {
-                if let Ok(Some(tx_height)) = self.btc_rpc.get_tx_block_height(txid).await {
+                if let Ok(Some(tx_height)) = self
+                    .btc_rpc
+                    .get_tx_block_height(txid)
+                    .await
+                    .map(|r| r.filter(|tx_height| *tx_height == height as u64))
+                {
                     if tx_height == height as u64 {
+                        debug!(?txid, ?tx_height, "Recognizing change UTXO");
                         self.recognize_change_utxo(dbtx, tx).await;
+                    } else {
+                        debug!(
+                            ?txid,
+                            ?tx_height,
+                            ?height,
+                            "Pending transaction not yet confirmed in this block"
+                        );
                     }
+                } else {
+                    debug!(?txid, ?height, "Pending transaction not yet confirmed");
                 }
             }
 
