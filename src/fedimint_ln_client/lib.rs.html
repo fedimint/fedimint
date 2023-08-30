@@ -1918,10 +1918,9 @@
             htlc_minimum_msat: <span class="prelude-val">None</span>,
             htlc_maximum_msat: <span class="prelude-val">None</span>,
         };
-        <span class="kw">let </span>route_hints = <span class="kw">if </span>route_hints.is_empty() {
-            <span class="macro">vec!</span>[RouteHint(<span class="macro">vec!</span>[route_hint_last_hop])]
-        } <span class="kw">else </span>{
-            route_hints
+        <span class="kw">let </span><span class="kw-2">mut </span>final_route_hints = <span class="macro">vec!</span>[RouteHint(<span class="macro">vec!</span>[route_hint_last_hop.clone()])];
+        <span class="kw">if </span>!route_hints.is_empty() {
+            <span class="kw">let </span><span class="kw-2">mut </span>two_hop_route_hints: Vec&lt;RouteHint&gt; = route_hints
                 .iter()
                 .map(|rh| {
                     RouteHint(
@@ -1933,8 +1932,9 @@
                             .collect(),
                     )
                 })
-                .collect()
-        };
+                .collect();
+            final_route_hints.append(<span class="kw-2">&amp;mut </span>two_hop_route_hints);
+        }
 
         <span class="kw">let </span>duration_since_epoch = fedimint_core::time::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -1952,7 +1952,7 @@
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ));
 
-        <span class="kw">for </span>rh <span class="kw">in </span>route_hints {
+        <span class="kw">for </span>rh <span class="kw">in </span>final_route_hints {
             invoice_builder = invoice_builder.private_route(rh);
         }
 
