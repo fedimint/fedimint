@@ -37,7 +37,7 @@
              'life0: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.create_bolt11_invoice" class="fn">create_bolt11_invoice</a>&lt;'life0, 'async_trait&gt;(
         &amp;'life0 self,
-        amount: <a class="struct" href="../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+        amount: Amount,
         description: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
         expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="https://docs.rs/anyhow/1.0.71/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(OperationId, Invoice)&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
@@ -84,7 +84,7 @@
     Self: 'async_trait,
     'life0: 'async_trait,</span></h4></section><details class="toggle method-toggle" open><summary><section id="tymethod.create_bolt11_invoice" class="method"><a class="src rightside" href="../src/fedimint_ln_client/lib.rs.html#95-100">source</a><h4 class="code-header">fn <a href="#tymethod.create_bolt11_invoice" class="fn">create_bolt11_invoice</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
-    amount: <a class="struct" href="../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+    amount: Amount,
     description: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
     expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="https://docs.rs/anyhow/1.0.71/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(OperationId, Invoice)&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
@@ -117,7 +117,7 @@
     Self: 'async_trait,
     'life0: 'async_trait,</span></h4></section><section id="method.create_bolt11_invoice" class="method trait-impl"><a class="src rightside" href="../src/fedimint_ln_client/lib.rs.html#295-350">source</a><a href="#method.create_bolt11_invoice" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.create_bolt11_invoice" class="fn">create_bolt11_invoice</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
-    amount: <a class="struct" href="../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+    amount: Amount,
     description: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>,
     expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="https://docs.rs/anyhow/1.0.71/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(OperationId, Invoice)&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<span class="where fmt-newline">where
