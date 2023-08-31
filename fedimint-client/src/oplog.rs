@@ -39,7 +39,7 @@ impl OperationLog {
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry {
-                operation_type: operation_type.to_string(),
+                operation_module_kind: operation_type.to_string(),
                 meta: serde_json::to_value(operation_meta)
                     .expect("Can only fail if meta is not serializable"),
                 outcome: None,
@@ -151,19 +151,44 @@ impl OperationLog {
     }
 }
 
+/// Represents an operation triggered by a user, typically related to sending or
+/// receiving money.
+///
+/// There are three levels of introspection possible for `OperationLogEntry`s:
+///   1. The [`OperationLogEntry::operation_module_kind`] function returns the
+///      kind of the module that created the operation.
+///   2. The [`OperationLogEntry::meta`] function returns static meta data that
+///      was associated with the operation when it was created. Modules define
+///      their own meta structures, so the module kind has to be used to
+///      determine the structure of the meta data.
+///   3. To find out the current state of the operation there is a two-step
+///      process:
+///     * First, the [`OperationLogEntry::outcome`] function returns the outcome
+///       if the operation finished **and** the update subscription stream has
+///       been processed till its end at least once.
+///     * If that isn't the case, the [`OperationLogEntry::outcome`] method will
+///       return `None` and the appropriate update subscription function has to
+///       be called. See the respective client extension trait for these
+///       functions.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OperationLogEntry {
-    operation_type: String,
+    operation_module_kind: String,
     meta: serde_json::Value,
     // TODO: probably change all that JSON to Dyn-types
     pub(crate) outcome: Option<serde_json::Value>,
 }
 
 impl OperationLogEntry {
-    pub fn operation_type(&self) -> &str {
-        &self.operation_type
+    /// Returns the kind of the module that generated the operation
+    pub fn operation_module_kind(&self) -> &str {
+        &self.operation_module_kind
     }
 
+    /// Returns the meta data of the operation. This is a JSON value that can be
+    /// either returned as a [`serde_json::Value`] or deserialized into a
+    /// specific type. The specific type should be named `<Module>OperationMeta`
+    /// in the module's client crate. The module can be determined by calling
+    /// [`OperationLogEntry::operation_module_kind`].
     pub fn meta<M: DeserializeOwned>(&self) -> M {
         serde_json::from_value(self.meta.clone()).expect("JSON deserialization should not fail")
     }
@@ -171,6 +196,20 @@ impl OperationLogEntry {
     /// Returns the last state update of the operation, if any was cached yet.
     /// If this hasn't been the case yet and `None` is returned subscribe to the
     /// appropriate update stream.
+    ///
+    /// ## Determining the return type
+    /// [`OperationLogEntry::meta`] should tell you the which operation type of
+    /// a given module the outcome belongs to. The operation type will have a
+    /// corresponding `async fn subscribe_type(&self, operation_id:
+    /// OperationId) -> anyhow::Result<UpdateStreamOrOutcome<TypeState>>;`
+    /// function that returns a `UpdateStreamOrOutcome<S>` where `S` is the
+    /// high-level state the operation is in. If this state is terminal, i.e.
+    /// the stream closes after returning it, it will be cached as the `outcome`
+    /// of the operation.
+    ///
+    /// This means the type to be used for deserializing the outcome is `S`,
+    /// often called `<OperationType>State`. Alternatively one can also use
+    /// [`serde_json::Value`] to get the unstructured data.
     pub fn outcome<D: DeserializeOwned>(&self) -> Option<D> {
         self.outcome.as_ref().map(|outcome| {
             serde_json::from_value(outcome.clone()).expect("JSON deserialization should not fail")
@@ -205,7 +244,7 @@ impl OperationLogEntry {
 impl Encodable for OperationLogEntry {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut len = 0;
-        len += self.operation_type.consensus_encode(writer)?;
+        len += self.operation_module_kind.consensus_encode(writer)?;
         len += serde_json::to_string(&self.meta)
             .expect("JSON serialization should not fail")
             .consensus_encode(writer)?;
@@ -237,7 +276,7 @@ impl Decodable for OperationLogEntry {
             .transpose()?;
 
         Ok(OperationLogEntry {
-            operation_type,
+            operation_module_kind: operation_type,
             meta,
             outcome,
         })
@@ -311,7 +350,7 @@ mod tests {
     #[test]
     fn test_operation_log_entry_serde() {
         let op_log = OperationLogEntry {
-            operation_type: "test".to_string(),
+            operation_module_kind: "test".to_string(),
             meta: serde_json::to_value(()).unwrap(),
             outcome: None,
         };
@@ -333,7 +372,7 @@ mod tests {
         };
 
         let op_log = OperationLogEntry {
-            operation_type: "test".to_string(),
+            operation_module_kind: "test".to_string(),
             meta: serde_json::to_value(meta.clone()).unwrap(),
             outcome: None,
         };

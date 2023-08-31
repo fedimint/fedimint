@@ -392,7 +392,7 @@ pub async fn handle_ng_command(
                     OperationOutput {
                         id: k.operation_id,
                         creation_time,
-                        operation_kind: v.operation_type().to_owned(),
+                        operation_kind: v.operation_module_kind().to_owned(),
                         operation_meta: v.meta(),
                         outcome: v.outcome(),
                     }
