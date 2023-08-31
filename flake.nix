@@ -342,6 +342,21 @@
                       ];
                     };
                   };
+
+                  fedimint-devtools =
+                    let
+                      packages' = packages craneLibNative;
+                    in
+                    pkgs.dockerTools.buildLayeredImage
+                      {
+                        name = "fedimint-devtools";
+                        contents = [ packages'.devimint packages'.fedimint-dbtool packages'.fedimint-load-test-tool pkgs.bash pkgs.coreutils ];
+                        config = {
+                          Cmd = [
+                            "${pkgs.bash}/bin/bash"
+                          ];
+                        };
+                      };
                 };
             };
 
