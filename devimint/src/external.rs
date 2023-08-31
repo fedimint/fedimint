@@ -264,13 +264,16 @@ impl Lnd {
         .await?;
 
         poll("lnd_connect", || async {
-            Ok(tonic_lnd::connect(
+            let result = tonic_lnd::connect(
                 lnd_rpc_addr.clone(),
                 lnd_tls_cert.clone(),
                 lnd_macaroon.clone(),
             )
-            .await
-            .is_ok())
+            .await;
+            if let Err(e) = &result {
+                info!("lnd_connect failed: {:?}", e);
+            }
+            Ok(result.is_ok())
         })
         .await?;
 
