@@ -87,13 +87,14 @@ impl GatewayTest {
         let client_builder: StandardGatewayClientBuilder =
             StandardGatewayClientBuilder::new(path.clone(), registry, 0);
 
-        let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> =
-            match Fixtures::is_real_test() {
-                true => Arc::new(RealLightningBuilder {
-                    node_type: lightning.lightning_node_type(),
-                }),
-                false => Arc::new(FakeLightningBuilder {}),
-            };
+        let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> = if Fixtures::is_real_test()
+        {
+            Arc::new(RealLightningBuilder {
+                node_type: lightning.lightning_node_type(),
+            })
+        } else {
+            Arc::new(FakeLightningBuilder {})
+        };
 
         let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
 
@@ -130,12 +131,12 @@ impl GatewayTest {
                 break;
             }
 
-            if gateway_state_iterations > 9 {
+            if gateway_state_iterations >= 30 {
                 panic!("Gateway did not start running after 10 attempts");
             }
 
             gateway_state_iterations += 1;
-            sleep(Duration::from_millis(100)).await;
+            sleep(Duration::from_secs(1)).await;
         }
 
         let listening_addr = lightning.listening_address();

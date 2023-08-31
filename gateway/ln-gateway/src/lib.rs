@@ -307,32 +307,37 @@ impl Gateway {
                             .await
                         {
                             Ok((stream, ln_client)) => {
-                                // Blocks until the connection to the lightning node breaks
                                 info!("Established HTLC stream");
 
-                                let (lightning_public_key, lightning_alias) =
-                                Self::fetch_lightning_node_info(ln_client.clone()).await.expect("Failed to retrieve Lightning info after establishing a connection");
+                                match Self::fetch_lightning_node_info(ln_client.clone()).await {
+                                    Ok((lightning_public_key, lightning_alias)) => {
+                                        self.register_clients_timer(&mut tg).await;
+                                        self.set_gateway_state(GatewayState::Running {
+                                            lnrpc: ln_client,
+                                            lightning_public_key,
+                                            lightning_alias,
 
-                                self.register_clients_timer(&mut tg).await;
-                                self.set_gateway_state(GatewayState::Running {
-                                    lnrpc: ln_client,
-                                    lightning_public_key,
-                                    lightning_alias,
+                                        }).await;
+                                        self.load_clients().await.expect("Failed to load gateway clients");
+                                        info!("Successfully loaded Gateway clients.");
 
-                                }).await;
-                                self.load_clients().await.expect("Failed to load gateway clients");
-                                info!("Successfully loaded Gateway clients.");
-
-                                self.handle_htlc_stream(stream, handle.clone()).await;
-                                self.set_gateway_state(GatewayState::Disconnected).await;
-                                warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+                                        // Blocks until the connection to the lightning node breaks
+                                        self.handle_htlc_stream(stream, handle.clone()).await;
+                                        self.set_gateway_state(GatewayState::Disconnected).await;
+                                        warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to retrieve Lightning info: {e:?}");
+                                    }
+                                }
                             }
                             Err(e) => {
-                                error!("Failed to open HTLC stream. Waiting 5 seconds and trying again");
-                                debug!("Error: {e:?}");
-                                sleep(Duration::from_secs(5)).await;
+                                debug!("Failed to open HTLC stream: {e:?}");
                             }
                         }
+
+                        error!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
+                        sleep(Duration::from_secs(5)).await;
                     }
                 },
             )
@@ -550,7 +555,7 @@ impl Gateway {
         } = self.state.read().await.clone()
         {
             let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
-                GatewayError::InvalidMetadata(format!("Invalid federation member string {e}"))
+                GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
 
             // The gateway deterministically assigns a channel id (u64) to each federation
@@ -737,7 +742,7 @@ impl Gateway {
                         match Self::fetch_lightning_route_hints(lnrpc.clone(), num_route_hints).await {
                             Ok(route_hints) => {
                                 for (federation_id, client) in clients.read().await.iter() {
-                                    if client
+                                    if let Err(e) = client
                                         .register_with_federation(
                                             api.clone(),
                                             route_hints.clone(),
@@ -745,15 +750,14 @@ impl Gateway {
                                             gateway_id,
                                         )
                                         .await
-                                        .is_err()
                                     {
-                                        error!("Error registering federation {federation_id}");
+                                        error!("Error registering federation {federation_id}: {e:?}");
                                     }
                                 }
                             }
-                            Err(_) => {
+                            Err(e) => {
                                 error!(
-                                    "Could not retrieve route hints, gateway will not be registered."
+                                    "Could not retrieve route hints, gateway will not be registered: {e:?}"
                                 );
                             }
                         }
