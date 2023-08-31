@@ -653,6 +653,12 @@
 <a href="#653" id="653">653</a>
 <a href="#654" id="654">654</a>
 <a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -665,7 +671,7 @@
     FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
@@ -1232,9 +1238,15 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;auth&quot;</span>,
-            <span class="kw">async </span>|_config: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; () {
+            <span class="kw">async </span>|_fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            <span class="string">&quot;modules_config_json&quot;</span>,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt; {
+                <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.modules_json.clone())
             }
         },
     ]
