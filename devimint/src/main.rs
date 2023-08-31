@@ -11,8 +11,8 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{Federation, Fedimintd};
 use devimint::util::{poll, poll_max_retries, poll_value, ProcessManager};
 use devimint::{
-    cmd, dev_fed, external_daemons, vars, Bitcoind, DevFed, Gatewayd, LightningNode, Lightningd,
-    Lnd,
+    cmd, dev_fed, external_daemons, vars, DevFed, ExternalDaemons, Gatewayd, LightningNode,
+    Lightningd, Lnd,
 };
 use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::task::TaskGroup;
@@ -1070,11 +1070,11 @@ async fn write_ready_file<T>(global: &vars::Global, result: Result<T>) -> Result
     result
 }
 
-async fn run_ui(process_mgr: &ProcessManager) -> Result<Vec<Fedimintd>> {
-    let bitcoind = Bitcoind::new(process_mgr).await?;
+async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, ExternalDaemons)> {
+    let externals = external_daemons(process_mgr).await?;
     let fed_size = process_mgr.globals.FM_FED_SIZE;
     let fedimintds = futures::future::try_join_all((0..fed_size).map(|peer| {
-        let bitcoind = bitcoind.clone();
+        let bitcoind = externals.bitcoind.clone();
         async move {
             let peer_port = 10000 + 8137 + peer * 2;
             let api_port = peer_port + 1;
@@ -1104,7 +1104,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<Vec<Fedimintd>> {
     }))
     .await?;
 
-    Ok(fedimintds)
+    Ok((fedimintds, externals))
 }
 
 use std::fmt::Write;
@@ -1195,8 +1195,8 @@ async fn handle_command() -> Result<()> {
         Cmd::RunUi => {
             let (process_mgr, task_group) = setup(args.common).await?;
             let main = async move {
-                let fedimintds = run_ui(&process_mgr).await?;
-                let daemons = write_ready_file(&process_mgr.globals, Ok(fedimintds)).await?;
+                let result = run_ui(&process_mgr).await;
+                let daemons = write_ready_file(&process_mgr.globals, result).await?;
                 Ok::<_, anyhow::Error>(daemons)
             };
             cleanup_on_exit(main, task_group).await?;
