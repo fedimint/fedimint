@@ -72,7 +72,6 @@ typos:
   git_ls_files="$(git ls-files)"
   git_ls_nonbinary_files="$(echo "$git_ls_files" |  grep -v -E "^db/|\.png\$|\.ods\$")"
 
-
   if ! echo "$git_ls_nonbinary_files" | typos --stdin-paths ; then
     >&2 echo "Typos found: Valid new words can be added to '_typos.toml'"
     return 1
