@@ -837,7 +837,7 @@
         .<span class="kw">await
         </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;
 
-    <span class="kw">if </span>operation.operation_type() != LightningCommonGen::KIND.as_str() {
+    <span class="kw">if </span>operation.operation_module_kind() != LightningCommonGen::KIND.as_str() {
         <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning operation&quot;</span>);
     }
 

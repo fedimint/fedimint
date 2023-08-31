@@ -884,7 +884,7 @@
             .<span class="kw">await
             </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>operation_log_entry.operation_type() != WalletCommonGen::KIND.as_str() {
+        <span class="kw">if </span>operation_log_entry.operation_module_kind() != WalletCommonGen::KIND.as_str() {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
         }
 
@@ -1033,7 +1033,7 @@
             .<span class="kw">await
             </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>operation.operation_type() != WalletCommonGen::KIND.as_str() {
+        <span class="kw">if </span>operation.operation_module_kind() != WalletCommonGen::KIND.as_str() {
             <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
         }
 

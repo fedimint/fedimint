@@ -448,6 +448,45 @@
 <a href="#448" id="448">448</a>
 <a href="#449" id="449">449</a>
 <a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future;
 <span class="kw">use </span>std::io::{Read, Write};
@@ -489,7 +528,7 @@
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>OperationLogKey { operation_id },
             <span class="kw-2">&amp;</span>OperationLogEntry {
-                operation_type: operation_type.to_string(),
+                operation_module_kind: operation_type.to_string(),
                 meta: serde_json::to_value(operation_meta)
                     .expect(<span class="string">&quot;Can only fail if meta is not serializable&quot;</span>),
                 outcome: <span class="prelude-val">None</span>,
@@ -601,26 +640,65 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="doccomment">/// Represents an operation triggered by a user, typically related to sending or
+/// receiving money.
+///
+/// There are three levels of introspection possible for `OperationLogEntry`s:
+///   1. The [`OperationLogEntry::operation_module_kind`] function returns the
+///      kind of the module that created the operation.
+///   2. The [`OperationLogEntry::meta`] function returns static meta data that
+///      was associated with the operation when it was created. Modules define
+///      their own meta structures, so the module kind has to be used to
+///      determine the structure of the meta data.
+///   3. To find out the current state of the operation there is a two-step
+///      process:
+///     * First, the [`OperationLogEntry::outcome`] function returns the outcome
+///       if the operation finished **and** the update subscription stream has
+///       been processed till its end at least once.
+///     * If that isn&#39;t the case, the [`OperationLogEntry::outcome`] method will
+///       return `None` and the appropriate update subscription function has to
+///       be called. See the respective client extension trait for these
+///       functions.
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>OperationLogEntry {
-    operation_type: String,
+    operation_module_kind: String,
     meta: serde_json::Value,
     <span class="comment">// TODO: probably change all that JSON to Dyn-types
     </span><span class="kw">pub</span>(<span class="kw">crate</span>) outcome: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
 }
 
 <span class="kw">impl </span>OperationLogEntry {
-    <span class="kw">pub fn </span>operation_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.operation_type
+    <span class="doccomment">/// Returns the kind of the module that generated the operation
+    </span><span class="kw">pub fn </span>operation_module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.operation_module_kind
     }
 
-    <span class="kw">pub fn </span>meta&lt;M: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; M {
+    <span class="doccomment">/// Returns the meta data of the operation. This is a JSON value that can be
+    /// either returned as a [`serde_json::Value`] or deserialized into a
+    /// specific type. The specific type should be named `&lt;Module&gt;OperationMeta`
+    /// in the module&#39;s client crate. The module can be determined by calling
+    /// [`OperationLogEntry::operation_module_kind`].
+    </span><span class="kw">pub fn </span>meta&lt;M: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; M {
         serde_json::from_value(<span class="self">self</span>.meta.clone()).expect(<span class="string">&quot;JSON deserialization should not fail&quot;</span>)
     }
 
     <span class="doccomment">/// Returns the last state update of the operation, if any was cached yet.
     /// If this hasn&#39;t been the case yet and `None` is returned subscribe to the
     /// appropriate update stream.
+    ///
+    /// ## Determining the return type
+    /// [`OperationLogEntry::meta`] should tell you the which operation type of
+    /// a given module the outcome belongs to. The operation type will have a
+    /// corresponding `async fn subscribe_type(&amp;self, operation_id:
+    /// OperationId) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;TypeState&gt;&gt;;`
+    /// function that returns a `UpdateStreamOrOutcome&lt;S&gt;` where `S` is the
+    /// high-level state the operation is in. If this state is terminal, i.e.
+    /// the stream closes after returning it, it will be cached as the `outcome`
+    /// of the operation.
+    ///
+    /// This means the type to be used for deserializing the outcome is `S`,
+    /// often called `&lt;OperationType&gt;State`. Alternatively one can also use
+    /// [`serde_json::Value`] to get the unstructured data.
     </span><span class="kw">pub fn </span>outcome&lt;D: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;D&gt; {
         <span class="self">self</span>.outcome.as_ref().map(|outcome| {
             serde_json::from_value(outcome.clone()).expect(<span class="string">&quot;JSON deserialization should not fail&quot;</span>)
@@ -655,7 +733,7 @@
 <span class="kw">impl </span>Encodable <span class="kw">for </span>OperationLogEntry {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += <span class="self">self</span>.operation_type.consensus_encode(writer)<span class="question-mark">?</span>;
+        len += <span class="self">self</span>.operation_module_kind.consensus_encode(writer)<span class="question-mark">?</span>;
         len += serde_json::to_string(<span class="kw-2">&amp;</span><span class="self">self</span>.meta)
             .expect(<span class="string">&quot;JSON serialization should not fail&quot;</span>)
             .consensus_encode(writer)<span class="question-mark">?</span>;
@@ -687,7 +765,7 @@
             .transpose()<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(OperationLogEntry {
-            operation_type,
+            operation_module_kind: operation_type,
             meta,
             outcome,
         })
@@ -761,7 +839,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_operation_log_entry_serde() {
         <span class="kw">let </span>op_log = OperationLogEntry {
-            operation_type: <span class="string">&quot;test&quot;</span>.to_string(),
+            operation_module_kind: <span class="string">&quot;test&quot;</span>.to_string(),
             meta: serde_json::to_value(()).unwrap(),
             outcome: <span class="prelude-val">None</span>,
         };
@@ -783,7 +861,7 @@
         };
 
         <span class="kw">let </span>op_log = OperationLogEntry {
-            operation_type: <span class="string">&quot;test&quot;</span>.to_string(),
+            operation_module_kind: <span class="string">&quot;test&quot;</span>.to_string(),
             meta: serde_json::to_value(meta.clone()).unwrap(),
             outcome: <span class="prelude-val">None</span>,
         };

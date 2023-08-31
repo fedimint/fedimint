@@ -1031,6 +1031,26 @@
 <a href="#1031" id="1031">1031</a>
 <a href="#1032" id="1032">1032</a>
 <a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1039,7 +1059,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
-<span class="kw">use </span>anyhow::{bail, ensure, format_err};
+<span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -1307,10 +1327,28 @@
             (PayType::Lightning(operation_id), output, contract_id)
         };
 
+        <span class="comment">// TODO: return fee from create_outgoing_output or even let user supply
+        // it/bounds for it
+        </span><span class="kw">let </span>fee = <span class="kw">match </span><span class="kw-2">&amp;</span>output.output {
+            LightningOutput::Contract(contract) =&gt; {
+                <span class="kw">let </span>fee_msat = contract
+                    .amount
+                    .msats
+                    .checked_sub(
+                        invoice
+                            .amount_milli_satoshis()
+                            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;MissingInvoiceAmount&quot;</span>))<span class="question-mark">?</span>,
+                    )
+                    .expect(<span class="string">&quot;Contract amount should be greater or equal than invoice amount&quot;</span>);
+                Amount::from_msats(fee_msat)
+            }
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;User client will only create contract outputs on spend&quot;</span>),
+        };
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        <span class="kw">let </span>operation_meta_gen = |txid, change_outpoint| LightningMeta::Pay {
+        <span class="kw">let </span>operation_meta_gen = |txid, change_outpoint| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
             invoice: invoice.clone(),
+            fee,
             change_outpoint,
         };
 
@@ -1358,7 +1396,7 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        <span class="kw">let </span>operation_meta_gen = |txid, <span class="kw">_</span>| LightningMeta::Receive {
+        <span class="kw">let </span>operation_meta_gen = |txid, <span class="kw">_</span>| LightningOperationMeta::Receive {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
             invoice: invoice.clone(),
         };
@@ -1387,8 +1425,8 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningMeta&gt;() {
-            LightningMeta::Receive { out_point, invoice } =&gt; (out_point, invoice),
+        <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;() {
+            LightningOperationMeta::Receive { out_point, invoice } =&gt; (out_point, invoice),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
 
@@ -1441,11 +1479,12 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(out_point, <span class="kw">_</span>, change_outpoint) = <span class="kw">match </span>operation.meta::&lt;LightningMeta&gt;() {
-            LightningMeta::Pay {
+        <span class="kw">let </span>(out_point, <span class="kw">_</span>, change_outpoint) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;() {
+            LightningOperationMeta::Pay {
                 out_point,
                 invoice,
                 change_outpoint,
+                ..
             } =&gt; (out_point, invoice, change_outpoint),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
@@ -1544,10 +1583,11 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>LightningMeta {
+</span><span class="kw">pub enum </span>LightningOperationMeta {
     Pay {
         out_point: OutPoint,
         invoice: Invoice,
+        fee: Amount,
         change_outpoint: <span class="prelude-ty">Option</span>&lt;OutPoint&gt;,
     },
     Receive {
@@ -1687,7 +1727,7 @@
         <span class="comment">// Compute amount to lock in the outgoing contract
         </span><span class="kw">let </span>invoice_amount_msat = invoice
             .amount_milli_satoshis()
-            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;MissingInvoiceAmount&quot;</span>))<span class="question-mark">?</span>;
+            .context(<span class="string">&quot;MissingInvoiceAmount&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>fees = gateway.fees;
         <span class="kw">let </span>base_fee = fees.base_msat <span class="kw">as </span>u64;
