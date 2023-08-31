@@ -25,7 +25,7 @@ I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS 
 
 ### 1.1. Digital Ocean Setup
 
-- Create a new droplet, use the default parameters for a $12 2GB RAM/1 CPU machine.
+- Create a new droplet, use the default parameters for a "Regular" CPU option ($12 2GB RAM/1 CPU machine).
 
 <img src="mutiny_setup/create_droplet.png" width="500">
 
@@ -35,6 +35,7 @@ I'll be using Digital Ocean, Linode, and Amazon EC2 for this guide, but any VPS 
 
 - `fedimintd` CAN run on the $6 1GB RAM/1 CPU machine, but for a longer running federation or one you want to be highly performant with > a couple dozen users we recommend the 2GB RAM at least.
 
+![Alt text](image.png)
 <img src="mutiny_setup/boxSize.png" width="500">
 
 - Auth with SSH keys (recommended) or password. Digital Ocean has an excellent guide on how to set up SSH keys if you click "New SSH Key" in the "Authentication" section. It also has a great browser based console that you can use to access the box directly from the dashboard.
@@ -101,7 +102,45 @@ For the google cloud machine we'll use something a little bigger because we'll a
 
 You should now have your machines running and be able to ssh into them. We'll install fedimint on each machine using the docker install script.
 
-Notes for specific machines:
+Run the No TLS fedimint setup script below on each of the 4 machines you're running the fedimint gaurdian daemon on. Only install fedimintd on the boxes that'll run the guardians. If you're running the lightning gateway on one of the machines, you'll install the gateway setup script on that machine as well.
+
+### Fedimint Setup Script (No TLS):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
+```
+
+or if you want to install with TLS:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/tls-download-mutinynet.sh | bash
+```
+
+then we'll run it again later for the gateway setup.
+
+The install script lets you install one or all of:
+
+1. Fedimintd: The fedimint daemon, this is the only thing we're installing right now.
+2. LND + Gateway: A lightning node with fedimint gateway for intercepting HTLCs to provide lightning services for the federation
+3. RTL: Ride the Lightning web interface for the the lightning node
+
+and it'll start the services on the following ports:
+
+- Fedimintd Guardian Dashboard: http://your.ip.add.ress:3000
+- Lightning Gateway Dashboard: http://your.ip.add.ress:3001
+- RTL Lightning Node Management: http://your.ip.add.ress.198:3003
+
+<img src="mutiny_setup/install_scripts.png" alt="Install Scripts" width="500">
+
+<img src="mutiny_setup/fedimint_startup.png" alt="Fedimint Startup" width="500">
+
+> If you see this pink screen, just hit TAB + ENTER to get past it.
+
+<img src="mutiny_setup/pinkScreen.png" alt="Pink Screen" width="500">
+
+You've now got the fedimint processes running on each machine. Congratulations! However, they're not connected into a federation yet. We'll do that in the next step.
+
+### Notes for specific machines:
 
 - If you're running on linode or aws you'll need to install and start docker and docker compose first. You can do this by running the following commands (change apt-get to yum if not using ubuntu):
 
@@ -138,40 +177,6 @@ and if you get a "platform error" when trying to install with docker compose, yo
 ```bash
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 ```
-
-Run the No TLS fedimint setup script below on each of the 4 machines you're running the fedimint gaurdian daemon on. Only install fedimintd on the boxes that'll run the guardians.
-
-### Fedimint Setup Script (No TLS):
-
-```bash
-curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
-```
-
-or if you want to install with TLS:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/tls-download-mutinynet.sh | bash
-```
-
-then we'll run it again later for the gateway setup.
-
-The install script lets you install one or all of:
-
-1. Fedimintd: The fedimint daemon, this is the only thing we're installing right now.
-2. LND + Gateway: A lightning node with fedimint gateway for intercepting HTLCs to provide lightning services for the federation
-3. RTL: Ride the Lightning web interface for the the lightning node
-
-and it'll start the services on the following ports:
-
-- Fedimintd Guardian Dashboard: http://your.ip.add.ress:3000
-- Lightning Gateway Dashboard: http://your.ip.add.ress:3001
-- RTL Lightning Node Management: http://your.ip.add.ress.198:3003
-
-<img src="mutiny_setup/install_scripts.png" alt="Install Scripts">
-
-<img src="mutiny_setup/fedimint_startup.png" alt="Fedimint Startup">
-
-You've now got the fedimint processes running on each machine. Congratulations! However, they're not connected into a federation yet. We'll do that in the next step.
 
 ## Step 3. Forming the Federation
 
@@ -230,48 +235,29 @@ TODO: Write up describing the DKG
 
 ### Guardian Dashboard
 
+- Your Federation is now set up!
+
 <img src="mutiny_setup/guardian_dashboard.png" alt="Guardian Dashboard" width="500">
 
-- these are all hardcoded for now
-
-The invite code doesn't populate yet so you'll have to get it from the command line with:
-
-```bash
-docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli dev invite-code
-```
-
-<img src="mutiny_setup/invite.png" alt="Invite" width="500">
-
-Then connect with Fedi:
-
-TODO: copy screenshots over from phone
-
-### Setting up the Lightning Gateway
+### Connecting and Setting up the Lightning Gateway
 
 Now that we have the federation running, we'll set up the lightning gateway. This is a lightning node that will intercept HTLCs from the lightning network and forward them to the federation. This will allow us to provide lightning services to the federation.
 
-First we have to connect to the federation. We'll use the same federation invite code as we do with the clients.
+Let's connect the lightning gateway cli to the federation.
 
 ```bash
-root@mutinynet-01:~# docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli dev invite-code
-{
-  "invite_code": "fed11jznymkms83ktcn0j4v0d6pspkfn26t65dwlx8gtmucje4jshennvzlazrd9354k858a06uz5zgva2qqcwaen5te0xcuzuvfcxvhr2wpwxyunsw3cxymngta0klu5kt7vcla79lqnjvzwvmz0"
-}
-root@mutinynet-01:~# docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli connect-fed fed11jznymkms83ktcn0j4v0d6pspkfn26t65dwlx8gtmucje4jshennvzlazrd9354k858a06uz5zgva2qqcwaen5te0xcuzuvfcxvhr2wpwxyunsw3cxymngta0klu5kt7vcla79lqnjvzwvmz0
-Enter gateway password: #this is whatever you set it to, default is `thereisnosecondbest`
+
+root@mutinynet-01:~# docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli connect-fed {{your_invite_code_here}}
+Enter gateway password: #default is `thereisnosecondbest`, this is whatever you set the gateway password when you installed fedimint
 {
   "federation_id": "90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5",
   "balance_msat": 0
 }
 ```
 
-<img src="mutiny_setup/dev_invite_code.png" alt="Dev Invite Code" width="500">
+### Funding the Gateway
 
-```bash
-root@mutinynet-01:~# docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli balance --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
-```
-
-You'll initially have 0, but you can deposit to it using the mutinynet faucet at https://faucet.mutinynet.com. Get a new address from the gateway and deposit to it:
+You'll initially have 0 sats and ecash, but you can deposit to the gateway using the mutinynet faucet at https://faucet.mutinynet.com. Get a new address from the gateway and deposit to it:
 
 ```bash
 docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli address --federation-id 90a64ddb703c6cbc4df2ab1edd0601b266ad2f546bbe63a17be6259aca17cce6c17fa21b4b1a56c7a1fafd70541219d5
@@ -285,11 +271,9 @@ docker-compose -f gateway/docker-compose.yaml exec gatewayd gateway-cli address 
 docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli help
 ```
 
-get a new address:
+### Lightning Gateway Dashboard
 
-```bash
-docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli deposit-address
-```
+Now that you're connected, you can go to the lightning gateway dashboard at http://your.ip.add.ress:3001 and see the gateway status.
 
 <img src="mutiny_setup/fed_deposit_addr.png" alt="Fed Deposit Address" width="500">
 
