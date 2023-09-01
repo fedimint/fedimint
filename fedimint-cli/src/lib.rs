@@ -26,6 +26,7 @@ use fedimint_core::api::{
     IFederationApi, InviteCode, WsFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::DatabaseValue;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -98,6 +99,11 @@ enum CliOutput {
     ConfigDecrypt,
 
     ConfigEncrypt,
+
+    OutputConfig {
+        config: ClientConfig,
+        modules: BTreeMap<ModuleInstanceId, String>,
+    },
 
     Raw(serde_json::Value),
 }
@@ -456,6 +462,9 @@ enum DevCmd {
         password: String,
     },
 
+    /// Output current client config
+    OutputConfig,
+
     /// Decode a transaction hex string and print it to stdout
     DecodeTransaction { hex_string: String },
 }
@@ -772,6 +781,21 @@ impl FedimintCli {
                 let key = get_encryption_key(&password, &salt).map_err_cli_general()?;
                 encrypted_write(plaintext_bytes, &key, out_file).map_err_cli_general()?;
                 Ok(CliOutput::ConfigEncrypt)
+            }
+            Command::Dev(DevCmd::OutputConfig) => {
+                let user = cli
+                    .build_client_ng(&self.module_inits, None)
+                    .await
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+                let config = user.get_config().clone();
+                let mut modules = BTreeMap::new();
+                for (instance_id, module) in &config.modules {
+                    modules.insert(
+                        instance_id.clone(),
+                        format!("{}", module.config.expect_decoded_ref()),
+                    );
+                }
+                Ok(CliOutput::OutputConfig { config, modules })
             }
             Command::Dev(DevCmd::DecodeTransaction { hex_string }) => {
                 let bytes: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(&hex_string)
