@@ -186,7 +186,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Parser)]
 </span><span class="kw">struct </span>Options {
-    <span class="attr">#[clap(long)]
+    <span class="attr">#[clap(long, env = <span class="string">&quot;FM_DBTOOL_DATABASE&quot;</span>)]
     </span>database: String,
 
     <span class="attr">#[clap(long, hide = <span class="bool-val">true</span>)]
@@ -226,7 +226,7 @@
     /// configuration file. If dumping the client database, the password can
     /// be an arbitrary string.
     </span>Dump {
-        <span class="attr">#[clap(long)]
+        <span class="attr">#[clap(long, env = <span class="string">&quot;FM_DBTOOL_CONFIG_DIR&quot;</span>)]
         </span>cfg_dir: PathBuf,
         <span class="attr">#[arg(long, env = <span class="string">&quot;FM_PASSWORD&quot;</span>)]
         </span>password: String,
@@ -323,7 +323,7 @@
                 module_inits,
                 modules,
                 prefix_names,
-            );
+            )<span class="question-mark">?</span>;
             dbdump.dump_database().<span class="kw">await</span><span class="question-mark">?</span>;
         }
     }
