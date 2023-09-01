@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# Our own wrapper around 'rustc'
+#
+# In certain places spurious Rust rebuilds are big issues,
+# causing out of disk space failures due to excessive rebuilds,
+# that are usually silently failing and generally hard to debug.
+# Cargo has no good way to detect/prevent it.
+#
+# That's why we wrap 'rustc' in this wrappper, so we get
+# an additional way to detect and control what is going on.
+#
+# Note: when calling into original binary, this script must not
+# have printed anything yet, even on stderr.
+
+set -euo pipefail
+
+orig_bin="${1:-}"
+shift 1
+
+if [ -z "$orig_bin" ]; then
+	>&2 echo "rustc-wrapper: Original binary missing"
+	exit 1
+fi
+
+if [ -n "${FM_CARGO_DENY_COMPILATION:-}" ]; then
+	# 'cargo' makes some invocations to rustc to get some
+	# configs, etc. 
+	# We need to let them through, they are not causing
+	# rebuilds.
+	if [ "$1" = '-vV' ]; then
+	  exec "$orig_bin" "$@"
+	fi
+
+	if [ "$3" = "___" ]; then
+	  exec "$orig_bin" "$@"
+	fi
+
+	>&2 echo "rustc (wrapper) attempting recompilation while FM_CARGO_DENY_COMPILATION set: $orig_bin $*"
+	exit 1
+fi
+
+exec "$orig_bin" "$@"

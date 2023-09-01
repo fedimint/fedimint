@@ -26,6 +26,13 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targe
 >&2 echo "Pre-building tests..."
 cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 
+# We've just built everything there is to built, so we should not have a
+# need to be build things again from now on, but since cargo does not
+# let us enforce it, we need to go behind its back. We put a fake 'rustc'
+# in the PATH.
+# If you really need to break this rule, ping dpc
+export FM_CARGO_DENY_COMPILATION=1
+
 function reconnect_test() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
 }

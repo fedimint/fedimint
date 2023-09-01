@@ -30,8 +30,8 @@ export RUST_BACKTRACE=1
 # 'cargo test' does not have a possibility of building whole workspace (to avoid any rebuilds), yet
 # running just a subset of tests from a given package. To overcome it we parse the output of this
 # command and run test binaries directly. Not elegant, but works.
-cargo test --no-run --workspace --all-targets # run it first without grep, to surface any issues that would be swallowed by it
-available_tests="$(cargo test --no-run --workspace --all-targets 2>&1 | grep Executable | sed -n 's/.*(\([^)]*\)).*/\1/p')"
+cargo test --no-run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} # run it first without grep, to surface any issues that would be swallowed by it
+available_tests="$(cargo test --no-run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} 2>&1 | grep Executable | sed -n 's/.*(\([^)]*\)).*/\1/p')"
 
 eval "$(devimint env)"
 >&2 echo "### Setting up tests - complete"
