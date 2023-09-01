@@ -321,7 +321,8 @@ impl ServerModule for Wallet {
             .collect::<Vec<WalletConsensusItem>>()
             .await;
 
-        let block_count = self.block_count().await;
+        // TODO: We should not be panicking
+        let block_count = self.get_block_count().await.expect("bitcoind rpc failed");
         let block_count_proposal = block_count.saturating_sub(self.cfg.consensus.finality_delay);
         let consensus_block_count = self.consensus_block_count(dbtx).await;
 
@@ -336,7 +337,8 @@ impl ServerModule for Wallet {
             items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
-        let fee_rate_proposal = self.fee_rate().await;
+        // TODO: We should not be panicking
+        let fee_rate_proposal = self.get_fee_rate().await.expect("bitcoind rpc failed");
 
         if fee_rate_proposal != self.consensus_fee_rate(dbtx).await {
             items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
@@ -622,6 +624,12 @@ impl ServerModule for Wallet {
                 }
             },
             api_endpoint! {
+                "block_count_local",
+                async |module: &Wallet, _context, _params: ()| -> Option<u32> {
+                    Ok(*module.block_count_local.lock().expect("Locking failed"))
+                }
+            },
+            api_endpoint! {
                 "peg_out_fees",
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
@@ -659,6 +667,8 @@ pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
     btc_rpc: DynBitcoindRpc,
+    /// The result of last successful get_block_count
+    block_count_local: std::sync::Mutex<Option<u32>>,
 }
 
 impl Wallet {
@@ -698,26 +708,27 @@ impl Wallet {
             ));
         }
 
-        match bitcoind_rpc.get_block_count().await {
+        let wallet = Wallet {
+            cfg,
+            secp: Default::default(),
+            block_count_local: Default::default(),
+            btc_rpc: bitcoind_rpc,
+        };
+
+        match wallet.get_block_count().await {
             Ok(height) => info!(height, "Connected to bitcoind"),
             Err(err) => warn!("Bitcoin node is not ready or configured properly. Modules relying on it may not function correctly: {:?}", err),
         }
 
-        match bitcoind_rpc.get_fee_rate(1).await {
+        match wallet.get_fee_rate_opt().await {
             Ok(feerate) => {
                 match feerate {
                     Some(fr) => info!(feerate = fr.sats_per_kvb, "Bitcoind feerate available"),
-                    None => info!(feerate = 0, "Bitcoind feerate available"),
+                    None => info!(feerate = 0, "Bitcoind feerate not available. Using defaults."),
                 }
             },
             Err(err) => warn!("Bitcoin fee estimation failed. Please configure your nodes to enable fee estimation: {:?}", err),
         }
-
-        let wallet = Wallet {
-            cfg,
-            secp: Default::default(),
-            btc_rpc: bitcoind_rpc,
-        };
 
         Ok(wallet)
     }
@@ -824,19 +835,31 @@ impl Wallet {
         })
     }
 
-    pub async fn block_count(&self) -> u32 {
-        self.btc_rpc
+    /// Wrapper around `self.btc_rpc` that keeps track of the last successful
+    /// result
+    async fn get_block_count(&self) -> anyhow::Result<u32> {
+        let res = self
+            .btc_rpc
             .get_block_count()
             .await
-            .expect("bitcoind rpc failed") as u32
+            .and_then(|count| Ok(u32::try_from(count)?));
+
+        if let Ok(ref count) = res {
+            *self.block_count_local.lock().expect("Failed to lock") = Some(*count);
+        }
+
+        res
     }
 
-    pub async fn fee_rate(&self) -> Feerate {
-        self.btc_rpc
-            .get_fee_rate(CONFIRMATION_TARGET)
-            .await
-            .expect("bitcoind rpc failed")
-            .unwrap_or(self.cfg.consensus.default_fee)
+    pub async fn get_fee_rate_opt(&self) -> anyhow::Result<Option<Feerate>> {
+        self.btc_rpc.get_fee_rate(CONFIRMATION_TARGET).await
+    }
+
+    pub async fn get_fee_rate(&self) -> anyhow::Result<Feerate> {
+        Ok(self
+            .get_fee_rate_opt()
+            .await?
+            .unwrap_or(self.cfg.consensus.default_fee))
     }
 
     pub async fn consensus_block_count(
