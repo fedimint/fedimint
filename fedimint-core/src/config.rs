@@ -111,6 +111,14 @@ pub struct PeerUrl {
 /// This includes global settings and client-side module configs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ClientConfig {
+    #[serde(flatten)]
+    pub global: GlobalClientConfig,
+    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+}
+
+/// Federation-wide client config
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct GlobalClientConfig {
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
@@ -122,8 +130,6 @@ pub struct ClientConfig {
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
-    /// Configs from other client modules
-    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
 impl ClientConfig {
@@ -282,7 +288,7 @@ impl ClientConfig {
 
     /// Federation name from config metadata (if set)
     pub fn federation_name(&self) -> Option<&str> {
-        self.meta.get(META_FEDERATION_NAME_KEY).map(|x| &**x)
+        self.global.meta.get(META_FEDERATION_NAME_KEY).map(|x| &**x)
     }
 }
 

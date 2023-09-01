@@ -826,6 +826,7 @@ impl WsFederationApi<WsClient> {
     pub fn from_config(config: &ClientConfig) -> Self {
         Self::new(
             config
+                .global
                 .api_endpoints
                 .iter()
                 .map(|(id, peer)| (*id, peer.url.clone()))

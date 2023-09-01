@@ -264,7 +264,7 @@ impl<T: AsRef<ClientConfig> + Clone + MaybeSend> Client<T> {
                 .expect("needs mint module client config")
                 .1
                 .clone(),
-            epoch_pk: self.config.as_ref().epoch_pk,
+            epoch_pk: self.config.as_ref().global.epoch_pk,
             context: self.context.clone(),
             secret: Self::mint_secret_static(&self.root_secret),
         }
@@ -1166,7 +1166,7 @@ impl Client<UserClientConfig> {
     ) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
 
-        let payload = PayInvoicePayload::new(self.config.0.federation_id, contract_id);
+        let payload = PayInvoicePayload::new(self.config.0.global.federation_id, contract_id);
 
         let future = reqwest::Client::new()
             .post(

@@ -185,10 +185,13 @@ impl ServerConfigConsensus {
         module_config_gens: &ModuleInitRegistry<DynServerModuleInit>,
     ) -> Result<ClientConfig, anyhow::Error> {
         let client = ClientConfig {
-            federation_id: FederationId(self.auth_pk_set.public_key()),
-            epoch_pk: self.epoch_pk_set.public_key(),
-            api_endpoints: self.api_endpoints.clone(),
-            consensus_version: self.version,
+            global: GlobalClientConfig {
+                federation_id: FederationId(self.auth_pk_set.public_key()),
+                epoch_pk: self.epoch_pk_set.public_key(),
+                api_endpoints: self.api_endpoints.clone(),
+                consensus_version: self.version,
+                meta: self.meta.clone(),
+            },
             modules: self
                 .modules
                 .iter()
@@ -199,7 +202,6 @@ impl ServerConfigConsensus {
                     Ok((*k, gen.get_client_config(*k, v)?))
                 })
                 .collect::<anyhow::Result<BTreeMap<_, _>>>()?,
-            meta: self.meta.clone(),
         };
         Ok(client)
     }

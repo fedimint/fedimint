@@ -56,6 +56,7 @@ impl<T: AsRef<ClientConfig> + Clone + Send> LegacyTestUser<T> {
         let api = WsFederationApi::new(
             config
                 .as_ref()
+                .global
                 .api_endpoints
                 .iter()
                 .filter(|(id, _)| peers.contains(id))

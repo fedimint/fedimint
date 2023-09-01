@@ -475,7 +475,7 @@ async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> 
     Ok(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),
         network: wallet_client.get_network(),
-        meta: client.get_config().meta.clone(),
+        meta: client.get_config().global.meta.clone(),
         total_amount_msat: summary.total_amount(),
         total_num_notes: summary.count_items(),
         denominations_msat: summary,

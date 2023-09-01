@@ -259,7 +259,7 @@ impl GatewayClientExt for Client {
             gateway_id,
         );
 
-        let federation_id = self.get_config().federation_id;
+        let federation_id = self.get_config().global.federation_id;
         let mut dbtx = self.db().begin_transaction().await;
         gateway
             .register_with_federation(&mut dbtx, federation_id, registration_info)
