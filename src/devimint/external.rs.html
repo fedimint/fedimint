@@ -548,6 +548,9 @@
 <a href="#548" id="548">548</a>
 <a href="#549" id="549">549</a>
 <a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -821,13 +824,16 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
         poll(<span class="string">&quot;lnd_connect&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(tonic_lnd::connect(
+            <span class="kw">let </span>result = tonic_lnd::connect(
                 lnd_rpc_addr.clone(),
                 lnd_tls_cert.clone(),
                 lnd_macaroon.clone(),
             )
-            .<span class="kw">await
-            </span>.is_ok())
+            .<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw-2">&amp;</span>result {
+                <span class="macro">info!</span>(<span class="string">&quot;lnd_connect failed: {:?}&quot;</span>, e);
+            }
+            <span class="prelude-val">Ok</span>(result.is_ok())
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
