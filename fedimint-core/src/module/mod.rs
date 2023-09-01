@@ -765,7 +765,7 @@ impl<CI> ConsensusProposal<CI> {
 
 /// Module associated types required by both client and server
 pub trait ModuleCommon {
-    type ClientConfig: ClientConfig;
+    type ClientConfig: ClientConfig + Serialize;
     type Input: Input;
     type Output: Output;
     type OutputOutcome: OutputOutcome;

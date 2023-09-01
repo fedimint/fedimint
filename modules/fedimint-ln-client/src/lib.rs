@@ -632,6 +632,10 @@ impl ClientModule for LightningClientModule {
             }
         }
     }
+
+    fn get_config(&self) -> <<Self as ClientModule>::Common as ModuleCommon>::ClientConfig {
+        self.cfg.clone()
+    }
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

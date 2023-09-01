@@ -4,7 +4,9 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use fedimint_core::api::DynGlobalApi;
-use fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{
+    Decoder, DynClientConfig, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId,
+};
 use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
@@ -14,6 +16,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+use serde_json::Value;
 
 use crate::sm::{Context, DynContext, DynState, Executor, OperationId, State};
 use crate::transaction::{ClientInput, ClientOutput};
@@ -183,6 +186,9 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
         unimplemented!()
     }
+
+    /// Returns the configuration of this module
+    fn get_config(&self) -> <<Self as ClientModule>::Common as ModuleCommon>::ClientConfig;
 }
 
 /// Type-erased version of [`ClientModule`]
@@ -262,6 +268,12 @@ pub trait IClientModule: Debug {
     ) -> Amount;
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
+
+    /// Returns the configuration of this module as an `Encodable` dyn object
+    fn get_config(&self, module_instance: ModuleInstanceId) -> DynClientConfig;
+
+    /// Returns the configuration of this module as a JSON object
+    fn get_config_json(&self) -> serde_json::Value;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -400,6 +412,15 @@ where
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
         <T as ClientModule>::subscribe_balance_changes(self).await
+    }
+
+    fn get_config(&self, module_instance: ModuleInstanceId) -> DynClientConfig {
+        <T as ClientModule>::get_config(self).into_dyn(module_instance)
+    }
+
+    fn get_config_json(&self) -> Value {
+        serde_json::to_value(<T as ClientModule>::get_config(self))
+            .expect("Config can be encoded to JSON")
     }
 }
 
