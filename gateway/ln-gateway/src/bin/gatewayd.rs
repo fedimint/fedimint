@@ -1,4 +1,6 @@
-use ln_gateway::Gatewayd;
+use fedimint_logging::TracingSetup;
+use ln_gateway::Gateway;
+use tracing::info;
 
 /// Fedimint Gateway Binary
 ///
@@ -8,5 +10,9 @@ use ln_gateway::Gatewayd;
 /// remote Lightning node accessible through a `GatewayLightningServer`.
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    Gatewayd::new()?.with_default_modules().run().await
+    TracingSetup::default().init()?;
+    let shutdown_receiver = Gateway::new_with_default_modules().await?.run().await?;
+    shutdown_receiver.await;
+    info!("Gatewayd exiting...");
+    Ok(())
 }

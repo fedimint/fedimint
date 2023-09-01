@@ -11,7 +11,7 @@ use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{block_in_place, sleep};
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_testing::gateway::LightningNodeName;
+use fedimint_testing::gateway::LightningNodeType;
 use futures::executor::block_on;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
@@ -453,10 +453,10 @@ pub enum LightningNode {
 }
 
 impl LightningNode {
-    pub fn name(&self) -> LightningNodeName {
+    pub fn name(&self) -> LightningNodeType {
         match self {
-            LightningNode::Cln(_) => LightningNodeName::Cln,
-            LightningNode::Lnd(_) => LightningNodeName::Lnd,
+            LightningNode::Cln(_) => LightningNodeType::Cln,
+            LightningNode::Lnd(_) => LightningNodeType::Lnd,
         }
     }
 }

@@ -28,6 +28,7 @@ fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { path = "../fedimint-testing" }
 futures = "0.3.24"
+ln-gateway = { path = "../gateway/ln-gateway" }
 nix = { version = "0.26.2", features = ["signal"] }
 rand = "0.8.5"
 serde_json = "1.0.94"
