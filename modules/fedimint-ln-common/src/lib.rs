@@ -187,6 +187,7 @@ pub struct LightningGateway {
     /// Key used to pay the gateway
     pub gateway_redeem_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
+    pub lightning_alias: String,
     pub api: Url,
     /// Route hints to reach the LN node of the gateway.
     ///

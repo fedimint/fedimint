@@ -316,7 +316,6 @@ impl Gateway {
                                             lnrpc: ln_client,
                                             lightning_public_key,
                                             lightning_alias,
-
                                         }).await;
                                         self.load_clients().await.expect("Failed to load gateway clients");
                                         info!("Successfully loaded Gateway clients.");
@@ -551,7 +550,7 @@ impl Gateway {
         if let GatewayState::Running {
             lnrpc,
             lightning_public_key,
-            lightning_alias: _,
+            lightning_alias,
         } = self.state.read().await.clone()
         {
             let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
@@ -596,6 +595,7 @@ impl Gateway {
                 .build(
                     gw_client_cfg.clone(),
                     lightning_public_key,
+                    lightning_alias,
                     lnrpc.clone(),
                     old_client,
                 )
@@ -677,7 +677,7 @@ impl Gateway {
         if let GatewayState::Running {
             lnrpc,
             lightning_public_key,
-            lightning_alias: _,
+            lightning_alias,
         } = self.state.read().await.clone()
         {
             let dbtx = self.gateway_db.begin_transaction().await;
@@ -693,6 +693,7 @@ impl Gateway {
                         .build(
                             config.clone(),
                             lightning_public_key,
+                            lightning_alias.clone(),
                             lnrpc.clone(),
                             old_client,
                         )

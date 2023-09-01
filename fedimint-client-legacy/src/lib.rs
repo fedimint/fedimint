@@ -132,6 +132,7 @@ pub struct GatewayClientConfig {
     pub timelock_delta: u64,
     pub api: Url,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
+    pub lightning_alias: String,
     /// Channel identifier assigned to the mint by the gateway.
     /// All clients in this federation should use this value as
     /// `short_channel_id` when creating invoices to be settled by this
@@ -153,6 +154,7 @@ impl GatewayClientConfig {
             mint_channel_id: self.mint_channel_id,
             gateway_redeem_key: self.redeem_key.x_only_public_key().0,
             node_pub_key: self.node_pub_key,
+            lightning_alias: self.lightning_alias.clone(),
             api: self.api.clone(),
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,

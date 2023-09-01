@@ -43,6 +43,7 @@ impl StandardGatewayClientBuilder {
         &self,
         config: FederationConfig,
         node_pub_key: secp256k1::PublicKey,
+        lightning_alias: String,
         lnrpc: Arc<dyn ILnRpcClient>,
         old_client: Option<fedimint_client::Client>,
     ) -> Result<fedimint_client::Client> {
@@ -52,6 +53,7 @@ impl StandardGatewayClientBuilder {
         registry.attach(GatewayClientGen {
             lnrpc,
             node_pub_key,
+            lightning_alias,
             fees: config.fees,
             timelock_delta: config.timelock_delta,
             mint_channel_id: config.mint_channel_id,

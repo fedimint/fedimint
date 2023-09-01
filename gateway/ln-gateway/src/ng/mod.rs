@@ -324,6 +324,7 @@ impl GatewayClientExt for Client {
 pub struct GatewayClientGen {
     pub lnrpc: Arc<dyn ILnRpcClient>,
     pub node_pub_key: secp256k1::PublicKey,
+    pub lightning_alias: String,
     pub timelock_delta: u64,
     pub mint_channel_id: u64,
     pub fees: RoutingFees,
@@ -361,6 +362,7 @@ impl ClientModuleInit for GatewayClientGen {
                 .child_key(ChildId(0))
                 .to_secp_key(&Secp256k1::new()),
             node_pub_key: self.node_pub_key,
+            lightning_alias: self.lightning_alias.clone(),
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
             fees: self.fees,
@@ -397,6 +399,7 @@ pub struct GatewayClientModule {
     pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
     node_pub_key: PublicKey,
+    lightning_alias: String,
     timelock_delta: u64,
     mint_channel_id: u64,
     fees: RoutingFees,
@@ -460,6 +463,7 @@ impl GatewayClientModule {
             mint_channel_id: self.mint_channel_id,
             gateway_redeem_key: self.redeem_key.x_only_public_key().0,
             node_pub_key: self.node_pub_key,
+            lightning_alias: self.lightning_alias.clone(),
             api,
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,
