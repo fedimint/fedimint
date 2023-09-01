@@ -218,10 +218,11 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Attempts to commit the dbtx or returns an ApiError
-    pub async fn commit_tx_result(self) -> Result<(), ApiError> {
+    pub async fn commit_tx_result(self, path: &'static str) -> Result<(), ApiError> {
         self.dbtx.commit_tx_result().await.map_err(|_err| {
             tracing::warn!(
                 target: fedimint_logging::LOG_NET_API,
+                path,
                 "API server error when writing to database: {:?}",
                 _err
             );
@@ -365,7 +366,7 @@ impl ApiEndpoint<()> {
 
                     let ret = handle_request::<E>(m, &mut context, request).await?;
 
-                    context.commit_tx_result().await?;
+                    context.commit_tx_result(E::PATH).await?;
 
                     Ok(serde_json::to_value(ret).expect("encoding error"))
                 })
