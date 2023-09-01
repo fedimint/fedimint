@@ -249,8 +249,8 @@
 </span><span class="kw">pub struct </span>GatewayInfo {
     <span class="kw">pub </span>version_hash: String,
     <span class="kw">pub </span>federations: Vec&lt;FederationInfo&gt;,
-    <span class="kw">pub </span>lightning_pub_key: String,
-    <span class="kw">pub </span>lightning_alias: String,
+    <span class="kw">pub </span>lightning_pub_key: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>lightning_alias: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="attr">#[serde(with = <span class="string">&quot;serde_routing_fees&quot;</span>)]
     </span><span class="kw">pub </span>fees: RoutingFees,
     <span class="kw">pub </span>route_hints: Vec&lt;route_hints::RouteHint&gt;,

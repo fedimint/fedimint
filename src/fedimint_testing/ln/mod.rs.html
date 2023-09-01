@@ -60,12 +60,13 @@
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::KeyPair;
-<span class="kw">use </span>fedimint_client_legacy::modules::ln::contracts::Preimage;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinHash};
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
@@ -74,6 +75,7 @@
 <span class="kw">use </span>secp256k1_zkp::SecretKey;
 
 <span class="kw">use </span><span class="self">self</span>::mock::INVALID_INVOICE_DESCRIPTION;
+<span class="kw">use </span><span class="kw">crate</span>::gateway::LightningNodeType;
 
 <span class="kw">pub mod </span>mock;
 <span class="kw">pub mod </span>real;
@@ -105,7 +107,7 @@
         </span><span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
-            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>Preimage([<span class="number">0</span>; <span class="number">32</span>]).<span class="number">0</span>))
+            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
             .current_timestamp()
             .min_final_cltv_expiry(<span class="number">0</span>)
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
@@ -121,5 +123,7 @@
     </span><span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String;
+
+    <span class="kw">fn </span>lightning_node_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType;
 }
 </code></pre></div></section></main></body></html>

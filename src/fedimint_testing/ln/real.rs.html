@@ -757,6 +757,20 @@
 <a href="#757" id="757">757</a>
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::TcpListener;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -788,6 +802,7 @@
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::BitcoinTest;
+<span class="kw">use </span><span class="kw">crate</span>::gateway::LightningNodeType;
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
 <span class="kw">const </span>DEFAULT_ESPLORA_SERVER: <span class="kw-2">&amp;</span>str = <span class="string">&quot;http://127.0.0.1:50002&quot;</span>;
@@ -862,6 +877,10 @@
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="string">&quot;127.0.0.1:9000&quot;</span>.to_string()
     }
+
+    <span class="kw">fn </span>lightning_node_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType {
+        LightningNodeType::Cln
+    }
 }
 
 <span class="attr">#[async_trait]
@@ -900,7 +919,8 @@
 }
 
 <span class="kw">impl </span>ClnLightningTest {
-    <span class="kw">pub async fn </span>new(dir: <span class="kw-2">&amp;</span>str) -&gt; ClnLightningTest {
+    <span class="kw">pub async fn </span>new() -&gt; ClnLightningTest {
+        <span class="kw">let </span>dir = env::var(<span class="string">&quot;FM_TEST_DIR&quot;</span>).expect(<span class="string">&quot;Real tests require FM_TEST_DIR&quot;</span>);
         <span class="kw">let </span>socket_cln = PathBuf::from(dir).join(<span class="string">&quot;cln/regtest/lightning-rpc&quot;</span>);
         <span class="kw">let </span>rpc_cln = Arc::new(Mutex::new(ClnRpc::new(socket_cln).<span class="kw">await</span>.unwrap()));
 
@@ -1004,6 +1024,10 @@
 
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="string">&quot;127.0.0.1:9734&quot;</span>.to_string()
+    }
+
+    <span class="kw">fn </span>lightning_node_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType {
+        LightningNodeType::Lnd
     }
 }
 
@@ -1514,6 +1538,10 @@
 
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="self">self</span>.listening_address.clone()
+    }
+
+    <span class="kw">fn </span>lightning_node_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType {
+        LightningNodeType::Ldk
     }
 }
 </code></pre></div></section></main></body></html>

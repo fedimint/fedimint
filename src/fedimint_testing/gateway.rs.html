@@ -152,32 +152,78 @@
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::fmt::{Display, Formatter};
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::Client;
-<span class="kw">use </span>fedimint_client_legacy::modules::ln::config::GatewayFee;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
+<span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::rpc_server::run_webserver;
 <span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
-<span class="kw">use </span>ln_gateway::Gateway;
+<span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tempfile::TempDir;
-<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
-<span class="kw">use </span><span class="kw">crate</span>::fixtures::test_dir;
+<span class="kw">use </span><span class="kw">crate</span>::fixtures::{test_dir, Fixtures};
+<span class="kw">use </span><span class="kw">crate</span>::ln::mock::FakeLightningTest;
+<span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LndLightningTest};
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
 <span class="doccomment">/// Fixture for creating a gateway
@@ -240,46 +286,60 @@
         </span><span class="kw">let </span>client_builder: StandardGatewayClientBuilder =
             StandardGatewayClientBuilder::new(path.clone(), registry, <span class="number">0</span>);
 
-        <span class="kw">let </span>listening_addr = lightning.listening_address();
-        <span class="kw">let </span>info = lightning.info().<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt; = <span class="kw">if </span>Fixtures::is_real_test()
+        {
+            Arc::new(RealLightningBuilder {
+                node_type: lightning.lightning_node_type(),
+            })
+        } <span class="kw">else </span>{
+            Arc::new(FakeLightningBuilder {})
+        };
 
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-        <span class="comment">// Create the stream to route HTLCs. We cannot create the Gateway until the
-        // stream to the lightning node has been setup.
-        </span><span class="kw">let </span>(stream, ln_client) = lightning.route_htlcs(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>gateway_db = Database::new(MemDatabase::new(), decoders.clone());
 
-        <span class="kw">let </span>clients = Arc::new(RwLock::new(BTreeMap::new()));
-        <span class="kw">let </span>scid_to_federation = Arc::new(RwLock::new(BTreeMap::new()));
-
-        <span class="comment">// Create gateway with the client created from `route_htlcs`
-        </span><span class="kw">let </span>gateway = Gateway::new(
-            ln_client.clone(),
-            client_builder.clone(),
-            GatewayFee(RoutingFees {
+        <span class="kw">let </span>gateway = Gateway::new_with_custom_registry(
+            lightning_builder,
+            client_builder,
+            listen,
+            address.clone(),
+            password.clone(),
+            RoutingFees {
                 base_msat: <span class="number">0</span>,
                 proportional_millionths: <span class="number">0</span>,
-            })
-            .<span class="number">0</span>,
-            Database::new(MemDatabase::new(), decoders.clone()),
-            address.clone(),
-            clients.clone(),
-            scid_to_federation.clone(),
-            tg.clone(),
+            },
             num_route_hints,
+            gateway_db,
         )
         .<span class="kw">await
-        </span>.unwrap();
-
-        run_webserver(password.clone(), listen, gateway.clone())
+        </span>.expect(<span class="string">&quot;Failed to create gateway&quot;</span>);
+        gateway
+            .clone()
+            .run()
             .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Failed to start webserver&quot;</span>);
+            </span>.expect(<span class="string">&quot;Failed to start gateway&quot;</span>);
 
-        <span class="comment">// Spawn new thread to listen for HTLCs
-        </span>tg.spawn(<span class="string">&quot;Subscribe to intercepted HTLCs&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-            Gateway::handle_htlc_stream(stream, ln_client, handle, scid_to_federation, clients)
-                .<span class="kw">await</span>;
-        })
-        .<span class="kw">await</span>;
+        <span class="comment">// Wait for the gateway to be in the running state
+        </span><span class="kw">let </span><span class="kw-2">mut </span>gateway_state_iterations = <span class="number">0</span>;
+        <span class="kw">loop </span>{
+            <span class="kw">if let </span>GatewayState::Running {
+                lnrpc: <span class="kw">_</span>,
+                lightning_public_key: <span class="kw">_</span>,
+                lightning_alias: <span class="kw">_</span>,
+            } = gateway.state.read().<span class="kw">await</span>.clone()
+            {
+                <span class="kw">break</span>;
+            }
+
+            <span class="kw">if </span>gateway_state_iterations &gt;= <span class="number">30 </span>{
+                <span class="macro">panic!</span>(<span class="string">&quot;Gateway did not start running after 10 attempts&quot;</span>);
+            }
+
+            gateway_state_iterations += <span class="number">1</span>;
+            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+        }
+
+        <span class="kw">let </span>listening_addr = lightning.listening_address();
+        <span class="kw">let </span>info = lightning.info().<span class="kw">await</span>.unwrap();
 
         <span class="self">Self </span>{
             password,
@@ -292,18 +352,48 @@
     }
 }
 
-<span class="attr">#[derive(Debug)]
-</span><span class="kw">pub enum </span>LightningNodeName {
+<span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub enum </span>LightningNodeType {
     Cln,
     Lnd,
+    Ldk,
 }
 
-<span class="kw">impl </span>Display <span class="kw">for </span>LightningNodeName {
+<span class="kw">impl </span>Display <span class="kw">for </span>LightningNodeType {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::result::Result&lt;(), std::fmt::Error&gt; {
         <span class="kw">match </span><span class="self">self </span>{
-            LightningNodeName::Cln =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;cln&quot;</span>),
-            LightningNodeName::Lnd =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;lnd&quot;</span>),
+            LightningNodeType::Cln =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;cln&quot;</span>),
+            LightningNodeType::Lnd =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;lnd&quot;</span>),
+            LightningNodeType::Ldk =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;ldk&quot;</span>),
         }
+    }
+}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>RealLightningBuilder {
+    node_type: LightningNodeType,
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>LightningBuilder <span class="kw">for </span>RealLightningBuilder {
+    <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
+        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.node_type {
+            LightningNodeType::Cln =&gt; Box::new(ClnLightningTest::new().<span class="kw">await</span>),
+            LightningNodeType::Lnd =&gt; Box::new(LndLightningTest::new().<span class="kw">await</span>),
+            <span class="kw">_ </span>=&gt; {
+                <span class="macro">unimplemented!</span>(<span class="string">&quot;Unsupported Lightning implementation&quot;</span>);
+            }
+        }
+    }
+}
+
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>FakeLightningBuilder;
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>LightningBuilder <span class="kw">for </span>FakeLightningBuilder {
+    <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
+        Box::new(FakeLightningTest::new())
     }
 }
 </code></pre></div></section></main></body></html>

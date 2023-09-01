@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_LIGHTNING_RETRIES"],"enum":["LightningRpcError"],"struct":["NetworkLnRpcClient"],"trait":["ILnRpcClient"],"type":["RouteHtlcStream"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_LIGHTNING_RETRIES"],"enum":["LightningRpcError"],"struct":["GatewayLightningBuilder","NetworkLnRpcClient"],"trait":["ILnRpcClient","LightningBuilder"],"type":["HtlcResult","RouteHtlcStream"]};
