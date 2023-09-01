@@ -19,6 +19,41 @@ pub trait QueryStrategy<IR, OR = IR> {
         None
     }
     fn process(&mut self, peer_id: PeerId, response: api::PeerResult<IR>) -> QueryStep<OR>;
+
+    fn with_request_timeout(
+        self,
+        timeout: Duration,
+    ) -> QueryStrategyWithRequestTimeout<Self, IR, OR>
+    where
+        Self: Sized,
+    {
+        QueryStrategyWithRequestTimeout {
+            inner: self,
+            timeout,
+            _ir: std::marker::PhantomData,
+            _or: std::marker::PhantomData,
+        }
+    }
+}
+
+/// Wraps a strategy `S` and adds a timeout to each call
+pub struct QueryStrategyWithRequestTimeout<S, IR, OR> {
+    inner: S,
+    timeout: Duration,
+    _ir: std::marker::PhantomData<IR>,
+    _or: std::marker::PhantomData<OR>,
+}
+
+impl<IR, OR, S> QueryStrategy<IR, OR> for QueryStrategyWithRequestTimeout<S, IR, OR>
+where
+    S: QueryStrategy<IR, OR>,
+{
+    fn process(&mut self, peer_id: PeerId, response: api::PeerResult<IR>) -> QueryStep<OR> {
+        self.inner.process(peer_id, response)
+    }
+    fn request_timeout(&self) -> Option<Duration> {
+        Some(self.timeout)
+    }
 }
 
 /// Results from the strategy handling a response from a peer

@@ -544,7 +544,9 @@ where
             },
             false,
             self.all_peers().total(),
-        );
+        )
+        // downloading a config shouldn't take too long
+        .with_request_timeout(Duration::from_secs(5));
 
         self.request_with_strategy(
             qs,
