@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use anyhow::Context;
 use erased_serde::Serialize;
 use fedimint_client_legacy::db as ClientRange;
 use fedimint_client_legacy::ln::db as ClientLightningRange;
@@ -52,7 +53,7 @@ impl<'a> DatabaseDump<'a> {
         module_inits: ServerModuleInitRegistry,
         modules: Vec<String>,
         prefixes: Vec<String>,
-    ) -> DatabaseDump<'a> {
+    ) -> anyhow::Result<DatabaseDump<'a>> {
         let read_only = match RocksDbReadOnly::open_read_only(data_dir) {
             Ok(db) => db,
             Err(_) => {
@@ -69,31 +70,31 @@ impl<'a> DatabaseDump<'a> {
                 ModuleDecoderRegistry::default(),
                 notifications,
             );
-            return DatabaseDump {
+            return Ok(DatabaseDump {
                 serialized: BTreeMap::new(),
                 read_only: dbtx,
                 modules,
                 prefixes,
                 cfg: None,
                 module_inits: Default::default(),
-            };
+            });
         }
 
-        let cfg = read_server_config(&password, cfg_dir).unwrap();
+        let cfg = read_server_config(&password, cfg_dir).context("Failed to read server config")?;
         let decoders = module_inits
             .available_decoders(cfg.iter_module_instances())
             .unwrap()
             .with_fallback();
         let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
 
-        DatabaseDump {
+        Ok(DatabaseDump {
             serialized: BTreeMap::new(),
             read_only: dbtx,
             modules,
             prefixes,
             cfg: Some(cfg),
             module_inits,
-        }
+        })
     }
 }
 

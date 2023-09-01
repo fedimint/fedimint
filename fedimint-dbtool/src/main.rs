@@ -20,7 +20,7 @@ mod dump;
 
 #[derive(Debug, Clone, Parser)]
 struct Options {
-    #[clap(long)]
+    #[clap(long, env = "FM_DBTOOL_DATABASE")]
     database: String,
 
     #[clap(long, hide = true)]
@@ -60,7 +60,7 @@ enum DbCommand {
     /// configuration file. If dumping the client database, the password can
     /// be an arbitrary string.
     Dump {
-        #[clap(long)]
+        #[clap(long, env = "FM_DBTOOL_CONFIG_DIR")]
         cfg_dir: PathBuf,
         #[arg(long, env = "FM_PASSWORD")]
         password: String,
@@ -157,7 +157,7 @@ async fn main() -> Result<()> {
                 module_inits,
                 modules,
                 prefix_names,
-            );
+            )?;
             dbdump.dump_database().await?;
         }
     }
