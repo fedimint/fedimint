@@ -791,7 +791,7 @@ impl FedimintCli {
                 let mut modules = BTreeMap::new();
                 for (instance_id, module) in &config.modules {
                     modules.insert(
-                        instance_id.clone(),
+                        *instance_id,
                         format!("{}", module.config.expect_decoded_ref()),
                     );
                 }
