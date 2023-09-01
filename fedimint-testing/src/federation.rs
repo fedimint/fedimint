@@ -72,6 +72,7 @@ impl FederationTest {
             .consensus
             .to_client_config(&self.server_init)
             .unwrap()
+            .global
             .federation_id
     }
 

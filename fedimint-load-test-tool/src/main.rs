@@ -517,12 +517,13 @@ async fn test_connect_raw_client(
     let mut cfg = api.download_client_config(&invite_code).await?;
 
     if let Some(limit_endpoints) = limit_endpoints {
-        cfg.api_endpoints = cfg
+        cfg.global.api_endpoints = cfg
+            .global
             .api_endpoints
             .into_iter()
             .take(limit_endpoints)
             .collect();
-        info!("Limiting endpoints to {:?}", cfg.api_endpoints);
+        info!("Limiting endpoints to {:?}", cfg.global.api_endpoints);
     }
     use jsonrpsee_core::client::ClientT;
     use jsonrpsee_ws_client::WsClientBuilder;
@@ -530,7 +531,7 @@ async fn test_connect_raw_client(
     info!("Connecting to {users} clients");
     let clients = (0..users)
         .flat_map(|_| {
-            let clients = cfg.api_endpoints.values().map(|url| async {
+            let clients = cfg.global.api_endpoints.values().map(|url| async {
                 let ws_client = WsClientBuilder::default()
                     .use_webpki_rustls()
                     .request_timeout(timeout)

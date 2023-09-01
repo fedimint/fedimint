@@ -46,7 +46,7 @@ impl StandardGatewayClientBuilder {
         lnrpc: Arc<dyn ILnRpcClient>,
         old_client: Option<fedimint_client::Client>,
     ) -> Result<fedimint_client::Client> {
-        let federation_id = config.config.federation_id;
+        let federation_id = config.config.global.federation_id;
 
         let mut registry = self.registry.clone();
         registry.attach(GatewayClientGen {
@@ -99,7 +99,7 @@ impl StandardGatewayClientBuilder {
         config: FederationConfig,
         mut dbtx: DatabaseTransaction<'_>,
     ) -> Result<()> {
-        let id = config.config.federation_id;
+        let id = config.config.global.federation_id;
         dbtx.insert_entry(&FederationIdKey { id }, &config).await;
         dbtx.commit_tx_result()
             .await

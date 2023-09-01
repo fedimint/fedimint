@@ -594,7 +594,7 @@ impl Gateway {
             let mut next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
             for config in configs {
-                let federation_id = config.config.federation_id;
+                let federation_id = config.config.global.federation_id;
                 let old_client = self.clients.read().await.get(&federation_id).cloned();
                 let client = self
                     .client_builder
@@ -712,7 +712,7 @@ impl Gateway {
             }
         };
 
-        let federation_id = gw_client_cfg.config.federation_id;
+        let federation_id = gw_client_cfg.config.global.federation_id;
         let route_hints =
             Self::fetch_lightning_route_hints(self.lnrpc.clone(), self.num_route_hints).await?;
         let old_client = self.clients.read().await.get(&federation_id).cloned();

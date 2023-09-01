@@ -837,7 +837,7 @@ impl Client {
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
-                core_consensus: config.consensus_version,
+                core_consensus: config.global.consensus_version,
                 api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
                     .expect("must not have conflicting versions"),
             },
@@ -851,7 +851,7 @@ impl Client {
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
-                                    core_consensus: config.consensus_version,
+                                    core_consensus: config.global.consensus_version,
                                     module_consensus: module_config.version,
                                     api: module_init.supported_api_versions(),
                                 },
@@ -1441,7 +1441,7 @@ impl ClientBuilder {
 
                 let module = module_init
                     .init(
-                        config.federation_id,
+                        config.global.federation_id,
                         module_config,
                         db.clone(),
                         module_instance,
@@ -1481,8 +1481,8 @@ impl ClientBuilder {
             config: config.clone(),
             decoders,
             db: db.clone(),
-            federation_id: config.federation_id,
-            federation_meta: config.meta,
+            federation_id: config.global.federation_id,
+            federation_meta: config.global.meta,
             primary_module_instance,
             modules,
             module_inits: self.module_inits.clone(),
@@ -1535,7 +1535,7 @@ async fn get_config(
             let mut dbtx = db.begin_transaction().await;
             dbtx.insert_new_entry(
                 &ClientConfigKey {
-                    id: config.federation_id,
+                    id: config.global.federation_id,
                 },
                 &config,
             )

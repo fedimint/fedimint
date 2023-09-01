@@ -267,6 +267,7 @@ impl Opts {
             .ok_or_cli_msg(CliErrorKind::MissingAuth, "Admin client needs our-id set")?;
 
         let url = cfg
+            .global
             .api_endpoints
             .get(our_id)
             .expect("Endpoint exists")
@@ -611,7 +612,7 @@ impl FedimintCli {
                 let decoders = cli.load_decoders(&cfg, &self.module_inits);
                 let client = cli.admin_client(&cfg)?;
                 let last_epoch = client
-                    .fetch_last_epoch_history(cfg.epoch_pk, &decoders)
+                    .fetch_last_epoch_history(cfg.global.epoch_pk, &decoders)
                     .await?;
 
                 let hex_outcome = last_epoch.consensus_encode_to_hex().map_err_cli_io()?;
