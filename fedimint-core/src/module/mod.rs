@@ -9,6 +9,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use secp256k1_zkp::XOnlyPublicKey;
@@ -348,10 +349,12 @@ impl ApiEndpoint<()> {
             E::Param: Debug,
             E::Response: Debug,
         {
-            tracing::trace!(target: "fedimint_server::request", ?request, "received request");
+            tracing::debug!(target: LOG_NET_API, path = E::PATH, ?request, "received request");
             let result = E::handle(state, context, request.params).await;
             if let Err(error) = &result {
-                tracing::trace!(target: "fedimint_server::request", ?error, "error");
+                tracing::warn!(target: LOG_NET_API, path = E::PATH, ?error, "api request error");
+            } else {
+                tracing::debug!(target: LOG_NET_API, path = E::PATH, "api request complete");
             }
             result
         }
