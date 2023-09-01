@@ -183,8 +183,6 @@ impl Federation {
 
     pub async fn pegin(&self, amount: u64) -> Result<()> {
         info!(amount, "Peg-in");
-        // Some blocks must always be mined first before pegin
-        self.await_minimum_blocks().await?;
         let deposit = cmd!(self, "deposit-address").out_json().await?;
         let deposit_address = deposit["address"].as_str().unwrap();
         let deposit_operation_id = deposit["operation_id"].as_str().unwrap();
@@ -192,7 +190,7 @@ impl Federation {
         self.bitcoind
             .send_to(deposit_address.to_owned(), amount)
             .await?;
-        self.bitcoind.mine_blocks(100).await?;
+        self.bitcoind.mine_blocks(21).await?;
 
         cmd!(self, "await-deposit", deposit_operation_id)
             .run()
@@ -202,8 +200,6 @@ impl Federation {
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
-        // Some blocks must always be mined first before pegin
-        self.await_minimum_blocks().await?;
         let fed_id = self.federation_id().await;
         let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
             .out_json()
@@ -246,7 +242,7 @@ impl Federation {
         Ok(expected)
     }
 
-    pub async fn await_minimum_blocks(&self) -> Result<()> {
+    pub async fn generate_first_epoch(&self) -> Result<()> {
         // TODO: optimize this
         self.generate_epochs(1).await?;
         Ok(())

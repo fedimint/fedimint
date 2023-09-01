@@ -195,12 +195,20 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
             Federation::new(process_mgr, bitcoind.clone(), fed_size).await
         },
     )?;
+
     info!(LOG_DEVIMINT, "federation and gateways started");
-    tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed))?;
+
+    tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed), async {
+        info!(LOG_DEVIMINT, "Joining federation with the main client");
+        cmd!(fed, "join-federation", fed.invite_code()?)
+            .run()
+            .await?;
+        info!(LOG_DEVIMINT, "Generating first epoch");
+        fed.generate_first_epoch().await?;
+        Ok(())
+    })?;
+
     // Initialize fedimint-cli
-    cmd!(fed, "join-federation", fed.invite_code()?)
-        .run()
-        .await?;
     info!(LOG_DEVIMINT, "await gateways registered");
     fed.await_gateways_registered().await?;
     info!(LOG_DEVIMINT, "gateways registered");
