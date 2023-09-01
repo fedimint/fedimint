@@ -10,7 +10,7 @@ use fedimint_core::api::{
     FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::ClientBackupKey;
-use fedimint_core::config::{ClientConfig, ClientConfigResponse};
+use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
@@ -577,9 +577,15 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             "auth",
-            async |_config: &ConsensusApi, context, _v: ()| -> () {
+            async |_fedimint: &ConsensusApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 Ok(())
+            }
+        },
+        api_endpoint! {
+            "modules_config_json",
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<ModuleInstanceId, JsonWithKind> {
+                Ok(fedimint.cfg.consensus.modules_json.clone())
             }
         },
     ]
