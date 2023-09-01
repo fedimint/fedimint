@@ -29,6 +29,7 @@ use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
 use db::{FederationRegistrationKey, GatewayPublicKey};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
+use fedimint_client::Client;
 use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -726,7 +727,7 @@ impl Gateway {
             )
             .await?;
 
-        let balance_msat = client.get_balance().await;
+        let federation_info = self.make_federation_info(&client, federation_id).await;
 
         self.register_client(client, federation_id, channel_id, route_hints)
             .await?;
@@ -736,10 +737,7 @@ impl Gateway {
             .save_config(gw_client_cfg.clone(), dbtx)
             .await?;
 
-        Ok(FederationInfo {
-            federation_id,
-            balance_msat,
-        })
+        Ok(federation_info)
     }
 
     pub async fn handle_get_info(&self, _payload: InfoPayload) -> Result<GatewayInfo> {
@@ -748,12 +746,7 @@ impl Gateway {
         let route_hints =
             Self::fetch_lightning_route_hints(self.lnrpc.clone(), self.num_route_hints).await?;
         for (federation_id, client) in federation_clients {
-            let balance_msat = client.get_balance().await;
-
-            federations.push(FederationInfo {
-                federation_id,
-                balance_msat,
-            });
+            federations.push(self.make_federation_info(&client, federation_id).await);
         }
 
         Ok(GatewayInfo {
@@ -872,5 +865,20 @@ impl Gateway {
         RestorePayload { federation_id: _ }: RestorePayload,
     ) -> Result<()> {
         unimplemented!("Restore is not currently supported");
+    }
+
+    async fn make_federation_info(
+        &self,
+        client: &Client,
+        federation_id: FederationId,
+    ) -> FederationInfo {
+        let balance_msat = client.get_balance().await;
+        let config = client.get_config().clone();
+
+        FederationInfo {
+            federation_id,
+            balance_msat,
+            config,
+        }
     }
 }

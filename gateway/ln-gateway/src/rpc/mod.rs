@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
@@ -61,6 +61,7 @@ pub struct FederationInfo {
     /// Unique identifier of the fed
     pub federation_id: FederationId,
     pub balance_msat: Amount,
+    pub config: ClientConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
