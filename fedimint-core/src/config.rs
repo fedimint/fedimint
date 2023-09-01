@@ -116,6 +116,14 @@ pub struct ClientConfig {
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
+/// Client config that cannot be cryptographically verified but is easier to
+/// parse by external tools
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct JsonClientConfig {
+    pub global: GlobalClientConfig,
+    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+}
+
 /// Federation-wide client config
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GlobalClientConfig {

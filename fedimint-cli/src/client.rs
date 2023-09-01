@@ -133,6 +133,8 @@ pub enum ClientCmd {
         module: ModuleSelector,
         args: Vec<ffi::OsString>,
     },
+    /// Returns the client config
+    Config,
 }
 
 pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
@@ -461,6 +463,10 @@ pub async fn handle_ng_command(
                 .context("Module not found")?;
 
             module_client.handle_cli_command(&client, &args).await
+        }
+        ClientCmd::Config => {
+            let config = client.get_config_json();
+            Ok(serde_json::to_value(config).expect("Client config is serializable"))
         }
     }
 }

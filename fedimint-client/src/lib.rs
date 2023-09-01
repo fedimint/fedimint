@@ -81,7 +81,9 @@ use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     InviteCode, WsFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
+use fedimint_core::config::{
+    ClientConfig, FederationId, JsonClientConfig, JsonWithKind, ModuleInitRegistry,
+};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -756,6 +758,26 @@ impl Client {
     /// Returns the config with which the client was initialized.
     pub fn get_config(&self) -> &ClientConfig {
         &self.inner.config
+    }
+
+    /// Returns the config of the client in JSON format.
+    ///
+    /// Compared to the consensus module format where module configs are binary
+    /// encoded this format cannot be cryptographically verified but is easier
+    /// to consume and to some degree human-readable.
+    pub fn get_config_json(&self) -> JsonClientConfig {
+        JsonClientConfig {
+            global: self.get_config().global.clone(),
+            modules: self
+                .inner
+                .modules
+                .iter_modules()
+                .map(|(instance_id, kind, module)| {
+                    let config = JsonWithKind::new(kind.clone(), module.get_config_json());
+                    (instance_id, config)
+                })
+                .collect(),
+        }
     }
 
     /// Get the primary module
