@@ -1732,6 +1732,8 @@
 <a href="#1732" id="1732">1732</a>
 <a href="#1733" id="1733">1733</a>
 <a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>ln;
@@ -1866,6 +1868,7 @@
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>api: Url,
     <span class="kw">pub </span>node_pub_key: bitcoin::secp256k1::PublicKey,
+    <span class="kw">pub </span>lightning_alias: String,
     <span class="doccomment">/// Channel identifier assigned to the mint by the gateway.
     /// All clients in this federation should use this value as
     /// `short_channel_id` when creating invoices to be settled by this
@@ -1887,6 +1890,7 @@
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
             gateway_redeem_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
             node_pub_key: <span class="self">self</span>.node_pub_key,
+            lightning_alias: <span class="self">self</span>.lightning_alias.clone(),
             api: <span class="self">self</span>.api.clone(),
             route_hints,
             valid_until: fedimint_core::time::now() + time_to_live,

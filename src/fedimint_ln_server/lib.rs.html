@@ -1409,6 +1409,7 @@
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
 <a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -2663,6 +2664,7 @@
             mint_channel_id: <span class="number">100</span>,
             gateway_redeem_key: pk.x_only_public_key().<span class="number">0</span>,
             node_pub_key: pk,
+            lightning_alias: <span class="string">&quot;FakeLightningAlias&quot;</span>.to_string(),
             api: Url::parse(<span class="string">&quot;http://example.com&quot;</span>)
                 .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
             route_hints: <span class="macro">vec!</span>[],

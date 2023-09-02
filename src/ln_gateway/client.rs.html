@@ -120,6 +120,8 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -165,6 +167,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,
         node_pub_key: secp256k1::PublicKey,
+        lightning_alias: String,
         lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
         old_client: <span class="prelude-ty">Option</span>&lt;fedimint_client::Client&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::Client&gt; {
@@ -174,6 +177,7 @@
         registry.attach(GatewayClientGen {
             lnrpc,
             node_pub_key,
+            lightning_alias,
             fees: config.fees,
             timelock_delta: config.timelock_delta,
             mint_channel_id: config.mint_channel_id,
