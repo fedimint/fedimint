@@ -5,7 +5,7 @@
 #
 
 [Version]
-  rocksdb_version=7.7.3
+  rocksdb_version=7.10.2
   options_file_version=1.1
 
 [DBOptions]
@@ -93,17 +93,11 @@
 
 [CFOptions "default"]
   compression_opts={max_dict_buffer_bytes=0;enabled=false;max_dict_bytes=0;parallel_threads=1;zstd_max_train_bytes=0;level=32767;use_zstd_dict_trainer=true;strategy=0;window_bits=-14;}
-  memtable_whole_key_filtering=false
-  max_bytes_for_level_base=268435456
-  memtable_huge_page_size=0
-  write_buffer_size=67108864
-  blob_compaction_readahead_size=0
-  arena_block_size=1048576
-  target_file_size_multiplier=1
-  inplace_update_num_locks=10000
-  memtable_prefix_bloom_size_ratio=0.000000
-  report_bg_io_stats=false
   memtable_protection_bytes_per_key=0
+  target_file_size_multiplier=1
+  report_bg_io_stats=false
+  write_buffer_size=67108864
+  memtable_huge_page_size=0
   max_successive_merges=0
   max_write_buffer_number=2
   prefix_extractor=nullptr
@@ -112,6 +106,11 @@
   blob_garbage_collection_force_threshold=1.000000
   enable_blob_files=false
   blob_file_starting_level=0
+  memtable_prefix_bloom_size_ratio=0.000000
+  inplace_update_num_locks=10000
+  blob_compaction_readahead_size=0
+  ignore_max_compaction_bytes_for_input=true
+  arena_block_size=1048576
   level0_stop_writes_trigger=36
   blob_compression_type=kNoCompression
   level0_slowdown_writes_trigger=20
@@ -123,6 +122,8 @@
   disable_auto_compactions=false
   check_flush_compaction_key_order=true
   min_blob_size=0
+  memtable_whole_key_filtering=false
+  max_bytes_for_level_base=268435456
   last_level_temperature=kUnknown
   compaction_options_fifo={allow_compaction=false;age_for_warm=0;max_table_files_size=1073741824;}
   max_bytes_for_level_multiplier=10.000000
@@ -139,33 +140,35 @@
   enable_blob_garbage_collection=false
   experimental_mempurge_threshold=0.000000
   bottommost_compression=kDisableCompressionOption
-  compaction_pri=kMinOverlappingRatio
-  compaction_filter_factory=nullptr
-  comparator=leveldb.BytewiseComparator
-  sst_partitioner_factory=nullptr
-  table_factory=BlockBasedTable
-  merge_operator=nullptr
-  compaction_filter=nullptr
-  level_compaction_dynamic_level_bytes=false
-  optimize_filters_for_hits=false
-  inplace_update_support=false
-  max_write_buffer_number_to_maintain=0
-  bloom_locality=0
-  preclude_last_level_data_seconds=0
-  max_write_buffer_size_to_maintain=134217728
-  compaction_style=kCompactionStyleLevel
   min_write_buffer_number_to_merge=1
-  memtable_factory=SkipListFactory
-  memtable_insert_with_hint_prefix_extractor=nullptr
-  force_consistency_checks=true
+  preserve_internal_time_seconds=0
+  preclude_last_level_data_seconds=0
+  sst_partitioner_factory=nullptr
   num_levels=7
+  force_consistency_checks=true
+  memtable_insert_with_hint_prefix_extractor=nullptr
+  memtable_factory=SkipListFactory
+  level_compaction_dynamic_file_size=true
+  max_write_buffer_number_to_maintain=0
+  optimize_filters_for_hits=false
+  level_compaction_dynamic_level_bytes=false
+  compaction_style=kCompactionStyleLevel
+  compaction_filter=nullptr
+  inplace_update_support=false
+  merge_operator=nullptr
+  table_factory=BlockBasedTable
+  bloom_locality=0
+  comparator=leveldb.BytewiseComparator
+  compaction_filter_factory=nullptr
+  max_write_buffer_size_to_maintain=134217728
+  compaction_pri=kMinOverlappingRatio
   
 [TableOptions/BlockBasedTable "default"]
   initial_auto_readahead_size=8192
   pin_top_level_index_and_filter=true
   block_align=false
   block_size_deviation=10
-  checksum=kCRC32c
+  checksum=kXXH3
   index_shortening=kShortenSeparators
   num_file_reads_for_auto_readahead=2
   whole_key_filtering=true

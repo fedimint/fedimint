@@ -1252,6 +1252,7 @@ mod fedimint_migration_tests {
             mint_channel_id: 100,
             gateway_redeem_key: pk.x_only_public_key().0,
             node_pub_key: pk,
+            lightning_alias: "FakeLightningAlias".to_string(),
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
