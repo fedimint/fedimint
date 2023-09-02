@@ -506,9 +506,13 @@ impl ConfigGenState {
             let combined = ConfigGenModuleParams::new(local.clone(), consensus.clone());
             // Check that the params are parseable
             let module = self.settings.registry.get(kind).expect("Module exists");
-            module
-                .validate_params(&combined)
-                .map_err(|e| ApiError::bad_request(format!("Module params invalid {e:?}")))?;
+            module.validate_params(&combined).map_err(|e| {
+                ApiError::bad_request(format!(
+                    "Module {} params invalid: {}",
+                    id,
+                    itertools::join(e.chain(), ": ")
+                ))
+            })?;
             combined_params.push((id, kind.clone(), combined));
         }
         consensus.modules =
