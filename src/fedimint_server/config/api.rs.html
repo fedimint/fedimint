@@ -1039,6 +1039,10 @@
 <a href="#1039" id="1039">1039</a>
 <a href="#1040" id="1040">1040</a>
 <a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1547,9 +1551,13 @@
             <span class="kw">let </span>combined = ConfigGenModuleParams::new(local.clone(), consensus.clone());
             <span class="comment">// Check that the params are parseable
             </span><span class="kw">let </span>module = <span class="self">self</span>.settings.registry.get(kind).expect(<span class="string">&quot;Module exists&quot;</span>);
-            module
-                .validate_params(<span class="kw-2">&amp;</span>combined)
-                .map_err(|e| ApiError::bad_request(<span class="macro">format!</span>(<span class="string">&quot;Module params invalid {e:?}&quot;</span>)))<span class="question-mark">?</span>;
+            module.validate_params(<span class="kw-2">&amp;</span>combined).map_err(|e| {
+                ApiError::bad_request(<span class="macro">format!</span>(
+                    <span class="string">&quot;Module {} params invalid: {}&quot;</span>,
+                    id,
+                    itertools::join(e.chain(), <span class="string">&quot;: &quot;</span>)
+                ))
+            })<span class="question-mark">?</span>;
             combined_params.push((id, kind.clone(), combined));
         }
         consensus.modules =
