@@ -818,7 +818,7 @@ pub trait ServerModule: Debug + Sized {
     ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
-    /// returns an error if any only if the consensus item does not change
+    /// returns an error if and only if the consensus item does not change
     /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a, 'b>(
         &'a self,
