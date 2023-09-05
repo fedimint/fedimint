@@ -42,7 +42,7 @@ aquamarine = "0.3.0"
 bitcoin = { version = "0.29.2", features = ["serde"] }
 bitcoin_hashes = "0.11.0"
 clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
-cln-plugin = { git = "https://github.com/fedimint/lightning", rev = "2db131d5" }
+cln-plugin = "0.1.5"
 cln-rpc = "0.1.1"
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core = { path = "../../fedimint-core" }
