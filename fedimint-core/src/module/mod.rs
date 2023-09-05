@@ -40,7 +40,7 @@ use crate::{
     OutPoint, PeerId,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
     pub pub_keys: Vec<XOnlyPublicKey>,

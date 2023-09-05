@@ -35,7 +35,7 @@ impl IncomingContractOffer {
 /// Specialized smart contract for incoming payments
 ///
 /// A user generates a private/public keypair that can later be used to claim
-/// the incoming funds. The public key is the defined as the preimage of a
+/// the incoming funds. The public key is defined as the preimage of a
 /// payment hash and threshold-encrypted to the federation's public key. They
 /// then put up the encrypted preimage for sale by creating an
 /// [`IncomingContractOffer`].
