@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["server_endpoints"],"struct":["ConsensusApi","ExpiringCache","RpcHandlerCtx"]};
+window.SIDEBAR_ITEMS = {"fn":["server_endpoints"],"struct":["ConsensusApi","ExpiringCache","InvitationCodesTracker","RpcHandlerCtx"]};

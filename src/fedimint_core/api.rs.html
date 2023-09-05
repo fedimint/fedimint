@@ -1873,7 +1873,7 @@
 </span><span class="kw">const </span>CONFIG_DOWNLOAD_TOKEN_BYTES: usize = <span class="number">12</span>;
 
 <span class="doccomment">/// Allows a client to download the config
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, PartialOrd, Ord)]
 </span><span class="kw">pub struct </span>ClientConfigDownloadToken(<span class="kw">pub </span>[u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
 
 <span class="macro">serde_as_encodable_hex!</span>(ClientConfigDownloadToken);

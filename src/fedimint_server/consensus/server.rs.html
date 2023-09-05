@@ -674,6 +674,7 @@
 <a href="#674" id="674">674</a>
 <a href="#675" id="675">675</a>
 <a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{max, min};
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
@@ -714,7 +715,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_global_database_migrations, LastEpochKey, GLOBAL_DATABASE_VERSION};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::peers::IPeerConnections;
-<span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
+<span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, PeerConnector, PeerSlice, ReconnectPeerConnections};
 <span class="kw">use crate</span>::{LOG_CONSENSUS, LOG_CORE};
@@ -891,6 +892,7 @@
 
         <span class="kw">let </span>consensus_api = ConsensusApi {
             cfg: cfg.clone(),
+            invitation_codes_tracker: InvitationCodesTracker::new(db.clone(), task_group).<span class="kw">await</span>,
             db: db.clone(),
             modules: modules.clone(),
             client_cfg,

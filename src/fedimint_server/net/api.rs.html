@@ -659,6 +659,100 @@
 <a href="#659" id="659">659</a>
 <a href="#660" id="660">660</a>
 <a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -668,7 +762,8 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::api::{
-    FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
+    ClientConfigDownloadToken, FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus,
+    ServerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
@@ -684,9 +779,11 @@
 };
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>secp256k1_zkp::SECP256K1;
@@ -702,8 +799,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::{ApiEvent, FundingVerifier, VerificationCaches};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigSignatureKey, EpochHistoryKey,
-    LastEpochKey,
+    AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
+    ClientConfigSignatureKey, EpochHistoryKey, LastEpochKey,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::SerdeTransaction;
@@ -729,12 +826,113 @@
     }
 }
 
+<span class="doccomment">/// Tracks the usage of invitiation code tokens
+///
+/// Mostly to serialize the database counter modifications, which would
+/// otherwise cause MVCC conflict.
+</span><span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>InvitationCodesTracker {
+    counts: Arc&lt;tokio::sync::Mutex&lt;BTreeMap&lt;ClientConfigDownloadToken, u64&gt;&gt;&gt;,
+    <span class="doccomment">/// Notify on any change `counts` above.
+    ///
+    /// Multiple invitation codes are possible. Maintaining notifications
+    /// per-key seems like a pain, so instead we assume invitation codes are
+    /// not in thousands and let the worker task detect the changes against
+    /// a local copy.
+    ///
+    /// `watch` is used as it supports sender disconnection detection which
+    /// simplifies task termination.
+    </span>counts_changed_tx: Arc&lt;tokio::sync::watch::Sender&lt;()&gt;&gt;,
+}
+
+<span class="kw">impl </span>InvitationCodesTracker {
+    <span class="kw">pub async fn </span>new(db: Database, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>counts: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = db
+            .begin_transaction()
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigDownloadKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(k, v)| (k.<span class="number">0</span>, v))
+            .collect()
+            .<span class="kw">await</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>local_counts = counts.clone();
+        <span class="kw">let </span>counts = Arc::new(tokio::sync::Mutex::new(counts));
+
+        <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = tokio::sync::watch::channel(());
+
+        tg.spawn(<span class="string">&quot;invitation_codes_tracker&quot;</span>, {
+            <span class="kw">let </span>counts = counts.clone();
+
+            |<span class="kw">_</span>| <span class="kw">async move </span>{
+                <span class="kw">while let </span><span class="prelude-val">Ok</span>(()) = rx.changed().<span class="kw">await </span>{
+                    <span class="kw">let </span>changed_counts: Vec&lt;<span class="kw">_</span>&gt; = counts
+                        .lock()
+                        .<span class="kw">await
+                        </span>.iter()
+                        .filter_map(|(token, count)| {
+                            <span class="kw">if </span>local_counts.get(token).copied().unwrap_or_default() != <span class="kw-2">*</span>count {
+                                <span class="prelude-val">Some</span>((token.clone(), <span class="kw-2">*</span>count))
+                            } <span class="kw">else </span>{
+                                <span class="prelude-val">None
+                            </span>}
+                        })
+                        .collect();
+
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+
+                    <span class="kw">for </span>(token, count) <span class="kw">in </span>changed_counts {
+                        dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientConfigDownloadKey(token.clone()), <span class="kw-2">&amp;</span>count)
+                            .<span class="kw">await</span>;
+                        local_counts.insert(token, count);
+                    }
+
+                    dbtx.commit_tx().<span class="kw">await</span>;
+                }
+            }
+        })
+        .<span class="kw">await</span>;
+
+        <span class="self">Self </span>{
+            counts,
+            counts_changed_tx: Arc::new(tx),
+        }
+    }
+
+    <span class="kw">pub async fn </span>use_token(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        token: <span class="kw-2">&amp;</span>ClientConfigDownloadToken,
+        limit: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.counts.lock().<span class="kw">await</span>;
+
+        <span class="kw">let </span>entry = lock.entry(token.clone()).or_default();
+
+        <span class="kw">if </span>limit.map(|limit| limit &lt;= <span class="kw-2">*</span>entry).unwrap_or(<span class="bool-val">false</span>) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(());
+        }
+
+        <span class="kw-2">*</span>entry += <span class="number">1</span>;
+
+        drop(lock);
+
+        <span class="self">self</span>.counts_changed_tx
+            .send(())
+            .expect(<span class="string">&quot;invitations code tracker task panicked&quot;</span>);
+
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ConsensusApi {
     <span class="doccomment">/// Our server configuration
     </span><span class="kw">pub </span>cfg: ServerConfig,
     <span class="doccomment">/// Database for serving the API
     </span><span class="kw">pub </span>db: Database,
+
+    <span class="kw">pub </span>invitation_codes_tracker: InvitationCodesTracker,
+
     <span class="doccomment">/// Modules registered with the federation
     </span><span class="kw">pub </span>modules: ServerModuleRegistry,
     <span class="doccomment">/// Cached client config
@@ -879,11 +1077,7 @@
         TransactionStatus::Accepted { epoch: <span class="number">0</span>, outputs }
     }
 
-    <span class="kw">pub async fn </span>download_client_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        info: InviteCode,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ApiResult&lt;ClientConfig&gt; {
+    <span class="kw">pub async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: InviteCode) -&gt; ApiResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>token = <span class="self">self</span>.cfg.local.download_token.clone();
 
         <span class="kw">if </span>info.download_token != token {
@@ -892,21 +1086,15 @@
             ));
         }
 
-        <span class="kw">let </span>times_used = dbtx
-            .get_value(<span class="kw-2">&amp;</span>ClientConfigDownloadKey(token.clone()))
+        <span class="kw">if </span><span class="self">self
+            </span>.invitation_codes_tracker
+            .use_token(<span class="kw-2">&amp;</span>token, <span class="self">self</span>.cfg.local.download_token_limit)
             .<span class="kw">await
-            </span>.unwrap_or_default()
-            + <span class="number">1</span>;
-
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientConfigDownloadKey(token), <span class="kw-2">&amp;</span>times_used)
-            .<span class="kw">await</span>;
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(limit) = <span class="self">self</span>.cfg.local.download_token_limit {
-            <span class="kw">if </span>times_used &gt; limit {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(
-                    <span class="string">&quot;Download token used too many times&quot;</span>.to_string(),
-                ));
-            }
+            </span>.is_err()
+        {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(
+                <span class="string">&quot;Download token used too many times&quot;</span>.to_string(),
+            ));
         }
 
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_cfg.clone())
@@ -1163,7 +1351,7 @@
                     .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;Could not parse invite code&quot;</span>.to_string()))<span class="question-mark">?</span>;
                 <span class="kw">let </span>future = context.wait_key_exists(ClientConfigSignatureKey);
                 <span class="kw">let </span>signature = future.<span class="kw">await</span>;
-                <span class="kw">let </span>client_config = fedimint.download_client_config(info, <span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>client_config = fedimint.download_client_config(info).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(ClientConfigResponse{
                     client_config,
                     signature
