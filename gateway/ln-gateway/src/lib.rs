@@ -29,6 +29,7 @@ use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
 use db::{FederationRegistrationKey, GatewayPublicKey};
 use fedimint_client::module::init::ClientModuleInitRegistry;
+use fedimint_client::Client;
 use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -415,12 +416,7 @@ impl Gateway {
             let route_hints =
                 Self::fetch_lightning_route_hints(lnrpc.clone(), self.num_route_hints).await?;
             for (federation_id, client) in federation_clients {
-                let balance_msat = client.get_balance().await;
-
-                federations.push(FederationInfo {
-                    federation_id,
-                    balance_msat,
-                });
+                federations.push(self.make_federation_info(&client, federation_id).await);
             }
 
             return Ok(GatewayInfo {
@@ -601,7 +597,7 @@ impl Gateway {
                 )
                 .await?;
 
-            let balance_msat = client.get_balance().await;
+            let federation_info = self.make_federation_info(&client, federation_id).await;
 
             client
                 .register_with_federation(
@@ -622,10 +618,7 @@ impl Gateway {
                 .save_config(gw_client_cfg.clone(), dbtx)
                 .await?;
 
-            return Ok(FederationInfo {
-                federation_id,
-                balance_msat,
-            });
+            return Ok(federation_info);
         }
 
         Err(GatewayError::Disconnected)
@@ -820,6 +813,21 @@ impl Gateway {
         }
 
         unreachable!();
+    }
+
+    async fn make_federation_info(
+        &self,
+        client: &Client,
+        federation_id: FederationId,
+    ) -> FederationInfo {
+        let balance_msat = client.get_balance().await;
+        let config = client.get_config().clone();
+
+        FederationInfo {
+            federation_id,
+            balance_msat,
+            config,
+        }
     }
 }
 
