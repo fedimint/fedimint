@@ -38,7 +38,7 @@ use crate::consensus::{
 use crate::db::{get_global_database_migrations, LastEpochKey, GLOBAL_DATABASE_VERSION};
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
-use crate::net::api::{ConsensusApi, ExpiringCache};
+use crate::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, PeerConnector, PeerSlice, ReconnectPeerConnections};
 use crate::{LOG_CONSENSUS, LOG_CORE};
@@ -215,6 +215,7 @@ impl ConsensusServer {
 
         let consensus_api = ConsensusApi {
             cfg: cfg.clone(),
+            invitation_codes_tracker: InvitationCodesTracker::new(db.clone(), task_group).await,
             db: db.clone(),
             modules: modules.clone(),
             client_cfg,
