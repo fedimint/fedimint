@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-22.04
     continue-on-error: true # can fail for external reasons, so don't be a blocker
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:
           use-quiet-mode: 'yes'
