@@ -29,6 +29,7 @@ use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
@@ -581,17 +582,21 @@ impl ServerModule for Wallet {
         dbtx.get_value(&PegOutBitcoinTransaction(out_point)).await
     }
 
-    async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
-        let module_name = common::KIND.as_str().to_string();
+    async fn audit(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        audit: &mut Audit,
+        module_instance_id: ModuleInstanceId,
+    ) {
         audit
-            .add_items(dbtx, &module_name, &UTXOPrefixKey, |_, v| {
+            .add_items(dbtx, module_instance_id, &UTXOPrefixKey, |_, v| {
                 v.amount.to_sat() as i64 * 1000
             })
             .await;
         audit
             .add_items(
                 dbtx,
-                &module_name,
+                module_instance_id,
                 &UnsignedTransactionPrefixKey,
                 |_, v| match v.rbf {
                     None => v.change.to_sat() as i64 * 1000,
@@ -602,7 +607,7 @@ impl ServerModule for Wallet {
         audit
             .add_items(
                 dbtx,
-                &module_name,
+                module_instance_id,
                 &PendingTransactionPrefixKey,
                 |_, v| match v.rbf {
                     None => v.change.to_sat() as i64 * 1000,

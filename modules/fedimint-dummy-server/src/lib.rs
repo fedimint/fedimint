@@ -7,6 +7,7 @@ use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
@@ -24,7 +25,7 @@ use fedimint_dummy_common::config::{
 };
 use fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
-    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION, KIND,
+    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::{FutureExt, StreamExt};
@@ -408,15 +409,25 @@ impl ServerModule for Dummy {
         dbtx.get_value(&DummyOutcomeKey(out_point)).await
     }
 
-    async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
+    async fn audit(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        audit: &mut Audit,
+        module_instance_id: ModuleInstanceId,
+    ) {
         audit
-            .add_items(dbtx, KIND.as_str(), &DummyFundsPrefixV1, |k, v| match k {
-                // the fed's test account is considered an asset (positive)
-                // should be the bitcoin we own in a real module
-                DummyFundsKeyV1(key) if key == fed_public_key() => v.msats as i64,
-                // a user's funds are a federation's liability (negative)
-                DummyFundsKeyV1(_) => -(v.msats as i64),
-            })
+            .add_items(
+                dbtx,
+                module_instance_id,
+                &DummyFundsPrefixV1,
+                |k, v| match k {
+                    // the fed's test account is considered an asset (positive)
+                    // should be the bitcoin we own in a real module
+                    DummyFundsKeyV1(key) if key == fed_public_key() => v.msats as i64,
+                    // a user's funds are a federation's liability (negative)
+                    DummyFundsKeyV1(_) => -(v.msats as i64),
+                },
+            )
             .await;
     }
 
