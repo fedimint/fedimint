@@ -718,6 +718,7 @@ impl<W: Write> Write for CountWrite<W> {
 pub enum DynRawFallback<T> {
     Raw {
         module_instance_id: ModuleInstanceId,
+        #[serde(with = "::fedimint_core::encoding::as_hex")]
         raw: Vec<u8>,
     },
     Decoded(T),
