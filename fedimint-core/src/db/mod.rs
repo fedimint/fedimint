@@ -1100,6 +1100,11 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
     }
 
+    /// Cancel the tx to avoid debugging warnings about uncommitted writes
+    pub fn cancel(mut self) {
+        self.commit_tracker.has_writes = false;
+    }
+
     pub async fn commit_tx_result(mut self) -> Result<()> {
         self.commit_tracker.is_committed = true;
         let commit_result = self.tx.commit_tx().await;
