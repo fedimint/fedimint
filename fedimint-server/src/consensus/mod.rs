@@ -503,6 +503,8 @@ impl FedimintConsensus {
             items.push(item);
         }
 
+        dbtx.commit_tx().await;
+
         let drop_peers = vec![];
 
         ConsensusProposal {
