@@ -639,7 +639,7 @@ pub struct InviteCode {
 const CONFIG_DOWNLOAD_TOKEN_BYTES: usize = 12;
 
 /// Allows a client to download the config
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, PartialOrd, Ord)]
 pub struct ClientConfigDownloadToken(pub [u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
 
 serde_as_encodable_hex!(ClientConfigDownloadToken);
