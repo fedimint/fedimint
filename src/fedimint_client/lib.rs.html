@@ -3266,14 +3266,14 @@
 /// attempts up to `retries` number times
 </span><span class="kw">async fn </span>try_download_config(
     invite_code: InviteCode,
-    retries: usize,
+    max_retries: usize,
 ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
     <span class="kw">let </span>api = Arc::new(WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()]))
         <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>IGlobalFederationApi + Send + Sync + <span class="lifetime">&#39;static</span>&gt;;
     <span class="kw">let </span><span class="kw-2">mut </span>num_retries = <span class="number">0</span>;
     <span class="kw">let </span>wait_millis = <span class="number">500</span>;
     <span class="kw">loop </span>{
-        <span class="kw">if </span>num_retries &gt; retries {
+        <span class="kw">if </span>num_retries &gt; max_retries {
             <span class="kw">break </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Failed to download client config&quot;</span>));
         }
         <span class="kw">match </span>api.download_client_config(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await </span>{

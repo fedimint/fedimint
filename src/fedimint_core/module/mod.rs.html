@@ -981,6 +981,10 @@
 <a href="#981" id="981">981</a>
 <a href="#982" id="982">982</a>
 <a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
@@ -992,6 +996,7 @@
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>jsonrpsee_core::JsonValue;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
@@ -1201,10 +1206,11 @@
     }
 
     <span class="doccomment">/// Attempts to commit the dbtx or returns an ApiError
-    </span><span class="kw">pub async fn </span>commit_tx_result(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
+    </span><span class="kw">pub async fn </span>commit_tx_result(<span class="self">self</span>, path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="self">self</span>.dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|_err| {
             <span class="macro">tracing::warn!</span>(
                 target: fedimint_logging::LOG_NET_API,
+                path,
                 <span class="string">&quot;API server error when writing to database: {:?}&quot;</span>,
                 _err
             );
@@ -1330,10 +1336,12 @@
             E::Param: Debug,
             E::Response: Debug,
         {
-            <span class="macro">tracing::trace!</span>(target: <span class="string">&quot;fedimint_server::request&quot;</span>, <span class="question-mark">?</span>request, <span class="string">&quot;received request&quot;</span>);
+            <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>request, <span class="string">&quot;received request&quot;</span>);
             <span class="kw">let </span>result = E::handle(state, context, request.params).<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = <span class="kw-2">&amp;</span>result {
-                <span class="macro">tracing::trace!</span>(target: <span class="string">&quot;fedimint_server::request&quot;</span>, <span class="question-mark">?</span>error, <span class="string">&quot;error&quot;</span>);
+                <span class="macro">tracing::warn!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>error, <span class="string">&quot;api request error&quot;</span>);
+            } <span class="kw">else </span>{
+                <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="string">&quot;api request complete&quot;</span>);
             }
             result
         }
@@ -1348,7 +1356,7 @@
 
                     <span class="kw">let </span>ret = handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>context, request).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                    context.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+                    context.commit_tx_result(E::PATH).<span class="kw">await</span><span class="question-mark">?</span>;
 
                     <span class="prelude-val">Ok</span>(serde_json::to_value(ret).expect(<span class="string">&quot;encoding error&quot;</span>))
                 })
@@ -1797,7 +1805,7 @@
     ) -&gt; ConsensusProposal&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once for every consensus item. The function
-    /// returns an error if any only if the consensus item does not change
+    /// returns an error if and only if the consensus item does not change
     /// our state and therefore may be safely discarded by the atomic broadcast.
     </span><span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,

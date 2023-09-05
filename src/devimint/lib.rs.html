@@ -222,6 +222,14 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::future::Future;
@@ -419,13 +427,21 @@
             Federation::new(process_mgr, bitcoind.clone(), fed_size).<span class="kw">await
         </span>},
     )<span class="question-mark">?</span>;
+
     <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;federation and gateways started&quot;</span>);
-    <span class="macro">tokio::try_join!</span>(gw_cln.connect_fed(<span class="kw-2">&amp;</span>fed), gw_lnd.connect_fed(<span class="kw-2">&amp;</span>fed))<span class="question-mark">?</span>;
+
+    <span class="macro">tokio::try_join!</span>(gw_cln.connect_fed(<span class="kw-2">&amp;</span>fed), gw_lnd.connect_fed(<span class="kw-2">&amp;</span>fed), <span class="kw">async </span>{
+        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;Joining federation with the main client&quot;</span>);
+        <span class="macro">cmd!</span>(fed, <span class="string">&quot;join-federation&quot;</span>, fed.invite_code()<span class="question-mark">?</span>)
+            .run()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;Generating first epoch&quot;</span>);
+        fed.generate_first_epoch().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    })<span class="question-mark">?</span>;
+
     <span class="comment">// Initialize fedimint-cli
-    </span><span class="macro">cmd!</span>(fed, <span class="string">&quot;join-federation&quot;</span>, fed.invite_code()<span class="question-mark">?</span>)
-        .run()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;await gateways registered&quot;</span>);
+    </span><span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;await gateways registered&quot;</span>);
     fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateways registered&quot;</span>);
     fed.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
