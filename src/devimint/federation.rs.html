@@ -515,6 +515,10 @@
 <a href="#515" id="515">515</a>
 <a href="#516" id="516">516</a>
 <a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fs;
 
@@ -700,6 +704,8 @@
 
     <span class="kw">pub async fn </span>pegin(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">&quot;Peg-in&quot;</span>);
+        <span class="comment">// Some blocks must always be mined first before pegin
+        </span><span class="self">self</span>.await_minimum_blocks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;deposit-address&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>deposit_address = deposit[<span class="string">&quot;address&quot;</span>].as_str().unwrap();
         <span class="kw">let </span>deposit_operation_id = deposit[<span class="string">&quot;operation_id&quot;</span>].as_str().unwrap();
@@ -707,7 +713,7 @@
         <span class="self">self</span>.bitcoind
             .send_to(deposit_address.to_owned(), amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">100</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;await-deposit&quot;</span>, deposit_operation_id)
             .run()
@@ -717,6 +723,8 @@
 
     <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in gateway funds&quot;</span>);
+        <span class="comment">// Some blocks must always be mined first before pegin
+        </span><span class="self">self</span>.await_minimum_blocks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>fed_id = <span class="self">self</span>.federation_id().<span class="kw">await</span>;
         <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
             .out_json()
@@ -759,7 +767,7 @@
         <span class="prelude-val">Ok</span>(expected)
     }
 
-    <span class="kw">pub async fn </span>generate_first_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>await_minimum_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// TODO: optimize this
         </span><span class="self">self</span>.generate_epochs(<span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
