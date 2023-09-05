@@ -1230,6 +1230,8 @@
 <a href="#1230" id="1230">1230</a>
 <a href="#1231" id="1231">1231</a>
 <a href="#1232" id="1232">1232</a>
+<a href="#1233" id="1233">1233</a>
+<a href="#1234" id="1234">1234</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1776,7 +1778,9 @@
             },
             <span class="bool-val">false</span>,
             <span class="self">self</span>.all_peers().total(),
-        );
+        )
+        <span class="comment">// downloading a config shouldn&#39;t take too long
+        </span>.with_request_timeout(Duration::from_secs(<span class="number">5</span>));
 
         <span class="self">self</span>.request_with_strategy(
             qs,
