@@ -681,7 +681,7 @@ impl Gateway {
                 for config in configs {
                     let federation_id = config.config.federation_id;
                     let old_client = self.clients.read().await.get(&federation_id).cloned();
-                    let client = self
+                    if let Ok(client) = self
                         .client_builder
                         .build(
                             config.clone(),
@@ -690,17 +690,20 @@ impl Gateway {
                             lnrpc.clone(),
                             old_client,
                         )
-                        .await?;
-
-                    // Registering each client happens in the background, since we're loading the
-                    // clients for the first time, just add them to the in-memory
-                    // maps
-                    let scid = config.mint_channel_id;
-                    self.clients.write().await.insert(federation_id, client);
-                    self.scid_to_federation
-                        .write()
                         .await
-                        .insert(scid, federation_id);
+                    {
+                        // Registering each client happens in the background, since we're loading
+                        // the clients for the first time, just add them to
+                        // the in-memory maps
+                        let scid = config.mint_channel_id;
+                        self.clients.write().await.insert(federation_id, client);
+                        self.scid_to_federation
+                            .write()
+                            .await
+                            .insert(scid, federation_id);
+                    } else {
+                        warn!("Failed to load client for federation: {federation_id}");
+                    }
 
                     if config.mint_channel_id > next_channel_id {
                         next_channel_id = config.mint_channel_id + 1;
