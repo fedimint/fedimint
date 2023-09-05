@@ -558,6 +558,7 @@ impl Drop for CommitTracker {
         if self.has_writes && !self.is_committed {
             warn!(
                 target: LOG_DB,
+                location = ?backtrace::Backtrace::new(),
                 "DatabaseTransaction has writes and has not called commit."
             );
         }

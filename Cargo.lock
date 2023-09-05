@@ -1415,6 +1415,7 @@ dependencies = [
  "async-lock",
  "async-recursion",
  "async-trait",
+ "backtrace",
  "bech32",
  "bincode",
  "bitcoin 0.29.2",
