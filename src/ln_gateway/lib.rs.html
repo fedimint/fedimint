@@ -899,6 +899,9 @@
 <a href="#899" id="899">899</a>
 <a href="#900" id="900">900</a>
 <a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1582,7 +1585,7 @@
                 <span class="kw">for </span>config <span class="kw">in </span>configs {
                     <span class="kw">let </span>federation_id = config.config.federation_id;
                     <span class="kw">let </span>old_client = <span class="self">self</span>.clients.read().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>federation_id).cloned();
-                    <span class="kw">let </span>client = <span class="self">self
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = <span class="self">self
                         </span>.client_builder
                         .build(
                             config.clone(),
@@ -1591,17 +1594,20 @@
                             lnrpc.clone(),
                             old_client,
                         )
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-                    <span class="comment">// Registering each client happens in the background, since we&#39;re loading the
-                    // clients for the first time, just add them to the in-memory
-                    // maps
-                    </span><span class="kw">let </span>scid = config.mint_channel_id;
-                    <span class="self">self</span>.clients.write().<span class="kw">await</span>.insert(federation_id, client);
-                    <span class="self">self</span>.scid_to_federation
-                        .write()
                         .<span class="kw">await
-                        </span>.insert(scid, federation_id);
+                    </span>{
+                        <span class="comment">// Registering each client happens in the background, since we&#39;re loading
+                        // the clients for the first time, just add them to
+                        // the in-memory maps
+                        </span><span class="kw">let </span>scid = config.mint_channel_id;
+                        <span class="self">self</span>.clients.write().<span class="kw">await</span>.insert(federation_id, client);
+                        <span class="self">self</span>.scid_to_federation
+                            .write()
+                            .<span class="kw">await
+                            </span>.insert(scid, federation_id);
+                    } <span class="kw">else </span>{
+                        <span class="macro">warn!</span>(<span class="string">&quot;Failed to load client for federation: {federation_id}&quot;</span>);
+                    }
 
                     <span class="kw">if </span>config.mint_channel_id &gt; next_channel_id {
                         next_channel_id = config.mint_channel_id + <span class="number">1</span>;
