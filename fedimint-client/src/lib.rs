@@ -1555,14 +1555,14 @@ async fn get_config(
 /// attempts up to `retries` number times
 async fn try_download_config(
     invite_code: InviteCode,
-    retries: usize,
+    max_retries: usize,
 ) -> anyhow::Result<ClientConfig> {
     let api = Arc::new(WsFederationApi::from_invite_code(&[invite_code.clone()]))
         as Arc<dyn IGlobalFederationApi + Send + Sync + 'static>;
     let mut num_retries = 0;
     let wait_millis = 500;
     loop {
-        if num_retries > retries {
+        if num_retries > max_retries {
             break Err(anyhow!("Failed to download client config"));
         }
         match api.download_client_config(&invite_code).await {

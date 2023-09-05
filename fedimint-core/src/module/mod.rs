@@ -9,6 +9,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use secp256k1_zkp::XOnlyPublicKey;
@@ -218,10 +219,11 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Attempts to commit the dbtx or returns an ApiError
-    pub async fn commit_tx_result(self) -> Result<(), ApiError> {
+    pub async fn commit_tx_result(self, path: &'static str) -> Result<(), ApiError> {
         self.dbtx.commit_tx_result().await.map_err(|_err| {
             tracing::warn!(
                 target: fedimint_logging::LOG_NET_API,
+                path,
                 "API server error when writing to database: {:?}",
                 _err
             );
@@ -347,10 +349,12 @@ impl ApiEndpoint<()> {
             E::Param: Debug,
             E::Response: Debug,
         {
-            tracing::trace!(target: "fedimint_server::request", ?request, "received request");
+            tracing::debug!(target: LOG_NET_API, path = E::PATH, ?request, "received request");
             let result = E::handle(state, context, request.params).await;
             if let Err(error) = &result {
-                tracing::trace!(target: "fedimint_server::request", ?error, "error");
+                tracing::warn!(target: LOG_NET_API, path = E::PATH, ?error, "api request error");
+            } else {
+                tracing::debug!(target: LOG_NET_API, path = E::PATH, "api request complete");
             }
             result
         }
@@ -365,7 +369,7 @@ impl ApiEndpoint<()> {
 
                     let ret = handle_request::<E>(m, &mut context, request).await?;
 
-                    context.commit_tx_result().await?;
+                    context.commit_tx_result(E::PATH).await?;
 
                     Ok(serde_json::to_value(ret).expect("encoding error"))
                 })
