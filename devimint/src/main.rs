@@ -1177,9 +1177,11 @@ async fn handle_command() -> Result<()> {
             let (process_mgr, task_group) = setup(args.common).await?;
             let main = async move {
                 let dev_fed = dev_fed(&process_mgr).await?;
-                dev_fed.fed.pegin(10_000).await?;
-                dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln).await?;
-                dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd).await?;
+                tokio::try_join!(
+                    dev_fed.fed.pegin(10_000),
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                )?;
                 let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
                 Ok::<_, anyhow::Error>(daemons)
             };

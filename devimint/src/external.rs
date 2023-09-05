@@ -81,8 +81,10 @@ impl Bitcoind {
         let client = self.client();
         let addr = client.get_new_address(None, None)?;
         let initial_block_count = client.get_block_count()?;
-        client.generate_to_address(block_num, &addr)?;
-        while client.get_block_count()? < initial_block_count + block_num {
+        tokio::task::block_in_place(|| client.generate_to_address(block_num, &addr))?;
+        while tokio::task::block_in_place(|| client.get_block_count())?
+            < initial_block_count + block_num
+        {
             trace!(LOG_DEVIMINT, "Waiting for blocks to be mined");
             sleep(Duration::from_millis(200)).await;
         }
