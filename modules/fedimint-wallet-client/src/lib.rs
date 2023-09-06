@@ -206,10 +206,6 @@ impl WalletClientExt for Client {
                         Some(DepositStates::Created(_)) => {
                             yield DepositState::WaitingForTransaction;
                         },
-                        Some(DepositStates::TimedOut(_)) => {
-                            yield DepositState::Failed("Deposit timed out".to_string());
-                            return;
-                        }
                         Some(s) => {
                             panic!("Unexpected state {s:?}")
                         },
@@ -219,6 +215,10 @@ impl WalletClientExt for Client {
                     match next_deposit_state(&mut operation_stream).await {
                         Some(DepositStates::WaitingForConfirmations(_)) => {
                             yield DepositState::WaitingForConfirmation;
+                        },
+                        Some(DepositStates::TimedOut(_)) => {
+                            yield DepositState::Failed("Deposit timed out".to_string());
+                            return;
                         },
                         Some(s) => {
                             panic!("Unexpected state {s:?}")
