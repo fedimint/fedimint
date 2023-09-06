@@ -8,6 +8,7 @@ use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
@@ -819,9 +820,14 @@ impl ServerModule for Lightning {
         dbtx.get_value(&ContractUpdateKey(out_point)).await
     }
 
-    async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
+    async fn audit(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        audit: &mut Audit,
+        module_instance_id: ModuleInstanceId,
+    ) {
         audit
-            .add_items(dbtx, common::KIND.as_str(), &ContractKeyPrefix, |_, v| {
+            .add_items(dbtx, module_instance_id, &ContractKeyPrefix, |_, v| {
                 -(v.amount.msats as i64)
             })
             .await;

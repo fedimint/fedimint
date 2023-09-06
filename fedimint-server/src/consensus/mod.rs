@@ -536,7 +536,11 @@ impl FedimintConsensus {
         let mut audit = Audit::default();
         for (module_instance_id, _, module) in self.modules.iter_modules() {
             module
-                .audit(&mut dbtx.with_module_prefix(module_instance_id), &mut audit)
+                .audit(
+                    &mut dbtx.with_module_prefix(module_instance_id),
+                    &mut audit,
+                    module_instance_id,
+                )
                 .await
         }
         audit

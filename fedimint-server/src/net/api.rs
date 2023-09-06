@@ -436,12 +436,21 @@ impl ConsensusApi {
     async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
         let mut dbtx = self.db.begin_transaction().await;
         let mut audit = Audit::default();
-        for (module_instance_id, _, module) in self.modules.iter_modules() {
+        let mut module_instance_id_to_kind: HashMap<ModuleInstanceId, String> = HashMap::new();
+        for (module_instance_id, kind, module) in self.modules.iter_modules() {
+            module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
-                .audit(&mut dbtx.with_module_prefix(module_instance_id), &mut audit)
+                .audit(
+                    &mut dbtx.with_module_prefix(module_instance_id),
+                    &mut audit,
+                    module_instance_id,
+                )
                 .await
         }
-        Ok(AuditSummary::from_audit(&audit))
+        Ok(AuditSummary::from_audit(
+            &audit,
+            &module_instance_id_to_kind,
+        ))
     }
 
     async fn handle_backup_request(

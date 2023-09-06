@@ -6,6 +6,7 @@ use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -604,11 +605,16 @@ impl ServerModule for Mint {
         }
     }
 
-    async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit) {
+    async fn audit(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        audit: &mut Audit,
+        module_instance_id: ModuleInstanceId,
+    ) {
         audit
             .add_items(
                 dbtx,
-                common::KIND.as_str(),
+                module_instance_id,
                 &MintAuditItemKeyPrefix,
                 |k, v| match k {
                     MintAuditItemKey::Issuance(_) => -(v.msats as i64),

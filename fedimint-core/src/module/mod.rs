@@ -878,7 +878,12 @@ pub trait ServerModule: Debug + Sized {
     ///
     /// Summing over all modules, if liabilities > assets then an error has
     /// occurred in the database and consensus should halt.
-    async fn audit(&self, dbtx: &mut ModuleDatabaseTransaction<'_>, audit: &mut Audit);
+    async fn audit(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        audit: &mut Audit,
+        module_instance_id: ModuleInstanceId,
+    );
 
     /// Returns a list of custom API endpoints defined by the module. These are
     /// made available both to users as well as to other modules. They thus
