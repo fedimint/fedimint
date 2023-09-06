@@ -158,14 +158,61 @@
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::IncomingContractOffer;
-<span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, PreimageDecryptionShare};
+<span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, FundedContract, IdentifiableContract, PreimageDecryptionShare};
 <span class="kw">use crate</span>::{ContractAccount, LightningGateway, LightningOutputOutcome};
 
 <span class="attr">#[repr(u8)]
@@ -179,6 +226,7 @@
     LightningGateway = <span class="number">0x45</span>,
     BlockCountVote = <span class="number">0x46</span>,
     EncryptedPreimageIndex = <span class="number">0x47</span>,
+    LightningAuditItem = <span class="number">0x48</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -215,6 +263,52 @@
 <span class="macro">impl_db_lookup!</span>(
     key = ContractUpdateKey,
     query_prefix = ContractUpdateKeyPrefix
+);
+
+<span class="doccomment">/// We keep a separate mapping of incoming and outgoing ContractIds to Amounts,
+/// which allows us to quickly audit the total liabilities in the Lightning
+/// module.
+///
+/// This differs from MintAuditItemKeys, since it doesn&#39;t include an aggregate
+/// *Total key. The motivation for not including the aggregate key is how the
+/// Amount associated to the contract mutates in the LN module. When a contract
+/// reaches a terminal state, the associated amount updates to 0. The additional
+/// complexity to update both the individual incoming/outgoing contract audit
+/// keys along with the aggregate audit key is not necessary.
+///
+/// In contrast to the mint module, the total number of LN audit keys with a
+/// non-zero amount will not grow linearly, so querying the LN audit keys with a
+/// non-zero amount should remain quick.
+</span><span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize, PartialEq)]
+</span><span class="kw">pub enum </span>LightningAuditItemKey {
+    Incoming(ContractId),
+    Outgoing(ContractId),
+}
+
+<span class="kw">impl </span>LightningAuditItemKey {
+    <span class="kw">pub fn </span>from_funded_contract(contract: <span class="kw-2">&amp;</span>FundedContract) -&gt; <span class="self">Self </span>{
+        <span class="kw">match </span>contract {
+            FundedContract::Outgoing(outgoing) =&gt; {
+                LightningAuditItemKey::Outgoing(outgoing.contract_id())
+            }
+            FundedContract::Incoming(incoming) =&gt; {
+                LightningAuditItemKey::Incoming(incoming.contract.contract_id())
+            }
+        }
+    }
+}
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>LightningAuditItemKeyPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = LightningAuditItemKey,
+    value = Amount,
+    db_prefix = DbKeyPrefix::LightningAuditItem,
+);
+<span class="macro">impl_db_lookup!</span>(
+    key = LightningAuditItemKey,
+    query_prefix = LightningAuditItemKeyPrefix
 );
 
 <span class="doccomment">/// We save the hash of the encrypted preimage from each accepted offer so that

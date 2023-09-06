@@ -1032,7 +1032,7 @@
     OutPoint, PeerId,
 };
 
-<span class="attr">#[derive(Debug)]
+<span class="attr">#[derive(Debug, PartialEq)]
 </span><span class="kw">pub struct </span>InputMeta {
     <span class="kw">pub </span>amount: TransactionItemAmount,
     <span class="kw">pub </span>pub_keys: Vec&lt;XOnlyPublicKey&gt;,
