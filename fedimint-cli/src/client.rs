@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
+use std::ffi;
 use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::ToHex;
@@ -122,6 +123,13 @@ pub enum ClientCmd {
     ListOperations {
         #[clap(long, default_value = "10")]
         limit: usize,
+    },
+    /// Call a module subcommand
+    Module {
+        /// Module selector (either module id or module kind)
+        #[clap(long)]
+        module: ModuleSelector,
+        args: Vec<ffi::OsString>,
     },
 }
 
@@ -437,6 +445,20 @@ pub async fn handle_ng_command(
         }
         ClientCmd::DiscoverVersion => {
             Ok(json!({ "versions": client.discover_common_api_version().await? }))
+        }
+        ClientCmd::Module { module, args } => {
+            let module_instance_id = match module {
+                ModuleSelector::Id(id) => id,
+                ModuleSelector::Kind(kind) => client
+                    .get_first_instance(&kind)
+                    .context("No module with this kind found")?,
+            };
+
+            let module_client = client
+                .get_module_client_dyn(module_instance_id)
+                .context("Module not found")?;
+
+            module_client.handle_cli_command(&client, &args).await
         }
     }
 }
