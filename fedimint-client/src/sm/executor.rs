@@ -437,7 +437,22 @@ where
                 }
             };
             transitions = remaining_transitions;
+            active_state_count -= 1;
+
             let (transition_outcome, state, transition_fn, meta) = completed_result;
+
+            if self
+                .db
+                .begin_transaction()
+                .await
+                .get_value(&ActiveStateKey::from_state(state.clone()))
+                .await
+                .is_none()
+            {
+                warn!(?state, "State transition not relevant anymore, skipping");
+                continue;
+            }
+
             debug!(
                 ?state,
                 transition_outcome = ?AbbreviateJson(&transition_outcome),
@@ -513,7 +528,6 @@ where
                 "Finished executing state transition"
             );
 
-            active_state_count -= 1;
             match active_or_inactive_state {
                 ActiveOrInactiveState::Active {
                     dyn_state,
