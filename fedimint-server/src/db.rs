@@ -109,7 +109,7 @@ impl_db_record!(
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientConfigDownloadKeyPrefix;
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
+#[derive(Debug, Encodable, Decodable, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ClientConfigDownloadKey(pub ClientConfigDownloadToken);
 
 impl_db_record!(
