@@ -388,6 +388,19 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
     assert_eq!(client_ng_reissue_amt, reissue_amount);
 
+    // Ensure that client can reissue via module commands
+    info!("Testing reissuing e-cash via module commands");
+    let reissue_notes = cmd!(fed, "spend", reissue_amount).out_json().await?["notes"]
+        .as_str()
+        .map(|s| s.to_owned())
+        .unwrap();
+    let client_ng_reissue_amt = cmd!(fed, "module", "--module", "mint", "reissue", reissue_notes)
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
+    assert_eq!(client_ng_reissue_amt, reissue_amount);
+
     // OUTGOING: fedimint-cli pays LND via CLN gateway
     info!("Testing fedimint-cli pays LND via CLN gateway");
     fed.use_gateway(&gw_cln).await?;
