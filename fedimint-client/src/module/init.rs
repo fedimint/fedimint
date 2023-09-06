@@ -12,7 +12,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
 
-use crate::module::recovery::RecoveringModule;
+use crate::module::recovery::{DynRecoveringModule, RecoveringModule};
 use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
 use crate::DynGlobalClientContext;
@@ -127,6 +127,13 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         notifier: Notifier<DynGlobalClientContext>,
         api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule>;
+
+    async fn init_recovering(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        cfg: &ClientModuleConfig,
+        module_root_secret: DerivableSecret,
+    ) -> anyhow::Result<DynRecoveringModule>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -176,6 +183,20 @@ where
             })
             .await?
             .into())
+    }
+
+    async fn init_recovering(
+        &self,
+        module_instance_id: ModuleInstanceId,
+        cfg: &ClientModuleConfig,
+        module_root_secret: DerivableSecret,
+    ) -> anyhow::Result<DynRecoveringModule> {
+        let typed_cfg: &<<T as fedimint_core::module::ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
+        Ok(DynRecoveringModule::from_typed(
+            module_instance_id,
+            self.init_recovering(typed_cfg.clone(), module_root_secret)
+                .await?,
+        ))
     }
 }
 
