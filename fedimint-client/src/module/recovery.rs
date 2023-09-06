@@ -9,10 +9,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync,
-    module_plugin_dyn_newtype_clone_passthrough, module_plugin_dyn_newtype_define,
-    module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough
-};
+use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync, module_plugin_dyn_newtype_clone_passthrough, module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough, PeerId};
 
 use crate::module::ClientModule;
 use crate::sm::DynState;
@@ -105,6 +102,7 @@ pub trait RecoveringModule:
     async fn process_ci(
         &mut self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
+        contributor: PeerId,
         ci: <<Self::ClientModule as ClientModule>::Common as ModuleCommon>::ConsensusItem,
     );
 
@@ -121,7 +119,7 @@ pub trait RecoveringModule:
     );
 
     async fn finalize(
-        self,
+        &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> Vec<<Self::ClientModule as ClientModule>::States>;
 }
@@ -135,6 +133,7 @@ pub trait IRecoveringModule: Debug + DynEncodable {
     async fn process_ci(
         &mut self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
+        contributor: PeerId,
         ci: DynModuleConsensusItem,
     );
 
@@ -143,7 +142,7 @@ pub trait IRecoveringModule: Debug + DynEncodable {
     async fn process_output(&mut self, dbtx: &mut ModuleDatabaseTransaction<'_>, output: DynOutput);
 
     async fn finalize(
-        self,
+        &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<DynState<DynGlobalClientContext>>;
@@ -171,6 +170,7 @@ impl IRecoveringModule for ::fedimint_core::core::DynUnknown {
     async fn process_ci(
         &mut self,
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _contributor: PeerId,
         _ci: DynModuleConsensusItem,
     ) {
         unimplemented!()
@@ -189,7 +189,7 @@ impl IRecoveringModule for ::fedimint_core::core::DynUnknown {
     }
 
     async fn finalize(
-        self,
+        &self,
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _module_instance_id: ModuleInstanceId,
     ) -> Vec<DynState<DynGlobalClientContext>> {
@@ -222,11 +222,13 @@ where
     async fn process_ci(
         &mut self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
+        contributor: PeerId,
         ci: DynModuleConsensusItem,
     ) {
         RecoveringModule::process_ci(
             self,
             dbtx,
+            contributor,
             ci.as_any()
                 .downcast_ref::<<<T::ClientModule as ClientModule>::Common as ModuleCommon>::ConsensusItem>()
                 .expect("CI dispatched to wrong module")
@@ -267,7 +269,7 @@ where
     }
 
     async fn finalize(
-        self,
+        &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<DynState<DynGlobalClientContext>> {
@@ -338,6 +340,7 @@ impl<T: ClientModule> RecoveringModule for NoRecoveringModule<T> {
     async fn process_ci(
         &mut self,
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _contributor: PeerId,
         _ci: <<Self::ClientModule as ClientModule>::Common as ModuleCommon>::ConsensusItem,
     ) {
     }
@@ -357,7 +360,7 @@ impl<T: ClientModule> RecoveringModule for NoRecoveringModule<T> {
     }
 
     async fn finalize(
-        self,
+        &self,
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> Vec<<Self::ClientModule as ClientModule>::States> {
         vec![]
