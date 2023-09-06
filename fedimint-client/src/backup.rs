@@ -1,22 +1,32 @@
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use anyhow::Result;
 use bitcoin::secp256k1;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{DynModuleConsensusItem, ModuleInstanceId};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::{sleep, spawn};
+use fedimint_core::transaction::Transaction;
+use fedimint_core::PeerId;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
+use futures::StreamExt;
 use secp256k1_zkp::{KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tokio::select;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info, instrument, trace, warn};
 
 use super::Client;
 use crate::get_decoded_client_secret;
-use crate::module::recovery::DynModuleBackup;
+use crate::module::init::ClientModuleInitRegistry;
+use crate::module::recovery::{DynModuleBackup, DynRecoveringModule};
 use crate::secret::DeriveableSecretClientExt;
 
 /// Backup metadata
@@ -359,6 +369,266 @@ impl Client {
 
     pub async fn get_decoded_client_secret<T: Decodable>(&self) -> anyhow::Result<T> {
         get_decoded_client_secret::<T>(self.db()).await
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct RecoveryProgress {
+    pub recovery_start_epoch: u64,
+    pub recovery_current_epoch: u64,
+    pub recovery_target_epoch: u64,
+}
+
+pub struct RecoveringClient {
+    progress: tokio::sync::watch::Receiver<Option<RecoveryProgress>>,
+    cancel_recovery: CancellationToken,
+    outcome_receiver: tokio::sync::oneshot::Receiver<anyhow::Result<Client>>,
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+struct RecoverySnapshot {
+    last_processed_epoch: u64,
+    modules: RecoveringModules,
+}
+
+type RecoveringModules = BTreeMap<ModuleInstanceId, DynRecoveringModule>;
+
+impl RecoveringClient {
+    pub(crate) async fn new(
+        stopped_client: Client,
+        module_gens: ClientModuleInitRegistry,
+    ) -> anyhow::Result<Self> {
+        // FIXME: ensure that DB is empty except for possible partial recovery
+        // TODO: check if a recovery is already in progress
+
+        let (update_progress, progress) = tokio::sync::watch::channel(None);
+        let (outcome_sender, outcome_receiver) = tokio::sync::oneshot::channel();
+        let cancel_recovery = CancellationToken::new();
+
+        let cfg = stopped_client.get_config();
+
+        let mut modules = BTreeMap::new();
+        for (&module_instance_id, module_config) in cfg.modules.iter() {
+            if stopped_client
+                .inner
+                .modules
+                .get(module_instance_id)
+                .is_none()
+            {
+                // Module is not initialized in client, not attempting to recover
+                continue;
+            }
+
+            let recovering_module = module_gens
+                .get(module_config.kind())
+                .expect("Unknown module kind")
+                .init_recovering(
+                    module_instance_id,
+                    module_config,
+                    stopped_client
+                        .root_secret()
+                        .derive_module_secret(module_instance_id),
+                )
+                .await?;
+            modules.insert(module_instance_id, recovering_module);
+        }
+
+        let cancel_recovery_task = cancel_recovery.clone();
+        spawn(async move {
+            select! {
+                client = Self::run_recovery(stopped_client, modules, update_progress) => {
+                    let _ = outcome_sender.send(Ok(client));
+                }
+                _ = cancel_recovery_task.cancelled() => {
+                    let _ = outcome_sender.send(Err(anyhow::anyhow!("Recovery cancelled")));
+                }
+            }
+        });
+
+        Ok(Self {
+            progress,
+            cancel_recovery,
+            outcome_receiver,
+        })
+    }
+
+    // TODO: Should this take &self so it can be selected over without having to
+    // worry about recreating the future?
+    // TODO: Should RecoveringClient be a future itself?
+    /// Waits for the recovery process to finish and a fully initialized client
+    /// to be returned
+    ///
+    /// # Errors
+    /// If recovery is cancelled using [`RecoveringClient::cancel`].
+    pub async fn wait_finished(self) -> anyhow::Result<Client> {
+        self.outcome_receiver.await.expect("Recovery task panicked")
+    }
+
+    /// Returns a channel that will receive progress updates from the recovery
+    /// task
+    pub async fn progress(&self) -> tokio::sync::watch::Receiver<Option<RecoveryProgress>> {
+        self.progress.clone()
+    }
+
+    /// Cancels the recovery process, stopping the recovery task and making
+    /// [`RecoveringClient::wait_finished`] finish with an error shortly after.
+    pub async fn cancel(&self) {
+        self.cancel_recovery.cancel();
+    }
+
+    #[instrument(skip_all)]
+    async fn run_recovery(
+        stopped_client: Client,
+        mut modules: RecoveringModules,
+        progress: tokio::sync::watch::Sender<Option<RecoveryProgress>>,
+    ) -> Client {
+        const POLL_TIME: Duration = Duration::from_secs(1);
+        const DOWNLOAD_PARALLELISM: usize = 16;
+
+        let db = stopped_client.db().clone();
+        let api = stopped_client.inner.api.clone();
+        let config = stopped_client.get_config().clone();
+        let decoders = stopped_client.decoders().clone();
+
+        // TODO: fetch backup
+        let last_backup_epoch = 0u64;
+        let current_epoch = loop {
+            match api.fetch_epoch_count().await {
+                Ok(epoch) => break epoch,
+                Err(e) => {
+                    warn!("Could not fetch current epoch, retrying: {e:?}");
+                    sleep(POLL_TIME).await;
+                }
+            }
+        };
+
+        let epoch_pk = config.epoch_pk;
+        let mut epoch_stream = futures::stream::iter(last_backup_epoch + 1..=current_epoch)
+            .map(move |epoch| {
+                let api_inner = api.clone();
+                let decoders = decoders.clone();
+                async move {
+                    loop {
+                        match api_inner
+                            .fetch_epoch_history(epoch, epoch_pk, &decoders)
+                            .await
+                        {
+                            Ok(epoch) => break epoch.outcome,
+                            Err(e) => {
+                                warn!("Could not fetch epoch {epoch}, retrying: {e:?}");
+                                sleep(POLL_TIME).await;
+                            }
+                        }
+                    }
+                }
+            })
+            .buffered(DOWNLOAD_PARALLELISM);
+
+        // Run recovery
+        let mut dbtx = db.begin_transaction().await;
+        while let Some(epoch) = epoch_stream.next().await {
+            // TODO: persist progress every N epochs
+
+            let _ = progress.send(Some(RecoveryProgress {
+                recovery_start_epoch: last_backup_epoch + 1,
+                recovery_current_epoch: epoch.epoch,
+                recovery_target_epoch: current_epoch,
+            }));
+
+            for (contributor, item) in epoch
+                .items
+                .into_iter()
+                .flat_map(|(peer, items)| items.into_iter().map(move |item| (peer, item)))
+            {
+                match item {
+                    ConsensusItem::Transaction(tx) => {
+                        Self::process_transaction(&mut dbtx, &mut modules, tx).await
+                    }
+                    ConsensusItem::Module(ci) => {
+                        Self::process_module_ci(&mut dbtx, &mut modules, contributor, ci).await
+                    }
+                    skipped => {
+                        trace!("Skipping consensus item: {skipped:?}");
+                    }
+                }
+            }
+        }
+        dbtx.commit_tx().await;
+
+        // Finalize recovery
+        let mut dbtx = db.begin_transaction().await;
+        let mut states = Vec::new();
+        for (module_instance_id, module) in modules {
+            states.append(
+                &mut module
+                    .finalize(
+                        &mut dbtx.with_module_prefix(module_instance_id),
+                        module_instance_id,
+                    )
+                    .await,
+            );
+        }
+        // I'm not aware of a concrete reason to start the executor later
+        stopped_client.start_executor().await;
+        stopped_client
+            .add_state_machines(&mut dbtx, states)
+            .await
+            .expect("");
+        dbtx.commit_tx().await;
+
+        stopped_client
+    }
+
+    #[instrument(skip_all)]
+    async fn process_transaction(
+        dbtx: &mut DatabaseTransaction<'_>,
+        modules: &mut RecoveringModules,
+        tx: Transaction,
+    ) {
+        for input in tx.inputs {
+            let module_instance_id = input.module_instance_id();
+            let Some(module) = modules.get_mut(&module_instance_id) else {
+                debug!("Skipping input for unknown module instance {module_instance_id}");
+                continue;
+            };
+            module
+                .process_input(&mut dbtx.with_module_prefix(module_instance_id), input)
+                .await;
+        }
+
+        for output in tx.outputs {
+            let module_instance_id = output.module_instance_id();
+            let Some(module) = modules.get_mut(&module_instance_id) else {
+                debug!("Skipping output for unknown module instance {module_instance_id}");
+                continue;
+            };
+            module
+                .process_output(&mut dbtx.with_module_prefix(module_instance_id), output)
+                .await;
+        }
+    }
+
+    #[instrument(skip_all)]
+    async fn process_module_ci(
+        dbtx: &mut DatabaseTransaction<'_>,
+        modules: &mut RecoveringModules,
+        contributor: PeerId,
+        ci: DynModuleConsensusItem,
+    ) {
+        let module_instance_id = ci.module_instance_id();
+        let Some(module) = modules.get_mut(&module_instance_id) else {
+            debug!(
+                "Skipping module consensus item for unknown module instance {module_instance_id}"
+            );
+            return;
+        };
+        module
+            .process_ci(
+                &mut dbtx.with_module_prefix(module_instance_id),
+                contributor,
+                ci,
+            )
+            .await;
     }
 }
 
