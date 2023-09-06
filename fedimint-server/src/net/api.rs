@@ -254,6 +254,8 @@ impl ConsensusApi {
             .send(ApiEvent::Transaction(transaction))
             .await?;
 
+        dbtx.cancel();
+
         Ok(())
     }
 

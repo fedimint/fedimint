@@ -558,6 +558,7 @@ impl Drop for CommitTracker {
         if self.has_writes && !self.is_committed {
             warn!(
                 target: LOG_DB,
+                location = ?backtrace::Backtrace::new(),
                 "DatabaseTransaction has writes and has not called commit."
             );
         }
@@ -1097,6 +1098,11 @@ impl<'parent> DatabaseTransaction<'parent> {
             commit_tracker,
             on_commit_hooks: vec![],
         }
+    }
+
+    /// Cancel the tx to avoid debugging warnings about uncommitted writes
+    pub fn cancel(mut self) {
+        self.commit_tracker.has_writes = false;
     }
 
     pub async fn commit_tx_result(mut self) -> Result<()> {
