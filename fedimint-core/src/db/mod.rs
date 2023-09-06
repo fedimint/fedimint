@@ -551,11 +551,12 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction
 pub struct CommitTracker {
     is_committed: bool,
     has_writes: bool,
+    aborted: bool,
 }
 
 impl Drop for CommitTracker {
     fn drop(&mut self) {
-        if self.has_writes && !self.is_committed {
+        if !self.aborted && self.has_writes && !self.is_committed {
             warn!(
                 target: LOG_DB,
                 "DatabaseTransaction has writes and has not called commit."
@@ -1058,6 +1059,7 @@ impl<'parent> DatabaseTransaction<'parent> {
             commit_tracker: CommitTracker {
                 is_committed: false,
                 has_writes: false,
+                aborted: false,
             },
             on_commit_hooks: vec![],
         }
@@ -1288,6 +1290,11 @@ impl<'parent> DatabaseTransaction<'parent> {
     #[instrument(level = "debug", skip_all, ret)]
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
         self.on_commit_hooks.push(Box::new(f));
+    }
+
+    /// Drop the transaction without warning about uncommitted writes.
+    pub fn abort(mut self) {
+        self.commit_tracker.aborted = true;
     }
 }
 
