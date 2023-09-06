@@ -576,6 +576,10 @@
 <a href="#576" id="576">576</a>
 <a href="#577" id="577">577</a>
 <a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -1114,7 +1118,11 @@
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
         <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             module
-                .audit(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id), <span class="kw-2">&amp;mut </span>audit)
+                .audit(
+                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id),
+                    <span class="kw-2">&amp;mut </span>audit,
+                    module_instance_id,
+                )
                 .<span class="kw">await
         </span>}
         audit

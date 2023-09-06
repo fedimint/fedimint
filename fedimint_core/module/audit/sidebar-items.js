@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["calculate_net_assets","generate_module_summaries"],"struct":["Audit","AuditItem","AuditSummary","ModuleSummary"]};
+window.SIDEBAR_ITEMS = {"fn":["calculate_net_assets","create_empty_module_placeholder","generate_module_summaries"],"struct":["Audit","AuditItem","AuditSummary","ModuleSummary"]};

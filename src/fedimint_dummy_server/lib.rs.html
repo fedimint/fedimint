@@ -461,6 +461,17 @@
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::string::ToString;
 
@@ -470,6 +481,7 @@
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
@@ -487,7 +499,7 @@
 };
 <span class="kw">use </span>fedimint_dummy_common::{
     fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
-    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION, KIND,
+    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
@@ -871,15 +883,25 @@
         </span>dbtx.get_value(<span class="kw-2">&amp;</span>DummyOutcomeKey(out_point)).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
+    <span class="kw">async fn </span>audit(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        audit: <span class="kw-2">&amp;mut </span>Audit,
+        module_instance_id: ModuleInstanceId,
+    ) {
         audit
-            .add_items(dbtx, KIND.as_str(), <span class="kw-2">&amp;</span>DummyFundsPrefixV1, |k, v| <span class="kw">match </span>k {
-                <span class="comment">// the fed&#39;s test account is considered an asset (positive)
-                // should be the bitcoin we own in a real module
-                </span>DummyFundsKeyV1(key) <span class="kw">if </span>key == fed_public_key() =&gt; v.msats <span class="kw">as </span>i64,
-                <span class="comment">// a user&#39;s funds are a federation&#39;s liability (negative)
-                </span>DummyFundsKeyV1(<span class="kw">_</span>) =&gt; -(v.msats <span class="kw">as </span>i64),
-            })
+            .add_items(
+                dbtx,
+                module_instance_id,
+                <span class="kw-2">&amp;</span>DummyFundsPrefixV1,
+                |k, v| <span class="kw">match </span>k {
+                    <span class="comment">// the fed&#39;s test account is considered an asset (positive)
+                    // should be the bitcoin we own in a real module
+                    </span>DummyFundsKeyV1(key) <span class="kw">if </span>key == fed_public_key() =&gt; v.msats <span class="kw">as </span>i64,
+                    <span class="comment">// a user&#39;s funds are a federation&#39;s liability (negative)
+                    </span>DummyFundsKeyV1(<span class="kw">_</span>) =&gt; -(v.msats <span class="kw">as </span>i64),
+                },
+            )
             .<span class="kw">await</span>;
     }
 

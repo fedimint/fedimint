@@ -1941,6 +1941,11 @@
 <a href="#1941" id="1941">1941</a>
 <a href="#1942" id="1942">1942</a>
 <a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
+<a href="#1947" id="1947">1947</a>
+<a href="#1948" id="1948">1948</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -1972,6 +1977,7 @@
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
+<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
@@ -2526,17 +2532,21 @@
         dbtx.get_value(<span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point)).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;, audit: <span class="kw-2">&amp;mut </span>Audit) {
-        <span class="kw">let </span>module_name = common::KIND.as_str().to_string();
+    <span class="kw">async fn </span>audit(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        audit: <span class="kw-2">&amp;mut </span>Audit,
+        module_instance_id: ModuleInstanceId,
+    ) {
         audit
-            .add_items(dbtx, <span class="kw-2">&amp;</span>module_name, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| {
+            .add_items(dbtx, module_instance_id, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| {
                 v.amount.to_sat() <span class="kw">as </span>i64 * <span class="number">1000
             </span>})
             .<span class="kw">await</span>;
         audit
             .add_items(
                 dbtx,
-                <span class="kw-2">&amp;</span>module_name,
+                module_instance_id,
                 <span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey,
                 |<span class="kw">_</span>, v| <span class="kw">match </span>v.rbf {
                     <span class="prelude-val">None </span>=&gt; v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>,
@@ -2547,7 +2557,7 @@
         audit
             .add_items(
                 dbtx,
-                <span class="kw-2">&amp;</span>module_name,
+                module_instance_id,
                 <span class="kw-2">&amp;</span>PendingTransactionPrefixKey,
                 |<span class="kw">_</span>, v| <span class="kw">match </span>v.rbf {
                     <span class="prelude-val">None </span>=&gt; v.change.to_sat() <span class="kw">as </span>i64 * <span class="number">1000</span>,
