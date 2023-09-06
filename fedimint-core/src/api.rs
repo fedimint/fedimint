@@ -25,7 +25,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
 };
 use fedimint_derive::Decodable;
-use fedimint_logging::LOG_NET_API;
+use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use jsonrpsee_core::client::ClientT;
@@ -224,7 +224,7 @@ pub trait FederationApiExt: IFederationApi {
         let max_delay_ms = 1000;
         loop {
             let response = futures.next().await;
-            trace!(?response, method, params = ?AbbreviateDebug(params.to_json()), "Received peer response");
+            trace!(target: LOG_CLIENT_NET_API, ?response, method, params = ?AbbreviateDebug(params.to_json()), "Received peer response");
             match response {
                 Some(PeerResponse { peer, result }) => {
                     let result: PeerResult<PeerRet> =
@@ -235,6 +235,7 @@ pub trait FederationApiExt: IFederationApi {
 
                     let strategy_step = strategy.process(peer, result);
                     trace!(
+                        target: LOG_CLIENT_NET_API,
                         method,
                         ?params,
                         ?strategy_step,
