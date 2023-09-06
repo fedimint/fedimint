@@ -1079,6 +1079,7 @@
 <a href="#1079" id="1079">1079</a>
 <a href="#1080" id="1080">1080</a>
 <a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1799,7 +1800,8 @@
 </span><span class="kw">pub enum </span>DynRawFallback&lt;T&gt; {
     Raw {
         module_instance_id: ModuleInstanceId,
-        raw: Vec&lt;u8&gt;,
+        <span class="attr">#[serde(with = <span class="string">&quot;::fedimint_core::encoding::as_hex&quot;</span>)]
+        </span>raw: Vec&lt;u8&gt;,
     },
     Decoded(T),
 }
