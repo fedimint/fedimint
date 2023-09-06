@@ -762,6 +762,8 @@
 <a href="#762" id="762">762</a>
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -1017,6 +1019,8 @@
         <span class="self">self</span>.api_sender
             .send(ApiEvent::Transaction(transaction))
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        dbtx.cancel();
 
         <span class="prelude-val">Ok</span>(())
     }

@@ -2536,6 +2536,12 @@
 <a href="#2536" id="2536">2536</a>
 <a href="#2537" id="2537">2537</a>
 <a href="#2538" id="2538">2538</a>
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
+<a href="#2541" id="2541">2541</a>
+<a href="#2542" id="2542">2542</a>
+<a href="#2543" id="2543">2543</a>
+<a href="#2544" id="2544">2544</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3096,6 +3102,7 @@
         <span class="kw">if </span><span class="self">self</span>.has_writes &amp;&amp; !<span class="self">self</span>.is_committed {
             <span class="macro">warn!</span>(
                 target: LOG_DB,
+                location = <span class="question-mark">?</span>backtrace::Backtrace::new(),
                 <span class="string">&quot;DatabaseTransaction has writes and has not called commit.&quot;
             </span>);
         }
@@ -3635,6 +3642,11 @@
             commit_tracker,
             on_commit_hooks: <span class="macro">vec!</span>[],
         }
+    }
+
+    <span class="doccomment">/// Cancel the tx to avoid debugging warnings about uncommitted writes
+    </span><span class="kw">pub fn </span>cancel(<span class="kw-2">mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">false</span>;
     }
 
     <span class="kw">pub async fn </span>commit_tx_result(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
