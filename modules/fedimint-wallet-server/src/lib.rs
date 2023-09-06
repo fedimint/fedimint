@@ -85,7 +85,7 @@ impl ServerModuleInit for WalletGen {
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
+        SupportedModuleApiVersions::from_raw(1, 0, &[(0, 0)])
     }
 
     async fn init(
