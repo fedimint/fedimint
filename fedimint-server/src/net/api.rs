@@ -250,6 +250,12 @@ impl ConsensusApi {
 
         funding_verifier.verify_funding()?;
 
+        // We use the DBTX as a scratch pad to evaluate if a transaction, if it was
+        // applied to the current federation state, would succeed. Since we don't
+        // actually want to accept it yet before generating consensus on it we need to
+        // abort here.
+        dbtx.abort();
+
         self.api_sender
             .send(ApiEvent::Transaction(transaction))
             .await?;
