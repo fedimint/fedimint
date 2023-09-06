@@ -9,6 +9,7 @@ on:
       - 'v*'
 jobs:
   docker:
+    if: github.repository == 'fedimint/fedimint'
     runs-on: ubuntu-latest
     steps:
       - name: Set up QEMU
