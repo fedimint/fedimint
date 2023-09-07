@@ -1,7 +1,8 @@
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::unreachable;
 
-use anyhow::bail;
+use anyhow::{bail, format_err};
 use fedimint_core::task::{self, block_in_place};
 use futures::executor::block_on;
 use serde::de::DeserializeOwned;
@@ -11,6 +12,24 @@ use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
 use super::*;
+
+pub fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
+    let mut map = BTreeMap::new();
+
+    if s.is_empty() {
+        return Ok(map);
+    }
+
+    for pair in s.split(',') {
+        let parts: Vec<&str> = pair.split('=').collect();
+        if parts.len() == 2 {
+            map.insert(parts[0].to_string(), parts[1].to_string());
+        } else {
+            return Err(format_err!("Invalid pair in map: {}", pair));
+        }
+    }
+    Ok(map)
+}
 
 fn send_sigterm(child: &Child) {
     send_signal(child, nix::sys::signal::Signal::SIGTERM);

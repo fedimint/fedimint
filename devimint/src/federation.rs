@@ -15,6 +15,7 @@ use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
 use fedimintd::attach_default_module_init_params;
+use fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
 use futures::future::join_all;
 use rand::Rng;
 use url::Url;
@@ -500,8 +501,20 @@ async fn set_config_gen_params(
         Network::Regtest,
         10,
     );
+    // Since we are not actually calling `fedimintd` binary, parse and handle
+    // `FM_EXTRA_META_DATA` like it would do.
+    let mut extra_meta_data = parse_map(
+        &std::env::var(FM_EXTRA_DKG_META_VAR)
+            .ok()
+            .unwrap_or_default(),
+    )
+    .with_context(|| format!("Failed to parse {}", FM_EXTRA_DKG_META_VAR))
+    .expect("Failed");
+    let mut meta = BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]);
+    meta.append(&mut extra_meta_data);
+
     let request = ConfigGenParamsRequest {
-        meta: BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]),
+        meta,
         modules: server_gen_params,
     };
     client.set_config_gen_params(request, auth.clone()).await?;
