@@ -84,6 +84,7 @@ threshold_crypto = { opt-level = 3 }
 [profile.ci]
 inherits = "dev"
 debug = "line-tables-only"
+incremental = false
 
 [profile.release]
 debug = "line-tables-only"
