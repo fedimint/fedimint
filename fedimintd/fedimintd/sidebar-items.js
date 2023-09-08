@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"fn":["run","spawn_metrics_server"],"struct":["Fedimintd","ServerOpts"]};
+window.SIDEBAR_ITEMS = {"constant":["FM_EXTRA_DKG_META_VAR","SHUTDOWN_TIMEOUT"],"fn":["parse_map","run","spawn_metrics_server"],"struct":["Fedimintd","ServerOpts"]};

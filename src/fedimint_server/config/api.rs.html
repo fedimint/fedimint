@@ -1043,6 +1043,7 @@
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
 <a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1789,6 +1790,7 @@
                 .expect(<span class="string">&quot;parses&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(<span class="number">0</span>, DummyGen::kind(), DummyGenParams::default());
+
             <span class="kw">let </span>default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
                 modules,
