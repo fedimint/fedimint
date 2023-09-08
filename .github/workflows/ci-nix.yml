@@ -49,6 +49,7 @@ jobs:
         run: nix build -L .#ci.workspaceCargoUdeps
 
   build:
+    if: github.repository == 'fedimint/fedimint'
     strategy:
       matrix:
         host:
@@ -125,13 +126,14 @@ jobs:
       - name: Upload failed test build dirs
         if: always()
         uses: actions/upload-artifact@v3
-        with: 
+        with:
           name: "fedimint-failed-test-logs-${{ github.run_number }}-${{ matrix.host}}"
           path: |
             /tmp/nix-build-*/
             !/tmp/nix-build-*/source/
 
   audit:
+    if: github.repository == 'fedimint/fedimint'
     name: "Audit"
     runs-on: buildjet-2vcpu-ubuntu-2004
     timeout-minutes: 10
@@ -157,6 +159,7 @@ jobs:
   # Which means we can not reuse much from `build` job. Might as well run it as another
   # build in parallel
   ccov:
+    if: github.repository == 'fedimint/fedimint'
     name: "Code coverage"
     runs-on: buildjet-8vcpu-ubuntu-2004
     timeout-minutes: 45
@@ -246,6 +249,7 @@ jobs:
         run: nix build -L .#cross.${{ matrix.target }}.client-pkgs
 
   containers:
+    if: github.repository == 'fedimint/fedimint'
     name: "Containers"
     runs-on: buildjet-8vcpu-ubuntu-2004
     timeout-minutes: 30
@@ -316,7 +320,7 @@ jobs:
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' && github.repository == 'fedimint/fedimint'
     name: "Release packages: ${{ matrix.build.flake-output }}"
 
     strategy:
@@ -370,7 +374,7 @@ jobs:
 
       - name: Upload Binaries
         uses: actions/upload-artifact@v3
-        with: 
+        with:
           name: "${{ matrix.build.flake-output}}-linux-x86_64"
           path: "bins/**"
 
@@ -390,19 +394,18 @@ jobs:
 
       - name: Upload DEB packages
         uses: actions/upload-artifact@v3
-        with: 
+        with:
           name: "deb-bundle"
           path: "debs/**.deb"
 
       - name: Upload RPM packages
         uses: actions/upload-artifact@v3
-        with: 
+        with:
           name: "rpm-bundle"
           path: "rpms/**.rpm"
 
   notifications:
-    # if: github.ref == 'refs/heads/master'
-    if: always()
+    if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
     runs-on: ubuntu-22.04
