@@ -1621,6 +1621,21 @@
 <a href="#1621" id="1621">1621</a>
 <a href="#1622" id="1622">1622</a>
 <a href="#1623" id="1623">1623</a>
+<a href="#1624" id="1624">1624</a>
+<a href="#1625" id="1625">1625</a>
+<a href="#1626" id="1626">1626</a>
+<a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a>
+<a href="#1631" id="1631">1631</a>
+<a href="#1632" id="1632">1632</a>
+<a href="#1633" id="1633">1633</a>
+<a href="#1634" id="1634">1634</a>
+<a href="#1635" id="1635">1635</a>
+<a href="#1636" id="1636">1636</a>
+<a href="#1637" id="1637">1637</a>
+<a href="#1638" id="1638">1638</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -2941,7 +2956,7 @@
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
-    <span class="kw">use </span>fedimint_core::{OutPoint, ServerModule, TransactionId};
+    <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
     };
@@ -2950,8 +2965,9 @@
         PreimageDecryptionShare,
     };
     <span class="kw">use </span>fedimint_ln_common::db::{
-        AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
-        ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
+        AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockCountVoteKey,
+        BlockCountVotePrefix, ContractKey, ContractKeyPrefix, ContractUpdateKey,
+        ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
         EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey, LightningAuditItemKeyPrefix,
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
@@ -3075,6 +3091,9 @@
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(pk), <span class="kw-2">&amp;</span>gateway)
             .<span class="kw">await</span>;
 
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>BlockCountVoteKey(PeerId::from(<span class="number">0</span>)), <span class="kw-2">&amp;</span><span class="number">1</span>)
+            .<span class="kw">await</span>;
+
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>EncryptedPreimageIndexKey(<span class="string">&quot;foobar&quot;</span>.consensus_hash()), <span class="kw-2">&amp;</span>())
             .<span class="kw">await</span>;
 
@@ -3153,9 +3172,9 @@
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_shares = agreed_decryption_shares.len();
                             <span class="macro">ensure!</span>(
-                            num_shares &gt; <span class="number">0</span>,
-                            <span class="string">&quot;validate_migrations was not able to read any AgreedDecryptionShares&quot;
-                        </span>);
+                                num_shares &gt; <span class="number">0</span>,
+                                <span class="string">&quot;validate_migrations was not able to read any AgreedDecryptionShares&quot;
+                            </span>);
                         }
                         DbKeyPrefix::ContractUpdate =&gt; {
                             <span class="kw">let </span>contract_updates = dbtx
@@ -3201,11 +3220,22 @@
                                 .<span class="kw">await</span>;
                             <span class="kw">let </span>num_shares = proposed_decryption_shares.len();
                             <span class="macro">ensure!</span>(
-                            num_shares &gt; <span class="number">0</span>,
-                            <span class="string">&quot;validate_migrations was not able to read any ProposeDecryptionShares&quot;
-                        </span>);
+                                num_shares &gt; <span class="number">0</span>,
+                                <span class="string">&quot;validate_migrations was not able to read any ProposeDecryptionShares&quot;
+                            </span>);
                         }
-                        DbKeyPrefix::BlockCountVote =&gt; {}
+                        DbKeyPrefix::BlockCountVote =&gt; {
+                            <span class="kw">let </span>block_count_vote = dbtx
+                                .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
+                                .<span class="kw">await
+                                </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                                .<span class="kw">await</span>;
+                            <span class="kw">let </span>num_votes = block_count_vote.len();
+                            <span class="macro">ensure!</span>(
+                                num_votes &gt; <span class="number">0</span>,
+                                <span class="string">&quot;validate_migrations was not able to read any BlockCountVote&quot;
+                            </span>);
+                        }
                         DbKeyPrefix::EncryptedPreimageIndex =&gt; {
                             <span class="kw">let </span>encrypted_preimage_index = dbtx
                                 .find_by_prefix(<span class="kw-2">&amp;</span>EncryptedPreimageIndexKeyPrefix)
