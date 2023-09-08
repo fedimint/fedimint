@@ -1318,7 +1318,7 @@ mod fedimint_migration_tests {
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
-    use fedimint_core::{OutPoint, ServerModule, TransactionId};
+    use fedimint_core::{OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
     };
@@ -1327,8 +1327,9 @@ mod fedimint_migration_tests {
         PreimageDecryptionShare,
     };
     use fedimint_ln_common::db::{
-        AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
-        ContractUpdateKey, ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
+        AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, BlockCountVoteKey,
+        BlockCountVotePrefix, ContractKey, ContractKeyPrefix, ContractUpdateKey,
+        ContractUpdateKeyPrefix, DbKeyPrefix, EncryptedPreimageIndexKey,
         EncryptedPreimageIndexKeyPrefix, LightningAuditItemKey, LightningAuditItemKeyPrefix,
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
@@ -1452,6 +1453,9 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
             .await;
 
+        dbtx.insert_new_entry(&BlockCountVoteKey(PeerId::from(0)), &1)
+            .await;
+
         dbtx.insert_new_entry(&EncryptedPreimageIndexKey("foobar".consensus_hash()), &())
             .await;
 
@@ -1530,9 +1534,9 @@ mod fedimint_migration_tests {
                                 .await;
                             let num_shares = agreed_decryption_shares.len();
                             ensure!(
-                            num_shares > 0,
-                            "validate_migrations was not able to read any AgreedDecryptionShares"
-                        );
+                                num_shares > 0,
+                                "validate_migrations was not able to read any AgreedDecryptionShares"
+                            );
                         }
                         DbKeyPrefix::ContractUpdate => {
                             let contract_updates = dbtx
@@ -1578,11 +1582,22 @@ mod fedimint_migration_tests {
                                 .await;
                             let num_shares = proposed_decryption_shares.len();
                             ensure!(
-                            num_shares > 0,
-                            "validate_migrations was not able to read any ProposeDecryptionShares"
-                        );
+                                num_shares > 0,
+                                "validate_migrations was not able to read any ProposeDecryptionShares"
+                            );
                         }
-                        DbKeyPrefix::BlockCountVote => {}
+                        DbKeyPrefix::BlockCountVote => {
+                            let block_count_vote = dbtx
+                                .find_by_prefix(&BlockCountVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_votes = block_count_vote.len();
+                            ensure!(
+                                num_votes > 0,
+                                "validate_migrations was not able to read any BlockCountVote"
+                            );
+                        }
                         DbKeyPrefix::EncryptedPreimageIndex => {
                             let encrypted_preimage_index = dbtx
                                 .find_by_prefix(&EncryptedPreimageIndexKeyPrefix)
