@@ -10,6 +10,7 @@ use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ApiAuth;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
@@ -18,7 +19,6 @@ use fedimintd::attach_default_module_init_params;
 use fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
 use futures::future::join_all;
 use rand::Rng;
-use url::Url;
 
 use super::*; // TODO: remove this
 
@@ -98,7 +98,7 @@ impl Federation {
                 peer.to_usize(),
                 Fedimintd::new(process_mgr, bitcoind.clone(), peer.to_usize(), &var).await?,
             );
-            let admin_client = WsAdminClient::new(Url::parse(&var.FM_API_URL)?);
+            let admin_client = WsAdminClient::new(SafeUrl::parse(&var.FM_API_URL)?);
             admin_clients.insert(*peer, admin_client);
             vars.insert(peer.to_usize(), var);
         }

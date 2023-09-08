@@ -1,19 +1,21 @@
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
 
-use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
+use std::hash::Hash;
 use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::{fs, io};
 
 use anyhow::format_err;
 use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tracing::debug;
-use url::Url;
+use url::{Host, ParseError, Url};
 
 use crate::task::MaybeSend;
 use crate::{apply, async_trait_maybe_send, maybe_add_send};
@@ -72,19 +74,55 @@ where
 ///
 /// The output is not fully RFC1738 conformant but good enough for our current
 /// purposes.
-pub struct SanitizedUrl<'a>(Cow<'a, Url>);
+#[derive(Hash, Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
+// nosemgrep: ban-raw-url
+pub struct SafeUrl(Url);
 
-impl<'a> SanitizedUrl<'a> {
-    pub fn new_owned(url: Url) -> SanitizedUrl<'static> {
-        SanitizedUrl(Cow::Owned(url))
+impl SafeUrl {
+    pub fn parse(url_str: &str) -> Result<SafeUrl, ParseError> {
+        Url::parse(url_str).map(SafeUrl)
     }
 
-    pub fn new_borrowed(url: &'a Url) -> SanitizedUrl<'a> {
-        SanitizedUrl(Cow::Borrowed(url))
+    /// Warning: This removes the safety.
+    // nosemgrep: ban-raw-url
+    pub fn reap_guts(self) -> Url {
+        self.0
+    }
+
+    pub fn host(&self) -> Option<Host<&str>> {
+        self.0.host()
+    }
+    pub fn host_str(&self) -> Option<&str> {
+        self.0.host_str()
+    }
+    pub fn scheme(&self) -> &str {
+        self.0.scheme()
+    }
+    pub fn port(&self) -> Option<u16> {
+        self.0.port()
+    }
+    pub fn port_or_known_default(&self) -> Option<u16> {
+        self.0.port_or_known_default()
+    }
+    pub fn path(&self) -> &str {
+        self.0.path()
+    }
+    /// Warning: This will expose username & password if present.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+    pub fn username(&self) -> &str {
+        self.0.username()
+    }
+    pub fn password(&self) -> Option<&str> {
+        self.0.password()
+    }
+    pub fn join(&self, input: &str) -> Result<SafeUrl, ParseError> {
+        self.0.join(input).map(SafeUrl)
     }
 }
 
-impl<'a> Display for SanitizedUrl<'a> {
+impl Display for SafeUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}://", self.0.scheme())?;
 
@@ -102,14 +140,23 @@ impl<'a> Display for SanitizedUrl<'a> {
     }
 }
 
-impl<'a> Debug for SanitizedUrl<'a> {
+impl Debug for SafeUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SanitizedUrl(")?;
+        write!(f, "SafeUrl(")?;
         Display::fmt(self, f)?;
         write!(f, ", has_password={}", self.0.password().is_some())?;
         write!(f, ", has_username={}", !self.0.username().is_empty())?;
         write!(f, ")")?;
         Ok(())
+    }
+}
+
+impl FromStr for SafeUrl {
+    type Err = ParseError;
+
+    #[inline]
+    fn from_str(input: &str) -> Result<SafeUrl, ParseError> {
+        SafeUrl::parse(input)
     }
 }
 
@@ -167,34 +214,52 @@ mod tests {
 
     use fedimint_core::task::Elapsed;
     use futures::FutureExt;
-    use url::Url;
 
     use crate::task::timeout;
-    use crate::util::{NextOrPending, SanitizedUrl};
+    use crate::util::{NextOrPending, SafeUrl};
 
     #[test]
-    fn test_sanitized_url() {
+    fn test_safe_url() {
         let test_cases = vec![
-            ("http://1.2.3.4:80/foo", "http://1.2.3.4/foo", "SanitizedUrl(http://1.2.3.4/foo, has_password=false, has_username=false)"),
-            ("http://1.2.3.4:81/foo", "http://1.2.3.4:81/foo", "SanitizedUrl(http://1.2.3.4:81/foo, has_password=false, has_username=false)"),
-            ("fedimint://1.2.3.4:1000/foo", "fedimint://1.2.3.4:1000/foo", "SanitizedUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=false)"),
-            ("fedimint://foo:bar@domain.com:1000/foo", "fedimint://domain.com:1000/foo", "SanitizedUrl(fedimint://domain.com:1000/foo, has_password=true, has_username=true)"),
-            ("fedimint://foo@1.2.3.4:1000/foo", "fedimint://1.2.3.4:1000/foo", "SanitizedUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=true)"),
+            (
+                "http://1.2.3.4:80/foo",
+                "http://1.2.3.4/foo",
+                "SafeUrl(http://1.2.3.4/foo, has_password=false, has_username=false)",
+            ),
+            (
+                "http://1.2.3.4:81/foo",
+                "http://1.2.3.4:81/foo",
+                "SafeUrl(http://1.2.3.4:81/foo, has_password=false, has_username=false)",
+            ),
+            (
+                "fedimint://1.2.3.4:1000/foo",
+                "fedimint://1.2.3.4:1000/foo",
+                "SafeUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=false)",
+            ),
+            (
+                "fedimint://foo:bar@domain.com:1000/foo",
+                "fedimint://domain.com:1000/foo",
+                "SafeUrl(fedimint://domain.com:1000/foo, has_password=true, has_username=true)",
+            ),
+            (
+                "fedimint://foo@1.2.3.4:1000/foo",
+                "fedimint://1.2.3.4:1000/foo",
+                "SafeUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=true)",
+            ),
         ];
 
-        for (url_str, sanitized_display_expected, sanitized_debug_expected) in test_cases {
-            let url = Url::parse(url_str).unwrap();
-            let sanitized_url = SanitizedUrl::new_borrowed(&url);
+        for (url_str, safe_display_expected, safe_debug_expected) in test_cases {
+            let safe_url = SafeUrl::parse(url_str).unwrap();
 
-            let sanitized_display = format!("{sanitized_url}");
+            let safe_display = format!("{safe_url}");
             assert_eq!(
-                sanitized_display, sanitized_display_expected,
+                safe_display, safe_display_expected,
                 "Display implementation out of spec"
             );
 
-            let sanitized_debug = format!("{sanitized_url:?}");
+            let safe_debug = format!("{safe_url:?}");
             assert_eq!(
-                sanitized_debug, sanitized_debug_expected,
+                safe_debug, safe_debug_expected,
                 "Debug implementation out of spec"
             );
         }

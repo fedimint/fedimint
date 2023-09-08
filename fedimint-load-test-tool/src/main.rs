@@ -16,7 +16,7 @@ use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::Client;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::util::BoxFuture;
+use fedimint_core::util::{BoxFuture, SafeUrl};
 use fedimint_core::Amount;
 use fedimint_mint_client::OOBNotes;
 use lightning_invoice::Invoice;
@@ -568,7 +568,7 @@ async fn test_connect_raw_client(
         .collect())
 }
 
-fn url_to_string_with_default_port(url: &url::Url) -> String {
+fn url_to_string_with_default_port(url: &SafeUrl) -> String {
     format!(
         "{}://{}:{}{}",
         url.scheme(),

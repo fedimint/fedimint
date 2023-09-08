@@ -20,10 +20,10 @@ use fedimint_bitcoind::{
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::task::{sleep, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, Feerate};
 use rand::rngs::OsRng;
 use tracing::debug;
-use url::Url;
 
 use super::BitcoinTest;
 
@@ -50,7 +50,11 @@ impl FakeBitcoinFactory {
 }
 
 impl IBitcoindRpcFactory for FakeBitcoinFactory {
-    fn create_connection(&self, _url: &Url, _handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
+    fn create_connection(
+        &self,
+        _url: &SafeUrl,
+        _handle: TaskHandle,
+    ) -> anyhow::Result<DynBitcoindRpc> {
         Ok(self.bitcoin.clone().into())
     }
 }

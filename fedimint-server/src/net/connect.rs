@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use anyhow::format_err;
 use async_trait::async_trait;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use futures::Stream;
 use tokio::io::{ReadHalf, WriteHalf};
@@ -17,7 +18,6 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
-use url::Url;
 
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
@@ -41,7 +41,7 @@ pub type ConnectionListener<M> =
 #[async_trait]
 pub trait Connector<M> {
     /// Connect to a `destination`
-    async fn connect_framed(&self, destination: Url, peer: PeerId) -> ConnectResult<M>;
+    async fn connect_framed(&self, destination: SafeUrl, peer: PeerId) -> ConnectResult<M>;
 
     /// Listen for incoming connections on `bind_addr`
     async fn listen(&self, bind_addr: SocketAddr) -> Result<ConnectionListener<M>, anyhow::Error>;
@@ -160,7 +160,7 @@ impl<M> Connector<M> for TlsTcpConnector
 where
     M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
 {
-    async fn connect_framed(&self, destination: Url, peer: PeerId) -> ConnectResult<M> {
+    async fn connect_framed(&self, destination: SafeUrl, peer: PeerId) -> ConnectResult<M> {
         let cfg = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(self.cert_store.clone())
@@ -233,7 +233,7 @@ pub fn dns_sanitize(name: &str) -> String {
 }
 
 /// Parses the host and port from a url
-pub fn parse_host_port(url: Url) -> anyhow::Result<String> {
+pub fn parse_host_port(url: SafeUrl) -> anyhow::Result<String> {
     let host = url
         .host_str()
         .ok_or_else(|| format_err!("Missing host in {url}"))?;
@@ -258,6 +258,7 @@ pub mod mock {
 
     use anyhow::{anyhow, Error};
     use fedimint_core::task::sleep;
+    use fedimint_core::util::SafeUrl;
     use fedimint_core::{task, PeerId};
     use futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
     use rand::Rng;
@@ -268,7 +269,6 @@ pub mod mock {
     use tokio::sync::Mutex;
     use tokio_util::sync::CancellationToken;
     use tracing::error;
-    use url::Url;
 
     use crate::net::connect::{parse_host_port, ConnectResult, Connector};
     use crate::net::framed::{BidiFramed, FramedTransport};
@@ -636,7 +636,7 @@ pub mod mock {
     where
         M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
     {
-        async fn connect_framed(&self, destination: Url, _peer: PeerId) -> ConnectResult<M> {
+        async fn connect_framed(&self, destination: SafeUrl, _peer: PeerId) -> ConnectResult<M> {
             let mut clients_lock = self.clients.try_lock().map_err(|e| {
                 anyhow!("Mock network mutex busy or poisoned, the network stack will re-try anyway: {e:?}")
             })?;
@@ -716,7 +716,7 @@ pub mod mock {
     #[tokio::test]
     async fn test_mock_network() {
         let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
-        let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
+        let url: SafeUrl = "ws://127.0.0.1:7000".parse().unwrap();
         let peer_a = PeerId::from(1);
         let peer_b = PeerId::from(2);
 
@@ -788,7 +788,7 @@ pub mod mock {
     #[tokio::test]
     async fn test_large_messages() {
         let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
-        let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
+        let url: SafeUrl = "ws://127.0.0.1:7000".parse().unwrap();
         let peer_a = PeerId::from(1);
         let peer_b = PeerId::from(2);
 
@@ -829,9 +829,9 @@ pub mod mock {
 mod tests {
     use std::net::SocketAddr;
 
+    use fedimint_core::util::SafeUrl;
     use fedimint_core::PeerId;
     use futures::{SinkExt, StreamExt};
-    use url::Url;
 
     use crate::config::gen_cert_and_key;
     use crate::net::connect::{ConnectionListener, Connector, TlsConfig};
@@ -869,7 +869,7 @@ mod tests {
         // FIXME: don't actually bind here, probably requires yet another Box<dyn Trait>
         // layer :(
         let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
-        let url: Url = "ws://127.0.0.1:7000".parse().unwrap();
+        let url: SafeUrl = "ws://127.0.0.1:7000".parse().unwrap();
         let connectors = gen_connector_config(5)
             .into_iter()
             .enumerate()
@@ -903,7 +903,7 @@ mod tests {
     #[tokio::test]
     async fn connect_reject() {
         let bind_addr: SocketAddr = "127.0.0.1:7001".parse().unwrap();
-        let url: Url = "wss://127.0.0.1:7001".parse().unwrap();
+        let url: SafeUrl = "wss://127.0.0.1:7001".parse().unwrap();
         let cfg = gen_connector_config(5);
 
         let honest = TlsTcpConnector::new(cfg[0].clone(), PeerId::from(0));

@@ -23,13 +23,12 @@ use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
 };
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::util::write_new;
+use fedimint_core::util::{write_new, SafeUrl};
 use fedimint_core::PeerId;
 use itertools::Itertools;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
 use tracing::error;
-use url::Url;
 
 use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
@@ -373,10 +372,10 @@ pub struct ConfigGenSettings {
     pub p2p_bind: SocketAddr,
     /// Bind address for our API connection
     pub api_bind: SocketAddr,
-    /// Url for our P2P connection
-    pub p2p_url: Url,
-    /// Url for our API connection
-    pub api_url: Url,
+    /// URL for our P2P connection
+    pub p2p_url: SafeUrl,
+    /// URL for our API connection
+    pub api_url: SafeUrl,
     /// The default params for the modules
     pub default_params: ConfigGenParamsRequest,
     /// How many API connections we will accept
@@ -396,7 +395,7 @@ pub struct ConfigGenState {
     local: Option<ConfigGenLocalConnection>,
     /// Connection info received from other guardians, unique by api_url
     /// (because it's non-user configurable)
-    peers: BTreeMap<Url, PeerServerParams>,
+    peers: BTreeMap<SafeUrl, PeerServerParams>,
     /// The config gen params requested by the leader
     requested_params: Option<ConfigGenParamsRequest>,
     /// Our status
@@ -414,9 +413,9 @@ struct ConfigGenLocalConnection {
     tls_cert: rustls::Certificate,
     /// Our guardian name
     our_name: String,
-    /// Url of "leader" guardian to send our connection info to
+    /// URL of "leader" guardian to send our connection info to
     /// Will be `None` if we are the leader
-    leader_api_url: Option<Url>,
+    leader_api_url: Option<SafeUrl>,
 }
 
 impl ConfigGenState {
@@ -698,6 +697,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::task::{sleep, TaskGroup};
+    use fedimint_core::util::SafeUrl;
     use fedimint_core::Amount;
     use fedimint_dummy_common::config::{
         DummyConfig, DummyGenParams, DummyGenParamsConsensus, DummyGenParamsLocal,
@@ -707,7 +707,6 @@ mod tests {
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
-    use url::Url;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
@@ -737,7 +736,7 @@ mod tests {
 
             let name = format!("peer{name_suffix}");
             let api_bind = format!("127.0.0.1:{port}").parse().expect("parses");
-            let api_url: Url = format!("ws://127.0.0.1:{port}").parse().expect("parses");
+            let api_url: SafeUrl = format!("ws://127.0.0.1:{port}").parse().expect("parses");
             let p2p_bind = format!("127.0.0.1:{}", port + 1).parse().expect("parses");
             let p2p_url = format!("fedimint://127.0.0.1:{}", port + 1)
                 .parse()
@@ -797,7 +796,7 @@ mod tests {
         }
 
         /// Helper function using generated urls
-        async fn set_connections(&self, leader: &Option<Url>) -> FederationResult<()> {
+        async fn set_connections(&self, leader: &Option<SafeUrl>) -> FederationResult<()> {
             self.client
                 .set_config_gen_connections(
                     ConfigGenConnectionsRequest {

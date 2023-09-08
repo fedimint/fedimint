@@ -10,10 +10,10 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, Amount};
 use lazy_static::lazy_static;
 use tracing::trace;
-use url::Url;
 
 use crate::btc::BitcoinTest;
 
@@ -144,7 +144,7 @@ pub struct RealBitcoinTest {
 impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
-    pub fn new(url: &Url, rpc: DynBitcoindRpc) -> Self {
+    pub fn new(url: &SafeUrl, rpc: DynBitcoindRpc) -> Self {
         let (host, auth) =
             fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect("correct url");
         let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));

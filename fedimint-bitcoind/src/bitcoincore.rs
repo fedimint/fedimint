@@ -11,9 +11,9 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::info;
-use url::Url;
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -21,7 +21,11 @@ use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 pub struct BitcoindFactory;
 
 impl IBitcoindRpcFactory for BitcoindFactory {
-    fn create_connection(&self, url: &Url, handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
+    fn create_connection(
+        &self,
+        url: &SafeUrl,
+        handle: TaskHandle,
+    ) -> anyhow::Result<DynBitcoindRpc> {
         Ok(RetryClient::new(BitcoinClient::new(url)?, handle).into())
     }
 }
@@ -30,7 +34,7 @@ impl IBitcoindRpcFactory for BitcoindFactory {
 struct BitcoinClient(::bitcoincore_rpc::Client);
 
 impl BitcoinClient {
-    fn new(url: &Url) -> anyhow::Result<Self> {
+    fn new(url: &SafeUrl) -> anyhow::Result<Self> {
         let (url, auth) = from_url_to_url_auth(url)?;
         Ok(Self(::bitcoincore_rpc::Client::new(&url, auth)?))
     }
@@ -115,7 +119,7 @@ impl IBitcoindRpc for BitcoinClient {
 }
 
 // TODO: Make private
-pub fn from_url_to_url_auth(url: &Url) -> anyhow::Result<(String, Auth)> {
+pub fn from_url_to_url_auth(url: &SafeUrl) -> anyhow::Result<(String, Auth)> {
     Ok((
         (if let Some(port) = url.port() {
             format!(

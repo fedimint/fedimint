@@ -11,11 +11,11 @@ use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::LOG_BLOCKCHAIN;
 use lazy_static::lazy_static;
 use tracing::info;
-use url::Url;
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
@@ -70,7 +70,7 @@ pub fn register_bitcoind(kind: String, factory: DynBitcoindRpcFactory) {
 /// Trait for creating new bitcoin RPC clients
 pub trait IBitcoindRpcFactory: Debug + Send + Sync {
     /// Creates a new bitcoin RPC client connection
-    fn create_connection(&self, url: &Url, handle: TaskHandle) -> Result<DynBitcoindRpc>;
+    fn create_connection(&self, url: &SafeUrl, handle: TaskHandle) -> Result<DynBitcoindRpc>;
 }
 
 dyn_newtype_define! {

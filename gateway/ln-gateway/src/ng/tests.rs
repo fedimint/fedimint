@@ -9,7 +9,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::Client;
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::task::sleep;
-use fedimint_core::util::NextOrPending;
+use fedimint_core::util::{NextOrPending, SafeUrl};
 use fedimint_core::{sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -38,7 +38,6 @@ use ln_gateway::ng::{
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
 use secp256k1::PublicKey;
-use url::Url;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -502,7 +501,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     gateway_test.connect_fed(&fed).await;
     let gateway = gateway_test.remove_client(&fed).await;
 
-    let mut fake_api = Url::from_str("http://127.0.0.1:8175").unwrap();
+    let mut fake_api = SafeUrl::from_str("http://127.0.0.1:8175").unwrap();
     let fake_route_hints = Vec::new();
     // Register with the federation with a low TTL to verify it will re-register
     gateway
@@ -517,7 +516,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     assert!(gateways.into_iter().any(|gateway| gateway.api == fake_api));
 
     // Update the URI for the gateway then re-register
-    fake_api = Url::from_str("http://127.0.0.1:8176").unwrap();
+    fake_api = SafeUrl::from_str("http://127.0.0.1:8176").unwrap();
 
     gateway
         .register_with_federation(

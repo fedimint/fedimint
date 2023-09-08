@@ -1,6 +1,7 @@
 use bitcoin::{Address, Amount};
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
+use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
@@ -8,14 +9,13 @@ use ln_gateway::rpc::{
     WithdrawPayload,
 };
 use serde::Serialize;
-use url::Url;
 
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
     /// The address of the gateway webserver
     #[clap(short, long, default_value = "http://127.0.0.1:8175")]
-    address: Url,
+    address: SafeUrl,
     #[command(subcommand)]
     command: Commands,
     /// WARNING: Passing in a password from the command line may be less secure!

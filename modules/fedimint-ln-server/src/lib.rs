@@ -1318,6 +1318,7 @@ mod fedimint_migration_tests {
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+    use fedimint_core::util::SafeUrl;
     use fedimint_core::{OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
@@ -1346,7 +1347,6 @@ mod fedimint_migration_tests {
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
-    use url::Url;
 
     use crate::{
         ContractAccount, Lightning, LightningGateway, LightningGen, LightningOutputOutcome,
@@ -1440,7 +1440,7 @@ mod fedimint_migration_tests {
             gateway_redeem_key: pk.x_only_public_key().0,
             node_pub_key: pk,
             lightning_alias: "FakeLightningAlias".to_string(),
-            api: Url::parse("http://example.com")
+            api: SafeUrl::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             route_hints: vec![],
             valid_until: fedimint_core::time::now(),

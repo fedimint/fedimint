@@ -5,9 +5,9 @@ use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::{info, warn};
-use url::Url;
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -15,7 +15,11 @@ use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 pub struct EsploraFactory;
 
 impl IBitcoindRpcFactory for EsploraFactory {
-    fn create_connection(&self, url: &Url, handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
+    fn create_connection(
+        &self,
+        url: &SafeUrl,
+        handle: TaskHandle,
+    ) -> anyhow::Result<DynBitcoindRpc> {
         Ok(RetryClient::new(EsploraClient::new(url)?, handle).into())
     }
 }
@@ -24,8 +28,8 @@ impl IBitcoindRpcFactory for EsploraFactory {
 pub struct EsploraClient(esplora_client::AsyncClient);
 
 impl EsploraClient {
-    fn new(url: &Url) -> anyhow::Result<Self> {
-        // Url needs to have any trailing path including '/' removed
+    fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+        // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');
 
         let builder = esplora_client::Builder::new(without_trailing);

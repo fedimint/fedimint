@@ -22,6 +22,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
 };
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_common::api::LnFederationApi;
@@ -41,7 +42,6 @@ use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::info;
-use url::Url;
 
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
@@ -122,7 +122,7 @@ pub trait GatewayClientExt {
     /// Register gateway with federation
     async fn register_with_federation(
         &self,
-        gateway_api: Url,
+        gateway_api: SafeUrl,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
@@ -246,7 +246,7 @@ impl GatewayClientExt for Client {
     /// Register this gateway with the federation
     async fn register_with_federation(
         &self,
-        gateway_api: Url,
+        gateway_api: SafeUrl,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
@@ -456,7 +456,7 @@ impl GatewayClientModule {
         &self,
         route_hints: Vec<RouteHint>,
         time_to_live: Duration,
-        api: Url,
+        api: SafeUrl,
         gateway_id: secp256k1::PublicKey,
     ) -> LightningGateway {
         LightningGateway {
