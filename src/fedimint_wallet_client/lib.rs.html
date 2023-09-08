@@ -905,10 +905,6 @@
                         <span class="prelude-val">Some</span>(DepositStates::Created(<span class="kw">_</span>)) =&gt; {
                             <span class="kw">yield </span>DepositState::WaitingForTransaction;
                         },
-                        <span class="prelude-val">Some</span>(DepositStates::TimedOut(<span class="kw">_</span>)) =&gt; {
-                            <span class="kw">yield </span>DepositState::Failed(<span class="string">&quot;Deposit timed out&quot;</span>.to_string());
-                            <span class="kw">return</span>;
-                        }
                         <span class="prelude-val">Some</span>(s) =&gt; {
                             <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
                         },
@@ -918,6 +914,10 @@
                     <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
                         <span class="prelude-val">Some</span>(DepositStates::WaitingForConfirmations(<span class="kw">_</span>)) =&gt; {
                             <span class="kw">yield </span>DepositState::WaitingForConfirmation;
+                        },
+                        <span class="prelude-val">Some</span>(DepositStates::TimedOut(<span class="kw">_</span>)) =&gt; {
+                            <span class="kw">yield </span>DepositState::Failed(<span class="string">&quot;Deposit timed out&quot;</span>.to_string());
+                            <span class="kw">return</span>;
                         },
                         <span class="prelude-val">Some</span>(s) =&gt; {
                             <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
