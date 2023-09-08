@@ -343,7 +343,7 @@
                     };
                   };
 
-                  fedimint-devtools =
+                  devtools =
                     let
                       packages' = packages craneLibNative;
                     in
