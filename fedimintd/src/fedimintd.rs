@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::format_err;
 use clap::Parser;
 use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
@@ -31,6 +32,8 @@ use crate::attach_default_module_init_params;
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub const FM_EXTRA_DKG_META_VAR: &str = "FM_EXTRA_DKG_META";
 
 #[derive(Parser)]
 pub struct ServerOpts {
@@ -74,6 +77,29 @@ pub struct ServerOpts {
 
     #[arg(long, env = "FM_BIND_METRICS_API")]
     bind_metrics_api: Option<SocketAddr>,
+
+    /// List of default meta values to use during config generation (format:
+    /// `key1=value1,key2=value,...`)
+    #[arg(long, env = FM_EXTRA_DKG_META_VAR, value_parser = parse_map, default_value="")]
+    extra_dkg_meta: BTreeMap<String, String>,
+}
+
+fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
+    let mut map = BTreeMap::new();
+
+    if s.is_empty() {
+        return Ok(map);
+    }
+
+    for pair in s.split(',') {
+        let parts: Vec<&str> = pair.split('=').collect();
+        if parts.len() == 2 {
+            map.insert(parts[0].to_string(), parts[1].to_string());
+        } else {
+            return Err(format_err!("Invalid pair in map: {}", pair));
+        }
+    }
+    Ok(map)
 }
 
 /// `fedimintd` builder
@@ -260,7 +286,7 @@ async fn run(
         write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), password)?;
     };
     let default_params = ConfigGenParamsRequest {
-        meta: BTreeMap::new(),
+        meta: opts.extra_dkg_meta.clone(),
         modules: module_inits_params,
     };
     let mut api = FedimintServer {
