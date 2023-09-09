@@ -1,6 +1,7 @@
 use fedimint_core::module::SerdeModuleEncoding;
 use serde::{Deserialize, Serialize};
 
+// TODO: this can be removed with the legacy client
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum TransactionStatus {
     /// The rejected state is only recorded if the error happens after consensus

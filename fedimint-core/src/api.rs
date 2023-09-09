@@ -46,7 +46,7 @@ use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
-use crate::outcome::TransactionStatus;
+use crate::outcome::{SerdeOutputOutcome, TransactionStatus};
 use crate::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
     VerifiableResponse,
@@ -354,6 +354,8 @@ pub trait GlobalFederationApi {
     where
         R: OutputOutcome;
 
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()>;
+
     async fn await_output_outcome<R>(
         &self,
         outpoint: OutPoint,
@@ -383,6 +385,7 @@ pub trait GlobalFederationApi {
     ) -> FederationResult<ApiVersionSet>;
 }
 
+// TODO: this can be removed with the legacy client
 fn map_tx_outcome_outpoint<R>(
     tx_outcome: TransactionStatus,
     out_point: OutPoint,
@@ -395,6 +398,7 @@ where
         TransactionStatus::Rejected(e) => Err(OutputOutcomeError::Rejected(e)),
         TransactionStatus::Accepted { outputs, .. } => {
             let outputs_len = outputs.len();
+
             outputs
                 .into_iter()
                 .nth(out_point.out_idx as usize) // avoid clone as would be necessary with .get(…)
@@ -402,21 +406,30 @@ where
                     outputs_num: outputs_len,
                     out_idx: out_point.out_idx,
                 })
-                .and_then(|output| {
-
-
-                    let dyn_outcome = output
-                        .try_into_inner_known_module_kind(module_decoder)
-                        .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?;
-
-                    let source_instance = dyn_outcome.module_instance_id();
-                    dyn_outcome.as_any().downcast_ref().cloned().ok_or_else(|| {
-                        let target_type = std::any::type_name::<R>();
-                        OutputOutcomeError::ResponseDeserialization(anyhow!("Could not downcast output outcome with instance id {source_instance} to {target_type}"))
-                    })
-                })
+                .and_then(|output| deserialize_outcome(output, module_decoder))
         }
     }
+}
+
+fn deserialize_outcome<R>(
+    outcome: SerdeOutputOutcome,
+    module_decoder: &Decoder,
+) -> OutputOutcomeResult<R>
+where
+    R: OutputOutcome + MaybeSend,
+{
+    let dyn_outcome = outcome
+        .try_into_inner_known_module_kind(module_decoder)
+        .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?;
+
+    let source_instance = dyn_outcome.module_instance_id();
+
+    dyn_outcome.as_any().downcast_ref().cloned().ok_or_else(|| {
+        let target_type = std::any::type_name::<R>();
+        OutputOutcomeError::ResponseDeserialization(anyhow!(
+            "Could not downcast output outcome with instance id {source_instance} to {target_type}"
+        ))
+    })
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -442,6 +455,7 @@ where
             .await
     }
 
+    // TODO: this can be removed with the legacy client
     /// Await the outcome of an entire transaction
     async fn await_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
         self.request_current_consensus("wait_transaction".to_owned(), ApiRequestErased::new(tx))
@@ -503,6 +517,7 @@ where
             .await
     }
 
+    // TODO: this can be removed with the legacy client
     async fn fetch_output_outcome<R>(
         &self,
         out_point: OutPoint,
@@ -518,6 +533,11 @@ where
             .transpose()?)
     }
 
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()> {
+        self.request_current_consensus("await_transaction".to_owned(), ApiRequestErased::new(txid))
+            .await
+    }
+
     // TODO should become part of the API
     async fn await_output_outcome<R>(
         &self,
@@ -529,8 +549,15 @@ where
         R: OutputOutcome,
     {
         fedimint_core::task::timeout(timeout, async move {
-            let tx_outcome = self.await_tx_outcome(&outpoint.txid).await?;
-            map_tx_outcome_outpoint(tx_outcome, outpoint, module_decoder)
+            let outcome: SerdeOutputOutcome = self
+                .request_current_consensus(
+                    "await_output_outcome".to_owned(),
+                    ApiRequestErased::new(outpoint),
+                )
+                .await
+                .map_err(OutputOutcomeError::Federation)?;
+
+            deserialize_outcome(outcome, module_decoder)
         })
         .await
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?
