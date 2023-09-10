@@ -17,7 +17,7 @@ use fedimint_core::task::timeout;
 use fedimint_core::Amount;
 use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -85,7 +85,7 @@ impl LnClient {
     pub async fn create_outgoing_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         gateway: &LightningGateway,
         timelock: u32,
         mut rng: impl RngCore + CryptoRng + 'a,
@@ -289,7 +289,7 @@ impl LnClient {
 
     pub fn compute_outgoing_contract_amount(
         &self,
-        invoice: &Invoice,
+        invoice: &Bolt11Invoice,
         fees: RoutingFees,
     ) -> Result<Amount> {
         let invoice_amount_msat = invoice

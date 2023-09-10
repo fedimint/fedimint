@@ -354,7 +354,7 @@ impl GatewayPayInvoice {
 pub struct PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
-    invoice: lightning_invoice::Invoice,
+    invoice: lightning_invoice::Bolt11Invoice,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]

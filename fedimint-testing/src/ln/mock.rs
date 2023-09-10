@@ -11,8 +11,8 @@ use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{
-    Currency, Description, Invoice, InvoiceBuilder, InvoiceDescription, SignedRawInvoice,
-    DEFAULT_EXPIRY_TIME,
+    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder,
+    SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gateway_lnrpc::{
     self, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
@@ -63,14 +63,14 @@ impl LightningTest for FakeLightningTest {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Invoice> {
+    ) -> ln_gateway::Result<Bolt11Invoice> {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description("".to_string())
             .payment_hash(sha256::Hash::hash(&[0; 32]))
             .current_timestamp()
-            .min_final_cltv_expiry(0)
+            .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(amount.msats)
             .expiry_time(Duration::from_secs(
@@ -115,12 +115,12 @@ impl ILnRpcClient for FakeLightningTest {
         &self,
         invoice: PayInvoiceRequest,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let signed = invoice.invoice.parse::<SignedRawInvoice>().unwrap();
-        let invoice = Invoice::from_signed(signed).unwrap();
+        let signed = invoice.invoice.parse::<SignedRawBolt11Invoice>().unwrap();
+        let invoice = Bolt11Invoice::from_signed(signed).unwrap();
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         if invoice.description()
-            == InvoiceDescription::Direct(
+            == Bolt11InvoiceDescription::Direct(
                 &Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
             )
         {

@@ -1340,7 +1340,7 @@ mod fedimint_migration_tests {
     };
     use futures::StreamExt;
     use lightning::routing::gossip::RoutingFees;
-    use lightning_invoice::Invoice;
+    use lightning_invoice::Bolt11Invoice;
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;

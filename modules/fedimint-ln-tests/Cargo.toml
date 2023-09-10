@@ -26,6 +26,6 @@ fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
-lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
+lightning-invoice = { version = "0.24.0", features = [ "serde" ] }
 tokio = { version = "1.26.0", features = ["sync"] }
 tracing = "0.1.37"

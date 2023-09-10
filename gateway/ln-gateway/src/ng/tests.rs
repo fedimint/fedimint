@@ -31,7 +31,7 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, LightningNodeType};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
@@ -81,7 +81,7 @@ pub fn sha256(data: &[u8]) -> sha256::Hash {
 }
 
 async fn pay_valid_invoice(
-    invoice: Invoice,
+    invoice: Bolt11Invoice,
     user_client: &Client,
     gateway: &Client,
 ) -> anyhow::Result<()> {

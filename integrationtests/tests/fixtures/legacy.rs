@@ -29,7 +29,7 @@ use fedimint_mint_client::BlindNonce;
 use fedimint_wallet_client::txoproof::PegInProof;
 use fedimint_wallet_client::{PegOut, PegOutFees, Rbf};
 use futures::executor::block_on;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use threshold_crypto::PublicKey;
 
 use crate::fixtures;

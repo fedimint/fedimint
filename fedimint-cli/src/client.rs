@@ -75,7 +75,9 @@ pub enum ClientCmd {
     /// Wait for incoming invoice to be paid
     WaitInvoice { operation_id: OperationId },
     /// Pay a lightning invoice via a gateway
-    LnPay { bolt11: lightning_invoice::Invoice },
+    LnPay {
+        bolt11: lightning_invoice::Bolt11Invoice,
+    },
     /// List registered gateways
     ListGateways,
     /// Switch active gateway

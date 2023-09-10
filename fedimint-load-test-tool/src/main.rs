@@ -19,7 +19,7 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::Amount;
 use fedimint_mint_client::OOBNotes;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufWriter};

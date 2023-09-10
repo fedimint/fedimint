@@ -5,7 +5,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::KeyPair;
 use fedimint_core::{Amount, BitcoinHash};
 use lightning::ln::PaymentSecret;
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
+use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use rand::rngs::OsRng;
 use secp256k1_zkp::SecretKey;
@@ -23,7 +23,7 @@ pub trait LightningTest: ILnRpcClient {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Invoice>;
+    ) -> ln_gateway::Result<Bolt11Invoice>;
 
     /// Creates an invoice that is not payable
     ///
@@ -33,7 +33,7 @@ pub trait LightningTest: ILnRpcClient {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Invoice> {
+    ) -> ln_gateway::Result<Bolt11Invoice> {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         // Generate fake node keypair
         let kp = KeyPair::new(&ctx, &mut OsRng);
@@ -45,7 +45,7 @@ pub trait LightningTest: ILnRpcClient {
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
             .payment_hash(sha256::Hash::hash(&[0; 32]))
             .current_timestamp()
-            .min_final_cltv_expiry(0)
+            .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(amount.msats)
             .expiry_time(Duration::from_secs(

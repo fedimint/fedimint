@@ -13,7 +13,7 @@ use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());

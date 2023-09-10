@@ -463,7 +463,7 @@ enum DevCmd {
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
     notes: TieredMulti<SpendableNote>,
-    invoice: lightning_invoice::Invoice,
+    invoice: lightning_invoice::Bolt11Invoice,
 }
 
 pub struct FedimintCli {

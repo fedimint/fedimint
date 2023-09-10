@@ -27,8 +27,8 @@ bitcoin_hashes = "0.11.0"
 erased-serde = "0.3"
 futures = "0.3.24"
 itertools = "0.10.5"
-lightning = "0.0.113"
-lightning-invoice = { version = "0.21.0", features = [ "serde" ] }
+lightning = "0.0.116"
+lightning-invoice = { version = "0.24.0", features = [ "serde" ] }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
 fedimint-ln-common ={ path = "../fedimint-ln-common" }

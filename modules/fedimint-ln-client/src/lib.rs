@@ -46,7 +46,7 @@ use futures::StreamExt;
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
+use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
@@ -79,7 +79,10 @@ pub trait LightningClientExt {
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
 
     /// Pays a LN invoice with our available funds
-    async fn pay_bolt11_invoice(&self, invoice: Invoice) -> anyhow::Result<(PayType, ContractId)>;
+    async fn pay_bolt11_invoice(
+        &self,
+        invoice: Bolt11Invoice,
+    ) -> anyhow::Result<(PayType, ContractId)>;
 
     async fn subscribe_internal_pay(
         &self,
@@ -97,7 +100,7 @@ pub trait LightningClientExt {
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
-    ) -> anyhow::Result<(OperationId, Invoice)>;
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice)>;
 
     async fn subscribe_ln_receive(
         &self,
@@ -169,7 +172,7 @@ pub enum LnReceiveState {
 }
 
 async fn invoice_has_internal_payment_markers(
-    invoice: &Invoice,
+    invoice: &Bolt11Invoice,
     markers: (secp256k1::PublicKey, u64),
 ) -> bool {
     // Asserts that the invoice src_node_id and short_channel_id match known
@@ -183,7 +186,7 @@ async fn invoice_has_internal_payment_markers(
 }
 
 async fn invoice_routes_back_to_federation(
-    invoice: &Invoice,
+    invoice: &Bolt11Invoice,
     gateways: Vec<LightningGateway>,
 ) -> bool {
     gateways.into_iter().any(|gateway| {
@@ -240,7 +243,10 @@ impl LightningClientExt for Client {
         Ok(instance.api.fetch_gateways().await?)
     }
 
-    async fn pay_bolt11_invoice(&self, invoice: Invoice) -> anyhow::Result<(PayType, ContractId)> {
+    async fn pay_bolt11_invoice(
+        &self,
+        invoice: Bolt11Invoice,
+    ) -> anyhow::Result<(PayType, ContractId)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let payment_hash = invoice.payment_hash();
         let operation_id = OperationId(payment_hash.into_inner());
@@ -315,7 +321,7 @@ impl LightningClientExt for Client {
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
-    ) -> anyhow::Result<(OperationId, Invoice)> {
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let (src_node_id, short_channel_id, route_hints) = match self.select_active_gateway().await
         {
@@ -533,13 +539,13 @@ impl LightningClientExt for Client {
 pub enum LightningOperationMeta {
     Pay {
         out_point: OutPoint,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         fee: Amount,
         change_outpoint: Option<OutPoint>,
     },
     Receive {
         out_point: OutPoint,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     },
 }
 
@@ -648,7 +654,7 @@ impl LightningClientModule {
         &'a self,
         operation_id: OperationId,
         api: DynModuleApi,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
@@ -747,7 +753,7 @@ impl LightningClientModule {
     pub async fn create_incoming_output(
         &self,
         operation_id: OperationId,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     ) -> anyhow::Result<(
         ClientOutput<LightningOutput, LightningClientStateMachines>,
         ContractId,
@@ -883,7 +889,7 @@ impl LightningClientModule {
         network: Network,
     ) -> anyhow::Result<(
         OperationId,
-        Invoice,
+        Bolt11Invoice,
         ClientOutput<LightningOutput, LightningClientStateMachines>,
     )> {
         let payment_keypair = KeyPair::new(&self.secp, &mut rng);
@@ -933,7 +939,7 @@ impl LightningClientModule {
             .payment_hash(payment_hash)
             .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
-            .min_final_cltv_expiry(18)
+            .min_final_cltv_expiry_delta(18)
             .payee_pub_key(node_public_key)
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),

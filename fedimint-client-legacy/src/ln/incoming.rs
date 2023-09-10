@@ -1,7 +1,7 @@
 use bitcoin::secp256k1::KeyPair;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use serde::Serialize;
 
 use crate::modules::ln::contracts::incoming::IncomingContract;
@@ -30,7 +30,7 @@ impl IncomingContractAccount {
 #[derive(Debug, Encodable, Decodable)]
 pub struct ConfirmedInvoice {
     /// The invoice itself
-    pub invoice: Invoice,
+    pub invoice: Bolt11Invoice,
     /// Keypair that will be able to sweep contract once it has received payment
     pub keypair: KeyPair,
 }

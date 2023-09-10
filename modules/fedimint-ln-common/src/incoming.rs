@@ -18,7 +18,7 @@ use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -121,7 +121,7 @@ pub enum IncomingSmError {
     #[error("There was a failure when funding the contract: {error_message}")]
     FailedToFundContract { error_message: String },
     #[error("Failed to parse the amount from the invoice: {invoice}")]
-    AmountError { invoice: Invoice },
+    AmountError { invoice: Bolt11Invoice },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]

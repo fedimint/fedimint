@@ -20,7 +20,7 @@ use fedimint_mint_client::{
 };
 use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc;
 use tracing::info;
 
