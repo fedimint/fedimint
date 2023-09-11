@@ -23,7 +23,7 @@ This is a guide for setting up a 3/4 federation + lightning gateway on mutinynet
 3. **E-cash Mint**: Users deposit bitcoin into fedimint and are issued e-cash "notes". Users then redeem those notes in exchange for bitcoin (either a withdrawal from the mint or to complete a lightning invoice payment). The chaumian e-cash system blinds the mint from its users: there isn't even a concept of a "user" to the mint, there is simply the e-cash notes, where every e-cash note is indistinguishable from every other of the same denomination.
 4. **Built on Bitcoin**: the underlying reserves which are deposited and withdrawn from the fedimint are bitcoin. The e-cash notes are 1-1 backed by on-chain bitcoin held by the fedimint and are denominated in satoshis. It will eventually be possible to denominate the e-cash notes in different currencies like USD or EUR using fedimint modules.
 5. **Compatible with the Lightning Network**: The e-cash mint alone is insufficient to successfully scale bitcoin. When you deposit into the mint and receive the ecash notes, the only other people who might accept that e-cash claim against bitcoin will be your mint or other users of that mint. Fedimint's compatibility with Lightning allows you to use your e-cash notes to pay lightning invoices, and to generate lightning invoices which you receive as e-cash, letting users of fedimints remain compatible with the broader bitcoin network.
-6. **Via Gateways**: we call the mechanism we use for lightning network compatiblity a "lightning gateway". Any user of a fedimint who also runs a lightning node can use that node to send and receive bitcoin in exchange for e-cash payments by other users of the mint. A lightning gateway can service many federations, and federations can be serviced by many lightning gateways. When a fedimint user tries to pay a lightning invoice, what they're actually doing is locking e-cash notes to a contract and advertising "Any lightning node that proves it paid this invoice can claim the e-cash". Lightning gateways servicing the federation compete to pay the invoice because they'll receive slightly more in e-cash than the value of the invoice. This gateway e-cash payment can be usefully thought of as an "extra hop" on the lightning payment's onion route, fitting with the standard economic incentives of lightning nodes.
+6. **Via Gateways**: we call the mechanism we use for lightning network compatibility a "lightning gateway". Any user of a fedimint who also runs a lightning node can use that node to send and receive bitcoin in exchange for e-cash payments by other users of the mint. A lightning gateway can service many federations, and federations can be serviced by many lightning gateways. When a fedimint user tries to pay a lightning invoice, what they're actually doing is locking e-cash notes to a contract and advertising "Any lightning node that proves it paid this invoice can claim the e-cash". Lightning gateways servicing the federation compete to pay the invoice because they'll receive slightly more in e-cash than the value of the invoice. This gateway e-cash payment can be usefully thought of as an "extra hop" on the lightning payment's onion route, fitting with the standard economic incentives of lightning nodes.
 </details>
 
 </br>
@@ -171,7 +171,7 @@ For the google cloud machine we'll use something a little bigger because we'll a
 
 You should now have your machines running and be able to ssh into them. We'll install fedimint on each machine using the docker install script.
 
-Run the No TLS fedimint setup script below on each of the 4 machines you're running the fedimint gaurdian daemon on. Only install fedimintd on the boxes that'll run the guardians. If you're running the lightning gateway on one of the machines, you'll install the gateway setup script on that machine as well.
+Run the No TLS fedimint setup script below on each of the 4 machines you're running the fedimint guardian daemon on. Only install fedimintd on the boxes that'll run the guardians. If you're running the lightning gateway on one of the machines, you'll install the gateway setup script on that machine as well.
 
 ### Fedimint Setup Script (No TLS):
 
@@ -268,7 +268,7 @@ Now that we have the fedimint processes running on each machine, we'll form the 
 
 ### Leader and Followers
 
-On the homescreen you'll see a selection to lead or follow. This does not refer to any of the underyling security elements: all the guardians will participate in a round-robin distributed key generation once connected to generate all of the secrets and private keys required to run the mint. No guardian at any time during setup knows the complete key or secret.
+On the homescreen you'll see a selection to lead or follow. This does not refer to any of the underlying security elements: all the guardians will participate in a round-robin distributed key generation once connected to generate all of the secrets and private keys required to run the mint. No guardian at any time during setup knows the complete key or secret.
 
 The "Leader" is simply the guardian who will input the configuration settings for the federation and the "Followers" will agree to and validate those settings. This distinction is made simply for UX purposes so each guardian doesn't have to repeatedly input the same things, and when there's a typo blow up the key generation.
 
@@ -313,7 +313,7 @@ The followers simply set their names and passwords then paste the websocket link
 
 <details>
 <summary>
-The "numbers" the guardians are running mostly involed a Distributed Key Generation (DKG). DKG is a collaborative cryptographic protocol where multiple parties generate a shared secret key without any party ever holding the full key. We use DKG for fedimint so that none of the guardians ever have the full key to the mint. This is a critical security feature of fedimint, as it means that even if a single guardian is compromised, the mint cannot be compromised.
+The "numbers" the guardians are running mostly involved a Distributed Key Generation (DKG). DKG is a collaborative cryptographic protocol where multiple parties generate a shared secret key without any party ever holding the full key. We use DKG for fedimint so that none of the guardians ever have the full key to the mint. This is a critical security feature of fedimint, as it means that even if a single guardian is compromised, the mint cannot be compromised.
 
 ^ Click arrow for details!
 
