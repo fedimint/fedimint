@@ -16,15 +16,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   notifications:
-    # if: github.ref == 'refs/heads/master'
-    if: always()                              
+    if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
     runs-on: ubuntu-22.04
-    needs: [ check-unused-dependencies, audit ]
+    needs: [ audit ]
 
     steps:
-    - name: Discord notifications on failure                                                         
+    - name: Discord notifications on failure
       # https://stackoverflow.com/a/74562058/134409
       if: ${{ always() && contains(needs.*.result, 'failure') }}
       # https://github.com/marketplace/actions/actions-status-discord

@@ -21,7 +21,8 @@ jobs:
       - name: Build docs
         run: nix build -L .#debug.workspaceDocExport
 
-      - name: Deploy docs
+      - if: github.repository == 'fedimint/fedimint'
+        name: Deploy docs
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
