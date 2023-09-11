@@ -10,10 +10,6 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    flake-compat = {
-      url = "github:edolstra/flake-compat";
-      flake = false;
-    };
     advisory-db = {
       url = "github:rustsec/advisory-db";
       flake = false;
@@ -24,7 +20,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flake-compat, fenix, crane, advisory-db, android-nixpkgs }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, fenix, crane, advisory-db, android-nixpkgs }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
