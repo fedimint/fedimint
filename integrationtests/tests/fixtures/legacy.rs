@@ -427,13 +427,17 @@ impl ILegacyTestClient for LegacyTestUser<UserClientConfig> {
         );
         let mut builder = TransactionBuilder::default();
         builder.output(Output::LN(offer_output));
-        block_on(builder.build_with_change(
+        let res = block_on(builder.build_with_change(
             self.client.mint_client(),
             &mut dbtx,
             rng(),
             vec![],
             &fixtures::secp(),
         ))
-        .into_type_erased()
+        .into_type_erased();
+
+        block_on(dbtx.commit_tx());
+
+        res
     }
 }
