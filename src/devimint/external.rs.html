@@ -553,6 +553,8 @@
 <a href="#553" id="553">553</a>
 <a href="#554" id="554">554</a>
 <a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -632,7 +634,7 @@
     }
 
     <span class="kw">pub async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(block_num, <span class="string">&quot;Mining bitcoin blocks&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">&quot;Mining bitcoin blocks&quot;</span>);
         <span class="kw">let </span>client = <span class="self">self</span>.client();
         <span class="kw">let </span>addr = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>initial_block_count = client.get_block_count()<span class="question-mark">?</span>;
@@ -640,15 +642,17 @@
         <span class="kw">while </span>tokio::task::block_in_place(|| client.get_block_count())<span class="question-mark">?
             </span>&lt; initial_block_count + block_num
         {
-            <span class="macro">trace!</span>(LOG_DEVIMINT, <span class="string">&quot;Waiting for blocks to be mined&quot;</span>);
+            <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">&quot;Waiting for blocks to be mined&quot;</span>);
             sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await</span>;
         }
+
+        <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">&quot;Mined blocks&quot;</span>);
 
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>send_to(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: String, amount: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Txid&gt; {
-        <span class="macro">info!</span>(amount, addr, <span class="string">&quot;Sending funds from bitcoind&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, amount, addr, <span class="string">&quot;Sending funds from bitcoind&quot;</span>);
         <span class="kw">let </span>amount = bitcoin::Amount::from_sat(amount);
         <span class="kw">let </span>tx = <span class="self">self</span>.client().send_to_address(
             <span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>,

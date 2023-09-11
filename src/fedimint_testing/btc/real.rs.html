@@ -243,6 +243,25 @@
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -304,9 +323,25 @@
                 .expect(<span class="string">&quot;rpc failed&quot;</span>);
             <span class="kw">let </span>expected_block_count = last_mined_block.height <span class="kw">as </span>u64 + <span class="number">1</span>;
             <span class="comment">// waits for the rpc client to catch up to bitcoind
-            </span><span class="kw">while </span><span class="self">self</span>.rpc.get_block_count().<span class="kw">await</span>.expect(<span class="string">&quot;rpc failed&quot;</span>) &lt; expected_block_count {
-                <span class="macro">trace!</span>(<span class="string">&quot;Waiting for blocks to be mined&quot;</span>);
-                sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await</span>;
+            </span><span class="kw">loop </span>{
+                <span class="kw">let </span>current_block_count = <span class="self">self</span>.rpc.get_block_count().<span class="kw">await</span>.expect(<span class="string">&quot;rpc failed&quot;</span>);
+                <span class="kw">if </span>current_block_count &lt; expected_block_count {
+                    <span class="macro">trace!</span>(
+                        <span class="question-mark">?</span>block_num,
+                        <span class="question-mark">?</span>expected_block_count,
+                        <span class="question-mark">?</span>current_block_count,
+                        <span class="string">&quot;Waiting for blocks to be mined&quot;
+                    </span>);
+                    sleep(Duration::from_millis(<span class="number">200</span>)).<span class="kw">await</span>;
+                } <span class="kw">else </span>{
+                    <span class="macro">trace!</span>(
+                        <span class="question-mark">?</span>block_num,
+                        <span class="question-mark">?</span>expected_block_count,
+                        <span class="question-mark">?</span>current_block_count,
+                        <span class="string">&quot;Mined blocks&quot;
+                    </span>);
+                    <span class="kw">break</span>;
+                }
             }
         };
     }
@@ -410,9 +445,12 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTest {
     <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
+        <span class="macro">trace!</span>(<span class="string">&quot;Trying to acquire global bitcoin lock&quot;</span>);
+        <span class="kw">let </span>_guard = REAL_BITCOIN_LOCK.lock().<span class="kw">await</span>;
+        <span class="macro">trace!</span>(<span class="string">&quot;Acquired global bitcoin lock&quot;</span>);
         Box::new(RealBitcoinTestLocked {
             inner: <span class="self">self</span>.inner.clone(),
-            _guard: REAL_BITCOIN_LOCK.lock().<span class="kw">await</span>,
+            _guard,
         })
     }
 

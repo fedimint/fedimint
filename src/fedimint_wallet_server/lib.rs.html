@@ -1946,6 +1946,27 @@
 <a href="#1946" id="1946">1946</a>
 <a href="#1947" id="1947">1947</a>
 <a href="#1948" id="1948">1948</a>
+<a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+<a href="#1955" id="1955">1955</a>
+<a href="#1956" id="1956">1956</a>
+<a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
+<a href="#1963" id="1963">1963</a>
+<a href="#1964" id="1964">1964</a>
+<a href="#1965" id="1965">1965</a>
+<a href="#1966" id="1966">1966</a>
+<a href="#1967" id="1967">1967</a>
+<a href="#1968" id="1968">1968</a>
+<a href="#1969" id="1969">1969</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2897,12 +2918,33 @@
                 </span>.map(|(key, transaction)| (key.<span class="number">0</span>, transaction))
                 .collect::&lt;HashMap&lt;Txid, PendingTransaction&gt;&gt;()
                 .<span class="kw">await</span>;
+            <span class="kw">let </span>pending_transactions_len = pending_transactions.len();
 
+            <span class="macro">debug!</span>(
+                <span class="question-mark">?</span>height,
+                <span class="question-mark">?</span>pending_transactions_len,
+                <span class="string">&quot;Recognizing change UTXOs&quot;
+            </span>);
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx_height)) = <span class="self">self</span>.btc_rpc.get_tx_block_height(txid).<span class="kw">await </span>{
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx_height)) = <span class="self">self
+                    </span>.btc_rpc
+                    .get_tx_block_height(txid)
+                    .<span class="kw">await
+                    </span>.map(|r| r.filter(|tx_height| <span class="kw-2">*</span>tx_height == height <span class="kw">as </span>u64))
+                {
                     <span class="kw">if </span>tx_height == height <span class="kw">as </span>u64 {
+                        <span class="macro">debug!</span>(<span class="question-mark">?</span>txid, <span class="question-mark">?</span>tx_height, <span class="string">&quot;Recognizing change UTXO&quot;</span>);
                         <span class="self">self</span>.recognize_change_utxo(dbtx, tx).<span class="kw">await</span>;
+                    } <span class="kw">else </span>{
+                        <span class="macro">debug!</span>(
+                            <span class="question-mark">?</span>txid,
+                            <span class="question-mark">?</span>tx_height,
+                            <span class="question-mark">?</span>height,
+                            <span class="string">&quot;Pending transaction not yet confirmed in this block&quot;
+                        </span>);
                     }
+                } <span class="kw">else </span>{
+                    <span class="macro">debug!</span>(<span class="question-mark">?</span>txid, <span class="question-mark">?</span>height, <span class="string">&quot;Pending transaction not yet confirmed&quot;</span>);
                 }
             }
 
