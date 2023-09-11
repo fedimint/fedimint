@@ -102,6 +102,7 @@ async fn await_consensus_to_catch_up(client: &Client, block_count: u64) -> anyho
 }
 
 #[tokio::test(flavor = "multi_thread")]
+//#[ignore]
 async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -144,6 +145,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+//#[ignore]
 async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -187,6 +189,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+//#[ignore]
 async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -232,6 +235,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+//#[ignore]
 async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -307,6 +311,88 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    // This test has many assumptions about bitcoin L1 blocks
+    // and FM epochs, so we just lock the node
+    let bitcoin = bitcoin.lock_exclusive().await;
+    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    info!("Starting test peg_outs_must_wait_for_available_utxos");
+
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+
+    let mut balance_sub =
+        peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
+
+    info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
+    let address = bitcoin.get_new_address().await;
+    let peg_out1 = PEG_OUT_AMOUNT_SATS;
+    let fees1 = client
+        .get_withdraw_fee(address.clone(), bsats(peg_out1))
+        .await?;
+    let op = client
+        .withdraw(address.clone(), bsats(peg_out1), fees1)
+        .await?;
+    let balance_after_peg_out =
+        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees1.amount().to_sat());
+    assert_eq!(client.get_balance().await, balance_after_peg_out);
+    assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
+
+    let sub = client.subscribe_withdraw_updates(op).await?;
+    let mut sub = sub.into_stream();
+    assert_eq!(sub.ok().await?, WithdrawState::Created);
+    let txid = match sub.ok().await? {
+        WithdrawState::Succeeded(txid) => txid,
+        other => panic!("Unexpected state: {other:?}"),
+    };
+    bitcoin.get_mempool_tx_fee(&txid).await;
+
+    // Do another peg-out
+    let peg_out2 = PEG_OUT_AMOUNT_SATS * 2;
+    let fees2 = client
+        .get_withdraw_fee(address.clone(), bsats(peg_out2))
+        .await;
+    // Must fail because change UTXOs are still being confirmed
+    assert!(fees2.is_err());
+
+    let current_block = dyn_bitcoin_rpc.get_block_count().await?;
+    bitcoin.mine_blocks(finality_delay + 1).await;
+    await_consensus_to_catch_up(&client, current_block + 1).await?;
+    // Now change UTXOs are available and we can peg-out again
+    let fees2 = client
+        .get_withdraw_fee(address.clone(), bsats(peg_out2))
+        .await?;
+    let op = client
+        .withdraw(address.clone(), bsats(peg_out2), fees2)
+        .await?;
+    let sub = client.subscribe_withdraw_updates(op).await?;
+    let mut sub = sub.into_stream();
+    assert_eq!(sub.ok().await?, WithdrawState::Created);
+    let txid = match sub.ok().await? {
+        WithdrawState::Succeeded(txid) => txid,
+        other => panic!("Unexpected state: {other:?}"),
+    };
+
+    bitcoin.get_mempool_tx_fee(&txid).await;
+    let balance_after_second_peg_out = sats(
+        PEG_IN_AMOUNT_SATS
+            - peg_out1
+            - peg_out2
+            - fees1.amount().to_sat()
+            - fees2.amount().to_sat(),
+    );
+    assert_eq!(client.get_balance().await, balance_after_second_peg_out);
+    assert_eq!(balance_sub.ok().await?, balance_after_second_peg_out);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+//#[ignore]
 async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let bitcoin = fixtures.bitcoin();

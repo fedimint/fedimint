@@ -31,47 +31,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::fixtures::{peers, test};
 
-#[tokio::test(flavor = "multi_thread")]
-async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
-    test(2, |fed, user, bitcoin| async move {
-        // at least one epoch needed to establish fees
-        bitcoin.prepare_funding_wallet().await;
-        fed.run_consensus_epochs(1).await;
-
-        // This test has many assumptions about bitcoin L1 blocks
-        // and FM epochs, so we just lock the node
-        let bitcoin = bitcoin.lock_exclusive().await;
-
-        let address1 = bitcoin.get_new_address().await;
-        let address2 = bitcoin.get_new_address().await;
-
-        fed.mine_and_mint(&*user, &*bitcoin, sats(5000)).await;
-        user.peg_out(1000, &address1);
-
-        fed.run_consensus_epochs(2).await;
-        fed.broadcast_transactions().await;
-        assert_eq!(
-            bitcoin.mine_block_and_get_received(&address1).await,
-            sats(1000)
-        );
-
-        // The change UTXO is still finalizing
-        let response = user.fetch_peg_out_fees(Amount::from_sat(2000), address2.clone());
-        assert_matches!(response.await, Err(_));
-
-        bitcoin.mine_blocks(100).await;
-        fed.run_consensus_epochs(1).await;
-        user.peg_out(2000, &address2);
-        fed.run_consensus_epochs(2).await;
-        fed.broadcast_transactions().await;
-        assert_eq!(
-            bitcoin.mine_block_and_get_received(&address2).await,
-            sats(2000)
-        );
-    })
-    .await
-}
-
 // this test had to be removed to switch to aleph bft and should be ported to
 // the new testing framework.
 #[tokio::test(flavor = "multi_thread")]

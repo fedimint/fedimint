@@ -10,7 +10,7 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1;
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::create_bitcoind;
 use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
 use fedimint_client_legacy::mint::SpendableNote;
 use fedimint_client_legacy::{module_decode_stubs, UserClientConfig};
@@ -207,7 +207,6 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let fed = FederationTest::new(
                 server_config,
                 &fed_db,
-                &|| bitcoin_rpc.clone(),
                 &connect_gen,
                 server_module_inits.clone(),
                 &mut task_group,
@@ -246,7 +245,6 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
                 bitcoin::network::constants::Network::Regtest,
                 10,
             );
-            let bitcoin_rpc = || factory.bitcoin.clone().into();
             let params = gen_local(&peers, base_port, "test", module_inits_params).unwrap();
 
             let server_config =
@@ -268,7 +266,6 @@ pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
             let fed = FederationTest::new(
                 server_config,
                 &fed_db,
-                &bitcoin_rpc,
                 &connect_gen,
                 server_module_inits.clone(),
                 &mut task_group,
@@ -431,7 +428,6 @@ pub struct FederationTest {
 struct ServerTest {
     fedimint: ConsensusServer,
     last_consensus: Vec<HbbftConsensusOutcome>,
-    bitcoin_rpc: DynBitcoindRpc,
     database: Database,
     override_proposal: Option<ConsensusProposal>,
     dropped_peers: Vec<PeerId>,
@@ -719,21 +715,6 @@ impl FederationTest {
         out_point
     }
 
-    /// Has every federation node broadcast any transactions pending to the
-    /// Bitcoin network, otherwise transactions will only get broadcast
-    /// every 10 seconds.
-    pub async fn broadcast_transactions(&self) {
-        for server in &self.servers {
-            let svr = server.lock().await;
-            let db = svr.database.new_isolated(self.wallet_id);
-            let dbtx = block_on(db.begin_transaction());
-            block_on(fedimint_wallet_server::broadcast_pending_tx(
-                dbtx,
-                &svr.bitcoin_rpc,
-            ));
-        }
-    }
-
     /// Runs `n` epochs in the federation (each guardian node)
     ///
     /// Call this method in tests when some conditions that trigger
@@ -980,13 +961,11 @@ impl FederationTest {
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
         database_gen: &impl Fn(ModuleDecoderRegistry) -> Database,
-        bitcoin_gen: &impl Fn() -> DynBitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
         module_inits: ServerModuleInitRegistry,
         task_group: &mut TaskGroup,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async {
-            let btc_rpc = bitcoin_gen();
             let decoders = module_inits
                 .available_decoders(cfg.iter_module_instances())
                 .unwrap();
@@ -1021,7 +1000,6 @@ impl FederationTest {
 
             Arc::new(Mutex::new(ServerTest {
                 fedimint,
-                bitcoin_rpc: btc_rpc,
                 database: db,
                 last_consensus: vec![],
                 override_proposal: None,
