@@ -34,6 +34,20 @@
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
                 cargo-nextest = pkgs-unstable.cargo-nextest;
+
+                cargo-llvm-cov = prev.rustPlatform.buildRustPackage rec {
+                  pname = "cargo-llvm-cov";
+                  version = "0.5.31";
+                  buildInputs = [ ];
+
+                  src = pkgs.fetchCrate {
+                    inherit pname version;
+                    sha256 = "sha256-HjnP9H1t660PJ5eXzgAhrdDEgqdzzb+9Dbk5RGUPjaQ=";
+                  };
+                  doCheck = false;
+                  cargoHash = "sha256-p6zpRRNX4g+jESNSwouWMjZlFhTBFJhe7LirYtFrZ1g=";
+                };
+
                 # TODO: switch to mainstream after https://github.com/crate-ci/typos/pull/708 is released
                 typos = prev.rustPlatform.buildRustPackage {
                   pname = "typos";

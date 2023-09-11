@@ -107,7 +107,7 @@ craneLib.overrideScope' (self: prev: {
     buildPhaseCargoCommand = "cargo llvm-cov --locked --workspace --all-targets --profile $CARGO_PROFILE --no-report";
     cargoBuildCommand = "dontuse";
     cargoCheckCommand = "dontuse";
-    nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ self.cargo-llvm-cov ];
+    nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-llvm-cov ];
     doCheck = false;
   });
 
@@ -117,7 +117,7 @@ craneLib.overrideScope' (self: prev: {
     cargoArtifacts = self.workspaceDepsCov;
     buildPhaseCargoCommand = "mkdir -p $out ; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo llvm-cov --locked --workspace --all-targets --profile $CARGO_PROFILE --lcov --tests --output-path $out/lcov.info --  --test-threads=$(($(nproc) * 2))";
     installPhaseCommand = "true";
-    nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ self.cargo-llvm-cov ];
+    nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-llvm-cov ];
     doCheck = false;
   });
 
