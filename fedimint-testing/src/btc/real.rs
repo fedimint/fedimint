@@ -59,9 +59,25 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                 .expect("rpc failed");
             let expected_block_count = last_mined_block.height as u64 + 1;
             // waits for the rpc client to catch up to bitcoind
-            while self.rpc.get_block_count().await.expect("rpc failed") < expected_block_count {
-                trace!("Waiting for blocks to be mined");
-                sleep(Duration::from_millis(200)).await;
+            loop {
+                let current_block_count = self.rpc.get_block_count().await.expect("rpc failed");
+                if current_block_count < expected_block_count {
+                    trace!(
+                        ?block_num,
+                        ?expected_block_count,
+                        ?current_block_count,
+                        "Waiting for blocks to be mined"
+                    );
+                    sleep(Duration::from_millis(200)).await;
+                } else {
+                    trace!(
+                        ?block_num,
+                        ?expected_block_count,
+                        ?current_block_count,
+                        "Mined blocks"
+                    );
+                    break;
+                }
             }
         };
     }
@@ -165,9 +181,12 @@ pub struct RealBitcoinTestLocked {
 #[async_trait]
 impl BitcoinTest for RealBitcoinTest {
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
+        trace!("Trying to acquire global bitcoin lock");
+        let _guard = REAL_BITCOIN_LOCK.lock().await;
+        trace!("Acquired global bitcoin lock");
         Box::new(RealBitcoinTestLocked {
             inner: self.inner.clone(),
-            _guard: REAL_BITCOIN_LOCK.lock().await,
+            _guard,
         })
     }
 
