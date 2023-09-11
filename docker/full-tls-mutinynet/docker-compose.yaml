@@ -11,7 +11,6 @@
 version: "3.3"
 
 services:
-
   traefik:
     image: "traefik:v2.10"
     container_name: "traefik"
@@ -32,7 +31,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
   fedimintd:
-    image: fedimint/fedimintd:v0.1.0-rc3
+    image: fedimint/fedimintd:v0.1.0
     volumes:
       - fedimintd_data:/data
     ports:
@@ -128,8 +127,8 @@ services:
       - -c
       - lnd --bitcoin.active --bitcoin.signet --bitcoin.dnsseed=0 --bitcoin.node=bitcoind --protocol.wumbo-channels --bitcoind.rpchost=bitcoind --bitcoind.rpcuser=bitcoin --bitcoind.rpcpass=bitcoin --bitcoind.zmqpubrawblock=tcp://bitcoind:48332 --bitcoind.zmqpubrawtx=tcp://bitcoind:48333 --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --restlisten=0.0.0.0:8080 --tlsextradomain=lnd --noseedbackup
     ports:
-      - '10009:10009'
-      - '0.0.0.0:9735:9735'
+      - "10009:10009"
+      - "0.0.0.0:9735:9735"
     volumes:
       - lnd_datadir:/root/.lnd
     depends_on:
@@ -238,7 +237,7 @@ services:
     ports:
       - 0.0.0.0:38333:38333
     volumes:
-      - 'bitcoin_datadir:/root/.bitcoin'
+      - "bitcoin_datadir:/root/.bitcoin"
     restart: always
     platform: linux/amd64
 
