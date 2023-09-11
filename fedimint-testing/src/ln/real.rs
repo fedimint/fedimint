@@ -69,14 +69,13 @@ impl LightningTest for ClnLightningTest {
     ) -> ln_gateway::Result<Bolt11Invoice> {
         info!("fetching invoice from cln");
         let random: u64 = rand::random();
-        let invoice_req = model::InvoiceRequest {
+        let invoice_req = model::requests::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
             description: "".to_string(),
             label: random.to_string(),
             expiry: expiry_time,
             fallbacks: None,
             preimage: None,
-            exposeprivatechannels: None,
             cltv: None,
             deschashonly: None,
         };
@@ -173,7 +172,7 @@ impl ClnLightningTest {
         if let Response::Getinfo(get_info) = rpc
             .lock()
             .await
-            .call(Request::Getinfo(model::GetinfoRequest {}))
+            .call(Request::Getinfo(model::requests::GetinfoRequest {}))
             .await
             .unwrap()
         {
@@ -185,7 +184,7 @@ impl ClnLightningTest {
 
     async fn channel_balance(rpc: Arc<Mutex<ClnRpc>>) -> Amount {
         info!("fetching balance from cln");
-        let listfunds_req = model::ListfundsRequest { spent: Some(false) };
+        let listfunds_req = model::requests::ListfundsRequest { spent: Some(false) };
         let listfunds_resp = if let Response::ListFunds(data) = rpc
             .lock()
             .await

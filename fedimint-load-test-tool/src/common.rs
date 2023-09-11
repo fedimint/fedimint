@@ -137,13 +137,13 @@ pub async fn build_client(
     Ok(client)
 }
 
-pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Invoice, String)> {
+pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Bolt11Invoice, String)> {
     let result = cmd!(LnCli, "addinvoice", "--amt_msat", amount.msats)
         .out_json()
         .await?;
     let invoice = result["payment_request"]
         .as_str()
-        .map(Invoice::from_str)
+        .map(Bolt11Invoice::from_str)
         .transpose()?
         .context("Missing payment_request field")?;
     let r_hash = result["r_hash"]
@@ -168,7 +168,7 @@ pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
 
 pub async fn gateway_pay_invoice(
     client: &Client,
-    invoice: Invoice,
+    invoice: Bolt11Invoice,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
@@ -195,7 +195,7 @@ pub async fn gateway_pay_invoice(
     Ok(())
 }
 
-pub async fn cln_create_invoice(amount: Amount) -> anyhow::Result<(Invoice, String)> {
+pub async fn cln_create_invoice(amount: Amount) -> anyhow::Result<(Bolt11Invoice, String)> {
     let now = fedimint_core::time::now();
     let random_n: u128 = rand::random();
     let label = format!("label-{now:?}-{random_n}");
@@ -205,7 +205,7 @@ pub async fn cln_create_invoice(amount: Amount) -> anyhow::Result<(Invoice, Stri
         .as_str()
         .context("Missing bolt11 field")?
         .to_owned();
-    Ok((Invoice::from_str(&invoice_string)?, label))
+    Ok((Bolt11Invoice::from_str(&invoice_string)?, label))
 }
 
 pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {

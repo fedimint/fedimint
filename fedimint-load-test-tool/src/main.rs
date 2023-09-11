@@ -266,7 +266,7 @@ async fn main() -> anyhow::Result<()> {
                 let mut lines = tokio::io::BufReader::new(invoices_file).lines();
                 let mut invoices = vec![];
                 while let Some(line) = lines.next_line().await? {
-                    let invoice = Invoice::from_str(&line)?;
+                    let invoice = Bolt11Invoice::from_str(&line)?;
                     invoices.push(invoice);
                 }
                 invoices
@@ -322,7 +322,7 @@ async fn run_load_test(
     generate_invoice_with: Option<LnInvoiceGeneration>,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
-    invoices_from_file: Vec<Invoice>,
+    invoices_from_file: Vec<Bolt11Invoice>,
     gateway_id: Option<String>,
     notes_per_user: u16,
     note_denomination: Amount,
@@ -418,7 +418,7 @@ async fn do_user_task(
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
     invoice_amount: Amount,
-    additional_invoices: Vec<Invoice>,
+    additional_invoices: Vec<Bolt11Invoice>,
     generate_invoice_with: Option<LnInvoiceGeneration>,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {

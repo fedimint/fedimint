@@ -217,7 +217,7 @@ impl Lightningd {
         poll("lightningd block processing", || async {
             let btc_height = self.bitcoind.client().get_blockchain_info()?.blocks;
             let lnd_height = self
-                .request(cln_rpc::model::GetinfoRequest {})
+                .request(cln_rpc::model::requests::GetinfoRequest {})
                 .await?
                 .blockheight;
             Ok((lnd_height as u64) == btc_height)
@@ -228,7 +228,7 @@ impl Lightningd {
 
     pub async fn pub_key(&self) -> Result<String> {
         Ok(self
-            .request(cln_rpc::model::GetinfoRequest {})
+            .request(cln_rpc::model::requests::GetinfoRequest {})
             .await?
             .id
             .to_string())
@@ -335,7 +335,7 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     info!(LOG_DEVIMINT, "block sync done");
     let cln_addr = cln
-        .request(cln_rpc::model::NewaddrRequest { addresstype: None })
+        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
         .await?
         .bech32
         .context("bech32 should be present")?;
@@ -346,7 +346,7 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
     let lnd_pubkey = lnd.pub_key().await?;
     let cln_pubkey = cln.pub_key().await?;
 
-    cln.request(cln_rpc::model::ConnectRequest {
+    cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()?,
         host: Some("127.0.0.1".to_owned()),
         port: Some(9734),
@@ -355,7 +355,7 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
 
     poll("fund channel", || async {
         Ok(cln
-            .request(cln_rpc::model::FundchannelRequest {
+            .request(cln_rpc::model::requests::FundchannelRequest {
                 id: lnd_pubkey.parse()?,
                 amount: cln_rpc::primitives::AmountOrAll::Amount(
                     cln_rpc::primitives::Amount::from_sat(10_000_000),
@@ -378,7 +378,7 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
 
     poll("list peers", || async {
         Ok(!cln
-            .request(cln_rpc::model::ListpeersRequest {
+            .request(cln_rpc::model::requests::ListpeersRequest {
                 id: Some(lnd_pubkey.parse()?),
                 level: None,
             })
