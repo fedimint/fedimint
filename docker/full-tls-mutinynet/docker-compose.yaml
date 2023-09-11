@@ -32,7 +32,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
   fedimintd:
-    image: fedimint/fedimintd:v0.1.0-rc3
+    image: fedimint/fedimintd:v0.1.0
     volumes:
       - fedimintd_data:/data
     ports:
@@ -71,7 +71,7 @@ services:
       - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
 
   gatewayd:
-    image: fedimint/gatewayd:v0.1.0-rc3
+    image: fedimint/gatewayd:v0.1.0
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files
