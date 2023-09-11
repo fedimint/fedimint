@@ -1,9 +1,9 @@
 # Important: 127.0.0.1 should be replaced by the external ip address of the machine
-version: '3'
+version: "3"
 
 services:
   fedimintd:
-    image: fedimint/fedimintd:v0.1.0-rc3
+    image: fedimint/fedimintd:v0.1.0
     volumes:
       - fedimintd_data:/data
     ports:
@@ -37,7 +37,6 @@ services:
 volumes:
   fedimintd_data:
     driver: local
-
 # Example of running it without docker compose:
 # docker run -it -e FM_BITCOIN_RPC_KIND=esplora -e FM_BITCOIN_RPC_URL=https://mutinynet.com/api/ -e FM_BIND_P2P=0.0.0.0:8173 -e FM_P2P_URL=fedimint://127.0.0.1:8173 -e FM_BIND_API=0.0.0.0:8174 -e FM_API_URL=ws://127.0.0.1:8174  -p 0.0.0.0:8173:8173 -p 0.0.0.0:8174:8174 fedimint/fedimintd:master
 # docker run -e REACT_APP_FM_CONFIG_API="ws://127.0.0.1:8174" -it fedimintui/guardian-ui
