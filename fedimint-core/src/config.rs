@@ -15,6 +15,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
 use serde::de::DeserializeOwned;
@@ -25,7 +26,6 @@ use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
-use url::Url;
 
 use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
@@ -101,7 +101,7 @@ impl JsonWithKind {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PeerUrl {
     /// The peer's public URL (e.g. `wss://fedimint-server-1:5000`)
-    pub url: Url,
+    pub url: SafeUrl,
     /// The peer's name
     pub name: String,
 }

@@ -43,6 +43,7 @@ use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::{self, sleep, MaybeSend};
 use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{
@@ -74,7 +75,6 @@ use thiserror::Error;
 use threshold_crypto::PublicKey;
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, info, instrument, trace};
-use url::Url;
 
 use crate::db::ClientSecretKey;
 use crate::ln::db::{
@@ -130,7 +130,7 @@ pub struct GatewayClientConfig {
     #[serde(with = "serde_keypair")]
     pub redeem_key: bitcoin::KeyPair,
     pub timelock_delta: u64,
-    pub api: Url,
+    pub api: SafeUrl,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
     pub lightning_alias: String,
     /// Channel identifier assigned to the mint by the gateway.

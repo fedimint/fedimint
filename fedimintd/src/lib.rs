@@ -6,6 +6,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::module::ServerModuleInit;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, Tiered};
 use fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -17,7 +18,6 @@ use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
 use fedimint_wallet_server::WalletGen;
-use url::Url;
 
 /// Module for creating `fedimintd` binary with custom modules
 pub mod fedimintd;
@@ -72,14 +72,13 @@ pub fn attach_default_module_init_params(
 
 pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
     let url = match network {
-        Network::Bitcoin => Url::parse("https://blockstream.info/api/")
+        Network::Bitcoin => SafeUrl::parse("https://blockstream.info/api/")
             .expect("Failed to parse default esplora server"),
-        Network::Testnet => Url::parse("https://blockstream.info/testnet/api/")
+        Network::Testnet => SafeUrl::parse("https://blockstream.info/testnet/api/")
             .expect("Failed to parse default esplora server"),
-        Network::Regtest => {
-            Url::parse("http://127.0.0.1:50002/").expect("Failed to parse default esplora server")
-        }
-        Network::Signet => Url::parse("https://mutinynet.com/api/")
+        Network::Regtest => SafeUrl::parse("http://127.0.0.1:50002/")
+            .expect("Failed to parse default esplora server"),
+        Network::Signet => SafeUrl::parse("https://mutinynet.com/api/")
             .expect("Failed to parse default esplora server"),
     };
     BitcoinRpcConfig {

@@ -6,9 +6,9 @@ use bitcoin_hashes::hex::ToHex;
 use electrum_client::ElectrumApi;
 use fedimint_core::task::{block_in_place, TaskHandle};
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use tracing::{info, warn};
-use url::Url;
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -16,7 +16,11 @@ use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 pub struct ElectrumFactory;
 
 impl IBitcoindRpcFactory for ElectrumFactory {
-    fn create_connection(&self, url: &Url, handle: TaskHandle) -> anyhow::Result<DynBitcoindRpc> {
+    fn create_connection(
+        &self,
+        url: &SafeUrl,
+        handle: TaskHandle,
+    ) -> anyhow::Result<DynBitcoindRpc> {
         Ok(RetryClient::new(ElectrumClient::new(url)?, handle).into())
     }
 }
@@ -24,7 +28,7 @@ impl IBitcoindRpcFactory for ElectrumFactory {
 pub struct ElectrumClient(electrum_client::Client);
 
 impl ElectrumClient {
-    fn new(url: &Url) -> anyhow::Result<Self> {
+    fn new(url: &SafeUrl) -> anyhow::Result<Self> {
         Ok(Self(electrum_client::Client::new(url.as_str())?))
     }
 }

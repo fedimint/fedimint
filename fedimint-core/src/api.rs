@@ -39,7 +39,6 @@ use serde_json::Value;
 use thiserror::Error;
 use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace, warn};
-use url::Url;
 
 use crate::backup::ClientBackupSnapshot;
 use crate::core::backup::SignedBackupRequest;
@@ -52,6 +51,7 @@ use crate::query::{
     VerifiableResponse,
 };
 use crate::transaction::{SerdeTransaction, Transaction};
+use crate::util::SafeUrl;
 use crate::{serde_as_encodable_hex, task};
 
 pub type PeerResult<T> = Result<T, PeerError>;
@@ -618,7 +618,7 @@ pub struct WsFederationApi<C = WsClient> {
 
 #[derive(Debug)]
 struct FederationPeer<C> {
-    url: Url,
+    url: SafeUrl,
     peer_id: PeerId,
     client: RwLock<Option<C>>,
 }
@@ -628,8 +628,8 @@ struct FederationPeer<C> {
 /// Can be used to download the configs and bootstrap a client
 #[derive(Clone, Debug, Eq, PartialEq, Encodable)]
 pub struct InviteCode {
-    /// Url to reach an API that we can download configs from
-    pub url: Url,
+    /// URL to reach an API that we can download configs from
+    pub url: SafeUrl,
     /// Config download token (might only be used a certain number of times)
     pub download_token: ClientConfigDownloadToken,
     /// Authentication id for the federation
@@ -765,13 +765,13 @@ impl<C: JsonRpcClient + Debug + 'static> IFederationApi for WsFederationApi<C> {
 
 #[apply(async_trait_maybe_send!)]
 pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    async fn connect(url: &Url) -> result::Result<Self, JsonRpcError>;
+    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcError>;
     fn is_connected(&self) -> bool;
 }
 
 #[apply(async_trait_maybe_send!)]
 impl JsonRpcClient for WsClient {
-    async fn connect(url: &Url) -> result::Result<Self, JsonRpcError> {
+    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcError> {
         #[cfg(not(target_family = "wasm"))]
         return WsClientBuilder::default()
             .use_webpki_rustls()
@@ -791,7 +791,7 @@ impl JsonRpcClient for WsClient {
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(peers: Vec<(PeerId, Url)>) -> Self {
+    pub fn new(peers: Vec<(PeerId, SafeUrl)>) -> Self {
         Self::new_with_client(peers)
     }
 
@@ -824,7 +824,7 @@ impl<C> WsFederationApi<C> {
     }
 
     /// Creates a new API client
-    pub fn new_with_client(peers: Vec<(PeerId, Url)>) -> Self {
+    pub fn new_with_client(peers: Vec<(PeerId, SafeUrl)>) -> Self {
         WsFederationApi {
             peer_ids: peers.iter().map(|m| m.0).collect(),
             peers: Arc::new(
@@ -909,14 +909,14 @@ impl<C: JsonRpcClient> FederationPeer<C> {
     }
 }
 
-/// `jsonrpsee` converts the `Url` to a `&str` internally and then parses it as
-/// an `Uri`. Unfortunately `Url` swallows ports that it considers default ports
-/// (e.g. 80 and 443 for HTTP(S)) which makes the `Uri` parsing fail in these
-/// cases. This function works around this limitation in a limited way (not
-/// fully standard compliant, but work for our use case).
+/// `jsonrpsee` converts the `SafeUrl` to a `&str` internally and then parses it
+/// as an `Uri`. Unfortunately the underlying `Url` type swallows ports that it
+/// considers default ports (e.g. 80 and 443 for HTTP(S)) which makes the `Uri`
+/// parsing fail in these cases. This function works around this limitation in a
+/// limited way (not fully standard compliant, but work for our use case).
 ///
 /// See <https://github.com/paritytech/jsonrpsee/issues/554#issue-1048646896>
-fn url_to_string_with_default_port(url: &Url) -> String {
+fn url_to_string_with_default_port(url: &SafeUrl) -> String {
     format!(
         "{}://{}:{}{}",
         url.scheme(),
@@ -1026,7 +1026,7 @@ mod tests {
             self.0.is_connected()
         }
 
-        async fn connect(_url: &Url) -> Result<Self> {
+        async fn connect(_url: &SafeUrl) -> Result<Self> {
             Ok(Self(C::connect().await?))
         }
     }
@@ -1062,7 +1062,7 @@ mod tests {
 
     fn federation_peer<C: SimpleClient + MaybeSend + MaybeSync>() -> FederationPeer<Client<C>> {
         FederationPeer {
-            url: Url::from_str("http://127.0.0.1").expect("Could not parse"),
+            url: SafeUrl::parse("http://127.0.0.1").expect("Could not parse"),
             peer_id: PeerId::from(0),
             client: RwLock::new(None),
         }

@@ -1,13 +1,13 @@
 use std::result::Result;
 
 use bitcoin::Address;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use reqwest::StatusCode;
 pub use reqwest::{Error, Response};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
-use url::Url;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
@@ -17,7 +17,7 @@ use crate::rpc::{FederationInfo, GatewayInfo};
 
 pub struct GatewayRpcClient {
     // Base URL to gateway web server
-    base_url: Url,
+    base_url: SafeUrl,
     // A request client
     client: reqwest::Client,
     // Password
@@ -25,7 +25,7 @@ pub struct GatewayRpcClient {
 }
 
 impl GatewayRpcClient {
-    pub fn new(base_url: Url, password: String) -> Self {
+    pub fn new(base_url: SafeUrl, password: String) -> Self {
         Self {
             base_url,
             client: reqwest::Client::new(),
@@ -81,13 +81,17 @@ impl GatewayRpcClient {
         self.call(url, payload).await
     }
 
-    async fn call<P, T: DeserializeOwned>(&self, url: Url, payload: P) -> Result<T, GatewayRpcError>
+    async fn call<P, T: DeserializeOwned>(
+        &self,
+        url: SafeUrl,
+        payload: P,
+    ) -> Result<T, GatewayRpcError>
     where
         P: Serialize,
     {
         let response = self
             .client
-            .post(url)
+            .post(url.reap_guts())
             .bearer_auth(self.password.clone())
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .json(&payload)

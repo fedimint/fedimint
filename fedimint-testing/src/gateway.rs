@@ -11,6 +11,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::sleep;
+use fedimint_core::util::SafeUrl;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
@@ -19,7 +20,6 @@ use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
-use url::Url;
 
 use crate::federation::FederationTest;
 use crate::fixtures::{test_dir, Fixtures};
@@ -32,7 +32,7 @@ pub struct GatewayTest {
     /// Password for the RPC
     pub password: String,
     /// URL for the RPC
-    api: Url,
+    api: SafeUrl,
     /// Handle of the running gateway
     gateway: Gateway,
     /// Temporary dir that stores the gateway config
@@ -80,7 +80,7 @@ impl GatewayTest {
         num_route_hints: usize,
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
-        let address: Url = format!("http://{listen}").parse().unwrap();
+        let address: SafeUrl = format!("http://{listen}").parse().unwrap();
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
 
         // Create federation client builder for the gateway

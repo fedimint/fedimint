@@ -5,13 +5,13 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::util::SafeUrl;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::info;
-use url::Url;
 
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
@@ -84,11 +84,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
 /// `GatewayLightningServer`.
 #[derive(Debug)]
 pub struct NetworkLnRpcClient {
-    connection_url: Url,
+    connection_url: SafeUrl,
 }
 
 impl NetworkLnRpcClient {
-    pub async fn new(url: Url) -> Self {
+    pub async fn new(url: SafeUrl) -> Self {
         info!(
             "Gateway configured to connect to remote LnRpcClient at \n cln extension address: {} ",
             url.to_string()
@@ -99,7 +99,7 @@ impl NetworkLnRpcClient {
     }
 
     async fn connect(
-        connection_url: Url,
+        connection_url: SafeUrl,
     ) -> Result<GatewayLightningClient<Channel>, LightningRpcError> {
         let mut retries = 0;
         let client = loop {

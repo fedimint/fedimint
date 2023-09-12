@@ -18,6 +18,7 @@ use fedimint_core::api::PeerConnectionStatus;
 use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::net::peers::IPeerConnections;
 use fedimint_core::task::{sleep_until, TaskGroup, TaskHandle};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
@@ -30,7 +31,6 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
-use url::Url;
 
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
@@ -70,7 +70,7 @@ pub struct NetworkConfig {
     /// members
     pub bind_addr: SocketAddr,
     /// Map of all peers' connection information we want to be connected to
-    pub peers: HashMap<PeerId, Url>,
+    pub peers: HashMap<PeerId, SafeUrl>,
 }
 
 /// Internal message type for [`ReconnectPeerConnections`], just public because
@@ -179,7 +179,7 @@ struct CommonPeerConnectionState<M> {
     outgoing: Receiver<M>,
     our_id: PeerId,
     peer_id: PeerId,
-    peer_address: Url,
+    peer_address: SafeUrl,
     delay_calculator: DelayCalculator,
     connect: SharedAnyConnector<PeerMessage<M>>,
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
@@ -726,7 +726,7 @@ where
     async fn new(
         our_id: PeerId,
         peer_id: PeerId,
-        peer_address: Url,
+        peer_address: SafeUrl,
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
@@ -778,7 +778,7 @@ where
         outgoing: Receiver<M>,
         our_id: PeerId,
         peer_id: PeerId,
-        peer_address: Url,
+        peer_address: SafeUrl,
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,

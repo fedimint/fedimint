@@ -40,6 +40,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
@@ -62,7 +63,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
-use url::Url;
 
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lnrpc_client::GatewayLightningBuilder;
@@ -114,7 +114,7 @@ pub struct GatewayOpts {
 
     /// Public URL from which the webserver API is reachable
     #[arg(long = "api-addr", env = "FM_GATEWAY_API_ADDR")]
-    pub api_addr: Url,
+    pub api_addr: SafeUrl,
 
     /// Gateway webserver authentication password
     #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
@@ -155,7 +155,7 @@ pub enum GatewayState {
 pub struct Gateway {
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
     listen: SocketAddr,
-    api_addr: Url,
+    api_addr: SafeUrl,
     password: String,
     num_route_hints: usize,
     pub state: Arc<RwLock<GatewayState>>,
@@ -174,7 +174,7 @@ impl Gateway {
         lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
         client_builder: StandardGatewayClientBuilder,
         listen: SocketAddr,
-        api_addr: Url,
+        api_addr: SafeUrl,
         password: String,
         fees: RoutingFees,
         num_route_hints: usize,
@@ -853,7 +853,7 @@ pub enum LightningMode {
     #[clap(name = "cln")]
     Cln {
         #[arg(long = "cln-extension-addr", env = "FM_GATEWAY_LIGHTNING_ADDR")]
-        cln_extension_addr: Url,
+        cln_extension_addr: SafeUrl,
     },
 }
 

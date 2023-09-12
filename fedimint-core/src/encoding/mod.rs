@@ -23,10 +23,10 @@ pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use lightning::util::ser::{Readable, Writeable};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use url::Url;
 
 use crate::core::ModuleInstanceId;
 use crate::module::registry::ModuleDecoderRegistry;
+use crate::util::SafeUrl;
 
 /// Object-safe trait for things that can encode themselves
 ///
@@ -122,19 +122,19 @@ pub trait Decodable: Sized {
     }
 }
 
-impl Encodable for Url {
+impl Encodable for SafeUrl {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.to_string().consensus_encode(writer)
     }
 }
 
-impl Decodable for Url {
+impl Decodable for SafeUrl {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         String::consensus_decode(d, modules)?
-            .parse::<Url>()
+            .parse::<SafeUrl>()
             .map_err(DecodeError::from_err)
     }
 }

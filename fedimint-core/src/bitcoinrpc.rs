@@ -1,10 +1,10 @@
 use std::env;
 
 use anyhow::Context;
+use fedimint_core::util::SafeUrl;
 use fedimint_derive::{Decodable, Encodable};
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;
-use url::Url;
 
 /// Env var for bitcoin RPC kind
 pub const FM_BITCOIN_RPC_KIND: &str = "FM_BITCOIN_RPC_KIND";
@@ -18,7 +18,7 @@ pub const FM_BITCOIND_COOKIE_FILE_VAR_NAME: &str = "FM_BITCOIND_COOKIE_FILE";
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct BitcoinRpcConfig {
     pub kind: String,
-    pub url: Url,
+    pub url: SafeUrl,
 }
 
 impl BitcoinRpcConfig {

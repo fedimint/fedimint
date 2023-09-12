@@ -51,3 +51,10 @@ rules:
   message: "`tokio::time::sleep` doesn't work in WASM. Use `fedimint_core::task::sleep` instead."
   pattern: tokio::time::sleep
   severity: WARNING
+
+- id: ban-raw-url
+  languages:
+    - rust
+  message: "`url::Url` may expose confidential username + passwords to logs etc. Use `fedimint_core::SafeUrl` instead."
+  pattern: url::Url
+  severity: WARNING

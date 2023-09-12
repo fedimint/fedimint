@@ -32,6 +32,7 @@ use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::ThresholdConsensus;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::TracingSetup;
@@ -43,7 +44,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tracing::{debug, info};
-use url::Url;
 use utils::{from_hex, parse_peer_id};
 
 use crate::client::ClientCmd;
@@ -70,7 +70,7 @@ enum CliOutput {
     },
 
     DecodeInviteCode {
-        url: Url,
+        url: SafeUrl,
         download_token: String,
         id: FederationId,
     },
@@ -414,7 +414,7 @@ enum DevCmd {
     /// Encode connection info from its constituent parts
     EncodeInviteCode {
         #[clap(long = "url")]
-        url: Url,
+        url: SafeUrl,
         #[clap(long = "download-token", value_parser = from_hex::<ClientConfigDownloadToken>)]
         download_token: ClientConfigDownloadToken,
         #[clap(long = "id")]

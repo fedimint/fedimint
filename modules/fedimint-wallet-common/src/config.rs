@@ -5,11 +5,11 @@ use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::__reexports::serde_json;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 use miniscript::descriptor::Wsh;
 use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonGen};
@@ -29,7 +29,7 @@ impl WalletGenParams {
                 finality_delay: 10,
                 client_default_bitcoin_rpc: BitcoinRpcConfig {
                     kind: "esplora".to_string(),
-                    url: Url::parse("http://127.0.0.1:50002/")
+                    url: SafeUrl::parse("http://127.0.0.1:50002/")
                         .expect("Failed to parse default esplora server"),
                 },
             },

@@ -28,12 +28,12 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::task::timeout;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
-use url::Url;
 
 use crate::api::LnFederationApi;
 use crate::contracts::incoming::{IncomingContract, IncomingContractOffer, OfferId};
@@ -188,7 +188,7 @@ pub struct LightningGateway {
     pub gateway_redeem_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
     pub lightning_alias: String,
-    pub api: Url,
+    pub api: SafeUrl,
     /// Route hints to reach the LN node of the gateway.
     ///
     /// These will be appended with the route hint of the recipient's virtual

@@ -14,7 +14,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::util::write_overwrite;
+use fedimint_core::util::{write_overwrite, SafeUrl};
 use fedimint_core::{timing, Amount};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
@@ -26,7 +26,6 @@ use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
-use url::Url;
 
 use crate::attach_default_module_init_params;
 
@@ -57,13 +56,13 @@ pub struct ServerOpts {
     bind_p2p: SocketAddr,
     /// Our external address for communicating with our peers
     #[arg(long, env = "FM_P2P_URL", default_value = "fedimint://127.0.0.1:8173")]
-    p2p_url: Url,
+    p2p_url: SafeUrl,
     /// Address we bind to for exposing the API
     #[arg(long, env = "FM_BIND_API", default_value = "127.0.0.1:8174")]
     bind_api: SocketAddr,
     /// Our API address for clients to connect to us
     #[arg(long, env = "FM_API_URL", default_value = "ws://127.0.0.1:8174")]
-    api_url: Url,
+    api_url: SafeUrl,
     /// Max denomination of notes issued by the federation (in millisats)
     /// default = 10 BTC
     #[arg(long, env = "FM_MAX_DENOMINATION", default_value = "1000000000000")]

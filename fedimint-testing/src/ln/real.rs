@@ -9,6 +9,7 @@ use bitcoin::{secp256k1, Network};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::Amount;
 use ldk_node::io::SqliteStore;
 use ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
@@ -26,7 +27,6 @@ use tokio::sync::Mutex;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};
 use tonic_lnd::{connect, LndClient};
 use tracing::{error, info, warn};
-use url::Url;
 
 use crate::btc::BitcoinTest;
 use crate::gateway::LightningNodeType;
@@ -156,7 +156,7 @@ impl ClnLightningTest {
 
         let lnrpc_addr = env::var("FM_GATEWAY_LIGHTNING_ADDR")
             .expect("FM_GATEWAY_LIGHTNING_ADDR not set")
-            .parse::<Url>()
+            .parse::<SafeUrl>()
             .expect("Invalid FM_GATEWAY_LIGHTNING_ADDR");
         let lnrpc: Box<dyn ILnRpcClient> = Box::new(NetworkLnRpcClient::new(lnrpc_addr).await);
 

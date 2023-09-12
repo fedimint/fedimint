@@ -4,10 +4,10 @@ use std::fmt::Debug;
 use bitcoin_hashes::sha256;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::task::MaybeSend;
+use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::PublicKey;
 use tokio_rustls::rustls;
-use url::Url;
 
 use crate::api::{
     DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
@@ -23,11 +23,11 @@ use crate::PeerId;
 // TODO: Maybe should have it's own CLI client so it doesn't need to be in core
 pub struct WsAdminClient {
     inner: DynGlobalApi,
-    pub url: Url,
+    pub url: SafeUrl,
 }
 
 impl WsAdminClient {
-    pub fn new(url: Url) -> Self {
+    pub fn new(url: SafeUrl) -> Self {
         // The peer ids given to the federation API are only useful when connected to
         // multiple peers so errors can be attributed. The admin client has no use for
         // them.
@@ -235,9 +235,9 @@ impl WsAdminClient {
 pub struct ConfigGenConnectionsRequest {
     /// Our guardian name
     pub our_name: String,
-    /// Url of "leader" guardian to send our connection info to
+    /// URL of "leader" guardian to send our connection info to
     /// Will be `None` if we are the leader
-    pub leader_api_url: Option<Url>,
+    pub leader_api_url: Option<SafeUrl>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -247,9 +247,9 @@ pub struct PeerServerParams {
     #[serde(with = "serde_tls_cert")]
     pub cert: rustls::Certificate,
     /// P2P is the network for running DKG and consensus
-    pub p2p_url: Url,
+    pub p2p_url: SafeUrl,
     /// API for secure websocket requests
-    pub api_url: Url,
+    pub api_url: SafeUrl,
     /// Name of the peer, used in TLS auth
     pub name: String,
     /// Status of the peer if known
