@@ -2,9 +2,8 @@
 
 This is a guide for setting up a 3/4 federation + lightning gateway on mutinynet, a test network for bitcoin with 30 second block times. You can run this same setup on a different test network or on mainnet with real bitcoin, but that is not encouraged while fedimint remains under active development.
 
-```diff
-- **WARNING** Fedimint 0.1 is alpha software released under an MIT License, do not use it with real bitcoin (yet), only use regtest or test networks like mutinynet.
-```
+> [!WARNING]  
+> Fedimint 0.1 is alpha software released under an MIT License, do not use it with real bitcoin (yet), only use regtest or test networks like mutinynet.
 
 <p align="center">
 <img src="setup-docs-assets/guardian_dashboard.png" alt="Guardian Dashboard" width="500">
@@ -458,6 +457,5 @@ Send some sats through your channel to the fedi alpha signet faucet. We'll be in
 
 Your federation gateway is now ready to provide lightning services to the federation! You should be able to send and receive lightning payments to users of the federation via the gateway, give it a try using a compatible client like the fedimint-cli or [webimint-rs](https://github.com/fedimint/webimint-rs) (demo at https://webimint.sirion.io/) ,
 
-```diff
-- **WARNING** webimint does not have persistent storage so you'll lose your funds if you close the browser tab. Do not use it with real bitcoin.
-```
+> [!WARNING]  
+> Fedimint 0.1 is alpha software released under an MIT License, do not use it with real bitcoin (yet), only use regtest or test networks like mutinynet.
