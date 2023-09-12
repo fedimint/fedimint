@@ -9,7 +9,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::GatewayTest;
+use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 
 /// Constructs a gateway connected to 2 federations for RPC tests
@@ -25,8 +25,13 @@ pub async fn fixtures() -> (
     fixtures = fixtures.with_module(LightningClientGen, LightningGen, ln_params);
 
     let lnd = fixtures.lnd().await;
-    let gateway = fixtures.new_gateway(lnd, 0).await;
-    let client = gateway.get_rpc().await;
+    let gateway = fixtures
+        .new_gateway(lnd, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+        .await;
+    let client = gateway
+        .get_rpc()
+        .await
+        .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
 
     let fed1 = fixtures.new_fed().await;
     let fed2 = fixtures.new_fed().await;

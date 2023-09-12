@@ -28,7 +28,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, LightningNodeType};
+use fedimint_testing::gateway::{GatewayTest, LightningNodeType, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Bolt11Invoice;
@@ -37,6 +37,10 @@ use ln_gateway::ng::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
+use ln_gateway::rpc::rpc_client::{GatewayRpcError, GatewayRpcResult};
+use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, SetConfigurationPayload};
+use ln_gateway::GatewayState;
+use reqwest::StatusCode;
 use secp256k1::PublicKey;
 
 fn fixtures() -> Fixtures {
@@ -67,7 +71,9 @@ where
     for (gateway_ln, other_node) in vec![(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
         let user_client = fed.new_client().await;
-        let mut gateway = fixtures.new_gateway(gateway_ln, 0).await;
+        let mut gateway = fixtures
+            .new_gateway(gateway_ln, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+            .await;
         gateway.connect_fed(&fed).await;
         let bitcoin = fixtures.bitcoin();
         f(gateway, other_node, fed, user_client, bitcoin).await?;
@@ -497,7 +503,9 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let node = fixtures.lnd().await;
     let fed = fixtures.new_fed().await;
     let user_client = fed.new_client().await;
-    let mut gateway_test = fixtures.new_gateway(node, 0).await;
+    let mut gateway_test = fixtures
+        .new_gateway(node, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+        .await;
     gateway_test.connect_fed(&fed).await;
     let gateway = gateway_test.remove_client(&fed).await;
 
@@ -617,7 +625,13 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
 
             let fed = fixtures.new_fed().await;
             let user_client = fed.new_client().await;
-            let mut gateway = fixtures.new_gateway(gateway_ln, num_route_hints).await;
+            let mut gateway = fixtures
+                .new_gateway(
+                    gateway_ln,
+                    num_route_hints,
+                    Some(DEFAULT_GATEWAY_PASSWORD.to_string()),
+                )
+                .await;
             gateway.connect_fed(&fed).await;
 
             let invoice_amount = sats(100);
@@ -690,4 +704,79 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_configuration() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+
+    let fed = fixtures.new_fed().await;
+    let lnd = fixtures.lnd().await;
+    let gateway = fixtures.new_gateway(lnd, 0, None).await;
+    let rpc_client = gateway.get_rpc().await;
+
+    // Verify that we can't join a federation yet because the configuration is not
+    // set
+    let join_payload = ConnectFedPayload {
+        invite_code: fed.invite_code().to_string(),
+    };
+
+    verify_rpc(
+        || rpc_client.connect_federation(join_payload.clone()),
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+
+    let test_password = "test_password".to_string();
+    let set_configuration_payload = SetConfigurationPayload {
+        password: test_password.clone(),
+    };
+    verify_rpc(
+        || rpc_client.set_configuration(set_configuration_payload.clone()),
+        StatusCode::OK,
+    )
+    .await;
+
+    GatewayTest::wait_for_gateway_state(gateway.gateway.clone(), |gw_state| {
+        matches!(gw_state, GatewayState::Running { .. })
+    })
+    .await;
+
+    // Test authentication
+    let rpc_client = rpc_client.with_password(Some(test_password));
+    let bad_rpc_client = rpc_client.with_password(Some("invalid".to_string()));
+
+    rpc_client.connect_federation(join_payload.clone()).await?;
+
+    rpc_client.get_info().await?;
+    verify_rpc(|| bad_rpc_client.get_info(), StatusCode::UNAUTHORIZED).await;
+
+    let federation_id = fed.invite_code().id;
+
+    let payload = BalancePayload { federation_id };
+    rpc_client.get_balance(payload.clone()).await?;
+    verify_rpc(
+        || bad_rpc_client.get_balance(payload.clone()),
+        StatusCode::UNAUTHORIZED,
+    )
+    .await;
+
+    // Verify that we can change the configuration after it is set
+    let set_configuration_payload = SetConfigurationPayload {
+        password: "new_password".to_string(),
+    };
+    rpc_client
+        .set_configuration(set_configuration_payload.clone())
+        .await?;
+
+    Ok(())
+}
+
+async fn verify_rpc<Fut, T>(func: impl Fn() -> Fut, status_code: StatusCode)
+where
+    Fut: Future<Output = GatewayRpcResult<T>>,
+{
+    if let Err(GatewayRpcError::BadStatus(status)) = func().await {
+        assert_eq!(status, status_code)
+    }
 }

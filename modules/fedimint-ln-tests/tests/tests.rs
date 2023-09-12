@@ -14,6 +14,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use lightning_invoice::Bolt11Invoice;
+use fedimint_testing::gateway::DEFAULT_GATEWAY_PASSWORD;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -24,7 +25,9 @@ fn fixtures() -> Fixtures {
 /// Setup a gateway connected to the fed and client
 async fn gateway(fixtures: &Fixtures, fed: &FederationTest) {
     let lnd = fixtures.lnd().await;
-    let mut gateway = fixtures.new_gateway(lnd, 0).await;
+    let mut gateway = fixtures
+        .new_gateway(lnd, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+        .await;
     gateway.connect_fed(fed).await;
 }
 
@@ -33,8 +36,20 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
-    let mut gateway1 = fixtures.new_gateway(fixtures.lnd().await, 0).await;
-    let mut gateway2 = fixtures.new_gateway(fixtures.cln().await, 0).await;
+    let mut gateway1 = fixtures
+        .new_gateway(
+            fixtures.lnd().await,
+            0,
+            Some(DEFAULT_GATEWAY_PASSWORD.to_string()),
+        )
+        .await;
+    let mut gateway2 = fixtures
+        .new_gateway(
+            fixtures.cln().await,
+            0,
+            Some(DEFAULT_GATEWAY_PASSWORD.to_string()),
+        )
+        .await;
 
     // Client selects a gateway by default
     gateway1.connect_fed(&fed).await;

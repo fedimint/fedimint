@@ -135,6 +135,7 @@ impl Fixtures {
         &self,
         ln: Box<dyn LightningTest>,
         num_route_hints: usize,
+        cli_password: Option<String>,
     ) -> GatewayTest {
         // TODO: Make construction easier
         let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
@@ -145,7 +146,7 @@ impl Fixtures {
         GatewayTest::new(
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(1))
                 .expect("Failed to allocate a port range"),
-            rand::random::<u64>().to_string(),
+            cli_password,
             ln,
             decoders,
             ClientModuleInitRegistry::from_iter(clients.filter(|client| {

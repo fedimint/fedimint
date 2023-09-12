@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
     let cli = Cli::parse();
-    let client = || GatewayRpcClient::new(cli.address, source_password(cli.rpcpassword));
+    let client = || GatewayRpcClient::new(cli.address, cli.rpcpassword);
 
     match cli.command {
         Commands::VersionHash => {
@@ -146,14 +146,4 @@ pub async fn print_response<T: Serialize>(val: T) {
         "{}",
         serde_json::to_string_pretty(&val).expect("Cannot serialize")
     )
-}
-
-pub fn source_password(rpcpassword: Option<String>) -> String {
-    match rpcpassword {
-        None => rpassword::prompt_password("Enter gateway password:").unwrap(),
-        Some(password) => {
-            eprintln!("WARNING: Passing in a password from the command line may be less secure!");
-            password
-        }
-    }
 }
