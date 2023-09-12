@@ -3,7 +3,7 @@ use std::env;
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicI64, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -66,7 +66,7 @@ use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 use tokio_rustls::rustls;
 use tracing::info;
 
@@ -78,9 +78,6 @@ pub mod user;
 
 // 21 denominations, up to ~1048 sats which is big enough for our tests
 const MAX_MSAT_DENOMINATION: u64 = u64::pow(2, 20);
-const DEFAULT_P2P_PORT: u16 = 8173;
-const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 20000;
-static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
@@ -127,17 +124,27 @@ where
     Ok(())
 }
 
+static TRACING_INIT_ONCE: tokio::sync::OnceCell<anyhow::Result<()>> = OnceCell::const_new();
+
 /// Generates the fixtures for an integration test and spawns API and HBBFT
 /// consensus threads for federation nodes starting at port DEFAULT_P2P_PORT.
 pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
-    let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
+    const NUM_PORTS_PER_PEER: u16 = 10;
+    let base_port = tokio::task::block_in_place(|| {
+        fedimint_portalloc::port_alloc(num_peers * NUM_PORTS_PER_PEER)
+    })?;
 
     // in case we need to output logs using 'cargo test -- --nocapture'
-    if base_port == BASE_PORT_INIT {
-        let chrome = env::var_os("FEDIMINT_TRACE_CHROME").map_or(false, |x| !x.is_empty());
-        TracingSetup::default().with_chrome(chrome).init()?;
-    }
+    TRACING_INIT_ONCE
+        .get_or_init(|| async {
+            let chrome = env::var_os("FEDIMINT_TRACE_CHROME").map_or(false, |x| !x.is_empty());
+            TracingSetup::default().with_chrome(chrome).init()?;
+            Ok(())
+        })
+        .await
+        .as_ref()
+        .map_err(|e| anyhow::format_err!("{e}"))?;
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let mut module_inits_params = ServerModuleConfigGenParamsRegistry::default();
