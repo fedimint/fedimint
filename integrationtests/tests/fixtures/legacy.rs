@@ -29,7 +29,7 @@ use fedimint_mint_client::BlindNonce;
 use fedimint_wallet_client::txoproof::PegInProof;
 use fedimint_wallet_client::{PegOut, PegOutFees, Rbf};
 use futures::executor::block_on;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use threshold_crypto::PublicKey;
 
 use crate::fixtures;
@@ -307,7 +307,7 @@ impl ILegacyLightningClient for LegacyTestUser<UserClientConfig> {
 
     async fn fund_outgoing_ln_contract(
         &self,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     ) -> LegacyClientResult<(ContractId, OutPoint)> {
         self.client
             .fund_outgoing_ln_contract(invoice, rng())
@@ -318,7 +318,7 @@ impl ILegacyLightningClient for LegacyTestUser<UserClientConfig> {
     async fn await_invoice_confirmation(
         &self,
         txid: TransactionId,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         payment_keypair: KeyPair,
     ) -> LegacyClientResult<ConfirmedInvoice> {
         self.client
@@ -331,7 +331,7 @@ impl ILegacyLightningClient for LegacyTestUser<UserClientConfig> {
         &self,
         amount: Amount,
         description: String,
-    ) -> LegacyClientResult<(TransactionId, Invoice, KeyPair)> {
+    ) -> LegacyClientResult<(TransactionId, Bolt11Invoice, KeyPair)> {
         self.client
             .generate_unconfirmed_invoice_and_submit(amount, description, &mut rng(), None)
             .await

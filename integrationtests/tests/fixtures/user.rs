@@ -22,7 +22,7 @@ use fedimint_wallet_client::txoproof::PegInProof;
 use fedimint_wallet_client::{PegOut, PegOutFees, Rbf};
 use futures::executor::block_on;
 use itertools::Itertools;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use threshold_crypto::PublicKey;
 use tracing::warn;
 
@@ -241,7 +241,7 @@ pub trait ILegacyLightningClient {
     /// Pays ecash to fund a LN invoice that will be paid by the gateway
     async fn fund_outgoing_ln_contract(
         &self,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     ) -> LegacyClientResult<(ContractId, OutPoint)>;
 
     /// Submits a LN invoice to the federation (without paying anything yet)
@@ -249,7 +249,7 @@ pub trait ILegacyLightningClient {
         &self,
         amount: Amount,
         description: String,
-    ) -> LegacyClientResult<(TransactionId, Invoice, KeyPair)>;
+    ) -> LegacyClientResult<(TransactionId, Bolt11Invoice, KeyPair)>;
     async fn try_refund_outgoing_contract(
         &self,
         contract_id: ContractId,
@@ -260,7 +260,7 @@ pub trait ILegacyLightningClient {
     async fn await_invoice_confirmation(
         &self,
         txid: TransactionId,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         payment_keypair: KeyPair,
     ) -> LegacyClientResult<ConfirmedInvoice>;
 }

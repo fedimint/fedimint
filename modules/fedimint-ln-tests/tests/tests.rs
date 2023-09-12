@@ -13,7 +13,7 @@ use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -114,7 +114,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     gateway(&fixtures, &fed).await;
 
     // Signet invoice should fail on regtest
-    let signet_invoice = Invoice::from_str(
+    let signet_invoice = Bolt11Invoice::from_str(
         "lntbs1u1pj8308gsp5xhxz908q5usddjjm6mfq6nwc2nu62twwm6za69d32kyx8h49a4hqpp5j5egfqw9kf5e96nk\
         6htr76a8kggl0xyz3pzgemv887pya4flguzsdp5235xzmntwvsxvmmjypex2en4dejxjmn8yp6xsefqvesh2cm9wsss\
         cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\

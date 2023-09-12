@@ -50,7 +50,7 @@ impl Faucet {
             .ln_rpc
             .lock()
             .await
-            .call_typed(cln_rpc::model::PayRequest {
+            .call_typed(cln_rpc::model::requests::PayRequest {
                 bolt11: invoice,
                 amount_msat: None,
                 label: None,
@@ -68,7 +68,10 @@ impl Faucet {
             .status;
 
         anyhow::ensure!(
-            matches!(invoice_status, cln_rpc::model::PayStatus::COMPLETE),
+            matches!(
+                invoice_status,
+                cln_rpc::model::responses::PayStatus::COMPLETE
+            ),
             "payment not complete"
         );
         Ok(())
@@ -79,14 +82,13 @@ impl Faucet {
             .ln_rpc
             .lock()
             .await
-            .call_typed(cln_rpc::model::InvoiceRequest {
+            .call_typed(cln_rpc::model::requests::InvoiceRequest {
                 amount_msat: AmountOrAny::Amount(ClnAmount::from_sat(amount)),
                 description: "lnd-gw-to-cln".to_string(),
                 label: format!("faucet-{}", rand::random::<u64>()),
                 expiry: None,
                 fallbacks: None,
                 preimage: None,
-                exposeprivatechannels: None,
                 cltv: None,
                 deschashonly: None,
             })

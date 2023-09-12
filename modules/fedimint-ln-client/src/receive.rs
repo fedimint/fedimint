@@ -12,7 +12,7 @@ use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::DecryptedPreimage;
 use fedimint_ln_common::LightningInput;
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -84,7 +84,7 @@ impl State for LightningReceiveStateMachine {
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct LightningReceiveSubmittedOffer {
     pub offer_txid: TransactionId,
-    pub invoice: Invoice,
+    pub invoice: Bolt11Invoice,
     pub payment_keypair: KeyPair,
 }
 
@@ -134,7 +134,7 @@ impl LightningReceiveSubmittedOffer {
     async fn transition_confirmed_invoice(
         result: Result<(), TxSubmissionError>,
         old_state: LightningReceiveStateMachine,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         keypair: KeyPair,
     ) -> LightningReceiveStateMachine {
         match result {
@@ -155,7 +155,7 @@ impl LightningReceiveSubmittedOffer {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct LightningReceiveConfirmedInvoice {
-    invoice: Invoice,
+    invoice: Bolt11Invoice,
     keypair: KeyPair,
 }
 
@@ -189,7 +189,7 @@ impl LightningReceiveConfirmedInvoice {
     }
 
     async fn await_incoming_contract_account(
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         global_context: DynGlobalClientContext,
     ) -> Result<IncomingContractAccount, LightningReceiveError> {
         // TODO: Get rid of polling

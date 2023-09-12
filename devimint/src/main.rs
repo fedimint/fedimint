@@ -234,14 +234,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // LND can pay CLN directly
     info!("Testing LND can pay CLN directly");
     let invoice = cln
-        .request(cln_rpc::model::InvoiceRequest {
+        .request(cln_rpc::model::requests::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(42_000)),
             description: "test".to_string(),
             label: "test2".to_string(),
             expiry: Some(60),
             fallbacks: None,
             preimage: None,
-            exposeprivatechannels: None,
             cltv: None,
             deschashonly: None,
         })
@@ -256,7 +255,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?
         .into_inner();
     let invoice_status = cln
-        .request(cln_rpc::model::WaitanyinvoiceRequest {
+        .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
             lastpay_index: None,
             timeout: None,
         })
@@ -264,7 +263,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .status;
     anyhow::ensure!(matches!(
         invoice_status,
-        cln_rpc::model::WaitanyinvoiceStatus::PAID
+        cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
     ));
 
     // CLN can pay LND directly
@@ -280,7 +279,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .into_inner();
     let invoice = add_invoice.payment_request;
     let payment_hash = add_invoice.r_hash;
-    cln.request(cln_rpc::model::PayRequest {
+    cln.request(cln_rpc::model::requests::PayRequest {
         bolt11: invoice,
         amount_msat: None,
         label: None,
@@ -526,14 +525,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     let invoice = cln
-        .request(cln_rpc::model::InvoiceRequest {
+        .request(cln_rpc::model::requests::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(1000)),
             description: "lnd-gw-to-cln".to_string(),
             label: "test-client".to_string(),
             expiry: Some(60),
             fallbacks: None,
             preimage: None,
-            exposeprivatechannels: None,
             cltv: None,
             deschashonly: None,
         })
@@ -544,7 +542,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let fed_id = fed.federation_id().await;
 
     let invoice_status = cln
-        .request(cln_rpc::model::WaitanyinvoiceRequest {
+        .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
             lastpay_index: None,
             timeout: None,
         })
@@ -552,7 +550,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .status;
     anyhow::ensure!(matches!(
         invoice_status,
-        cln_rpc::model::WaitanyinvoiceStatus::PAID
+        cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
     ));
 
     // Assert balances changed by 1000 msat (amount sent) + 10 msat (fee)
@@ -586,7 +584,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
     let invoice = ln_invoice_response.invoice;
     let invoice_status = cln
-        .request(cln_rpc::model::PayRequest {
+        .request(cln_rpc::model::requests::PayRequest {
             bolt11: invoice,
             amount_msat: None,
             label: None,
@@ -604,7 +602,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .status;
     anyhow::ensure!(matches!(
         invoice_status,
-        cln_rpc::model::PayStatus::COMPLETE
+        cln_rpc::model::responses::PayStatus::COMPLETE
     ));
 
     // Receive the ecash notes
@@ -953,7 +951,7 @@ async fn do_try_create_and_pay_invoice(
         Some(LightningNode::Lnd(_lnd)) => {
             // Pay the invoice using CLN
             let invoice_status = new_cln
-                .request(cln_rpc::model::PayRequest {
+                .request(cln_rpc::model::requests::PayRequest {
                     bolt11: invoice,
                     amount_msat: None,
                     label: None,
@@ -971,7 +969,7 @@ async fn do_try_create_and_pay_invoice(
                 .status;
             anyhow::ensure!(matches!(
                 invoice_status,
-                cln_rpc::model::PayStatus::COMPLETE
+                cln_rpc::model::responses::PayStatus::COMPLETE
             ));
         }
         None => {

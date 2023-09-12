@@ -54,8 +54,8 @@ fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 futures = "0.3.24"
-lightning = "0.0.113"
-lightning-invoice = "0.21.0"
+lightning = "0.0.116"
+lightning-invoice = "0.24.0"
 prost = "0.11"
 rand = "0.8"
 reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }

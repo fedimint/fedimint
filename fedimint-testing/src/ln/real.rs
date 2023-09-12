@@ -13,7 +13,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::Amount;
 use ldk_node::io::SqliteStore;
 use ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
-use lightning_invoice::Invoice;
+use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
@@ -66,17 +66,16 @@ impl LightningTest for ClnLightningTest {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Invoice> {
+    ) -> ln_gateway::Result<Bolt11Invoice> {
         info!("fetching invoice from cln");
         let random: u64 = rand::random();
-        let invoice_req = model::InvoiceRequest {
+        let invoice_req = model::requests::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
             description: "".to_string(),
             label: random.to_string(),
             expiry: expiry_time,
             fallbacks: None,
             preimage: None,
-            exposeprivatechannels: None,
             cltv: None,
             deschashonly: None,
         };
@@ -94,7 +93,7 @@ impl LightningTest for ClnLightningTest {
             panic!("cln-rpc response did not match expected InvoiceResponse")
         };
 
-        Ok(Invoice::from_str(&invoice_resp.bolt11).unwrap())
+        Ok(Bolt11Invoice::from_str(&invoice_resp.bolt11).unwrap())
     }
 
     fn is_shared(&self) -> bool {
@@ -173,7 +172,7 @@ impl ClnLightningTest {
         if let Response::Getinfo(get_info) = rpc
             .lock()
             .await
-            .call(Request::Getinfo(model::GetinfoRequest {}))
+            .call(Request::Getinfo(model::requests::GetinfoRequest {}))
             .await
             .unwrap()
         {
@@ -185,7 +184,7 @@ impl ClnLightningTest {
 
     async fn channel_balance(rpc: Arc<Mutex<ClnRpc>>) -> Amount {
         info!("fetching balance from cln");
-        let listfunds_req = model::ListfundsRequest { spent: Some(false) };
+        let listfunds_req = model::requests::ListfundsRequest { spent: Some(false) };
         let listfunds_resp = if let Response::ListFunds(data) = rpc
             .lock()
             .await
@@ -221,7 +220,7 @@ impl LightningTest for LndLightningTest {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Invoice> {
+    ) -> ln_gateway::Result<Bolt11Invoice> {
         info!("fetching invoice from lnd");
         let mut lnd_rpc = self.rpc_lnd.lock().await;
         let tonic_invoice = match expiry_time {
@@ -242,7 +241,7 @@ impl LightningTest for LndLightningTest {
             .unwrap()
             .into_inner();
 
-        Ok(Invoice::from_str(&invoice_resp.payment_request).unwrap())
+        Ok(Bolt11Invoice::from_str(&invoice_resp.payment_request).unwrap())
     }
 
     fn is_shared(&self) -> bool {
@@ -384,7 +383,7 @@ enum LdkMessage {
         response_sender: std::sync::mpsc::Sender<LdkMessage>,
     },
     InvoiceResponse {
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     },
     OpenChannelRequest {
         node_id: PublicKey,
@@ -490,9 +489,10 @@ impl LdkLightningTest {
                         let ldk_invoice = node
                             .receive_payment(amount_msat, description.as_str(), expiry_secs)
                             .expect("LDK Node failed to create invoice");
-                        let invoice =
-                            lightning_invoice::Invoice::from_str(ldk_invoice.to_string().as_str())
-                                .expect("Failed to create lightning_invoice");
+                        let invoice = lightning_invoice::Bolt11Invoice::from_str(
+                            ldk_invoice.to_string().as_str(),
+                        )
+                        .expect("Failed to create lightning_invoice");
                         response_sender
                             .send(LdkMessage::InvoiceResponse { invoice })
                             .expect("Failed to send InvoiceResponse");
@@ -731,7 +731,7 @@ impl LightningTest for LdkLightningTest {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Invoice> {
+    ) -> ln_gateway::Result<Bolt11Invoice> {
         let (sender, receiver) = std::sync::mpsc::channel::<LdkMessage>();
         self.ldk_node_sender
             .lock()

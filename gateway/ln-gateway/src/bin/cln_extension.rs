@@ -212,8 +212,11 @@ impl ClnRpcService {
             ))
             .await
             .map(|response| match response {
-                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, alias, .. }) => {
-                    Ok((id, alias))
+                cln_rpc::Response::Getinfo(model::responses::GetinfoResponse {
+                    id, alias, ..
+                }) => {
+                    // FIXME: How to handle missing alias?
+                    Ok((id, alias.unwrap_or_default()))
                 }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
@@ -257,10 +260,12 @@ impl GatewayLightning for ClnRpcService {
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
         let peers_response = client
-            .call(cln_rpc::Request::ListPeers(model::ListpeersRequest {
-                id: None,
-                level: None,
-            }))
+            .call(cln_rpc::Request::ListPeers(
+                model::requests::ListpeersRequest {
+                    id: None,
+                    level: None,
+                },
+            ))
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
@@ -272,12 +277,19 @@ impl GatewayLightning for ClnRpcService {
 
         let mut active_peer_channels = peers
             .into_iter()
-            .flat_map(|peer| peer.channels.into_iter().map(move |chan| (peer.id, chan)))
+            .flat_map(|peer| {
+                // TODO: figure out how to get channels now
+                #[allow(deprecated)]
+                peer.channels
+                    .into_iter()
+                    .flatten()
+                    .map(move |chan| (peer.id, chan))
+            })
             .filter_map(|(peer_id, chan)| {
                 // TODO: upstream eq derive
                 if !matches!(
                     chan.state,
-                    model::ListpeersPeersChannelsState::CHANNELD_NORMAL
+                    model::responses::ListpeersPeersChannelsState::CHANNELD_NORMAL
                 ) {
                     return None;
                 }
@@ -297,9 +309,9 @@ impl GatewayLightning for ClnRpcService {
         );
 
         let listfunds_response = client
-            .call(cln_rpc::Request::ListFunds(model::ListfundsRequest {
-                spent: None,
-            }))
+            .call(cln_rpc::Request::ListFunds(
+                model::requests::ListfundsRequest { spent: None },
+            ))
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
         let pubkey_to_incoming_capacity = match listfunds_response {
@@ -320,11 +332,13 @@ impl GatewayLightning for ClnRpcService {
         let mut route_hints = vec![];
         for (peer_id, scid) in active_peer_channels {
             let channels_response = client
-                .call(cln_rpc::Request::ListChannels(model::ListchannelsRequest {
-                    short_channel_id: Some(scid),
-                    source: None,
-                    destination: None,
-                }))
+                .call(cln_rpc::Request::ListChannels(
+                    model::requests::ListchannelsRequest {
+                        short_channel_id: Some(scid),
+                        source: None,
+                        destination: None,
+                    },
+                ))
                 .await
                 .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
@@ -378,7 +392,7 @@ impl GatewayLightning for ClnRpcService {
             .rpc_client()
             .await
             .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::Pay(model::PayRequest {
+            .call(cln_rpc::Request::Pay(model::requests::PayRequest {
                 bolt11: invoice,
                 amount_msat: None,
                 label: None,
@@ -394,7 +408,7 @@ impl GatewayLightning for ClnRpcService {
             }))
             .await
             .map(|response| match response {
-                cln_rpc::Response::Pay(model::PayResponse {
+                cln_rpc::Response::Pay(model::responses::PayResponse {
                     payment_preimage, ..
                 }) => Ok(PayInvoiceResponse {
                     preimage: payment_preimage.to_vec(),

@@ -476,7 +476,7 @@ impl Decodable for Duration {
     }
 }
 
-impl Encodable for lightning_invoice::Invoice {
+impl Encodable for lightning_invoice::Bolt11Invoice {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.to_string().consensus_encode(writer)
     }
@@ -505,13 +505,13 @@ impl Decodable for lightning::routing::gossip::RoutingFees {
     }
 }
 
-impl Decodable for lightning_invoice::Invoice {
+impl Decodable for lightning_invoice::Bolt11Invoice {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         String::consensus_decode(d, modules)?
-            .parse::<lightning_invoice::Invoice>()
+            .parse::<lightning_invoice::Bolt11Invoice>()
             .map_err(DecodeError::from_err)
     }
 }
@@ -940,7 +940,9 @@ mod tests {
 			p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
 			8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
 			j5r6drg6k6zcqj0fcwg";
-        let invoice = invoice_str.parse::<lightning_invoice::Invoice>().unwrap();
+        let invoice = invoice_str
+            .parse::<lightning_invoice::Bolt11Invoice>()
+            .unwrap();
         test_roundtrip(invoice);
     }
 

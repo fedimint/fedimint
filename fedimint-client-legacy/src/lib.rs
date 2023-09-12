@@ -60,7 +60,7 @@ use itertools::{Either, Itertools};
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
+use lightning_invoice::{Bolt11Invoice, CreationError, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln::db::LightningGatewayKey;
 use ln::PayInvoicePayload;
 use mint::NoteIssuanceRequests;
@@ -857,7 +857,7 @@ impl Client<UserClientConfig> {
 
     pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
         &self,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         mut rng: R,
     ) -> Result<(ContractId, OutPoint)> {
         let gateway = self.fetch_active_gateway().await?;
@@ -1000,7 +1000,7 @@ impl Client<UserClientConfig> {
         description: String,
         mut rng: R,
         expiry_time: Option<u64>,
-    ) -> Result<(TransactionId, Invoice, KeyPair)> {
+    ) -> Result<(TransactionId, Bolt11Invoice, KeyPair)> {
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
         let (invoice, ln_output) = self
             .generate_unconfirmed_invoice(
@@ -1028,7 +1028,7 @@ impl Client<UserClientConfig> {
         payment_keypair: KeyPair,
         mut rng: R,
         expiry_time: Option<u64>,
-    ) -> Result<(Invoice, Output)> {
+    ) -> Result<(Bolt11Invoice, Output)> {
         let gateway = self.fetch_active_gateway().await?;
         let preimage: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&preimage);
@@ -1084,7 +1084,7 @@ impl Client<UserClientConfig> {
         .payment_hash(payment_hash)
         .payment_secret(PaymentSecret(rng.gen()))
         .duration_since_epoch(duration_since_epoch)
-        .min_final_cltv_expiry(18)
+        .min_final_cltv_expiry_delta(18)
         .payee_pub_key(node_public_key)
         .expiry_time(Duration::from_secs(
             expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
@@ -1114,7 +1114,7 @@ impl Client<UserClientConfig> {
     pub async fn await_invoice_confirmation(
         &self,
         txid: TransactionId,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         payment_keypair: KeyPair,
     ) -> Result<ConfirmedInvoice> {
         // Await acceptance by the federation
@@ -1233,7 +1233,7 @@ impl Client<GatewayClientConfig> {
             return Err(ClientError::NotOurKey);
         }
 
-        let invoice: Invoice = account.contract.invoice.clone();
+        let invoice: Bolt11Invoice = account.contract.invoice.clone();
         let invoice_amount = Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
@@ -1262,7 +1262,7 @@ impl Client<GatewayClientConfig> {
     }
 
     /// Returns true if the invoice contains us as a routing hint
-    fn is_maybe_internal_payment(&self, invoice: &Invoice) -> bool {
+    fn is_maybe_internal_payment(&self, invoice: &Bolt11Invoice) -> bool {
         let maybe_route_hint_first_id = invoice
             .route_hints()
             .first()

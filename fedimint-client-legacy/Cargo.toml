@@ -21,8 +21,8 @@ bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
 futures = "0.3.24"
 hkdf = { path = "../crypto/hkdf" }
-lightning-invoice = "0.21.0"
-lightning = "0.0.113"
+lightning-invoice = "0.24.0"
+lightning = "0.0.116"
 miniscript = { version = "9.0.2" }
 fedimint-client = { path = "../fedimint-client" }
 fedimint-core = { path = "../fedimint-core" }
