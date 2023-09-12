@@ -226,9 +226,7 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::sync::atomic::{AtomicU16, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{env, fs};
@@ -258,8 +256,6 @@
 
 <span class="doccomment">/// A default timeout for things happening in tests
 </span><span class="kw">pub const </span>TIMEOUT: Duration = Duration::from_secs(<span class="number">10</span>);
-
-<span class="kw">static </span>BASE_PORT: AtomicU16 = AtomicU16::new(<span class="number">18173</span>);
 
 <span class="doccomment">/// A tool for easily writing fedimint integration tests
 </span><span class="kw">pub struct </span>Fixtures {
@@ -352,7 +348,8 @@
     </span><span class="kw">pub async fn </span>new_fed_with_peers(<span class="kw-2">&amp;</span><span class="self">self</span>, num_peers: u16) -&gt; FederationTest {
         FederationTest::new(
             num_peers,
-            BASE_PORT.fetch_add(num_peers * <span class="number">2</span>, Ordering::Relaxed),
+            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))
+                .expect(<span class="string">&quot;Failed to allocate a port range&quot;</span>),
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
@@ -374,7 +371,8 @@
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.clone().into_iter();
 
         GatewayTest::new(
-            BASE_PORT.fetch_add(<span class="number">1</span>, Ordering::Relaxed),
+            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(<span class="number">1</span>))
+                .expect(<span class="string">&quot;Failed to allocate a port range&quot;</span>),
             rand::random::&lt;u64&gt;().to_string(),
             ln,
             decoders,

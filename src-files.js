@@ -25,6 +25,7 @@ var srcIndex = JSON.parse('{\
 "fedimint_mint_client":["",[["backup",[],["recovery.rs"]]],["backup.rs","db.rs","input.rs","lib.rs","oob.rs","output.rs"]],\
 "fedimint_mint_common":["",[],["common.rs","config.rs","db.rs","lib.rs"]],\
 "fedimint_mint_server":["",[],["lib.rs"]],\
+"fedimint_portalloc":["",[["data",[],["dto.rs"]]],["data.rs","lib.rs","util.rs"]],\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
 "fedimint_server":["",[["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug.rs","mod.rs","server.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["db.rs","lib.rs","multiplexed.rs"]],\
 "fedimint_testing":["",[["btc",[],["mock.rs","mod.rs","real.rs"]],["ln",[],["mock.rs","mod.rs","real.rs"]]],["db.rs","federation.rs","fixtures.rs","gateway.rs","lib.rs"]],\

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["TIMEOUT"],"fn":["test_dir"],"static":["BASE_PORT"],"struct":["Fixtures"]};
+window.SIDEBAR_ITEMS = {"constant":["TIMEOUT"],"fn":["test_dir"],"struct":["Fixtures"]};
