@@ -85,12 +85,6 @@ export -f always_success_test
 
 export parallel_jobs='+0'
 
-if [ "$(uname -s)" == "Darwin" ]; then
-  # We rely on `unshare` to run all tests in separate network namespaces
-  # This is not possible on MacOS, so we run every test serially with a no-op fake 'unshare'
-  parallel_jobs='1'
-fi
-
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
 joblog="$tmpdir/joblog"
