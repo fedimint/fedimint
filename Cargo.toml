@@ -39,6 +39,7 @@ members = [
     "modules/fedimint-wallet-client",
     "modules/fedimint-wallet-server",
     "modules/fedimint-wallet-tests",
+    "utils/portalloc",
     "devimint",
     "integrationtests",
     "fedimint-build",
