@@ -97,8 +97,6 @@ craneLib.overrideScope' (self: prev: {
       rocksdb
       protobuf
 
-      moreutils-ts
-      parallel
     ] ++ lib.optionals (!stdenv.isDarwin) [
       util-linux
       iproute2
@@ -128,6 +126,9 @@ craneLib.overrideScope' (self: prev: {
       pkgs-kitman.esplora
       procps
       which
+      cargo-nextest
+      moreutils-ts
+      parallel
     ];
 
     # we carefully optimize our debug symbols on cargo level,
