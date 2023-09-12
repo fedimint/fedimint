@@ -470,7 +470,7 @@ impl ConfigGenState {
         self.peers
             .values()
             .cloned()
-            .chain(self.our_peer_info().ok().into_iter())
+            .chain(self.our_peer_info().ok())
             .sorted_by_key(|peer| peer.cert.clone())
             .enumerate()
             .map(|(i, peer)| (PeerId::from(i as u16), peer))
@@ -514,8 +514,7 @@ impl ConfigGenState {
             })?;
             combined_params.push((id, kind.clone(), combined));
         }
-        consensus.modules =
-            ServerModuleConfigGenParamsRegistry::from_iter(combined_params.into_iter());
+        consensus.modules = ServerModuleConfigGenParamsRegistry::from_iter(combined_params);
 
         let local = ConfigGenParamsLocal {
             our_id: *our_id,

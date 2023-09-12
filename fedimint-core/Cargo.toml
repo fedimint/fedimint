@@ -15,7 +15,7 @@ path = "src/lib.rs"
 [dependencies]
 async-recursion = "1.0.4"
 anyhow = "1.0.65"
-async-trait = "0.1.64"
+async-trait = "0.1.73"
 futures = "0.3.24"
 backtrace = "0.3.67"
 bincode = "1.3.1"

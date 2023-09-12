@@ -17,7 +17,6 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_core::task::TaskGroup;
 pub use fedimint_core::*;
-use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};

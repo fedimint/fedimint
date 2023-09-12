@@ -15,7 +15,7 @@ use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature
 use thiserror::Error;
 use tracing::error;
 
-use crate::db::NoteKey;
+use crate::client_db::NoteKey;
 use crate::{MintClientContext, SpendableNote};
 
 /// Child ID used to derive the spend key from a note's [`DerivableSecret`]

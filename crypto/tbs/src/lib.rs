@@ -284,7 +284,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // All sig shards available
-        let bsig = combine_valid_shares(sigs.clone().into_iter(), threshold);
+        let bsig = combine_valid_shares(sigs.clone(), threshold);
         let sig = unblind_signature(bkey, bsig);
         assert!(verify(msg, sig, pk));
 
@@ -292,7 +292,7 @@ mod tests {
         for _ in 0..5 {
             sigs.pop();
         }
-        let bsig = combine_valid_shares(sigs.clone().into_iter(), threshold);
+        let bsig = combine_valid_shares(sigs.clone(), threshold);
         let sig = unblind_signature(bkey, bsig);
         assert!(verify(msg, sig, pk));
 

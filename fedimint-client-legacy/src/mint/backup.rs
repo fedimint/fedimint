@@ -708,7 +708,7 @@ impl EcashRecoveryTracker {
         self.pending_outputs.insert(
             out_point,
             (
-                TieredMulti::from_iter(found.into_iter().chain(missing.into_iter())),
+                TieredMulti::from_iter(found.into_iter().chain(missing)),
                 HashMap::new(),
             ),
         );

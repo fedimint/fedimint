@@ -55,7 +55,7 @@ impl MicroMintClient {
         PendingInner: IntoIterator<Item = (Amount, NoteIssuanceRequest)>,
     {
         PlaintextEcashBackup {
-            notes: TieredMulti::from_iter(spendable_notes.into_iter()),
+            notes: TieredMulti::from_iter(spendable_notes),
             pending_notes: pending_notes
                 .into_iter()
                 .map(|(out_point, iss_reqs)| {
@@ -226,7 +226,7 @@ impl MicroMintFed {
 
         note_iss_requests
             .iter()
-            .zip(confs_by_order.into_iter())
+            .zip(confs_by_order)
             .map(|((amount, _bn, iss_req), sigs_by_peer)| {
                 let bsig = tbs::combine_valid_shares(
                     sigs_by_peer
@@ -263,9 +263,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
     let orig = PlaintextEcashBackup {
         notes: TieredMulti::from_iter([]),
         pending_notes: vec![],
-        next_note_idx: Tiered::from_iter(
-            [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
-        ),
+        next_note_idx: Tiered::from_iter([(Amount::from_msats(1), NoteIndex::from_u64(3))]),
         epoch_count: 0,
         metadata: Metadata::from_raw(vec![1, 2, 3]),
     };
@@ -282,9 +280,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
     let orig = PlaintextEcashBackup {
         notes: TieredMulti::from_iter([]),
         pending_notes: vec![],
-        next_note_idx: Tiered::from_iter(
-            [(Amount::from_msats(1), NoteIndex::from_u64(3))].into_iter(),
-        ),
+        next_note_idx: Tiered::from_iter([(Amount::from_msats(1), NoteIndex::from_u64(3))]),
         epoch_count: 1,
         metadata: Metadata::from_raw(vec![1, 2, 3]),
     };

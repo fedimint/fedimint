@@ -64,7 +64,7 @@ where
     let lnd2 = fixtures.lnd().await;
     let cln2 = fixtures.cln().await;
 
-    for (gateway_ln, other_node) in vec![(lnd1, cln1), (cln2, lnd2)] {
+    for (gateway_ln, other_node) in [(lnd1, cln1), (cln2, lnd2)] {
         let fed = fixtures.new_fed().await;
         let user_client = fed.new_client().await;
         let mut gateway = fixtures.new_gateway(gateway_ln, 0).await;
@@ -600,9 +600,9 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
 
     let GetNodeInfoResponse { pub_key, alias: _ } = cln.info().await?;
     let cln_public_key = PublicKey::from_slice(&pub_key)?;
-    let all_keys = vec![lnd_public_key, cln_public_key];
+    let all_keys = [lnd_public_key, cln_public_key];
 
-    for gateway_type in vec![LightningNodeType::Cln, LightningNodeType::Lnd] {
+    for gateway_type in [LightningNodeType::Cln, LightningNodeType::Lnd] {
         for num_route_hints in 0..=1 {
             let gateway_ln = match gateway_type {
                 LightningNodeType::Cln => fixtures.cln().await,
