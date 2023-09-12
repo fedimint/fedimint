@@ -3,7 +3,7 @@ version: '3'
 
 services:
   gatewayd:
-    image: fedimint/gatewayd:v0.1.0-rc3
+    image: fedimint/gatewayd:v0.1.0
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files

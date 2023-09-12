@@ -3,7 +3,7 @@ version: '3'
 
 services:
   fedimintd:
-    image: fedimint/fedimintd:v0.1.0-rc3
+    image: fedimint/fedimintd:v0.1.0
     volumes:
       - fedimintd_data:/data
     ports:
