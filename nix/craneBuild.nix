@@ -15,17 +15,19 @@ craneLib.overrideScope' (self: prev: {
     pnameSuffix = "-workspace-build";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
-    buildPhaseCargoCommand = "cargo build --workspace --all-targets --locked --profile $CARGO_PROFILE; cargo test --no-run  --locked --workspace --all-targets --profile $CARGO_PROFILE";
+    buildPhaseCargoCommand = "cargo build --workspace --all-targets --locked --profile $CARGO_PROFILE; cargo test --no-run --locked --workspace --all-targets --profile $CARGO_PROFILE";
     doCheck = false;
   });
 
-  workspaceTest = self.cargoTest (prev.commonArgs // {
+  workspaceTest = self.cargoNextest (prev.commonArgs // {
     version = "0.0.1";
-    cargoArtifacts = self.workspaceDeps;
+    cargoArtifacts = self.workspaceBuild;
+    cargoExtraArgs = "--workspace --all-targets --locked";
   });
 
   workspaceTestDoc = self.cargoTest (self.commonArgs // {
     version = "0.0.1";
+    # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
     cargoTestExtraArgs = "--doc";
     cargoArtifacts = self.workspaceDeps;
   });
