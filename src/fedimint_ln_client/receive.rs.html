@@ -341,7 +341,7 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::DecryptedPreimage;
 <span class="kw">use </span>fedimint_ln_common::LightningInput;
-<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
@@ -413,7 +413,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveSubmittedOffer {
     <span class="kw">pub </span>offer_txid: TransactionId,
-    <span class="kw">pub </span>invoice: Invoice,
+    <span class="kw">pub </span>invoice: Bolt11Invoice,
     <span class="kw">pub </span>payment_keypair: KeyPair,
 }
 
@@ -463,7 +463,7 @@
     <span class="kw">async fn </span>transition_confirmed_invoice(
         result: <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt;,
         old_state: LightningReceiveStateMachine,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         keypair: KeyPair,
     ) -&gt; LightningReceiveStateMachine {
         <span class="kw">match </span>result {
@@ -484,7 +484,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>LightningReceiveConfirmedInvoice {
-    invoice: Invoice,
+    invoice: Bolt11Invoice,
     keypair: KeyPair,
 }
 
@@ -518,7 +518,7 @@
     }
 
     <span class="kw">async fn </span>await_incoming_contract_account(
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         global_context: DynGlobalClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractAccount, LightningReceiveError&gt; {
         <span class="comment">// TODO: Get rid of polling

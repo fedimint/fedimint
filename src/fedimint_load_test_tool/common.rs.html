@@ -303,7 +303,7 @@
 };
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
 
@@ -420,13 +420,13 @@
     <span class="prelude-val">Ok</span>(client)
 }
 
-<span class="kw">pub async fn </span>lnd_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Invoice, String)&gt; {
+<span class="kw">pub async fn </span>lnd_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
     <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">&quot;addinvoice&quot;</span>, <span class="string">&quot;--amt_msat&quot;</span>, amount.msats)
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>invoice = result[<span class="string">&quot;payment_request&quot;</span>]
         .as_str()
-        .map(Invoice::from_str)
+        .map(Bolt11Invoice::from_str)
         .transpose()<span class="question-mark">?
         </span>.context(<span class="string">&quot;Missing payment_request field&quot;</span>)<span class="question-mark">?</span>;
     <span class="kw">let </span>r_hash = result[<span class="string">&quot;r_hash&quot;</span>]
@@ -451,7 +451,7 @@
 
 <span class="kw">pub async fn </span>gateway_pay_invoice(
     client: <span class="kw-2">&amp;</span>Client,
-    invoice: Invoice,
+    invoice: Bolt11Invoice,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>m = fedimint_core::time::now();
@@ -478,7 +478,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>cln_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Invoice, String)&gt; {
+<span class="kw">pub async fn </span>cln_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
     <span class="kw">let </span>now = fedimint_core::time::now();
     <span class="kw">let </span>random_n: u128 = rand::random();
     <span class="kw">let </span>label = <span class="macro">format!</span>(<span class="string">&quot;label-{now:?}-{random_n}&quot;</span>);
@@ -488,7 +488,7 @@
         .as_str()
         .context(<span class="string">&quot;Missing bolt11 field&quot;</span>)<span class="question-mark">?
         </span>.to_owned();
-    <span class="prelude-val">Ok</span>((Invoice::from_str(<span class="kw-2">&amp;</span>invoice_string)<span class="question-mark">?</span>, label))
+    <span class="prelude-val">Ok</span>((Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>invoice_string)<span class="question-mark">?</span>, label))
 }
 
 <span class="kw">pub async fn </span>cln_wait_invoice_payment(label: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {

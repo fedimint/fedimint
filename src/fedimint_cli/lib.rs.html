@@ -1323,7 +1323,7 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">struct </span>PayRequest {
     notes: TieredMulti&lt;SpendableNote&gt;,
-    invoice: lightning_invoice::Invoice,
+    invoice: lightning_invoice::Bolt11Invoice,
 }
 
 <span class="kw">pub struct </span>FedimintCli {

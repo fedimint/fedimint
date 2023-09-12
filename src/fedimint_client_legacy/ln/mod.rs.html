@@ -360,7 +360,7 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
-<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -428,7 +428,7 @@
     </span><span class="kw">pub async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         gateway: <span class="kw-2">&amp;</span>LightningGateway,
         timelock: u32,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
@@ -632,7 +632,7 @@
 
     <span class="kw">pub fn </span>compute_outgoing_contract_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice: <span class="kw-2">&amp;</span>Invoice,
+        invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
         fees: RoutingFees,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
         <span class="kw">let </span>invoice_amount_msat = invoice

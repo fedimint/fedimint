@@ -117,7 +117,7 @@
     </span><span class="kw">pub </span>user_key: secp256k1::XOnlyPublicKey,
     <span class="comment">// FIXME: use pruned, privacy friendly version without description etc.
     </span><span class="doccomment">/// Invoice containing metadata on how to obtain the preimage
-    </span><span class="kw">pub </span>invoice: lightning_invoice::Invoice,
+    </span><span class="kw">pub </span>invoice: lightning_invoice::Bolt11Invoice,
     <span class="doccomment">/// Flag that can be set by the gateway and allows the client to claim an
     /// early refund
     </span><span class="kw">pub </span>cancelled: bool,

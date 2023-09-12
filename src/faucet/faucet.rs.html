@@ -149,6 +149,8 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -201,7 +203,7 @@
             </span>.ln_rpc
             .lock()
             .<span class="kw">await
-            </span>.call_typed(cln_rpc::model::PayRequest {
+            </span>.call_typed(cln_rpc::model::requests::PayRequest {
                 bolt11: invoice,
                 amount_msat: <span class="prelude-val">None</span>,
                 label: <span class="prelude-val">None</span>,
@@ -219,7 +221,10 @@
             </span>.status;
 
         <span class="macro">anyhow::ensure!</span>(
-            <span class="macro">matches!</span>(invoice_status, cln_rpc::model::PayStatus::COMPLETE),
+            <span class="macro">matches!</span>(
+                invoice_status,
+                cln_rpc::model::responses::PayStatus::COMPLETE
+            ),
             <span class="string">&quot;payment not complete&quot;
         </span>);
         <span class="prelude-val">Ok</span>(())
@@ -230,14 +235,13 @@
             </span>.ln_rpc
             .lock()
             .<span class="kw">await
-            </span>.call_typed(cln_rpc::model::InvoiceRequest {
+            </span>.call_typed(cln_rpc::model::requests::InvoiceRequest {
                 amount_msat: AmountOrAny::Amount(ClnAmount::from_sat(amount)),
                 description: <span class="string">&quot;lnd-gw-to-cln&quot;</span>.to_string(),
                 label: <span class="macro">format!</span>(<span class="string">&quot;faucet-{}&quot;</span>, rand::random::&lt;u64&gt;()),
                 expiry: <span class="prelude-val">None</span>,
                 fallbacks: <span class="prelude-val">None</span>,
                 preimage: <span class="prelude-val">None</span>,
-                exposeprivatechannels: <span class="prelude-val">None</span>,
                 cltv: <span class="prelude-val">None</span>,
                 deschashonly: <span class="prelude-val">None</span>,
             })

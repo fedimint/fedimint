@@ -774,7 +774,7 @@
         poll(<span class="string">&quot;lightningd block processing&quot;</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>btc_height = <span class="self">self</span>.bitcoind.client().get_blockchain_info()<span class="question-mark">?</span>.blocks;
             <span class="kw">let </span>lnd_height = <span class="self">self
-                </span>.request(cln_rpc::model::GetinfoRequest {})
+                </span>.request(cln_rpc::model::requests::GetinfoRequest {})
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.blockheight;
             <span class="prelude-val">Ok</span>((lnd_height <span class="kw">as </span>u64) == btc_height)
@@ -785,7 +785,7 @@
 
     <span class="kw">pub async fn </span>pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request(cln_rpc::model::GetinfoRequest {})
+            </span>.request(cln_rpc::model::requests::GetinfoRequest {})
             .<span class="kw">await</span><span class="question-mark">?
             </span>.id
             .to_string())
@@ -892,7 +892,7 @@
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
     <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;block sync done&quot;</span>);
     <span class="kw">let </span>cln_addr = cln
-        .request(cln_rpc::model::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
+        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
         .<span class="kw">await</span><span class="question-mark">?
         </span>.bech32
         .context(<span class="string">&quot;bech32 should be present&quot;</span>)<span class="question-mark">?</span>;
@@ -903,7 +903,7 @@
     <span class="kw">let </span>lnd_pubkey = lnd.pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>cln_pubkey = cln.pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    cln.request(cln_rpc::model::ConnectRequest {
+    cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()<span class="question-mark">?</span>,
         host: <span class="prelude-val">Some</span>(<span class="string">&quot;127.0.0.1&quot;</span>.to_owned()),
         port: <span class="prelude-val">Some</span>(<span class="number">9734</span>),
@@ -912,7 +912,7 @@
 
     poll(<span class="string">&quot;fund channel&quot;</span>, || <span class="kw">async </span>{
         <span class="prelude-val">Ok</span>(cln
-            .request(cln_rpc::model::FundchannelRequest {
+            .request(cln_rpc::model::requests::FundchannelRequest {
                 id: lnd_pubkey.parse()<span class="question-mark">?</span>,
                 amount: cln_rpc::primitives::AmountOrAll::Amount(
                     cln_rpc::primitives::Amount::from_sat(<span class="number">10_000_000</span>),
@@ -935,7 +935,7 @@
 
     poll(<span class="string">&quot;list peers&quot;</span>, || <span class="kw">async </span>{
         <span class="prelude-val">Ok</span>(!cln
-            .request(cln_rpc::model::ListpeersRequest {
+            .request(cln_rpc::model::requests::ListpeersRequest {
                 id: <span class="prelude-val">Some</span>(lnd_pubkey.parse()<span class="question-mark">?</span>),
                 level: <span class="prelude-val">None</span>,
             })

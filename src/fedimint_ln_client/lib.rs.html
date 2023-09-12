@@ -1051,6 +1051,12 @@
 <a href="#1051" id="1051">1051</a>
 <a href="#1052" id="1052">1052</a>
 <a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1099,7 +1105,7 @@
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
-<span class="kw">use </span>lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
+<span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 <span class="kw">use </span>rand::seq::IteratorRandom;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
@@ -1132,7 +1138,10 @@
     </span><span class="kw">async fn </span>fetch_registered_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;LightningGateway&gt;&gt;;
 
     <span class="doccomment">/// Pays a LN invoice with our available funds
-    </span><span class="kw">async fn </span>pay_bolt11_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: Invoice) -&gt; anyhow::Result&lt;(PayType, ContractId)&gt;;
+    </span><span class="kw">async fn </span>pay_bolt11_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: Bolt11Invoice,
+    ) -&gt; anyhow::Result&lt;(PayType, ContractId)&gt;;
 
     <span class="kw">async fn </span>subscribe_internal_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1150,7 +1159,7 @@
         amount: Amount,
         description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; anyhow::Result&lt;(OperationId, Invoice)&gt;;
+    ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice)&gt;;
 
     <span class="kw">async fn </span>subscribe_ln_receive(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1222,7 +1231,7 @@
 }
 
 <span class="kw">async fn </span>invoice_has_internal_payment_markers(
-    invoice: <span class="kw-2">&amp;</span>Invoice,
+    invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
     markers: (secp256k1::PublicKey, u64),
 ) -&gt; bool {
     <span class="comment">// Asserts that the invoice src_node_id and short_channel_id match known
@@ -1236,7 +1245,7 @@
 }
 
 <span class="kw">async fn </span>invoice_routes_back_to_federation(
-    invoice: <span class="kw-2">&amp;</span>Invoice,
+    invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
     gateways: Vec&lt;LightningGateway&gt;,
 ) -&gt; bool {
     gateways.into_iter().any(|gateway| {
@@ -1293,7 +1302,10 @@
         <span class="prelude-val">Ok</span>(instance.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="kw">async fn </span>pay_bolt11_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: Invoice) -&gt; anyhow::Result&lt;(PayType, ContractId)&gt; {
+    <span class="kw">async fn </span>pay_bolt11_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invoice: Bolt11Invoice,
+    ) -&gt; anyhow::Result&lt;(PayType, ContractId)&gt; {
         <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>payment_hash = invoice.payment_hash();
         <span class="kw">let </span>operation_id = OperationId(payment_hash.into_inner());
@@ -1368,7 +1380,7 @@
         amount: Amount,
         description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; anyhow::Result&lt;(OperationId, Invoice)&gt; {
+    ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice)&gt; {
         <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span><span class="self">self</span>.select_active_gateway().<span class="kw">await
         </span>{
@@ -1586,13 +1598,13 @@
 </span><span class="kw">pub enum </span>LightningOperationMeta {
     Pay {
         out_point: OutPoint,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         fee: Amount,
         change_outpoint: <span class="prelude-ty">Option</span>&lt;OutPoint&gt;,
     },
     Receive {
         out_point: OutPoint,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     },
 }
 
@@ -1701,7 +1713,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         operation_id: OperationId,
         api: DynModuleApi,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         gateway: LightningGateway,
         fed_id: FederationId,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
@@ -1800,7 +1812,7 @@
     </span><span class="kw">pub async fn </span>create_incoming_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     ) -&gt; anyhow::Result&lt;(
         ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
         ContractId,
@@ -1936,7 +1948,7 @@
         network: Network,
     ) -&gt; anyhow::Result&lt;(
         OperationId,
-        Invoice,
+        Bolt11Invoice,
         ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
     )&gt; {
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
@@ -1986,7 +1998,7 @@
             .payment_hash(payment_hash)
             .payment_secret(PaymentSecret(rng.gen()))
             .duration_since_epoch(duration_since_epoch)
-            .min_final_cltv_expiry(<span class="number">18</span>)
+            .min_final_cltv_expiry_delta(<span class="number">18</span>)
             .payee_pub_key(node_public_key)
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),

@@ -2711,7 +2711,7 @@
     };
     <span class="kw">use </span>fedimint_ln_common::db::{ContractKey, LightningAuditItemKey};
     <span class="kw">use </span>fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
-    <span class="kw">use </span>lightning_invoice::Invoice;
+    <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>secp256k1::{generate_keypair, XOnlyPublicKey};
 
@@ -2890,7 +2890,7 @@
         <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;mut </span>tg).unwrap();
 
         <span class="kw">let </span>preimage = Preimage([<span class="number">42u8</span>; <span class="number">32</span>]);
-        <span class="kw">let </span>invoice = str::parse::&lt;Invoice&gt;(<span class="string">&quot;lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp&quot;</span>)
+        <span class="kw">let </span>invoice = str::parse::&lt;Bolt11Invoice&gt;(<span class="string">&quot;lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp&quot;</span>)
             .expect(<span class="string">&quot;should parse a valid invoice string&quot;</span>);
         <span class="kw">let </span>gateway_key = random_x_only_pub_key();
         <span class="kw">let </span>outgoing_contract = FundedContract::Outgoing(OutgoingContract {
@@ -2979,7 +2979,7 @@
     };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
-    <span class="kw">use </span>lightning_invoice::Invoice;
+    <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
     <span class="kw">use </span>rand::distributions::Standard;
     <span class="kw">use </span>rand::prelude::Distribution;
     <span class="kw">use </span>rand::rngs::OsRng;
@@ -3023,7 +3023,7 @@
             },
         )
         .<span class="kw">await</span>;
-        <span class="kw">let </span>invoice = str::parse::&lt;Invoice&gt;(<span class="string">&quot;lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp&quot;</span>);
+        <span class="kw">let </span>invoice = str::parse::&lt;Bolt11Invoice&gt;(<span class="string">&quot;lnbc10u1pjq37rgsp5cry9r0qqdzp0tl0m27jedvxtrazq0v8xh5rfvzuhm7yxydg50m9qpp5r0cjzjzt7pjwae8trp6dtteh6hstdakzv68atpqx0zshaexghpwsdqqcqpjrzjqfzekav6v27ra0lf3geqmg3hj3xvfu652cuyhk8aa7naqdqvwh6x7zagh5qqy3qqqyqqqqqpqqqqqqgq9q9qyysgq6vf5z83a2q2ua9nwanmc7pql26pwt8smt2xzwp7kjd0mgplmy925s5yz6nlfxt99p2dlffw82gw8kte7lv87pcf4nahslg2vyhhkzwqqxuqmgp&quot;</span>);
         <span class="kw">let </span>outgoing_contract = FundedContract::Outgoing(outgoing::OutgoingContract {
             hash: secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">6</span>, <span class="number">7</span>, <span class="number">8</span>]),
             gateway_key: pk.x_only_public_key().<span class="number">0</span>,

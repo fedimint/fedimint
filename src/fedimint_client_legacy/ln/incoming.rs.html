@@ -53,7 +53,7 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
-<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::Serialize;
 
 <span class="kw">use </span><span class="kw">crate</span>::modules::ln::contracts::incoming::IncomingContract;
@@ -82,7 +82,7 @@
 </span><span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ConfirmedInvoice {
     <span class="doccomment">/// The invoice itself
-    </span><span class="kw">pub </span>invoice: Invoice,
+    </span><span class="kw">pub </span>invoice: Bolt11Invoice,
     <span class="doccomment">/// Keypair that will be able to sweep contract once it has received payment
     </span><span class="kw">pub </span>keypair: KeyPair,
 }

@@ -507,6 +507,8 @@
 <a href="#507" id="507">507</a>
 <a href="#508" id="508">508</a>
 <a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -584,7 +586,9 @@
     <span class="doccomment">/// Wait for incoming invoice to be paid
     </span>WaitInvoice { operation_id: OperationId },
     <span class="doccomment">/// Pay a lightning invoice via a gateway
-    </span>LnPay { bolt11: lightning_invoice::Invoice },
+    </span>LnPay {
+        bolt11: lightning_invoice::Bolt11Invoice,
+    },
     <span class="doccomment">/// List registered gateways
     </span>ListGateways,
     <span class="doccomment">/// Switch active gateway

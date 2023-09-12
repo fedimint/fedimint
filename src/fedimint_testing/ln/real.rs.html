@@ -786,7 +786,7 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>ldk_node::io::SqliteStore;
 <span class="kw">use </span>ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
-<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
     EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
@@ -839,17 +839,16 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; ln_gateway::Result&lt;Invoice&gt; {
+    ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
         <span class="macro">info!</span>(<span class="string">&quot;fetching invoice from cln&quot;</span>);
         <span class="kw">let </span>random: u64 = rand::random();
-        <span class="kw">let </span>invoice_req = model::InvoiceRequest {
+        <span class="kw">let </span>invoice_req = model::requests::InvoiceRequest {
             amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.msats)),
             description: <span class="string">&quot;&quot;</span>.to_string(),
             label: random.to_string(),
             expiry: expiry_time,
             fallbacks: <span class="prelude-val">None</span>,
             preimage: <span class="prelude-val">None</span>,
-            exposeprivatechannels: <span class="prelude-val">None</span>,
             cltv: <span class="prelude-val">None</span>,
             deschashonly: <span class="prelude-val">None</span>,
         };
@@ -867,7 +866,7 @@
             <span class="macro">panic!</span>(<span class="string">&quot;cln-rpc response did not match expected InvoiceResponse&quot;</span>)
         };
 
-        <span class="prelude-val">Ok</span>(Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.bolt11).unwrap())
+        <span class="prelude-val">Ok</span>(Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.bolt11).unwrap())
     }
 
     <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -946,7 +945,7 @@
         <span class="kw">if let </span>Response::Getinfo(get_info) = rpc
             .lock()
             .<span class="kw">await
-            </span>.call(Request::Getinfo(model::GetinfoRequest {}))
+            </span>.call(Request::Getinfo(model::requests::GetinfoRequest {}))
             .<span class="kw">await
             </span>.unwrap()
         {
@@ -958,7 +957,7 @@
 
     <span class="kw">async fn </span>channel_balance(rpc: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;) -&gt; Amount {
         <span class="macro">info!</span>(<span class="string">&quot;fetching balance from cln&quot;</span>);
-        <span class="kw">let </span>listfunds_req = model::ListfundsRequest { spent: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) };
+        <span class="kw">let </span>listfunds_req = model::requests::ListfundsRequest { spent: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) };
         <span class="kw">let </span>listfunds_resp = <span class="kw">if let </span>Response::ListFunds(data) = rpc
             .lock()
             .<span class="kw">await
@@ -994,7 +993,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; ln_gateway::Result&lt;Invoice&gt; {
+    ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
         <span class="macro">info!</span>(<span class="string">&quot;fetching invoice from lnd&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>lnd_rpc = <span class="self">self</span>.rpc_lnd.lock().<span class="kw">await</span>;
         <span class="kw">let </span>tonic_invoice = <span class="kw">match </span>expiry_time {
@@ -1015,7 +1014,7 @@
             </span>.unwrap()
             .into_inner();
 
-        <span class="prelude-val">Ok</span>(Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.payment_request).unwrap())
+        <span class="prelude-val">Ok</span>(Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>invoice_resp.payment_request).unwrap())
     }
 
     <span class="kw">fn </span>is_shared(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -1157,7 +1156,7 @@
         response_sender: std::sync::mpsc::Sender&lt;LdkMessage&gt;,
     },
     InvoiceResponse {
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
     },
     OpenChannelRequest {
         node_id: PublicKey,
@@ -1263,9 +1262,10 @@
                         <span class="kw">let </span>ldk_invoice = node
                             .receive_payment(amount_msat, description.as_str(), expiry_secs)
                             .expect(<span class="string">&quot;LDK Node failed to create invoice&quot;</span>);
-                        <span class="kw">let </span>invoice =
-                            lightning_invoice::Invoice::from_str(ldk_invoice.to_string().as_str())
-                                .expect(<span class="string">&quot;Failed to create lightning_invoice&quot;</span>);
+                        <span class="kw">let </span>invoice = lightning_invoice::Bolt11Invoice::from_str(
+                            ldk_invoice.to_string().as_str(),
+                        )
+                        .expect(<span class="string">&quot;Failed to create lightning_invoice&quot;</span>);
                         response_sender
                             .send(LdkMessage::InvoiceResponse { invoice })
                             .expect(<span class="string">&quot;Failed to send InvoiceResponse&quot;</span>);
@@ -1504,7 +1504,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; ln_gateway::Result&lt;Invoice&gt; {
+    ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
         <span class="kw">let </span>(sender, receiver) = std::sync::mpsc::channel::&lt;LdkMessage&gt;();
         <span class="self">self</span>.ldk_node_sender
             .lock()

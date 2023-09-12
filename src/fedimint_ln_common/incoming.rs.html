@@ -342,7 +342,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
@@ -445,7 +445,7 @@
     <span class="attr">#[error(<span class="string">&quot;There was a failure when funding the contract: {error_message}&quot;</span>)]
     </span>FailedToFundContract { error_message: String },
     <span class="attr">#[error(<span class="string">&quot;Failed to parse the amount from the invoice: {invoice}&quot;</span>)]
-    </span>AmountError { invoice: Invoice },
+    </span>AmountError { invoice: Bolt11Invoice },
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]

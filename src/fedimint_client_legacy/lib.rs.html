@@ -1796,7 +1796,7 @@
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
-<span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
+<span class="kw">use </span>lightning_invoice::{Bolt11Invoice, CreationError, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 <span class="kw">use </span>ln::db::LightningGatewayKey;
 <span class="kw">use </span>ln::PayInvoicePayload;
 <span class="kw">use </span>mint::NoteIssuanceRequests;
@@ -2593,7 +2593,7 @@
 
     <span class="kw">pub async fn </span>fund_outgoing_ln_contract&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(ContractId, OutPoint)&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2736,7 +2736,7 @@
         description: String,
         <span class="kw-2">mut </span>rng: R,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(TransactionId, Invoice, KeyPair)&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(TransactionId, Bolt11Invoice, KeyPair)&gt; {
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>(invoice, ln_output) = <span class="self">self
             </span>.generate_unconfirmed_invoice(
@@ -2764,7 +2764,7 @@
         payment_keypair: KeyPair,
         <span class="kw-2">mut </span>rng: R,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Invoice, Output)&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, Output)&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>preimage: [u8; <span class="number">32</span>] = payment_keypair.x_only_public_key().<span class="number">0</span>.serialize();
         <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage);
@@ -2820,7 +2820,7 @@
         .payment_hash(payment_hash)
         .payment_secret(PaymentSecret(rng.gen()))
         .duration_since_epoch(duration_since_epoch)
-        .min_final_cltv_expiry(<span class="number">18</span>)
+        .min_final_cltv_expiry_delta(<span class="number">18</span>)
         .payee_pub_key(node_public_key)
         .expiry_time(Duration::from_secs(
             expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
@@ -2850,7 +2850,7 @@
     <span class="kw">pub async fn </span>await_invoice_confirmation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         txid: TransactionId,
-        invoice: Invoice,
+        invoice: Bolt11Invoice,
         payment_keypair: KeyPair,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
         <span class="comment">// Await acceptance by the federation
@@ -2969,7 +2969,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NotOurKey);
         }
 
-        <span class="kw">let </span>invoice: Invoice = account.contract.invoice.clone();
+        <span class="kw">let </span>invoice: Bolt11Invoice = account.contract.invoice.clone();
         <span class="kw">let </span>invoice_amount = Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
@@ -2998,7 +2998,7 @@
     }
 
     <span class="doccomment">/// Returns true if the invoice contains us as a routing hint
-    </span><span class="kw">fn </span>is_maybe_internal_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>Invoice) -&gt; bool {
+    </span><span class="kw">fn </span>is_maybe_internal_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>Bolt11Invoice) -&gt; bool {
         <span class="kw">let </span>maybe_route_hint_first_id = invoice
             .route_hints()
             .first()

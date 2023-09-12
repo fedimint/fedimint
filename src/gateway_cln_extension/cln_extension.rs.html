@@ -641,6 +641,20 @@
 <a href="#641" id="641">641</a>
 <a href="#642" id="642">642</a>
 <a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -855,8 +869,11 @@
             ))
             .<span class="kw">await
             </span>.map(|response| <span class="kw">match </span>response {
-                cln_rpc::Response::Getinfo(model::GetinfoResponse { id, alias, .. }) =&gt; {
-                    <span class="prelude-val">Ok</span>((id, alias))
+                cln_rpc::Response::Getinfo(model::responses::GetinfoResponse {
+                    id, alias, ..
+                }) =&gt; {
+                    <span class="comment">// FIXME: How to handle missing alias?
+                    </span><span class="prelude-val">Ok</span>((id, alias.unwrap_or_default()))
                 }
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
             })
@@ -900,10 +917,12 @@
             </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>peers_response = client
-            .call(cln_rpc::Request::ListPeers(model::ListpeersRequest {
-                id: <span class="prelude-val">None</span>,
-                level: <span class="prelude-val">None</span>,
-            }))
+            .call(cln_rpc::Request::ListPeers(
+                model::requests::ListpeersRequest {
+                    id: <span class="prelude-val">None</span>,
+                    level: <span class="prelude-val">None</span>,
+                },
+            ))
             .<span class="kw">await
             </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
 
@@ -915,12 +934,19 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>active_peer_channels = peers
             .into_iter()
-            .flat_map(|peer| peer.channels.into_iter().map(<span class="kw">move </span>|chan| (peer.id, chan)))
+            .flat_map(|peer| {
+                <span class="comment">// TODO: figure out how to get channels now
+                </span><span class="attr">#[allow(deprecated)]
+                </span>peer.channels
+                    .into_iter()
+                    .flatten()
+                    .map(<span class="kw">move </span>|chan| (peer.id, chan))
+            })
             .filter_map(|(peer_id, chan)| {
                 <span class="comment">// TODO: upstream eq derive
                 </span><span class="kw">if </span>!<span class="macro">matches!</span>(
                     chan.state,
-                    model::ListpeersPeersChannelsState::CHANNELD_NORMAL
+                    model::responses::ListpeersPeersChannelsState::CHANNELD_NORMAL
                 ) {
                     <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
@@ -940,9 +966,9 @@
         );
 
         <span class="kw">let </span>listfunds_response = client
-            .call(cln_rpc::Request::ListFunds(model::ListfundsRequest {
-                spent: <span class="prelude-val">None</span>,
-            }))
+            .call(cln_rpc::Request::ListFunds(
+                model::requests::ListfundsRequest { spent: <span class="prelude-val">None </span>},
+            ))
             .<span class="kw">await
             </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
         <span class="kw">let </span>pubkey_to_incoming_capacity = <span class="kw">match </span>listfunds_response {
@@ -963,11 +989,13 @@
         <span class="kw">let </span><span class="kw-2">mut </span>route_hints = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(peer_id, scid) <span class="kw">in </span>active_peer_channels {
             <span class="kw">let </span>channels_response = client
-                .call(cln_rpc::Request::ListChannels(model::ListchannelsRequest {
-                    short_channel_id: <span class="prelude-val">Some</span>(scid),
-                    source: <span class="prelude-val">None</span>,
-                    destination: <span class="prelude-val">None</span>,
-                }))
+                .call(cln_rpc::Request::ListChannels(
+                    model::requests::ListchannelsRequest {
+                        short_channel_id: <span class="prelude-val">Some</span>(scid),
+                        source: <span class="prelude-val">None</span>,
+                        destination: <span class="prelude-val">None</span>,
+                    },
+                ))
                 .<span class="kw">await
                 </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
 
@@ -1021,7 +1049,7 @@
             </span>.rpc_client()
             .<span class="kw">await
             </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
-            </span>.call(cln_rpc::Request::Pay(model::PayRequest {
+            </span>.call(cln_rpc::Request::Pay(model::requests::PayRequest {
                 bolt11: invoice,
                 amount_msat: <span class="prelude-val">None</span>,
                 label: <span class="prelude-val">None</span>,
@@ -1037,7 +1065,7 @@
             }))
             .<span class="kw">await
             </span>.map(|response| <span class="kw">match </span>response {
-                cln_rpc::Response::Pay(model::PayResponse {
+                cln_rpc::Response::Pay(model::responses::PayResponse {
                     payment_preimage, ..
                 }) =&gt; <span class="prelude-val">Ok</span>(PayInvoiceResponse {
                     preimage: payment_preimage.to_vec(),

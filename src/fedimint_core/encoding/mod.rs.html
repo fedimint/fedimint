@@ -1080,6 +1080,8 @@
 <a href="#1080" id="1080">1080</a>
 <a href="#1081" id="1081">1081</a>
 <a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1558,7 +1560,7 @@
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>lightning_invoice::Invoice {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>lightning_invoice::Bolt11Invoice {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.to_string().consensus_encode(writer)
     }
@@ -1587,13 +1589,13 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>lightning_invoice::Invoice {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>lightning_invoice::Bolt11Invoice {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         String::consensus_decode(d, modules)<span class="question-mark">?
-            </span>.parse::&lt;lightning_invoice::Invoice&gt;()
+            </span>.parse::&lt;lightning_invoice::Bolt11Invoice&gt;()
             .map_err(DecodeError::from_err)
     }
 }
@@ -2022,7 +2024,9 @@
 			p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
 			8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
 			j5r6drg6k6zcqj0fcwg&quot;</span>;
-        <span class="kw">let </span>invoice = invoice_str.parse::&lt;lightning_invoice::Invoice&gt;().unwrap();
+        <span class="kw">let </span>invoice = invoice_str
+            .parse::&lt;lightning_invoice::Bolt11Invoice&gt;()
+            .unwrap();
         test_roundtrip(invoice);
     }
 

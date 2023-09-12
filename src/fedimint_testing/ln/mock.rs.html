@@ -173,8 +173,8 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning_invoice::{
-    Currency, Description, Invoice, InvoiceBuilder, InvoiceDescription, SignedRawInvoice,
-    DEFAULT_EXPIRY_TIME,
+    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder,
+    SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
 };
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
     <span class="self">self</span>, EmptyResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
@@ -225,14 +225,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; ln_gateway::Result&lt;Invoice&gt; {
+    ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
 
         <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
             .description(<span class="string">&quot;&quot;</span>.to_string())
             .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
             .current_timestamp()
-            .min_final_cltv_expiry(<span class="number">0</span>)
+            .min_final_cltv_expiry_delta(<span class="number">0</span>)
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
             .amount_milli_satoshis(amount.msats)
             .expiry_time(Duration::from_secs(
@@ -277,12 +277,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: PayInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw">let </span>signed = invoice.invoice.parse::&lt;SignedRawInvoice&gt;().unwrap();
-        <span class="kw">let </span>invoice = Invoice::from_signed(signed).unwrap();
+        <span class="kw">let </span>signed = invoice.invoice.parse::&lt;SignedRawBolt11Invoice&gt;().unwrap();
+        <span class="kw">let </span>invoice = Bolt11Invoice::from_signed(signed).unwrap();
         <span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         <span class="kw">if </span>invoice.description()
-            == InvoiceDescription::Direct(
+            == Bolt11InvoiceDescription::Direct(
                 <span class="kw-2">&amp;</span>Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
             )
         {

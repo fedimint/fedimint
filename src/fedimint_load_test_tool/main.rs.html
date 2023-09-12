@@ -778,7 +778,7 @@
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, SafeUrl};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
-<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufWriter};
@@ -1025,7 +1025,7 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>lines = tokio::io::BufReader::new(invoices_file).lines();
                 <span class="kw">let </span><span class="kw-2">mut </span>invoices = <span class="macro">vec!</span>[];
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(line) = lines.next_line().<span class="kw">await</span><span class="question-mark">? </span>{
-                    <span class="kw">let </span>invoice = Invoice::from_str(<span class="kw-2">&amp;</span>line)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>invoice = Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>line)<span class="question-mark">?</span>;
                     invoices.push(invoice);
                 }
                 invoices
@@ -1081,7 +1081,7 @@
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
-    invoices_from_file: Vec&lt;Invoice&gt;,
+    invoices_from_file: Vec&lt;Bolt11Invoice&gt;,
     gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
     notes_per_user: u16,
     note_denomination: Amount,
@@ -1177,7 +1177,7 @@
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
     invoice_amount: Amount,
-    additional_invoices: Vec&lt;Invoice&gt;,
+    additional_invoices: Vec&lt;Bolt11Invoice&gt;,
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
