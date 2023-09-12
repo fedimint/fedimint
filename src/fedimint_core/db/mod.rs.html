@@ -2542,6 +2542,16 @@
 <a href="#2542" id="2542">2542</a>
 <a href="#2543" id="2543">2543</a>
 <a href="#2544" id="2544">2544</a>
+<a href="#2545" id="2545">2545</a>
+<a href="#2546" id="2546">2546</a>
+<a href="#2547" id="2547">2547</a>
+<a href="#2548" id="2548">2548</a>
+<a href="#2549" id="2549">2549</a>
+<a href="#2550" id="2550">2550</a>
+<a href="#2551" id="2551">2551</a>
+<a href="#2552" id="2552">2552</a>
+<a href="#2553" id="2553">2553</a>
+<a href="#2554" id="2554">2554</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
@@ -3095,16 +3105,24 @@
 </span><span class="kw">pub struct </span>CommitTracker {
     is_committed: bool,
     has_writes: bool,
+    ignore_uncommitted: bool,
 }
 
 <span class="kw">impl </span>Drop <span class="kw">for </span>CommitTracker {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">if </span><span class="self">self</span>.has_writes &amp;&amp; !<span class="self">self</span>.is_committed {
-            <span class="macro">warn!</span>(
-                target: LOG_DB,
-                location = <span class="question-mark">?</span>backtrace::Backtrace::new(),
-                <span class="string">&quot;DatabaseTransaction has writes and has not called commit.&quot;
-            </span>);
+            <span class="kw">if </span><span class="self">self</span>.ignore_uncommitted {
+                <span class="macro">debug!</span>(
+                    target: LOG_DB,
+                    <span class="string">&quot;DatabaseTransaction has writes and has not called commit, but that&#39;s expected.&quot;
+                </span>);
+            } <span class="kw">else </span>{
+                <span class="macro">warn!</span>(
+                    target: LOG_DB,
+                    location = <span class="question-mark">?</span>backtrace::Backtrace::new(),
+                    <span class="string">&quot;DatabaseTransaction has writes and has not called commit.&quot;
+                </span>);
+            }
         }
     }
 }
@@ -3603,6 +3621,7 @@
             commit_tracker: CommitTracker {
                 is_committed: <span class="bool-val">false</span>,
                 has_writes: <span class="bool-val">false</span>,
+                ignore_uncommitted: <span class="bool-val">false</span>,
             },
             on_commit_hooks: <span class="macro">vec!</span>[],
         }
@@ -3645,9 +3664,10 @@
     }
 
     <span class="doccomment">/// Cancel the tx to avoid debugging warnings about uncommitted writes
-    </span><span class="kw">pub fn </span>cancel(<span class="kw-2">mut </span><span class="self">self</span>) {
-        <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">false</span>;
-    }
+    </span><span class="kw">pub fn </span>ignore_uncommitted(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="self">self</span>.commit_tracker.ignore_uncommitted = <span class="bool-val">true</span>;
+        <span class="self">self
+    </span>}
 
     <span class="kw">pub async fn </span>commit_tx_result(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.commit_tracker.is_committed = <span class="bool-val">true</span>;

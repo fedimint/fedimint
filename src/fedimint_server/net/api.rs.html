@@ -976,6 +976,8 @@
 
         <span class="comment">// Create read-only DB tx so that the read state is consistent
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        <span class="comment">// We ignore any writes, as we only verify if the transaction is valid here
+        </span>dbtx.ignore_uncommitted();
 
         <span class="kw">let </span>txid = transaction.tx_hash();
         <span class="kw">let </span>caches = <span class="self">self</span>.build_verification_caches(transaction.clone());
@@ -1019,8 +1021,6 @@
         <span class="self">self</span>.api_sender
             .send(ApiEvent::Transaction(transaction))
             .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        dbtx.cancel();
 
         <span class="prelude-val">Ok</span>(())
     }
