@@ -7,7 +7,12 @@
 
 { src, srcDotCargo, pkgs, lib, clightning-dev, pkgs-kitman, moreutils-ts, ... }:
 craneLib:
-craneLib.overrideScope' (self: prev: {
+craneLib.overrideScope' (self: prev:
+
+let
+  filterWorkspaceDepsBuildFilesRegex = [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".config" ".config/.*" ".*/Cargo.toml" ".*/proto/.*" ];
+in
+{
 
   commonSrc = builtins.path { path = src; name = "fedimint"; };
 
@@ -50,13 +55,13 @@ craneLib.overrideScope' (self: prev: {
   #
   # Lile `filterWorkspaceFiles` but doesn't even need *.rs files
   # (because they are not used for building dependencies)
-  filterWorkspaceDepsBuildFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*/proto/.*" ] src;
+  filterWorkspaceDepsBuildFiles = src: self.filterSrcWithRegexes filterWorkspaceDepsBuildFilesRegex src;
 
   # Filter only files relevant to building the workspace
-  filterWorkspaceFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".config" ".config/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" ] src;
+  filterWorkspaceFiles = src: self.filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" ]) src;
 
   # Like `filterWorkspaceFiles` but with `./scripts/` included
-  filterWorkspaceTestFiles = src: self.filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".config" ".config/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "scripts/.*" ] src;
+  filterWorkspaceTestFiles = src: self.filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "scripts/.*" ]) src;
 
   cargo-llvm-cov = self.buildPackage rec {
     pname = "cargo-llvm-cov";
