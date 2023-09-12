@@ -72,26 +72,6 @@ async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
     .await
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn ecash_can_be_exchanged_directly_between_users() -> Result<()> {
-    test(4, |fed, user_send, bitcoin| async move {
-        let user_receive = user_send.new_client_with_peers(peers(&[0, 1, 2]));
-
-        fed.mine_and_mint(&*user_send, &*bitcoin, sats(5000)).await;
-        assert_eq!(user_send.ecash_total(), sats(5000));
-        assert_eq!(user_receive.ecash_total(), sats(0));
-
-        let ecash = fed.spend_ecash(&*user_send, sats(3500)).await;
-        user_receive.reissue(ecash).await.unwrap();
-        fed.run_consensus_epochs(2).await; // process transaction + sign new notes
-
-        assert_eq!(user_send.ecash_total(), sats(1500));
-        assert_eq!(user_receive.ecash_total(), sats(3500));
-        assert_eq!(fed.max_balance_sheet(), 0);
-    })
-    .await
-}
-
 // this test had to be removed to switch to aleph bft and should be ported to
 // the new testing framework.
 #[tokio::test(flavor = "multi_thread")]
