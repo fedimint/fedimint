@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicI64, AtomicU16, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -66,9 +66,10 @@ use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::fixtures::user::ILegacyTestClient;
 use crate::ConsensusItem;
@@ -81,6 +82,36 @@ const MAX_MSAT_DENOMINATION: u64 = u64::pow(2, 20);
 const DEFAULT_P2P_PORT: u16 = 8173;
 const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 20000;
 static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
+
+/// Allocate a port range of a size `range_size`, verying that
+/// no port is already used.
+///
+/// Returns the start of the range.
+///
+/// Note: this does not prevent something to come one second later
+/// and using the port, but is better than nothing.
+pub async fn allocate_port_range(range_size: u16) -> anyhow::Result<u16> {
+    Ok('retry: loop {
+        let base_port = BASE_PORT.fetch_add(range_size, Ordering::Relaxed);
+
+        if 65_000 < base_port {
+            bail!(
+                "Failed at finding any port range of size {range_size} to use for the federation"
+            );
+        }
+
+        for port in base_port..base_port + range_size {
+            if let Err(error) = TcpListener::bind(("127.0.0.1", port)).await {
+                warn!(
+                    ?error,
+                    port, "Could not use a port. Will try a different range"
+                );
+                continue 'retry;
+            }
+        }
+        break base_port;
+    })
+}
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
@@ -131,7 +162,8 @@ where
 /// consensus threads for federation nodes starting at port DEFAULT_P2P_PORT.
 pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
-    let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
+    const NUM_PORTS_PER_PEER: u16 = 10;
+    let base_port = allocate_port_range(num_peers * NUM_PORTS_PER_PEER).await?;
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == BASE_PORT_INIT {
