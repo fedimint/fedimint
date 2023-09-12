@@ -210,6 +210,8 @@ impl ConsensusApi {
 
         // Create read-only DB tx so that the read state is consistent
         let mut dbtx = self.db.begin_transaction().await;
+        // We ignore any writes, as we only verify if the transaction is valid here
+        dbtx.ignore_uncommitted();
 
         let txid = transaction.tx_hash();
         let caches = self.build_verification_caches(transaction.clone());
@@ -253,8 +255,6 @@ impl ConsensusApi {
         self.api_sender
             .send(ApiEvent::Transaction(transaction))
             .await?;
-
-        dbtx.cancel();
 
         Ok(())
     }

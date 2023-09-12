@@ -551,16 +551,24 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction
 pub struct CommitTracker {
     is_committed: bool,
     has_writes: bool,
+    ignore_uncommitted: bool,
 }
 
 impl Drop for CommitTracker {
     fn drop(&mut self) {
         if self.has_writes && !self.is_committed {
-            warn!(
-                target: LOG_DB,
-                location = ?backtrace::Backtrace::new(),
-                "DatabaseTransaction has writes and has not called commit."
-            );
+            if self.ignore_uncommitted {
+                debug!(
+                    target: LOG_DB,
+                    "DatabaseTransaction has writes and has not called commit, but that's expected."
+                );
+            } else {
+                warn!(
+                    target: LOG_DB,
+                    location = ?backtrace::Backtrace::new(),
+                    "DatabaseTransaction has writes and has not called commit."
+                );
+            }
         }
     }
 }
@@ -1059,6 +1067,7 @@ impl<'parent> DatabaseTransaction<'parent> {
             commit_tracker: CommitTracker {
                 is_committed: false,
                 has_writes: false,
+                ignore_uncommitted: false,
             },
             on_commit_hooks: vec![],
         }
@@ -1101,8 +1110,9 @@ impl<'parent> DatabaseTransaction<'parent> {
     }
 
     /// Cancel the tx to avoid debugging warnings about uncommitted writes
-    pub fn cancel(mut self) {
-        self.commit_tracker.has_writes = false;
+    pub fn ignore_uncommitted(&mut self) -> &mut Self {
+        self.commit_tracker.ignore_uncommitted = true;
+        self
     }
 
     pub async fn commit_tx_result(mut self) -> Result<()> {
