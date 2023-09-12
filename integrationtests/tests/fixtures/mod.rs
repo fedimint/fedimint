@@ -3,11 +3,11 @@ use std::env;
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicI64, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -66,10 +66,9 @@ use hbbft::honey_badger::Batch;
 use legacy::LegacyTestUser;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 use tokio_rustls::rustls;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::fixtures::user::ILegacyTestClient;
 use crate::ConsensusItem;
@@ -79,39 +78,6 @@ pub mod user;
 
 // 21 denominations, up to ~1048 sats which is big enough for our tests
 const MAX_MSAT_DENOMINATION: u64 = u64::pow(2, 20);
-const DEFAULT_P2P_PORT: u16 = 8173;
-const BASE_PORT_INIT: u16 = DEFAULT_P2P_PORT + 20000;
-static BASE_PORT: AtomicU16 = AtomicU16::new(BASE_PORT_INIT);
-
-/// Allocate a port range of a size `range_size`, verying that
-/// no port is already used.
-///
-/// Returns the start of the range.
-///
-/// Note: this does not prevent something to come one second later
-/// and using the port, but is better than nothing.
-pub async fn allocate_port_range(range_size: u16) -> anyhow::Result<u16> {
-    Ok('retry: loop {
-        let base_port = BASE_PORT.fetch_add(range_size, Ordering::Relaxed);
-
-        if 65_000 < base_port {
-            bail!(
-                "Failed at finding any port range of size {range_size} to use for the federation"
-            );
-        }
-
-        for port in base_port..base_port + range_size {
-            if let Err(error) = TcpListener::bind(("127.0.0.1", port)).await {
-                warn!(
-                    ?error,
-                    port, "Could not use a port. Will try a different range"
-                );
-                continue 'retry;
-            }
-        }
-        break base_port;
-    })
-}
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
@@ -158,18 +124,27 @@ where
     Ok(())
 }
 
+static TRACING_INIT_ONCE: tokio::sync::OnceCell<anyhow::Result<()>> = OnceCell::const_new();
+
 /// Generates the fixtures for an integration test and spawns API and HBBFT
 /// consensus threads for federation nodes starting at port DEFAULT_P2P_PORT.
 pub async fn fixtures(num_peers: u16) -> anyhow::Result<Fixtures> {
     let mut task_group = TaskGroup::new();
     const NUM_PORTS_PER_PEER: u16 = 10;
-    let base_port = allocate_port_range(num_peers * NUM_PORTS_PER_PEER).await?;
+    let base_port = tokio::task::block_in_place(|| {
+        fedimint_portalloc::port_alloc(num_peers * NUM_PORTS_PER_PEER)
+    })?;
 
     // in case we need to output logs using 'cargo test -- --nocapture'
-    if base_port == BASE_PORT_INIT {
-        let chrome = env::var_os("FEDIMINT_TRACE_CHROME").map_or(false, |x| !x.is_empty());
-        TracingSetup::default().with_chrome(chrome).init()?;
-    }
+    TRACING_INIT_ONCE
+        .get_or_init(|| async {
+            let chrome = env::var_os("FEDIMINT_TRACE_CHROME").map_or(false, |x| !x.is_empty());
+            TracingSetup::default().with_chrome(chrome).init()?;
+            Ok(())
+        })
+        .await
+        .as_ref()
+        .map_err(|e| anyhow::format_err!("{e}"))?;
 
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let mut module_inits_params = ServerModuleConfigGenParamsRegistry::default();

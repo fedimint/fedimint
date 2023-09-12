@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
@@ -29,8 +28,6 @@ use crate::ln::LightningTest;
 
 /// A default timeout for things happening in tests
 pub const TIMEOUT: Duration = Duration::from_secs(10);
-
-static BASE_PORT: AtomicU16 = AtomicU16::new(18173);
 
 /// A tool for easily writing fedimint integration tests
 pub struct Fixtures {
@@ -123,7 +120,8 @@ impl Fixtures {
     pub async fn new_fed_with_peers(&self, num_peers: u16) -> FederationTest {
         FederationTest::new(
             num_peers,
-            BASE_PORT.fetch_add(num_peers * 2, Ordering::Relaxed),
+            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
+                .expect("Failed to allocate a port range"),
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
@@ -145,7 +143,8 @@ impl Fixtures {
         let clients = self.clients.clone().into_iter();
 
         GatewayTest::new(
-            BASE_PORT.fetch_add(1, Ordering::Relaxed),
+            tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(1))
+                .expect("Failed to allocate a port range"),
             rand::random::<u64>().to_string(),
             ln,
             decoders,
