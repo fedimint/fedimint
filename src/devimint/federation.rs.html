@@ -540,6 +540,7 @@
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::module::ApiAuth;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>fedimint_testing::federation::local_config_gen_params;
@@ -548,7 +549,6 @@
 <span class="kw">use </span>fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>; <span class="comment">// TODO: remove this
 
@@ -628,7 +628,7 @@
                 peer.to_usize(),
                 Fedimintd::new(process_mgr, bitcoind.clone(), peer.to_usize(), <span class="kw-2">&amp;</span>var).<span class="kw">await</span><span class="question-mark">?</span>,
             );
-            <span class="kw">let </span>admin_client = WsAdminClient::new(Url::parse(<span class="kw-2">&amp;</span>var.FM_API_URL)<span class="question-mark">?</span>);
+            <span class="kw">let </span>admin_client = WsAdminClient::new(SafeUrl::parse(<span class="kw-2">&amp;</span>var.FM_API_URL)<span class="question-mark">?</span>);
             admin_clients.insert(<span class="kw-2">*</span>peer, admin_client);
             vars.insert(peer.to_usize(), var);
         }

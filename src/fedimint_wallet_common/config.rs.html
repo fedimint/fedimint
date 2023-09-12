@@ -201,11 +201,11 @@
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{PegInDescriptor, WalletCommonGen};
@@ -225,7 +225,7 @@
                 finality_delay: <span class="number">10</span>,
                 client_default_bitcoin_rpc: BitcoinRpcConfig {
                     kind: <span class="string">&quot;esplora&quot;</span>.to_string(),
-                    url: Url::parse(<span class="string">&quot;http://127.0.0.1:50002/&quot;</span>)
+                    url: SafeUrl::parse(<span class="string">&quot;http://127.0.0.1:50002/&quot;</span>)
                         .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
                 },
             },

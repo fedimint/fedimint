@@ -1043,7 +1043,6 @@
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
 <a href="#1045" id="1045">1045</a>
-<a href="#1046" id="1046">1046</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1069,13 +1068,12 @@
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
 };
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
-<span class="kw">use </span>fedimint_core::util::write_new;
+<span class="kw">use </span>fedimint_core::util::{write_new, SafeUrl};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::error;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
@@ -1419,10 +1417,10 @@
     </span><span class="kw">pub </span>p2p_bind: SocketAddr,
     <span class="doccomment">/// Bind address for our API connection
     </span><span class="kw">pub </span>api_bind: SocketAddr,
-    <span class="doccomment">/// Url for our P2P connection
-    </span><span class="kw">pub </span>p2p_url: Url,
-    <span class="doccomment">/// Url for our API connection
-    </span><span class="kw">pub </span>api_url: Url,
+    <span class="doccomment">/// URL for our P2P connection
+    </span><span class="kw">pub </span>p2p_url: SafeUrl,
+    <span class="doccomment">/// URL for our API connection
+    </span><span class="kw">pub </span>api_url: SafeUrl,
     <span class="doccomment">/// The default params for the modules
     </span><span class="kw">pub </span>default_params: ConfigGenParamsRequest,
     <span class="doccomment">/// How many API connections we will accept
@@ -1442,7 +1440,7 @@
     </span>local: <span class="prelude-ty">Option</span>&lt;ConfigGenLocalConnection&gt;,
     <span class="doccomment">/// Connection info received from other guardians, unique by api_url
     /// (because it&#39;s non-user configurable)
-    </span>peers: BTreeMap&lt;Url, PeerServerParams&gt;,
+    </span>peers: BTreeMap&lt;SafeUrl, PeerServerParams&gt;,
     <span class="doccomment">/// The config gen params requested by the leader
     </span>requested_params: <span class="prelude-ty">Option</span>&lt;ConfigGenParamsRequest&gt;,
     <span class="doccomment">/// Our status
@@ -1460,9 +1458,9 @@
     </span>tls_cert: rustls::Certificate,
     <span class="doccomment">/// Our guardian name
     </span>our_name: String,
-    <span class="doccomment">/// Url of &quot;leader&quot; guardian to send our connection info to
+    <span class="doccomment">/// URL of &quot;leader&quot; guardian to send our connection info to
     /// Will be `None` if we are the leader
-    </span>leader_api_url: <span class="prelude-ty">Option</span>&lt;Url&gt;,
+    </span>leader_api_url: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
 }
 
 <span class="kw">impl </span>ConfigGenState {
@@ -1744,6 +1742,7 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiAuth;
     <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+    <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::Amount;
     <span class="kw">use </span>fedimint_dummy_common::config::{
         DummyConfig, DummyGenParams, DummyGenParamsConsensus, DummyGenParamsLocal,
@@ -1753,7 +1752,6 @@
     <span class="kw">use </span>fedimint_testing::fixtures::test_dir;
     <span class="kw">use </span>futures::future::join_all;
     <span class="kw">use </span>itertools::Itertools;
-    <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, PLAINTEXT_PASSWORD};
@@ -1783,7 +1781,7 @@
 
             <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">&quot;peer{name_suffix}&quot;</span>);
             <span class="kw">let </span>api_bind = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{port}&quot;</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
-            <span class="kw">let </span>api_url: Url = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{port}&quot;</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
+            <span class="kw">let </span>api_url: SafeUrl = <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{port}&quot;</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
             <span class="kw">let </span>p2p_bind = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>).parse().expect(<span class="string">&quot;parses&quot;</span>);
             <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">&quot;fedimint://127.0.0.1:{}&quot;</span>, port + <span class="number">1</span>)
                 .parse()
@@ -1843,7 +1841,7 @@
         }
 
         <span class="doccomment">/// Helper function using generated urls
-        </span><span class="kw">async fn </span>set_connections(<span class="kw-2">&amp;</span><span class="self">self</span>, leader: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Url&gt;) -&gt; FederationResult&lt;()&gt; {
+        </span><span class="kw">async fn </span>set_connections(<span class="kw-2">&amp;</span><span class="self">self</span>, leader: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;SafeUrl&gt;) -&gt; FederationResult&lt;()&gt; {
             <span class="self">self</span>.client
                 .set_config_gen_connections(
                     ConfigGenConnectionsRequest {

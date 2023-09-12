@@ -892,6 +892,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
@@ -903,7 +904,6 @@
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, info};
-<span class="kw">use </span>url::Url;
 <span class="kw">use </span>utils::{from_hex, parse_peer_id};
 
 <span class="kw">use </span><span class="kw">crate</span>::client::ClientCmd;
@@ -930,7 +930,7 @@
     },
 
     DecodeInviteCode {
-        url: Url,
+        url: SafeUrl,
         download_token: String,
         id: FederationId,
     },
@@ -1274,7 +1274,7 @@
     <span class="doccomment">/// Encode connection info from its constituent parts
     </span>EncodeInviteCode {
         <span class="attr">#[clap(long = <span class="string">&quot;url&quot;</span>)]
-        </span>url: Url,
+        </span>url: SafeUrl,
         <span class="attr">#[clap(long = <span class="string">&quot;download-token&quot;</span>, value_parser = from_hex::&lt;ClientConfigDownloadToken&gt;)]
         </span>download_token: ClientConfigDownloadToken,
         <span class="attr">#[clap(long = <span class="string">&quot;id&quot;</span>)]

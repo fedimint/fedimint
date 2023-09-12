@@ -120,6 +120,10 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -127,9 +131,9 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
 <span class="kw">use </span>tracing::{info, warn};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -137,7 +141,11 @@
 </span><span class="kw">pub struct </span>EsploraFactory;
 
 <span class="kw">impl </span>IBitcoindRpcFactory <span class="kw">for </span>EsploraFactory {
-    <span class="kw">fn </span>create_connection(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
+    <span class="kw">fn </span>create_connection(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        url: <span class="kw-2">&amp;</span>SafeUrl,
+        handle: TaskHandle,
+    ) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
         <span class="prelude-val">Ok</span>(RetryClient::new(EsploraClient::new(url)<span class="question-mark">?</span>, handle).into())
     }
 }
@@ -146,8 +154,8 @@
 </span><span class="kw">pub struct </span>EsploraClient(esplora_client::AsyncClient);
 
 <span class="kw">impl </span>EsploraClient {
-    <span class="kw">fn </span>new(url: <span class="kw-2">&amp;</span>Url) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="comment">// Url needs to have any trailing path including &#39;/&#39; removed
+    <span class="kw">fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+        <span class="comment">// URL needs to have any trailing path including &#39;/&#39; removed
         </span><span class="kw">let </span>without_trailing = url.as_str().trim_end_matches(<span class="string">&#39;/&#39;</span>);
 
         <span class="kw">let </span>builder = esplora_client::Builder::new(without_trailing);

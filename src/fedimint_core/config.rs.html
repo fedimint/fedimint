@@ -886,6 +886,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{DynRawFallback, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::SerdeSignature;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -896,7 +897,6 @@
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
 <span class="kw">use </span>tracing::warn;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
@@ -972,7 +972,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PeerUrl {
     <span class="doccomment">/// The peer&#39;s public URL (e.g. `wss://fedimint-server-1:5000`)
-    </span><span class="kw">pub </span>url: Url,
+    </span><span class="kw">pub </span>url: SafeUrl,
     <span class="doccomment">/// The peer&#39;s name
     </span><span class="kw">pub </span>name: String,
 }

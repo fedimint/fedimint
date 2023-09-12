@@ -1105,10 +1105,10 @@
 <span class="kw">use </span>lightning::util::ser::{Readable, Writeable};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::ModuleInstanceId;
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 
 <span class="doccomment">/// Object-safe trait for things that can encode themselves
 ///
@@ -1204,19 +1204,19 @@
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>Url {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>SafeUrl {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.to_string().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>Url {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>SafeUrl {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         String::consensus_decode(d, modules)<span class="question-mark">?
-            </span>.parse::&lt;Url&gt;()
+            </span>.parse::&lt;SafeUrl&gt;()
             .map_err(DecodeError::from_err)
     }
 }

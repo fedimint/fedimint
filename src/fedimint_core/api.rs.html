@@ -1274,7 +1274,6 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::{PublicKey, PK_SIZE};
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
 <span class="kw">use </span><span class="kw">crate</span>::core::backup::SignedBackupRequest;
@@ -1287,6 +1286,7 @@
     VerifiableResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
+<span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 <span class="kw">use crate</span>::{serde_as_encodable_hex, task};
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
@@ -1853,7 +1853,7 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">struct </span>FederationPeer&lt;C&gt; {
-    url: Url,
+    url: SafeUrl,
     peer_id: PeerId,
     client: RwLock&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
 }
@@ -1863,8 +1863,8 @@
 /// Can be used to download the configs and bootstrap a client
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
 </span><span class="kw">pub struct </span>InviteCode {
-    <span class="doccomment">/// Url to reach an API that we can download configs from
-    </span><span class="kw">pub </span>url: Url,
+    <span class="doccomment">/// URL to reach an API that we can download configs from
+    </span><span class="kw">pub </span>url: SafeUrl,
     <span class="doccomment">/// Config download token (might only be used a certain number of times)
     </span><span class="kw">pub </span>download_token: ClientConfigDownloadToken,
     <span class="doccomment">/// Authentication id for the federation
@@ -2000,13 +2000,13 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
         </span><span class="kw">return </span>WsClientBuilder::default()
             .use_webpki_rustls()
@@ -2026,7 +2026,7 @@
 
 <span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new(peers: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(peers: Vec&lt;(PeerId, SafeUrl)&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new_with_client(peers)
     }
 
@@ -2059,7 +2059,7 @@
     }
 
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new_with_client(peers: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new_with_client(peers: Vec&lt;(PeerId, SafeUrl)&gt;) -&gt; <span class="self">Self </span>{
         WsFederationApi {
             peer_ids: peers.iter().map(|m| m.<span class="number">0</span>).collect(),
             peers: Arc::new(
@@ -2144,14 +2144,14 @@
     }
 }
 
-<span class="doccomment">/// `jsonrpsee` converts the `Url` to a `&amp;str` internally and then parses it as
-/// an `Uri`. Unfortunately `Url` swallows ports that it considers default ports
-/// (e.g. 80 and 443 for HTTP(S)) which makes the `Uri` parsing fail in these
-/// cases. This function works around this limitation in a limited way (not
-/// fully standard compliant, but work for our use case).
+<span class="doccomment">/// `jsonrpsee` converts the `SafeUrl` to a `&amp;str` internally and then parses it
+/// as an `Uri`. Unfortunately the underlying `Url` type swallows ports that it
+/// considers default ports (e.g. 80 and 443 for HTTP(S)) which makes the `Uri`
+/// parsing fail in these cases. This function works around this limitation in a
+/// limited way (not fully standard compliant, but work for our use case).
 ///
 /// See &lt;https://github.com/paritytech/jsonrpsee/issues/554#issue-1048646896&gt;
-</span><span class="kw">fn </span>url_to_string_with_default_port(url: <span class="kw-2">&amp;</span>Url) -&gt; String {
+</span><span class="kw">fn </span>url_to_string_with_default_port(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; String {
     <span class="macro">format!</span>(
         <span class="string">&quot;{}://{}:{}{}&quot;</span>,
         url.scheme(),
@@ -2261,7 +2261,7 @@
             <span class="self">self</span>.<span class="number">0</span>.is_connected()
         }
 
-        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>Url) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect().<span class="kw">await</span><span class="question-mark">?</span>))
         }
     }
@@ -2297,7 +2297,7 @@
 
     <span class="kw">fn </span>federation_peer&lt;C: SimpleClient + MaybeSend + MaybeSync&gt;() -&gt; FederationPeer&lt;Client&lt;C&gt;&gt; {
         FederationPeer {
-            url: Url::from_str(<span class="string">&quot;http://127.0.0.1&quot;</span>).expect(<span class="string">&quot;Could not parse&quot;</span>),
+            url: SafeUrl::parse(<span class="string">&quot;http://127.0.0.1&quot;</span>).expect(<span class="string">&quot;Could not parse&quot;</span>),
             peer_id: PeerId::from(<span class="number">0</span>),
             client: RwLock::new(<span class="prelude-val">None</span>),
         }

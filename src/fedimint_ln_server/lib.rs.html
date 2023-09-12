@@ -2956,6 +2956,7 @@
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
+    <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
@@ -2984,7 +2985,6 @@
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>strum::IntoEnumIterator;
     <span class="kw">use </span>threshold_crypto::G1Projective;
-    <span class="kw">use </span>url::Url;
 
     <span class="kw">use crate</span>::{
         ContractAccount, Lightning, LightningGateway, LightningGen, LightningOutputOutcome,
@@ -3078,7 +3078,7 @@
             gateway_redeem_key: pk.x_only_public_key().<span class="number">0</span>,
             node_pub_key: pk,
             lightning_alias: <span class="string">&quot;FakeLightningAlias&quot;</span>.to_string(),
-            api: Url::parse(<span class="string">&quot;http://example.com&quot;</span>)
+            api: SafeUrl::parse(<span class="string">&quot;http://example.com&quot;</span>)
                 .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
             route_hints: <span class="macro">vec!</span>[],
             valid_until: fedimint_core::time::now(),

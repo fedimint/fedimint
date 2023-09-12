@@ -211,22 +211,89 @@
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 
-<span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt::{Debug, Display, Formatter};
 <span class="kw">use </span>std::future::Future;
+<span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::{fs, io};
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::io::AsyncWriteExt;
 <span class="kw">use </span>tracing::debug;
-<span class="kw">use </span>url::Url;
+<span class="kw">use </span>url::{Host, ParseError, Url};
 
 <span class="kw">use </span><span class="kw">crate</span>::task::MaybeSend;
 <span class="kw">use crate</span>::{apply, async_trait_maybe_send, maybe_add_send};
@@ -285,19 +352,55 @@
 ///
 /// The output is not fully RFC1738 conformant but good enough for our current
 /// purposes.
-</span><span class="kw">pub struct </span>SanitizedUrl&lt;<span class="lifetime">&#39;a</span>&gt;(Cow&lt;<span class="lifetime">&#39;a</span>, Url&gt;);
+</span><span class="attr">#[derive(Hash, Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
+</span><span class="comment">// nosemgrep: ban-raw-url
+</span><span class="kw">pub struct </span>SafeUrl(Url);
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; SanitizedUrl&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">pub fn </span>new_owned(url: Url) -&gt; SanitizedUrl&lt;<span class="lifetime">&#39;static</span>&gt; {
-        SanitizedUrl(Cow::Owned(url))
+<span class="kw">impl </span>SafeUrl {
+    <span class="kw">pub fn </span>parse(url_str: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;SafeUrl, ParseError&gt; {
+        Url::parse(url_str).map(SafeUrl)
     }
 
-    <span class="kw">pub fn </span>new_borrowed(url: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Url) -&gt; SanitizedUrl&lt;<span class="lifetime">&#39;a</span>&gt; {
-        SanitizedUrl(Cow::Borrowed(url))
+    <span class="doccomment">/// Warning: This removes the safety.
+    </span><span class="comment">// nosemgrep: ban-raw-url
+    </span><span class="kw">pub fn </span>reap_guts(<span class="self">self</span>) -&gt; Url {
+        <span class="self">self</span>.<span class="number">0
+    </span>}
+
+    <span class="kw">pub fn </span>host(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Host&lt;<span class="kw-2">&amp;</span>str&gt;&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.host()
+    }
+    <span class="kw">pub fn </span>host_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.host_str()
+    }
+    <span class="kw">pub fn </span>scheme(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="self">self</span>.<span class="number">0</span>.scheme()
+    }
+    <span class="kw">pub fn </span>port(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u16&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.port()
+    }
+    <span class="kw">pub fn </span>port_or_known_default(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u16&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.port_or_known_default()
+    }
+    <span class="kw">pub fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="self">self</span>.<span class="number">0</span>.path()
+    }
+    <span class="doccomment">/// Warning: This will expose username &amp; password if present.
+    </span><span class="kw">pub fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="self">self</span>.<span class="number">0</span>.as_str()
+    }
+    <span class="kw">pub fn </span>username(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
+        <span class="self">self</span>.<span class="number">0</span>.username()
+    }
+    <span class="kw">pub fn </span>password(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.password()
+    }
+    <span class="kw">pub fn </span>join(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;SafeUrl, ParseError&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.join(input).map(SafeUrl)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Display <span class="kw">for </span>SanitizedUrl&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl </span>Display <span class="kw">for </span>SafeUrl {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="macro">write!</span>(f, <span class="string">&quot;{}://&quot;</span>, <span class="self">self</span>.<span class="number">0</span>.scheme())<span class="question-mark">?</span>;
 
@@ -315,14 +418,23 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; Debug <span class="kw">for </span>SanitizedUrl&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl </span>Debug <span class="kw">for </span>SafeUrl {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;SanitizedUrl(&quot;</span>)<span class="question-mark">?</span>;
+        <span class="macro">write!</span>(f, <span class="string">&quot;SafeUrl(&quot;</span>)<span class="question-mark">?</span>;
         Display::fmt(<span class="self">self</span>, f)<span class="question-mark">?</span>;
         <span class="macro">write!</span>(f, <span class="string">&quot;, has_password={}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>.password().is_some())<span class="question-mark">?</span>;
         <span class="macro">write!</span>(f, <span class="string">&quot;, has_username={}&quot;</span>, !<span class="self">self</span>.<span class="number">0</span>.username().is_empty())<span class="question-mark">?</span>;
         <span class="macro">write!</span>(f, <span class="string">&quot;)&quot;</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">impl </span>FromStr <span class="kw">for </span>SafeUrl {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= ParseError;
+
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>from_str(input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;SafeUrl, ParseError&gt; {
+        SafeUrl::parse(input)
     }
 }
 
@@ -380,34 +492,52 @@
 
     <span class="kw">use </span>fedimint_core::task::Elapsed;
     <span class="kw">use </span>futures::FutureExt;
-    <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::task::timeout;
-    <span class="kw">use </span><span class="kw">crate</span>::util::{NextOrPending, SanitizedUrl};
+    <span class="kw">use </span><span class="kw">crate</span>::util::{NextOrPending, SafeUrl};
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_sanitized_url() {
+    </span><span class="kw">fn </span>test_safe_url() {
         <span class="kw">let </span>test_cases = <span class="macro">vec!</span>[
-            (<span class="string">&quot;http://1.2.3.4:80/foo&quot;</span>, <span class="string">&quot;http://1.2.3.4/foo&quot;</span>, <span class="string">&quot;SanitizedUrl(http://1.2.3.4/foo, has_password=false, has_username=false)&quot;</span>),
-            (<span class="string">&quot;http://1.2.3.4:81/foo&quot;</span>, <span class="string">&quot;http://1.2.3.4:81/foo&quot;</span>, <span class="string">&quot;SanitizedUrl(http://1.2.3.4:81/foo, has_password=false, has_username=false)&quot;</span>),
-            (<span class="string">&quot;fedimint://1.2.3.4:1000/foo&quot;</span>, <span class="string">&quot;fedimint://1.2.3.4:1000/foo&quot;</span>, <span class="string">&quot;SanitizedUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=false)&quot;</span>),
-            (<span class="string">&quot;fedimint://foo:bar@domain.com:1000/foo&quot;</span>, <span class="string">&quot;fedimint://domain.com:1000/foo&quot;</span>, <span class="string">&quot;SanitizedUrl(fedimint://domain.com:1000/foo, has_password=true, has_username=true)&quot;</span>),
-            (<span class="string">&quot;fedimint://foo@1.2.3.4:1000/foo&quot;</span>, <span class="string">&quot;fedimint://1.2.3.4:1000/foo&quot;</span>, <span class="string">&quot;SanitizedUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=true)&quot;</span>),
+            (
+                <span class="string">&quot;http://1.2.3.4:80/foo&quot;</span>,
+                <span class="string">&quot;http://1.2.3.4/foo&quot;</span>,
+                <span class="string">&quot;SafeUrl(http://1.2.3.4/foo, has_password=false, has_username=false)&quot;</span>,
+            ),
+            (
+                <span class="string">&quot;http://1.2.3.4:81/foo&quot;</span>,
+                <span class="string">&quot;http://1.2.3.4:81/foo&quot;</span>,
+                <span class="string">&quot;SafeUrl(http://1.2.3.4:81/foo, has_password=false, has_username=false)&quot;</span>,
+            ),
+            (
+                <span class="string">&quot;fedimint://1.2.3.4:1000/foo&quot;</span>,
+                <span class="string">&quot;fedimint://1.2.3.4:1000/foo&quot;</span>,
+                <span class="string">&quot;SafeUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=false)&quot;</span>,
+            ),
+            (
+                <span class="string">&quot;fedimint://foo:bar@domain.com:1000/foo&quot;</span>,
+                <span class="string">&quot;fedimint://domain.com:1000/foo&quot;</span>,
+                <span class="string">&quot;SafeUrl(fedimint://domain.com:1000/foo, has_password=true, has_username=true)&quot;</span>,
+            ),
+            (
+                <span class="string">&quot;fedimint://foo@1.2.3.4:1000/foo&quot;</span>,
+                <span class="string">&quot;fedimint://1.2.3.4:1000/foo&quot;</span>,
+                <span class="string">&quot;SafeUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=true)&quot;</span>,
+            ),
         ];
 
-        <span class="kw">for </span>(url_str, sanitized_display_expected, sanitized_debug_expected) <span class="kw">in </span>test_cases {
-            <span class="kw">let </span>url = Url::parse(url_str).unwrap();
-            <span class="kw">let </span>sanitized_url = SanitizedUrl::new_borrowed(<span class="kw-2">&amp;</span>url);
+        <span class="kw">for </span>(url_str, safe_display_expected, safe_debug_expected) <span class="kw">in </span>test_cases {
+            <span class="kw">let </span>safe_url = SafeUrl::parse(url_str).unwrap();
 
-            <span class="kw">let </span>sanitized_display = <span class="macro">format!</span>(<span class="string">&quot;{sanitized_url}&quot;</span>);
+            <span class="kw">let </span>safe_display = <span class="macro">format!</span>(<span class="string">&quot;{safe_url}&quot;</span>);
             <span class="macro">assert_eq!</span>(
-                sanitized_display, sanitized_display_expected,
+                safe_display, safe_display_expected,
                 <span class="string">&quot;Display implementation out of spec&quot;
             </span>);
 
-            <span class="kw">let </span>sanitized_debug = <span class="macro">format!</span>(<span class="string">&quot;{sanitized_url:?}&quot;</span>);
+            <span class="kw">let </span>safe_debug = <span class="macro">format!</span>(<span class="string">&quot;{safe_url:?}&quot;</span>);
             <span class="macro">assert_eq!</span>(
-                sanitized_debug, sanitized_debug_expected,
+                safe_debug, safe_debug_expected,
                 <span class="string">&quot;Debug implementation out of spec&quot;
             </span>);
         }

@@ -318,10 +318,10 @@
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::task::MaybeSend;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::PublicKey;
 <span class="kw">use </span>tokio_rustls::rustls;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::{
     DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
@@ -337,11 +337,11 @@
 </span><span class="comment">// TODO: Maybe should have it&#39;s own CLI client so it doesn&#39;t need to be in core
 </span><span class="kw">pub struct </span>WsAdminClient {
     inner: DynGlobalApi,
-    <span class="kw">pub </span>url: Url,
+    <span class="kw">pub </span>url: SafeUrl,
 }
 
 <span class="kw">impl </span>WsAdminClient {
-    <span class="kw">pub fn </span>new(url: Url) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(url: SafeUrl) -&gt; <span class="self">Self </span>{
         <span class="comment">// The peer ids given to the federation API are only useful when connected to
         // multiple peers so errors can be attributed. The admin client has no use for
         // them.
@@ -549,9 +549,9 @@
 </span><span class="kw">pub struct </span>ConfigGenConnectionsRequest {
     <span class="doccomment">/// Our guardian name
     </span><span class="kw">pub </span>our_name: String,
-    <span class="doccomment">/// Url of &quot;leader&quot; guardian to send our connection info to
+    <span class="doccomment">/// URL of &quot;leader&quot; guardian to send our connection info to
     /// Will be `None` if we are the leader
-    </span><span class="kw">pub </span>leader_api_url: <span class="prelude-ty">Option</span>&lt;Url&gt;,
+    </span><span class="kw">pub </span>leader_api_url: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -561,9 +561,9 @@
     </span><span class="attr">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>cert: rustls::Certificate,
     <span class="doccomment">/// P2P is the network for running DKG and consensus
-    </span><span class="kw">pub </span>p2p_url: Url,
+    </span><span class="kw">pub </span>p2p_url: SafeUrl,
     <span class="doccomment">/// API for secure websocket requests
-    </span><span class="kw">pub </span>api_url: Url,
+    </span><span class="kw">pub </span>api_url: SafeUrl,
     <span class="doccomment">/// Name of the peer, used in TLS auth
     </span><span class="kw">pub </span>name: String,
     <span class="doccomment">/// Status of the peer if known

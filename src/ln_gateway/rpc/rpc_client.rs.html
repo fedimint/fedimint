@@ -110,16 +110,20 @@
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::result::Result;
 
 <span class="kw">use </span>bitcoin::Address;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>reqwest::StatusCode;
 <span class="kw">pub use </span>reqwest::{Error, Response};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
@@ -129,7 +133,7 @@
 
 <span class="kw">pub struct </span>GatewayRpcClient {
     <span class="comment">// Base URL to gateway web server
-    </span>base_url: Url,
+    </span>base_url: SafeUrl,
     <span class="comment">// A request client
     </span>client: reqwest::Client,
     <span class="comment">// Password
@@ -137,7 +141,7 @@
 }
 
 <span class="kw">impl </span>GatewayRpcClient {
-    <span class="kw">pub fn </span>new(base_url: Url, password: String) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(base_url: SafeUrl, password: String) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             base_url,
             client: reqwest::Client::new(),
@@ -193,13 +197,17 @@
         <span class="self">self</span>.call(url, payload).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>call&lt;P, T: DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, url: Url, payload: P) -&gt; <span class="prelude-ty">Result</span>&lt;T, GatewayRpcError&gt;
+    <span class="kw">async fn </span>call&lt;P, T: DeserializeOwned&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        url: SafeUrl,
+        payload: P,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T, GatewayRpcError&gt;
     <span class="kw">where
         </span>P: Serialize,
     {
         <span class="kw">let </span>response = <span class="self">self
             </span>.client
-            .post(url)
+            .post(url.reap_guts())
             .bearer_auth(<span class="self">self</span>.password.clone())
             .header(reqwest::header::CONTENT_TYPE, <span class="string">&quot;application/json&quot;</span>)
             .json(<span class="kw-2">&amp;</span>payload)

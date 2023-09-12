@@ -160,6 +160,7 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
@@ -167,14 +168,13 @@
     WithdrawPayload,
 };
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>url::Url;
 
 <span class="attr">#[derive(Parser)]
 #[command(version)]
 </span><span class="kw">struct </span>Cli {
     <span class="doccomment">/// The address of the gateway webserver
     </span><span class="attr">#[clap(short, long, default_value = <span class="string">&quot;http://127.0.0.1:8175&quot;</span>)]
-    </span>address: Url,
+    </span>address: SafeUrl,
     <span class="attr">#[command(subcommand)]
     </span>command: Commands,
     <span class="doccomment">/// WARNING: Passing in a password from the command line may be less secure!

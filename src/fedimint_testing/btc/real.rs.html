@@ -274,10 +274,10 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, Amount};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>tracing::trace;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::BitcoinTest;
 
@@ -424,7 +424,7 @@
 <span class="kw">impl </span>RealBitcoinTest {
     <span class="kw">const </span>ERROR: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str = <span class="string">&quot;Bitcoin RPC returned an error&quot;</span>;
 
-    <span class="kw">pub fn </span>new(url: <span class="kw-2">&amp;</span>Url, rpc: DynBitcoindRpc) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl, rpc: DynBitcoindRpc) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>(host, auth) =
             fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect(<span class="string">&quot;correct url&quot;</span>);
         <span class="kw">let </span>client = Arc::new(Client::new(<span class="kw-2">&amp;</span>host, auth).expect(<span class="self">Self</span>::ERROR));

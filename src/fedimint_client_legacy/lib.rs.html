@@ -1779,6 +1779,7 @@
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, sleep, MaybeSend};
 <span class="kw">use </span>fedimint_core::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredMulti, TieredSummary, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_ln_client::{
@@ -1810,7 +1811,6 @@
 <span class="kw">use </span>threshold_crypto::PublicKey;
 <span class="kw">use </span>tokio::sync::{Mutex, MutexGuard};
 <span class="kw">use </span>tracing::{debug, info, instrument, trace};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{
@@ -1866,7 +1866,7 @@
     <span class="attr">#[serde(with = <span class="string">&quot;serde_keypair&quot;</span>)]
     </span><span class="kw">pub </span>redeem_key: bitcoin::KeyPair,
     <span class="kw">pub </span>timelock_delta: u64,
-    <span class="kw">pub </span>api: Url,
+    <span class="kw">pub </span>api: SafeUrl,
     <span class="kw">pub </span>node_pub_key: bitcoin::secp256k1::PublicKey,
     <span class="kw">pub </span>lightning_alias: String,
     <span class="doccomment">/// Channel identifier assigned to the mint by the gateway.

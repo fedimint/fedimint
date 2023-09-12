@@ -1027,6 +1027,7 @@
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>futures::Stream;
 <span class="kw">use </span>tokio::io::{ReadHalf, WriteHalf};
@@ -1034,7 +1035,6 @@
 <span class="kw">use </span>tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 <span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
 <span class="kw">use </span>tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
@@ -1058,7 +1058,7 @@
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>Connector&lt;M&gt; {
     <span class="doccomment">/// Connect to a `destination`
-    </span><span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: Url, peer: PeerId) -&gt; ConnectResult&lt;M&gt;;
+    </span><span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: SafeUrl, peer: PeerId) -&gt; ConnectResult&lt;M&gt;;
 
     <span class="doccomment">/// Listen for incoming connections on `bind_addr`
     </span><span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: SocketAddr) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt;;
@@ -1177,7 +1177,7 @@
 <span class="kw">where
     </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: Url, peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
+    <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: SafeUrl, peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
         <span class="kw">let </span>cfg = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(<span class="self">self</span>.cert_store.clone())
@@ -1250,7 +1250,7 @@
 }
 
 <span class="doccomment">/// Parses the host and port from a url
-</span><span class="kw">pub fn </span>parse_host_port(url: Url) -&gt; anyhow::Result&lt;String&gt; {
+</span><span class="kw">pub fn </span>parse_host_port(url: SafeUrl) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>host = url
         .host_str()
         .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">&quot;Missing host in {url}&quot;</span>))<span class="question-mark">?</span>;
@@ -1275,6 +1275,7 @@
 
     <span class="kw">use </span>anyhow::{anyhow, Error};
     <span class="kw">use </span>fedimint_core::task::sleep;
+    <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::{task, PeerId};
     <span class="kw">use </span>futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
     <span class="kw">use </span>rand::Rng;
@@ -1285,7 +1286,6 @@
     <span class="kw">use </span>tokio::sync::Mutex;
     <span class="kw">use </span>tokio_util::sync::CancellationToken;
     <span class="kw">use </span>tracing::error;
-    <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::{parse_host_port, ConnectResult, Connector};
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::{BidiFramed, FramedTransport};
@@ -1653,7 +1653,7 @@
     <span class="kw">where
         </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
-        <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: Url, _peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
+        <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: SafeUrl, _peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>clients_lock = <span class="self">self</span>.clients.try_lock().map_err(|e| {
                 <span class="macro">anyhow!</span>(<span class="string">&quot;Mock network mutex busy or poisoned, the network stack will re-try anyway: {e:?}&quot;</span>)
             })<span class="question-mark">?</span>;
@@ -1733,7 +1733,7 @@
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_mock_network() {
         <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -1805,7 +1805,7 @@
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_large_messages() {
         <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -1846,9 +1846,9 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::net::SocketAddr;
 
+    <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::{SinkExt, StreamExt};
-    <span class="kw">use </span>url::Url;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::gen_cert_and_key;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectionListener, Connector, TlsConfig};
@@ -1886,7 +1886,7 @@
         <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt;
         // layer :(
         </span><span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: Url = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;ws://127.0.0.1:7000&quot;</span>.parse().unwrap();
         <span class="kw">let </span>connectors = gen_connector_config(<span class="number">5</span>)
             .into_iter()
             .enumerate()
@@ -1920,7 +1920,7 @@
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>connect_reject() {
         <span class="kw">let </span>bind_addr: SocketAddr = <span class="string">&quot;127.0.0.1:7001&quot;</span>.parse().unwrap();
-        <span class="kw">let </span>url: Url = <span class="string">&quot;wss://127.0.0.1:7001&quot;</span>.parse().unwrap();
+        <span class="kw">let </span>url: SafeUrl = <span class="string">&quot;wss://127.0.0.1:7001&quot;</span>.parse().unwrap();
         <span class="kw">let </span>cfg = gen_connector_config(<span class="number">5</span>);
 
         <span class="kw">let </span>honest = TlsTcpConnector::new(cfg[<span class="number">0</span>].clone(), PeerId::from(<span class="number">0</span>));

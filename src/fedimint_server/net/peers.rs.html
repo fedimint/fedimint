@@ -944,6 +944,7 @@
 <span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
 <span class="kw">use </span>fedimint_core::task::{sleep_until, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;
 <span class="kw">use </span>futures::future::select_all;
@@ -956,7 +957,6 @@
 <span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
@@ -996,7 +996,7 @@
     /// members
     </span><span class="kw">pub </span>bind_addr: SocketAddr,
     <span class="doccomment">/// Map of all peers&#39; connection information we want to be connected to
-    </span><span class="kw">pub </span>peers: HashMap&lt;PeerId, Url&gt;,
+    </span><span class="kw">pub </span>peers: HashMap&lt;PeerId, SafeUrl&gt;,
 }
 
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because
@@ -1105,7 +1105,7 @@
     outgoing: Receiver&lt;M&gt;,
     our_id: PeerId,
     peer_id: PeerId,
-    peer_address: Url,
+    peer_address: SafeUrl,
     delay_calculator: DelayCalculator,
     connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
     incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
@@ -1652,7 +1652,7 @@
     </span><span class="kw">async fn </span>new(
         our_id: PeerId,
         peer_id: PeerId,
-        peer_address: Url,
+        peer_address: SafeUrl,
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
@@ -1704,7 +1704,7 @@
         outgoing: Receiver&lt;M&gt;,
         our_id: PeerId,
         peer_id: PeerId,
-        peer_address: Url,
+        peer_address: SafeUrl,
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,

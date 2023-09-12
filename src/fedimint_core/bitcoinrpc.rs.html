@@ -39,10 +39,10 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_derive::{Decodable, Encodable};
 <span class="kw">use </span>jsonrpsee_core::Serialize;
 <span class="kw">use </span>serde::Deserialize;
-<span class="kw">use </span>url::Url;
 
 <span class="doccomment">/// Env var for bitcoin RPC kind
 </span><span class="kw">pub const </span>FM_BITCOIN_RPC_KIND: <span class="kw-2">&amp;</span>str = <span class="string">&quot;FM_BITCOIN_RPC_KIND&quot;</span>;
@@ -56,7 +56,7 @@
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BitcoinRpcConfig {
     <span class="kw">pub </span>kind: String,
-    <span class="kw">pub </span>url: Url,
+    <span class="kw">pub </span>url: SafeUrl,
 }
 
 <span class="kw">impl </span>BitcoinRpcConfig {

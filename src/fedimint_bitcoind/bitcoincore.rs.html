@@ -148,6 +148,10 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::path::PathBuf;
@@ -161,9 +165,9 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskHandle};
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
 <span class="kw">use </span>tracing::info;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -171,7 +175,11 @@
 </span><span class="kw">pub struct </span>BitcoindFactory;
 
 <span class="kw">impl </span>IBitcoindRpcFactory <span class="kw">for </span>BitcoindFactory {
-    <span class="kw">fn </span>create_connection(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
+    <span class="kw">fn </span>create_connection(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        url: <span class="kw-2">&amp;</span>SafeUrl,
+        handle: TaskHandle,
+    ) -&gt; anyhow::Result&lt;DynBitcoindRpc&gt; {
         <span class="prelude-val">Ok</span>(RetryClient::new(BitcoinClient::new(url)<span class="question-mark">?</span>, handle).into())
     }
 }
@@ -180,7 +188,7 @@
 </span><span class="kw">struct </span>BitcoinClient(::bitcoincore_rpc::Client);
 
 <span class="kw">impl </span>BitcoinClient {
-    <span class="kw">fn </span>new(url: <span class="kw-2">&amp;</span>Url) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>(url, auth) = from_url_to_url_auth(url)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>(::bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>url, auth)<span class="question-mark">?</span>))
     }
@@ -265,7 +273,7 @@
 }
 
 <span class="comment">// TODO: Make private
-</span><span class="kw">pub fn </span>from_url_to_url_auth(url: <span class="kw-2">&amp;</span>Url) -&gt; anyhow::Result&lt;(String, Auth)&gt; {
+</span><span class="kw">pub fn </span>from_url_to_url_auth(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;(String, Auth)&gt; {
     <span class="prelude-val">Ok</span>((
         (<span class="kw">if let </span><span class="prelude-val">Some</span>(port) = url.port() {
             <span class="macro">format!</span>(

@@ -242,11 +242,11 @@
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 <span class="kw">use </span>fedimint_logging::LOG_BLOCKCHAIN;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>tracing::info;
-<span class="kw">use </span>url::Url;
 
 <span class="attr">#[cfg(feature = <span class="string">&quot;bitcoincore-rpc&quot;</span>)]
 </span><span class="kw">pub mod </span>bitcoincore;
@@ -301,7 +301,7 @@
 <span class="doccomment">/// Trait for creating new bitcoin RPC clients
 </span><span class="kw">pub trait </span>IBitcoindRpcFactory: Debug + Send + Sync {
     <span class="doccomment">/// Creates a new bitcoin RPC client connection
-    </span><span class="kw">fn </span>create_connection(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>Url, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt;;
+    </span><span class="kw">fn </span>create_connection(<span class="kw-2">&amp;</span><span class="self">self</span>, url: <span class="kw-2">&amp;</span>SafeUrl, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{

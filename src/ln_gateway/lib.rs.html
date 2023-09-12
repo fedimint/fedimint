@@ -944,6 +944,7 @@
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::now;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
@@ -966,7 +967,6 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::GatewayLightningBuilder;
@@ -1018,7 +1018,7 @@
 
     <span class="doccomment">/// Public URL from which the webserver API is reachable
     </span><span class="attr">#[arg(long = <span class="string">&quot;api-addr&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_API_ADDR&quot;</span>)]
-    </span><span class="kw">pub </span>api_addr: Url,
+    </span><span class="kw">pub </span>api_addr: SafeUrl,
 
     <span class="doccomment">/// Gateway webserver authentication password
     </span><span class="attr">#[arg(long = <span class="string">&quot;password&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_PASSWORD&quot;</span>)]
@@ -1059,7 +1059,7 @@
 </span><span class="kw">pub struct </span>Gateway {
     lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
     listen: SocketAddr,
-    api_addr: Url,
+    api_addr: SafeUrl,
     password: String,
     num_route_hints: usize,
     <span class="kw">pub </span>state: Arc&lt;RwLock&lt;GatewayState&gt;&gt;,
@@ -1078,7 +1078,7 @@
         lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
         client_builder: StandardGatewayClientBuilder,
         listen: SocketAddr,
-        api_addr: Url,
+        api_addr: SafeUrl,
         password: String,
         fees: RoutingFees,
         num_route_hints: usize,
@@ -1757,7 +1757,7 @@
     <span class="attr">#[clap(name = <span class="string">&quot;cln&quot;</span>)]
     </span>Cln {
         <span class="attr">#[arg(long = <span class="string">&quot;cln-extension-addr&quot;</span>, env = <span class="string">&quot;FM_GATEWAY_LIGHTNING_ADDR&quot;</span>)]
-        </span>cln_extension_addr: Url,
+        </span>cln_extension_addr: SafeUrl,
     },
 }
 

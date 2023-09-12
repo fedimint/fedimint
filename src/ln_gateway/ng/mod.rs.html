@@ -651,6 +651,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
 };
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::contracts::ContractId;
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
@@ -670,7 +671,6 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::info;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="self">self</span>::complete::GatewayCompleteStateMachine;
 <span class="kw">use </span><span class="self">self</span>::pay::{
@@ -751,7 +751,7 @@
     <span class="doccomment">/// Register gateway with federation
     </span><span class="kw">async fn </span>register_with_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: Url,
+        gateway_api: SafeUrl,
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
@@ -875,7 +875,7 @@
     <span class="doccomment">/// Register this gateway with the federation
     </span><span class="kw">async fn </span>register_with_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: Url,
+        gateway_api: SafeUrl,
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
@@ -1085,7 +1085,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         route_hints: Vec&lt;RouteHint&gt;,
         time_to_live: Duration,
-        api: Url,
+        api: SafeUrl,
         gateway_id: secp256k1::PublicKey,
     ) -&gt; LightningGateway {
         LightningGateway {

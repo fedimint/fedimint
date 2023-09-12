@@ -86,7 +86,6 @@
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
@@ -95,6 +94,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, Tiered};
 <span class="kw">use </span>fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -106,7 +106,6 @@
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
-<span class="kw">use </span>url::Url;
 
 <span class="doccomment">/// Module for creating `fedimintd` binary with custom modules
 </span><span class="kw">pub mod </span>fedimintd;
@@ -161,14 +160,13 @@
 
 <span class="kw">pub fn </span>default_esplora_server(network: Network) -&gt; BitcoinRpcConfig {
     <span class="kw">let </span>url = <span class="kw">match </span>network {
-        Network::Bitcoin =&gt; Url::parse(<span class="string">&quot;https://blockstream.info/api/&quot;</span>)
+        Network::Bitcoin =&gt; SafeUrl::parse(<span class="string">&quot;https://blockstream.info/api/&quot;</span>)
             .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
-        Network::Testnet =&gt; Url::parse(<span class="string">&quot;https://blockstream.info/testnet/api/&quot;</span>)
+        Network::Testnet =&gt; SafeUrl::parse(<span class="string">&quot;https://blockstream.info/testnet/api/&quot;</span>)
             .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
-        Network::Regtest =&gt; {
-            Url::parse(<span class="string">&quot;http://127.0.0.1:50002/&quot;</span>).expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>)
-        }
-        Network::Signet =&gt; Url::parse(<span class="string">&quot;https://mutinynet.com/api/&quot;</span>)
+        Network::Regtest =&gt; SafeUrl::parse(<span class="string">&quot;http://127.0.0.1:50002/&quot;</span>)
+            .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
+        Network::Signet =&gt; SafeUrl::parse(<span class="string">&quot;https://mutinynet.com/api/&quot;</span>)
             .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
     };
     BitcoinRpcConfig {

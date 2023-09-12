@@ -233,13 +233,13 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>futures::stream::BoxStream;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tonic::transport::{Channel, Endpoint};
 <span class="kw">use </span>tonic::Request;
 <span class="kw">use </span>tracing::info;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
@@ -312,11 +312,11 @@
 /// `GatewayLightningServer`.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>NetworkLnRpcClient {
-    connection_url: Url,
+    connection_url: SafeUrl,
 }
 
 <span class="kw">impl </span>NetworkLnRpcClient {
-    <span class="kw">pub async fn </span>new(url: Url) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub async fn </span>new(url: SafeUrl) -&gt; <span class="self">Self </span>{
         <span class="macro">info!</span>(
             <span class="string">&quot;Gateway configured to connect to remote LnRpcClient at \n cln extension address: {} &quot;</span>,
             url.to_string()
@@ -327,7 +327,7 @@
     }
 
     <span class="kw">async fn </span>connect(
-        connection_url: Url,
+        connection_url: SafeUrl,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayLightningClient&lt;Channel&gt;, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
         <span class="kw">let </span>client = <span class="kw">loop </span>{

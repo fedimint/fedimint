@@ -210,6 +210,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
@@ -218,7 +219,6 @@
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tempfile::TempDir;
-<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::fixtures::{test_dir, Fixtures};
@@ -231,7 +231,7 @@
     <span class="doccomment">/// Password for the RPC
     </span><span class="kw">pub </span>password: String,
     <span class="doccomment">/// URL for the RPC
-    </span>api: Url,
+    </span>api: SafeUrl,
     <span class="doccomment">/// Handle of the running gateway
     </span>gateway: Gateway,
     <span class="doccomment">/// Temporary dir that stores the gateway config
@@ -279,7 +279,7 @@
         num_route_hints: usize,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
-        <span class="kw">let </span>address: Url = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
+        <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;gateway-{}&quot;</span>, rand::random::&lt;u64&gt;()));
 
         <span class="comment">// Create federation client builder for the gateway
