@@ -151,9 +151,18 @@ pub trait MintClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<ReissueExternalNotesState>>;
 
     /// Fetches and removes notes of *at least* amount `min_amount` from the
-    /// wallet to be sent to the recipient out of band. These spends can be
-    /// canceled by calling [`MintClientExt::try_cancel_spend_notes`] as long as
-    /// the recipient hasn't reissued the e-cash notes themselves yet.
+    /// wallet to be sent to the recipient out of band.
+    ///
+    /// ## Overpayment
+    /// Since the client cannot guarantee that it has the right e-cash
+    /// denominations to represent the requested amount it may select a set of
+    /// notes that is worth more than that. This behavior can be limited using
+    /// `overpay_allowance`, see [`OOBMaxOverpay`] for more information.
+    ///
+    /// ## Cancellation
+    /// These spends can be canceled by calling
+    /// [`MintClientExt::try_cancel_spend_notes`] as long as the recipient
+    /// hasn't reissued the e-cash notes themselves yet.
     ///
     /// The client will also automatically attempt to cancel the operation after
     /// `try_cancel_after` time has passed. This is a safety mechanism to avoid
@@ -164,6 +173,7 @@ pub trait MintClientExt {
     async fn spend_notes<M: Serialize + Send>(
         &self,
         min_amount: Amount,
+        overpay_allowance: OOBMaxOverpay,
         try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)>;
@@ -190,6 +200,63 @@ pub trait MintClientExt {
 
     /// Awaits the backup restoration to complete
     async fn await_restore_finished(&self) -> anyhow::Result<()>;
+}
+
+/// Represents a rule for by how much a user is willing to overpay in case of
+/// not having the exactly right denominations for an out-of-band spend.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum OOBMaxOverpay {
+    /// Do not limit the amount that's potentially being overpaid.
+    ///
+    /// This is mostly useful in cases where the caller has its own strategy for
+    /// handling not having the correct denominations. For example an online
+    /// client might want to do a reissuance of the returned notes to split them
+    /// up.
+    Any,
+    /// Limit the amount being overpaid to `max_rel * amount`, ignore this limit
+    /// for overpayments below `allow_below_abs`.
+    Limit {
+        /// Maximum relative overpayment, e.g. 1% is `0.01`.
+        max_rel: f64,
+        /// Amount below which overpayments are permitted regardless of their
+        /// relative magnitude. Set to `Amount::ZERO` for no exceptions.
+        allow_below_abs: Amount,
+    },
+}
+
+impl OOBMaxOverpay {
+    /// Checks if the overpayment of an out-of-band spend is inside the allowed
+    /// bounds.
+    ///
+    /// ## Panics
+    /// If `actual < target`.
+    fn check_overpayment(&self, target: Amount, actual: Amount) -> anyhow::Result<()> {
+        match *self {
+            OOBMaxOverpay::Any => Ok(()),
+            OOBMaxOverpay::Limit {
+                max_rel,
+                allow_below_abs,
+            } => {
+                let overpayment = actual - target;
+
+                if overpayment < allow_below_abs {
+                    return Ok(());
+                }
+
+                let rel_overpayment = (overpayment.msats as f64) / (target.msats as f64);
+
+                if rel_overpayment < max_rel {
+                    Ok(())
+                } else {
+                    Err(anyhow!(
+                        "Would have overpaid by {}%, max allowed: {}%",
+                        rel_overpayment * 100.0,
+                        max_rel * 100.0
+                    ))
+                }
+            }
+        }
+    }
 }
 
 /// The high-level state of a reissue operation started with
@@ -328,6 +395,7 @@ impl MintClientExt for Client {
     async fn spend_notes<M: Serialize + Send>(
         &self,
         min_amount: Amount,
+        overpay_allowance: OOBMaxOverpay,
         try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
@@ -347,6 +415,9 @@ impl MintClientExt for Client {
                                 try_cancel_after,
                             )
                             .await?;
+
+                        overpay_allowance.check_overpayment(min_amount, notes.total_amount())?;
+
                         let oob_notes = OOBNotes {
                             federation_id: mint.federation_id,
                             notes,

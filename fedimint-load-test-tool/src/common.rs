@@ -16,7 +16,7 @@ use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
 use fedimint_mint_client::{
-    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, OOBNotes,
+    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, OOBMaxOverpay, OOBNotes,
 };
 use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
@@ -77,7 +77,7 @@ pub async fn do_spend_notes(
     amount: Amount,
 ) -> anyhow::Result<(OperationId, OOBNotes)> {
     let (operation_id, oob_notes) = client
-        .spend_notes(amount, Duration::from_secs(600), ())
+        .spend_notes(amount, OOBMaxOverpay::Any, Duration::from_secs(600), ())
         .await?;
     let mut updates = client
         .subscribe_spend_notes(operation_id)

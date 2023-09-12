@@ -20,7 +20,7 @@ use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_client::{
     InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
 };
-use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
+use fedimint_mint_client::{MintClientExt, MintClientModule, OOBMaxOverpay, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -170,7 +170,7 @@ pub async fn handle_ng_command(
         }
         ClientCmd::Spend { amount } => {
             let (operation, notes) = client
-                .spend_notes(amount, Duration::from_secs(3600), ())
+                .spend_notes(amount, OOBMaxOverpay::Any, Duration::from_secs(3600), ())
                 .await?;
             info!("Spend e-cash operation: {operation}");
 
