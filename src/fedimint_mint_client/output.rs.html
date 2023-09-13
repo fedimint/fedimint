@@ -386,11 +386,24 @@
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
+<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 <span class="kw">use </span>fedimint_core::core::Decoder;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
@@ -401,10 +414,12 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::{error, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::client_db::NoteKey;
 <span class="kw">use crate</span>::{MintClientContext, SpendableNote};
+
+<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="doccomment">/// Child ID used to derive the spend key from a note&#39;s [`DerivableSecret`]
 </span><span class="kw">const </span>SPEND_KEY_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
@@ -553,17 +568,28 @@
         module_decoder: Decoder,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;MintOutputBlindSignatures, String&gt; {
         <span class="kw">loop </span>{
-            <span class="kw">let </span>outcome: MintOutputOutcome = global_context
+            <span class="kw">let </span>outcome: MintOutputOutcome = <span class="kw">match </span>global_context
                 .api()
                 .await_output_outcome(common.out_point, Duration::MAX, <span class="kw-2">&amp;</span>module_decoder)
                 .<span class="kw">await
-                </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
+            </span>{
+                <span class="prelude-val">Ok</span>(outcome) =&gt; outcome,
+                <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
+                    <span class="macro">trace!</span>(
+                        <span class="string">&quot;Awaiting outcome to become ready failed, retrying in {}s: {e}&quot;</span>,
+                        RETRY_DELAY.as_secs()
+                    );
+                    sleep(RETRY_DELAY).<span class="kw">await</span>;
+                    <span class="kw">continue</span>;
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
+            };
 
             <span class="kw">match </span>outcome.<span class="number">0 </span>{
                 <span class="prelude-val">Some</span>(bsigs) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(bsigs),
                 <span class="prelude-val">None </span>=&gt; {
                     <span class="comment">// FIXME: hack since we can&#39;t await outpoints yet?! may return non-final outcome
-                    </span>sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+                    </span>sleep(RETRY_DELAY).<span class="kw">await</span>;
                 }
             }
         }
