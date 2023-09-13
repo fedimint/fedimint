@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["NextPegInTweakIndexKey"]};
+window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["BlockCountVoteKey","BlockCountVotePrefix","BlockHashKey","BlockHashKeyPrefix","DbKeyPrefixIter","FeeRateVoteKey","FeeRateVotePrefix","PegOutBitcoinTransaction","PegOutBitcoinTransactionPrefix","PegOutNonceKey","PegOutTxSignatureCI","PegOutTxSignatureCIPrefix","PendingTransactionKey","PendingTransactionPrefixKey","UTXOKey","UTXOPrefixKey","UnsignedTransactionKey","UnsignedTransactionPrefixKey"]};
