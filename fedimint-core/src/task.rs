@@ -154,7 +154,7 @@ impl TaskGroup {
                 _ = terminate => {},
             }
         }
-        tokio::spawn({
+        spawn("kill handlers", {
             let task_group = self.clone();
             async move {
                 wait_for_shutdown_signal().await;
@@ -186,7 +186,7 @@ impl TaskGroup {
         let handle = self.make_handle();
 
         let (tx, rx) = oneshot::channel();
-        if let Some(handle) = self::imp::spawn(async move {
+        if let Some(handle) = self::imp::spawn(name.as_str(), async move {
             // if receiver is not interested, just drop the message
             let _ = tx.send(f(handle).await);
         }) {
@@ -213,7 +213,7 @@ impl TaskGroup {
         };
         let handle = self.make_handle();
 
-        if let Some(handle) = self::imp::spawn_local(async move {
+        if let Some(handle) = self::imp::spawn_local(name.as_str(), async move {
             f(handle).await;
         }) {
             self.inner.join.lock().await.push_back((name, handle));
@@ -240,7 +240,7 @@ impl TaskGroup {
         let handle = self.make_handle();
 
         let (tx, rx) = oneshot::channel();
-        if let Some(handle) = self::imp::spawn(async move {
+        if let Some(handle) = self::imp::spawn(name.as_str(), async move {
             let _ = tx.send(f(handle).await);
         }) {
             self.inner.join.lock().await.push_back((name, handle));
@@ -393,18 +393,28 @@ mod imp {
 
     use super::*;
 
-    pub fn spawn<F>(future: F) -> Option<JoinHandle<()>>
+    pub fn spawn<F, V: Send + 'static>(name: &str, future: F) -> Option<JoinHandle<V>>
     where
-        F: Future<Output = ()> + Send + 'static,
+        F: Future<Output = V> + Send + 'static,
     {
-        Some(tokio::spawn(future))
+        Some(
+            tokio::task::Builder::new()
+                .name(name)
+                .spawn(future)
+                .expect("spawn failed"),
+        )
     }
 
-    pub(crate) fn spawn_local<F>(future: F) -> Option<JoinHandle<()>>
+    pub(crate) fn spawn_local<F>(name: &str, future: F) -> Option<JoinHandle<()>>
     where
         F: Future<Output = ()> + 'static,
     {
-        Some(tokio::task::spawn_local(future))
+        Some(
+            tokio::task::Builder::new()
+                .name(name)
+                .spawn_local(future)
+                .expect("spawn failed"),
+        )
     }
 
     pub fn block_in_place<F, R>(f: F) -> R
@@ -440,7 +450,7 @@ mod imp {
 
     use super::*;
 
-    pub fn spawn<F>(future: F) -> Option<JoinHandle<()>>
+    pub fn spawn<F>(_name: &str, future: F) -> Option<JoinHandle<()>>
     where
         // No Send needed on wasm
         F: Future<Output = ()> + 'static,
@@ -449,12 +459,12 @@ mod imp {
         None
     }
 
-    pub(crate) fn spawn_local<F>(future: F) -> Option<JoinHandle<()>>
+    pub(crate) fn spawn_local<F>(_name: &str, future: F) -> Option<JoinHandle<()>>
     where
         // No Send needed on wasm
         F: Future<Output = ()> + 'static,
     {
-        self::spawn(future)
+        self::spawn(_name, future)
     }
 
     pub fn block_in_place<F, R>(f: F) -> R

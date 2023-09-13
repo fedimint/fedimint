@@ -12,7 +12,7 @@ use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{spawn, TaskGroup};
 use fedimint_core::Amount;
 use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
@@ -130,13 +130,13 @@ impl ClnRpcService {
             .hook(
                 "htlc_accepted",
                 |plugin: Plugin<Arc<ClnHtlcInterceptor>>, value: serde_json::Value| async move {
-                    // This callback needs to be `Sync`, so we use tokio::spawn
-                    let handle = tokio::spawn(async move {
+                    // This callback needs to be `Sync`, so we use task::spawn
+                    let handle = spawn("cln intercept htlc", async move {
                         // Handle core-lightning "htlc_accepted" events
                         // by passing the HTLC to the interceptor in the plugin state
                         let payload: HtlcAccepted = serde_json::from_value(value)?;
                         Ok(plugin.state().intercept_htlc(payload).await)
-                    });
+                    }).expect("some handle on non-wasm");
                     handle.await?
                 },
             )

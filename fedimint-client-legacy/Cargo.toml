@@ -60,6 +60,6 @@ jsonrpsee-wasm-client = { version = "0.18.0" }
 ring = { version = "0.16.20", features = ["wasm32_unknown_unknown_js", "wasm32_c"] }
 
 [dev-dependencies]
-tokio = { version = "1.26.0", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 once_cell = "1.16.0"

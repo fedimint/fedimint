@@ -30,7 +30,7 @@ lightning-invoice = { version = "0.24.0", features = [ "serde" ] }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 serde_json = "1.0.91"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "tracing"] }
 tracing = "0.1"
 url = { version = "2.3.1", features = ["serde"] }
 

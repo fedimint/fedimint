@@ -6,7 +6,7 @@ use fedimint_atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Re
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::sleep;
+use fedimint_core::task::{sleep, spawn};
 use fedimint_core::PeerId;
 use secp256k1_zkp::{rand, Secp256k1, SecretKey};
 use tokio::task::JoinHandle;
@@ -99,7 +99,7 @@ impl Federation {
 
         let connection = self.connections[peer_index].clone();
 
-        tokio::spawn(async move {
+        spawn("atomic start broadcast", async move {
             loop {
                 tokio::select! {
                     message = connection.receiver.recv() => {
@@ -135,7 +135,7 @@ impl Federation {
             }
         });
 
-        tokio::spawn(async move {
+        spawn("mempool item sender", async move {
             let mut item: u64 = 0;
             while mempool_item_sender
                 .send(item.to_le_bytes().to_vec())
@@ -157,7 +157,7 @@ impl Federation {
 
         let mut ordered_item_receiver = broadcast.run_session(session_index).await;
 
-        let decision_handle = tokio::spawn(async move {
+        let decision_handle = spawn("atomic decision handler", async move {
             while let Some((ordered_item, .., decision_sender)) =
                 ordered_item_receiver.recv().await.unwrap()
             {
@@ -169,7 +169,8 @@ impl Federation {
 
                 decision_sender.send(decision).unwrap();
             }
-        });
+        })
+        .expect("some handle on non-wasm");
 
         (broadcast, decision_handle)
     }

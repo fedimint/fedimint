@@ -39,7 +39,7 @@ tracing ="0.1.37"
 url = { version = "2.3.1", features = ["serde"] }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 jsonrpsee = { version = "0.16.2", features = ["server"] }
-tokio = { version = "1.26.0", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.11"
 tokio-rustls = "0.23.4"
 tokio-util = { version = "0.7.4", features = [ "codec" ] }

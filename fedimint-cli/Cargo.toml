@@ -37,7 +37,7 @@ fedimint-server = { path = "../fedimint-server" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 thiserror = "1.0.39"
-tokio = { version = "1.26.0", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
 tracing ="0.1.37"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 serde_json = { version = "1.0.91", features = ["preserve_order"] }

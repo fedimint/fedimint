@@ -4,7 +4,7 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use async_channel::{Receiver, Sender};
 use bitcoin_hashes::Hash;
-use fedimint_core::task::sleep;
+use fedimint_core::task::{sleep, spawn};
 use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::conversion::{to_node_index, to_peer_id};
@@ -72,24 +72,28 @@ pub async fn run(
     let (signature_sender, signature_receiver) = watch::channel(None);
     let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
-    let aleph_handle = tokio::spawn(aleph_bft::run_session(
-        config,
-        aleph_bft::LocalIO::new(
-            DataProvider::new(keychain.clone(), item_receiver, signature_receiver),
-            FinalizationHandler::new(unit_data_sender),
-            backup_saver,
-            backup_loader,
+    let aleph_handle = spawn(
+        "aleph run session",
+        aleph_bft::run_session(
+            config,
+            aleph_bft::LocalIO::new(
+                DataProvider::new(keychain.clone(), item_receiver, signature_receiver),
+                FinalizationHandler::new(unit_data_sender),
+                backup_saver,
+                backup_loader,
+            ),
+            Network::new(network_data_receiver, outgoing_message_sender.clone()),
+            keychain.clone(),
+            Spawner::new(),
+            aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
         ),
-        Network::new(network_data_receiver, outgoing_message_sender.clone()),
-        keychain.clone(),
-        Spawner::new(),
-        aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
-    ));
+    )
+    .expect("some handle on non-wasm");
 
     // we periodically request the signed block corresponding to the current session
     // to recover in case we have been left behind by our peers
     let peer_count = keychain.peer_count();
-    let block_request_handle = tokio::spawn(async move {
+    let block_request_handle = spawn("atomic block request", async move {
         for peer_id in (0..peer_count)
             .map(|peer_index| to_peer_id(peer_index.into()))
             .cycle()
@@ -107,7 +111,8 @@ pub async fn run(
 
             sleep(BLOCK_REQUEST_DELAY).await;
         }
-    });
+    })
+    .expect("some handle on non-wasm");
 
     // this is the minimum number of unit data that will be ordered before we reach
     // the EXPONENTIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit

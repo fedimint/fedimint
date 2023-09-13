@@ -1,4 +1,5 @@
 use fedimint_core::db::Database;
+use fedimint_core::task::spawn;
 use fedimint_core::PeerId;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -33,7 +34,7 @@ impl AtomicBroadcast {
         let db_clone = db.clone();
         let sender_clone = outgoing_message_sender.clone();
 
-        let relay_handle = tokio::spawn(async move {
+        let relay_handle = spawn("atomic relay", async move {
             while let Ok((message, peer_id)) = incoming_message_receiver.recv().await {
                 match message {
                     Message::NetworkData(network_data) => {
@@ -64,7 +65,8 @@ impl AtomicBroadcast {
             }
 
             std::future::pending().await
-        });
+        })
+        .expect("some handle on non-wasm");
 
         Self {
             keychain,
@@ -92,7 +94,7 @@ impl AtomicBroadcast {
         if let Some(signed_block) = db::load_block(&self.db, index).await {
             tracing::info!("Loaded block with index {}", index);
 
-            tokio::spawn(async move {
+            spawn("atomic run session db", async move {
                 let mut decision_receivers = vec![];
 
                 for ordered_item in signed_block.block.items.into_iter() {
@@ -128,7 +130,7 @@ impl AtomicBroadcast {
             let outgoing_message_sender = self.outgoing_message_sender.clone();
             let signed_block_receiver = self.signed_block_receiver.clone();
 
-            tokio::spawn(async move {
+            spawn("atomic run session", async move {
                 let session_result = session::run(
                     index,
                     keychain,

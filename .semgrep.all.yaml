@@ -45,6 +45,13 @@ rules:
     - pattern: tokio::fs::File::create
   severity: WARNING
 
+- id: ban-tokio-spawn
+  languages:
+    - rust
+  message: "`tokio::spawn` won't set task name by default. use `fedimint_core::task::spawn` instead"
+  pattern: tokio::spawn
+  severity: WARNING
+
 - id: ban-tokio-sleep
   languages:
     - rust

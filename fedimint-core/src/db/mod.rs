@@ -2409,15 +2409,17 @@ mod tests {
 
     use super::mem_impl::MemDatabase;
     use super::*;
+    use crate::task::spawn;
 
     async fn waiter(db: &Database, key: TestKey) -> tokio::task::JoinHandle<TestVal> {
         let db = db.clone();
         let (tx, rx) = oneshot::channel::<()>();
-        let join_handle = tokio::spawn(async move {
+        let join_handle = spawn("wait key exists", async move {
             let sub = db.wait_key_exists(&key);
             tx.send(()).unwrap();
             sub.await
-        });
+        })
+        .expect("some handle on non-wasm");
         rx.await.unwrap();
         join_handle
     }

@@ -77,6 +77,7 @@ impl TracingSetup {
         };
 
         let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_thread_names(false) // can be enabled for debugging
             .with_writer(fmt_writer)
             .with_filter(filter_layer);
 

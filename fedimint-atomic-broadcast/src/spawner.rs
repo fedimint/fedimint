@@ -8,18 +8,18 @@ impl Spawner {
 }
 
 impl aleph_bft::SpawnHandle for Spawner {
-    fn spawn(&self, _name: &str, task: impl futures::Future<Output = ()> + Send + 'static) {
-        tokio::spawn(task);
+    fn spawn(&self, name: &str, task: impl futures::Future<Output = ()> + Send + 'static) {
+        fedimint_core::task::spawn(name, task);
     }
 
     fn spawn_essential(
         &self,
-        _: &str,
+        name: &str,
         task: impl futures::Future<Output = ()> + Send + 'static,
     ) -> aleph_bft::TaskHandle {
         let (res_tx, res_rx) = futures::channel::oneshot::channel();
 
-        tokio::spawn(async move {
+        fedimint_core::task::spawn(name, async move {
             task.await;
             res_tx.send(()).expect("We own the rx.");
         });
