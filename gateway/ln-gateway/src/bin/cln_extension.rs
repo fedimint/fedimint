@@ -274,11 +274,18 @@ impl GatewayLightning for ClnRpcService {
         .unwrap_or(Vec::new())
         .into_iter()
         .filter_map(|chan| {
-            if let Some(peer_id) = chan.peer_id {
-                chan.short_channel_id.map(|scid| (peer_id, scid))
-            } else {
-                None
+            if let Some(state) = chan.state {
+                if matches!(
+                    state,
+                    model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                ) {
+                    if let Some(peer_id) = chan.peer_id {
+                        return chan.short_channel_id.map(|scid| (peer_id, scid));
+                    }
+                }
             }
+
+            None
         })
         .collect::<Vec<_>>();
 
