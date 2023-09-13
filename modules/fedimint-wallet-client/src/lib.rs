@@ -1,6 +1,6 @@
 pub mod api;
 
-mod db;
+mod client_db;
 mod deposit;
 mod withdraw;
 
@@ -41,7 +41,7 @@ use secp256k1::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 
 use crate::api::WalletFederationApi;
-use crate::db::NextPegInTweakIndexKey;
+use crate::client_db::NextPegInTweakIndexKey;
 use crate::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 

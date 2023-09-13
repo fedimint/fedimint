@@ -20,7 +20,7 @@ use threshold_crypto::G1Affine;
 use tracing::{debug, error, info, trace, warn};
 
 use super::*;
-use crate::db::{NextECashNoteIndexKey, NoteKey};
+use crate::client_db::{NextECashNoteIndexKey, NoteKey};
 use crate::output::{MintOutputCommon, MintOutputStatesCreated, NoteIssuanceRequest};
 use crate::MintClientContext;
 
@@ -531,7 +531,7 @@ impl MintRestoreInProgressState {
         self.pending_outputs.insert(
             out_point,
             (
-                TieredMulti::from_iter(found.into_iter().chain(missing.into_iter())),
+                TieredMulti::from_iter(found.into_iter().chain(missing)),
                 BTreeMap::new(),
             ),
         );

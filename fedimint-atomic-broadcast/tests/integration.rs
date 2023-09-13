@@ -55,7 +55,7 @@ pub fn bootstrap_connections(peer_count: usize) -> Vec<Connection> {
         receivers.push((peer_id, receiver));
     }
 
-    let senders = BTreeMap::from_iter(senders.into_iter());
+    let senders = BTreeMap::from_iter(senders);
 
     receivers
         .into_iter()

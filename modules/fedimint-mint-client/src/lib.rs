@@ -1,7 +1,7 @@
 // Backup and restore logic
 pub(crate) mod backup;
 /// Database keys used throughout the mint client module
-mod db;
+mod client_db;
 /// State machines for mint inputs
 mod input;
 /// State machines for out-of-band transmitted e-cash notes
@@ -59,7 +59,7 @@ use tracing::{debug, info, warn};
 
 use crate::backup::recovery::MintRestoreInProgressState;
 use crate::backup::EcashBackup;
-use crate::db::{NextECashNoteIndexKey, NoteKey, NoteKeyPrefix};
+use crate::client_db::{NextECashNoteIndexKey, NoteKey, NoteKeyPrefix};
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };

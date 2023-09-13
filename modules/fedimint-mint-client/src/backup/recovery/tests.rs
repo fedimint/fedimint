@@ -51,7 +51,7 @@ impl MicroMintClient {
         PendingInner: IntoIterator<Item = (Amount, NoteIssuanceRequest)>,
     {
         EcashBackup {
-            notes: TieredMulti::from_iter(spendable_notes.into_iter()),
+            notes: TieredMulti::from_iter(spendable_notes),
             pending_notes: pending_notes
                 .into_iter()
                 .map(|(out_point, iss_reqs)| {
@@ -221,7 +221,7 @@ impl MicroMintFed {
 
         note_iss_requests
             .iter()
-            .zip(confs_by_order.into_iter())
+            .zip(confs_by_order)
             .map(|((amount, _bn, iss_req), sigs_by_peer)| {
                 let bsig = tbs::combine_valid_shares(
                     sigs_by_peer
