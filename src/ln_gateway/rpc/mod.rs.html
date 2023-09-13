@@ -181,6 +181,17 @@
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -259,6 +270,11 @@
     <span class="kw">pub </span>gateway_id: secp256k1::PublicKey,
 }
 
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>SetConfigurationPayload {
+    <span class="kw">pub </span>password: String,
+}
+
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub enum </span>GatewayRequest {
     Info(GatewayRequestInner&lt;InfoPayload&gt;),
@@ -270,6 +286,7 @@
     Backup(GatewayRequestInner&lt;BackupPayload&gt;),
     Restore(GatewayRequestInner&lt;RestorePayload&gt;),
     Shutdown,
+    SetConfiguration(GatewayRequestInner&lt;SetConfigurationPayload&gt;),
 }
 
 <span class="attr">#[derive(Debug)]
@@ -314,6 +331,11 @@
 <span class="macro">impl_gateway_request_trait!</span>(WithdrawPayload, Txid, GatewayRequest::Withdraw);
 <span class="macro">impl_gateway_request_trait!</span>(BackupPayload, (), GatewayRequest::Backup);
 <span class="macro">impl_gateway_request_trait!</span>(RestorePayload, (), GatewayRequest::Restore);
+<span class="macro">impl_gateway_request_trait!</span>(
+    SetConfigurationPayload,
+    (),
+    GatewayRequest::SetConfiguration
+);
 
 <span class="kw">impl</span>&lt;T&gt; GatewayRequestInner&lt;T&gt;
 <span class="kw">where

@@ -147,16 +147,6 @@
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -234,7 +224,7 @@
     TracingSetup::default().init()<span class="question-mark">?</span>;
 
     <span class="kw">let </span>cli = Cli::parse();
-    <span class="kw">let </span>client = || GatewayRpcClient::new(cli.address, source_password(cli.rpcpassword));
+    <span class="kw">let </span>client = || GatewayRpcClient::new(cli.address, cli.rpcpassword);
 
     <span class="kw">match </span>cli.command {
         Commands::VersionHash =&gt; {
@@ -305,15 +295,5 @@
         <span class="string">&quot;{}&quot;</span>,
         serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">&quot;Cannot serialize&quot;</span>)
     )
-}
-
-<span class="kw">pub fn </span>source_password(rpcpassword: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; String {
-    <span class="kw">match </span>rpcpassword {
-        <span class="prelude-val">None </span>=&gt; rpassword::prompt_password(<span class="string">&quot;Enter gateway password:&quot;</span>).unwrap(),
-        <span class="prelude-val">Some</span>(password) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">&quot;WARNING: Passing in a password from the command line may be less secure!&quot;</span>);
-            password
-        }
-    }
 }
 </code></pre></div></section></main></body></html>

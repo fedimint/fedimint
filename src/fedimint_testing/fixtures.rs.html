@@ -226,6 +226,7 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -363,6 +364,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ln: Box&lt;<span class="kw">dyn </span>LightningTest&gt;,
         num_route_hints: usize,
+        cli_password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier
         </span><span class="kw">let </span>server_gens = ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone());
@@ -373,7 +375,7 @@
         GatewayTest::new(
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(<span class="number">1</span>))
                 .expect(<span class="string">&quot;Failed to allocate a port range&quot;</span>),
-            rand::random::&lt;u64&gt;().to_string(),
+            cli_password,
             ln,
             decoders,
             ClientModuleInitRegistry::from_iter(clients.filter(|client| {

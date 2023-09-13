@@ -144,6 +144,23 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -160,29 +177,37 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
-    RestorePayload, WithdrawPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
+<span class="kw">use </span><span class="kw">crate</span>::db::GatewayConfiguration;
 <span class="kw">use crate</span>::{Gateway, GatewayError};
 
 <span class="kw">pub async fn </span>run_webserver(
-    authkey: String,
+    config: <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;,
     bind_addr: SocketAddr,
     gateway: Gateway,
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
 ) -&gt; axum::response::Result&lt;()&gt; {
-    <span class="comment">// Public routes on gateway webserver
-    </span><span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice));
+    <span class="kw">let </span>(routes, admin_routes) = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = config {
+        <span class="comment">// Public routes on gateway webserver
+        </span><span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice));
 
-    <span class="comment">// Authenticated, public routes used for gateway administration
-    </span><span class="kw">let </span>admin_routes = Router::new()
-        .route(<span class="string">&quot;/info&quot;</span>, post(info))
-        .route(<span class="string">&quot;/balance&quot;</span>, post(balance))
-        .route(<span class="string">&quot;/address&quot;</span>, post(address))
-        .route(<span class="string">&quot;/withdraw&quot;</span>, post(withdraw))
-        .route(<span class="string">&quot;/connect-fed&quot;</span>, post(connect_fed))
-        .route(<span class="string">&quot;/backup&quot;</span>, post(backup))
-        .route(<span class="string">&quot;/restore&quot;</span>, post(restore))
-        .layer(ValidateRequestHeaderLayer::bearer(<span class="kw-2">&amp;</span>authkey));
+        <span class="comment">// Authenticated, public routes used for gateway administration
+        </span><span class="kw">let </span>admin_routes = Router::new()
+            .route(<span class="string">&quot;/info&quot;</span>, post(info))
+            .route(<span class="string">&quot;/balance&quot;</span>, post(balance))
+            .route(<span class="string">&quot;/address&quot;</span>, post(address))
+            .route(<span class="string">&quot;/withdraw&quot;</span>, post(withdraw))
+            .route(<span class="string">&quot;/connect-fed&quot;</span>, post(connect_fed))
+            .route(<span class="string">&quot;/backup&quot;</span>, post(backup))
+            .route(<span class="string">&quot;/restore&quot;</span>, post(restore))
+            .route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration))
+            .layer(ValidateRequestHeaderLayer::bearer(<span class="kw-2">&amp;</span>gateway_config.password));
+        (routes, admin_routes)
+    } <span class="kw">else </span>{
+        <span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration));
+        (routes, Router::new())
+    };
 
     <span class="kw">let </span>app = Router::new()
         .merge(routes)
@@ -289,5 +314,14 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     gateway.handle_restore_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
+}
+
+<span class="attr">#[instrument(skip_all, err)]
+</span><span class="kw">async fn </span>set_configuration(
+    Extension(gateway): Extension&lt;Gateway&gt;,
+    Json(payload): Json&lt;SetConfigurationPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    gateway.handle_set_configuration_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
 }
 </code></pre></div></section></main></body></html>

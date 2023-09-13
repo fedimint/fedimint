@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["FederationConfig","FederationIdKey","FederationIdKeyPrefix","FederationRegistrationKey","GatewayPublicKey"]};
+window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["FederationConfig","FederationIdKey","FederationIdKeyPrefix","FederationRegistrationKey","GatewayConfiguration","GatewayConfigurationKey","GatewayPublicKey"]};

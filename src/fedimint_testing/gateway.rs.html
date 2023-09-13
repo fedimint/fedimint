@@ -197,6 +197,15 @@
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -209,7 +218,7 @@
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
@@ -226,14 +235,14 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::real::{ClnLightningTest, LndLightningTest};
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
 
+<span class="kw">pub const </span>DEFAULT_GATEWAY_PASSWORD: <span class="kw-2">&amp;</span>str = <span class="string">&quot;thereisnosecondbest&quot;</span>;
+
 <span class="doccomment">/// Fixture for creating a gateway
 </span><span class="kw">pub struct </span>GatewayTest {
-    <span class="doccomment">/// Password for the RPC
-    </span><span class="kw">pub </span>password: String,
     <span class="doccomment">/// URL for the RPC
     </span>api: SafeUrl,
     <span class="doccomment">/// Handle of the running gateway
-    </span>gateway: Gateway,
+    </span><span class="kw">pub </span>gateway: Gateway,
     <span class="doccomment">/// Temporary dir that stores the gateway config
     </span>_config_dir: <span class="prelude-ty">Option</span>&lt;TempDir&gt;,
     <span class="comment">// Public key of the lightning node
@@ -245,7 +254,7 @@
 <span class="kw">impl </span>GatewayTest {
     <span class="doccomment">/// RPC client for communicating with the gateway admin API
     </span><span class="kw">pub async fn </span>get_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcClient {
-        GatewayRpcClient::new(<span class="self">self</span>.api.clone(), <span class="self">self</span>.password.clone())
+        GatewayRpcClient::new(<span class="self">self</span>.api.clone(), <span class="prelude-val">None</span>)
     }
 
     <span class="doccomment">/// Removes a client from the gateway
@@ -260,7 +269,10 @@
     <span class="doccomment">/// Connects to a new federation and stores the info
     </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; FederationInfo {
         <span class="kw">let </span>invite_code = fed.invite_code().to_string();
-        <span class="kw">let </span>rpc = <span class="self">self</span>.get_rpc().<span class="kw">await</span>;
+        <span class="kw">let </span>rpc = <span class="self">self
+            </span>.get_rpc()
+            .<span class="kw">await
+            </span>.with_password(<span class="prelude-val">Some</span>(DEFAULT_GATEWAY_PASSWORD.to_string()));
         rpc.connect_federation(ConnectFedPayload { invite_code })
             .<span class="kw">await
             </span>.unwrap()
@@ -272,7 +284,7 @@
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
         base_port: u16,
-        password: String,
+        cli_password: <span class="prelude-ty">Option</span>&lt;String&gt;,
         lightning: Box&lt;<span class="kw">dyn </span>LightningTest&gt;,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleInitRegistry,
@@ -302,7 +314,7 @@
             client_builder,
             listen,
             address.clone(),
-            password.clone(),
+            cli_password,
             RoutingFees {
                 base_msat: <span class="number">0</span>,
                 proportional_millionths: <span class="number">0</span>,
@@ -312,21 +324,39 @@
         )
         .<span class="kw">await
         </span>.expect(<span class="string">&quot;Failed to create gateway&quot;</span>);
-        gateway
-            .clone()
-            .run()
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Failed to start gateway&quot;</span>);
 
-        <span class="comment">// Wait for the gateway to be in the running state
-        </span><span class="kw">let </span><span class="kw-2">mut </span>gateway_state_iterations = <span class="number">0</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>task_group = TaskGroup::new();
+        <span class="kw">let </span>gateway_run = gateway.clone();
+        task_group
+            .spawn(<span class="string">&quot;Gateway Run&quot;</span>, |_handle| <span class="kw">async move </span>{
+                gateway_run.run().<span class="kw">await</span>.expect(<span class="string">&quot;Failed to start gateway&quot;</span>);
+            })
+            .<span class="kw">await</span>;
+
+        <span class="comment">// Wait for the gateway to be in the configuring or running state
+        </span>GatewayTest::wait_for_gateway_state(gateway.clone(), |gw_state| {
+            <span class="macro">matches!</span>(gw_state, GatewayState::Configuring)
+                || <span class="macro">matches!</span>(gw_state, GatewayState::Running { .. })
+        })
+        .<span class="kw">await</span>;
+
+        <span class="kw">let </span>listening_addr = lightning.listening_address();
+        <span class="kw">let </span>info = lightning.info().<span class="kw">await</span>.unwrap();
+
+        <span class="self">Self </span>{
+            api: address,
+            _config_dir,
+            gateway,
+            node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
+            listening_addr,
+        }
+    }
+
+    <span class="kw">pub async fn </span>wait_for_gateway_state(gateway: Gateway, func: <span class="kw">impl </span>Fn(GatewayState) -&gt; bool) {
+        <span class="kw">let </span><span class="kw-2">mut </span>gateway_state_iterations = <span class="number">0</span>;
         <span class="kw">loop </span>{
-            <span class="kw">if let </span>GatewayState::Running {
-                lnrpc: <span class="kw">_</span>,
-                lightning_public_key: <span class="kw">_</span>,
-                lightning_alias: <span class="kw">_</span>,
-            } = gateway.state.read().<span class="kw">await</span>.clone()
-            {
+            <span class="kw">let </span>gw_state = gateway.state.read().<span class="kw">await</span>.clone();
+            <span class="kw">if </span>func(gw_state) {
                 <span class="kw">break</span>;
             }
 
@@ -336,18 +366,6 @@
 
             gateway_state_iterations += <span class="number">1</span>;
             sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-        }
-
-        <span class="kw">let </span>listening_addr = lightning.listening_address();
-        <span class="kw">let </span>info = lightning.info().<span class="kw">await</span>.unwrap();
-
-        <span class="self">Self </span>{
-            password,
-            api: address,
-            _config_dir,
-            gateway,
-            node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
-            listening_addr,
         }
     }
 }

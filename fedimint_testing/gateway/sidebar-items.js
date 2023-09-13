@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["LightningNodeType"],"struct":["FakeLightningBuilder","GatewayTest","RealLightningBuilder"]};
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_GATEWAY_PASSWORD"],"enum":["LightningNodeType"],"struct":["FakeLightningBuilder","GatewayTest","RealLightningBuilder"]};
