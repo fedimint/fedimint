@@ -37,6 +37,7 @@
             overlays = [
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
+                cargo-nextest = pkgs-unstable.cargo-nextest;
                 # TODO: switch to mainstream after https://github.com/crate-ci/typos/pull/708 is released
                 typos = prev.rustPlatform.buildRustPackage {
                   pname = "typos";
