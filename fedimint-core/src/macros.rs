@@ -355,7 +355,7 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
 ///
 /// "Plugin trait" is a trait that a developer of a mint module
 /// needs to implement when implementing mint module. It uses associated
-/// types with trait bonds to guide the developer.
+/// types with trait bounds to guide the developer.
 ///
 /// Blanket implementations are used to convert the "plugin trait",
 /// incompatible with `dyn Trait` into "module types" and corresponding
