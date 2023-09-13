@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::core::Decoder;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -13,10 +13,12 @@ use secp256k1::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, trace};
 
 use crate::db::NoteKey;
 use crate::{MintClientContext, SpendableNote};
+
+const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 /// Child ID used to derive the spend key from a note's [`DerivableSecret`]
 const SPEND_KEY_CHILD_ID: ChildId = ChildId(0);
@@ -165,17 +167,28 @@ impl MintOutputStatesCreated {
         module_decoder: Decoder,
     ) -> Result<MintOutputBlindSignatures, String> {
         loop {
-            let outcome: MintOutputOutcome = global_context
+            let outcome: MintOutputOutcome = match global_context
                 .api()
                 .await_output_outcome(common.out_point, Duration::MAX, &module_decoder)
                 .await
-                .map_err(|e| e.to_string())?;
+            {
+                Ok(outcome) => outcome,
+                Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+                    trace!(
+                        "Awaiting outcome to become ready failed, retrying in {}s: {e}",
+                        RETRY_DELAY.as_secs()
+                    );
+                    sleep(RETRY_DELAY).await;
+                    continue;
+                }
+                Err(e) => return Err(e.to_string()),
+            };
 
             match outcome.0 {
                 Some(bsigs) => return Ok(bsigs),
                 None => {
                     // FIXME: hack since we can't await outpoints yet?! may return non-final outcome
-                    sleep(Duration::from_secs(1)).await;
+                    sleep(RETRY_DELAY).await;
                 }
             }
         }
