@@ -8,8 +8,6 @@ use bitcoin_hashes::hex::ToHex;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use serde_json::json;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::Receiver;
 use tower_http::cors::CorsLayer;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
 use tracing::{error, instrument};
@@ -22,25 +20,31 @@ use crate::db::GatewayConfiguration;
 use crate::{Gateway, GatewayError};
 
 pub async fn run_webserver(
-    authkey: String,
+    config: Option<GatewayConfiguration>,
     bind_addr: SocketAddr,
     gateway: Gateway,
     task_group: &mut TaskGroup,
 ) -> axum::response::Result<()> {
-    // Public routes on gateway webserver
-    let routes = Router::new().route("/pay_invoice", post(pay_invoice));
+    let (routes, admin_routes) = if let Some(gateway_config) = config {
+        // Public routes on gateway webserver
+        let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
-    // Authenticated, public routes used for gateway administration
-    let admin_routes = Router::new()
-        .route("/info", post(info))
-        .route("/balance", post(balance))
-        .route("/address", post(address))
-        .route("/withdraw", post(withdraw))
-        .route("/connect-fed", post(connect_fed))
-        .route("/backup", post(backup))
-        .route("/restore", post(restore))
-        .route("/set_configuration", post(set_configuration))
-        .layer(ValidateRequestHeaderLayer::bearer(&authkey));
+        // Authenticated, public routes used for gateway administration
+        let admin_routes = Router::new()
+            .route("/info", post(info))
+            .route("/balance", post(balance))
+            .route("/address", post(address))
+            .route("/withdraw", post(withdraw))
+            .route("/connect-fed", post(connect_fed))
+            .route("/backup", post(backup))
+            .route("/restore", post(restore))
+            .route("/set_configuration", post(set_configuration))
+            .layer(ValidateRequestHeaderLayer::bearer(&gateway_config.password));
+        (routes, admin_routes)
+    } else {
+        let routes = Router::new().route("/set_configuration", post(set_configuration));
+        (routes, Router::new())
+    };
 
     let app = Router::new()
         .merge(routes)
@@ -64,38 +68,6 @@ pub async fn run_webserver(
         .await;
 
     Ok(())
-}
-
-pub async fn run_config_webserver(
-    bind_addr: SocketAddr,
-    task_group: &mut TaskGroup,
-) -> Receiver<GatewayConfiguration> {
-    // Public routes on gateway webserver
-    let public_routes = Router::new().route("/set_configuration", post(set_configuration_public));
-
-    let (sender, receiver) = mpsc::channel::<GatewayConfiguration>(10);
-
-    let app = Router::new()
-        .merge(public_routes)
-        .layer(Extension(sender))
-        .layer(CorsLayer::permissive());
-
-    let handle = task_group.make_handle();
-    let shutdown_rx = handle.make_shutdown_rx().await;
-    let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
-    task_group
-        .spawn("Gateway Config Webserver", move |_| async move {
-            let graceful = server.with_graceful_shutdown(async {
-                shutdown_rx.await;
-            });
-
-            if let Err(e) = graceful.await {
-                error!("Error shutting down gatewayd config webserver: {:?}", e);
-            }
-        })
-        .await;
-
-    receiver
 }
 
 /// Display high-level information about the Gateway
@@ -178,21 +150,6 @@ async fn restore(
     Json(payload): Json<RestorePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_restore_msg(payload).await?;
-    Ok(())
-}
-
-#[instrument(skip_all, err)]
-async fn set_configuration_public(
-    Extension(sender): Extension<mpsc::Sender<GatewayConfiguration>>,
-    Json(payload): Json<SetConfigurationPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
-    let gateway_configuration = GatewayConfiguration {
-        password: payload.password.clone(),
-    };
-
-    sender.send(gateway_configuration).await.map_err(|e| {
-        GatewayError::UnexpectedState(format!("Gateway is not in Configuring state: {e:?}"))
-    })?;
     Ok(())
 }
 

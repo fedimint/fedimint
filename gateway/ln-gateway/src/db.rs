@@ -69,4 +69,5 @@ impl_db_record!(
     key = GatewayConfigurationKey,
     value = GatewayConfiguration,
     db_prefix = DbKeyPrefix::GatewayConfiguration,
+    notify_on_modify = true,
 );

@@ -59,7 +59,6 @@ use ng::pay::OutgoingPaymentError;
 use ng::GatewayClientExt;
 use rand::rngs::OsRng;
 use rand::Rng;
-use rpc::rpc_server::run_config_webserver;
 use rpc::{FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -284,22 +283,70 @@ impl Gateway {
     pub async fn run(mut self) -> anyhow::Result<TaskShutdownToken> {
         let mut tg = TaskGroup::new();
 
-        let gateway_config = self.get_gateway_configuration().await?;
-
-        run_webserver(
-            gateway_config.password.clone(),
-            self.listen,
-            self.clone(),
-            &mut tg,
-        )
-        .await
-        .expect("Failed to start webserver");
-        info!("Successfully started webserver");
-
+        self.start_webserver(&mut tg).await;
         self.start_gateway(&mut tg).await?;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
+    }
+
+    async fn start_webserver(&mut self, task_group: &mut TaskGroup) {
+        let gateway_db = self.gateway_db.clone();
+
+        let listen = self.listen;
+        let gateway = self.clone();
+        let cli_password = self.cli_password.clone();
+        let subgroup = task_group.make_subgroup().await;
+        task_group
+            .spawn("Webserver", move |handle| async move {
+                while !handle.is_shutting_down() {
+                    // Re-fetch the configuration because the password has changed.
+                    let gateway_config = Gateway::get_gateway_configuration(
+                        gateway_db.clone(),
+                        cli_password.clone(),
+                    )
+                    .await;
+                    let mut webserver_group = subgroup.make_subgroup().await;
+                    run_webserver(
+                        gateway_config.clone(),
+                        listen,
+                        gateway.clone(),
+                        &mut webserver_group,
+                    )
+                    .await
+                    .expect("Failed to start webserver");
+                    info!("Successfully started webserver");
+
+                    gateway_db
+                        .wait_key_check(&GatewayConfigurationKey, |v| {
+                            v.filter(|cfg| {
+                                if let Some(old_config) = gateway_config.clone() {
+                                    old_config.password != cfg.clone().password
+                                } else {
+                                    true
+                                }
+                            })
+                        })
+                        .await;
+
+                    info!("GatewayConfiguration has been updated, restarting webserver...");
+                    if let Err(e) = webserver_group.shutdown_join_all(None).await {
+                        panic!("Error shutting down server: {e:?}");
+                    }
+                }
+            })
+            .await;
+
+        let gateway_config =
+            Gateway::get_gateway_configuration(self.gateway_db.clone(), self.cli_password.clone())
+                .await;
+        if gateway_config.is_none() {
+            self.set_gateway_state(GatewayState::Configuring).await;
+            info!("Waiting for gateway to be configured...");
+            self.gateway_db
+                .wait_key_exists(&GatewayConfigurationKey)
+                .await;
+        }
     }
 
     async fn start_gateway(mut self, task_group: &mut TaskGroup) -> Result<()> {
@@ -656,7 +703,8 @@ impl Gateway {
         SetConfigurationPayload { password }: SetConfigurationPayload,
     ) -> Result<()> {
         let gw_state = self.state.read().await.clone();
-        let can_set_config = matches!(gw_state, GatewayState::Running { .. });
+        let can_set_config = matches!(gw_state, GatewayState::Running { .. })
+            || matches!(gw_state, GatewayState::Configuring);
         if !can_set_config {
             return Err(GatewayError::Disconnected);
         }
@@ -667,58 +715,33 @@ impl Gateway {
         dbtx.insert_entry(&GatewayConfigurationKey, &gateway_config)
             .await;
         dbtx.commit_tx().await;
-        info!("Overwrote GatewayConfiguration successfully");
+        info!("Set GatewayConfiguration successfully");
 
         Ok(())
     }
 
-    /// This function will return a `GatewayConfiguration` one of three
-    /// different ways. To avoid conflicting configs, the below order is the
+    /// This function will return a `GatewayConfiguration` one of two
+    /// ways. To avoid conflicting configs, the below order is the
     /// order in which the gateway will respect configurations:
     /// - `GatewayConfiguration` is read from the database.
     /// - All cli or environment variables are set such that we can create a
     ///   `GatewayConfiguration`
-    /// - The `set_configuration` API endpoint writes a `GatewayConfiguration`
-    ///   into the database.
-    pub async fn get_gateway_configuration(&mut self) -> Result<GatewayConfiguration> {
-        {
-            let mut dbtx = self.gateway_db.begin_transaction().await;
-            if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
-                info!("Gateway using configuration from database.");
-                return Ok(gateway_config);
-            }
-
-            if let Some(password) = self.cli_password.clone() {
-                info!("Gateway using configuration from environment.");
-                return Ok(GatewayConfiguration { password });
-            }
+    pub async fn get_gateway_configuration(
+        gateway_db: Database,
+        cli_password: Option<String>,
+    ) -> Option<GatewayConfiguration> {
+        let mut dbtx = gateway_db.begin_transaction().await;
+        if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
+            info!("Gateway using configuration from database.");
+            return Some(gateway_config);
         }
 
-        self.set_gateway_state(GatewayState::Configuring).await;
-
-        let mut task_group = TaskGroup::new();
-        let mut rx = run_config_webserver(self.listen, &mut task_group).await;
-
-        // Wait for the `/set_configuration` API to send a `GatewayConfiguration`
-        info!("Waiting for GatewayConfiguration to be set");
-        match rx.recv().await {
-            Some(gateway_config) => {
-                // Shutdown config web server
-                task_group.shutdown();
-                task_group.join_all(None).await?;
-
-                let mut dbtx = self.gateway_db.begin_transaction().await;
-                dbtx.insert_entry(&GatewayConfigurationKey, &gateway_config)
-                    .await;
-                dbtx.commit_tx().await;
-
-                info!("Set GatewayConfiguration successfully");
-                Ok(gateway_config)
-            }
-            None => Err(GatewayError::UnexpectedState(
-                "GatewayConfiguration not set".to_string(),
-            )),
+        if let Some(password) = cli_password.clone() {
+            info!("Gateway using configuration from environment.");
+            return Some(GatewayConfiguration { password });
         }
+
+        None
     }
 
     pub async fn remove_client(

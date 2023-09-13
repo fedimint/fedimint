@@ -39,6 +39,7 @@ use ln_gateway::ng::{
 };
 use ln_gateway::rpc::rpc_client::{GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, SetConfigurationPayload};
+use ln_gateway::utils::retry;
 use ln_gateway::GatewayState;
 use reqwest::StatusCode;
 use secp256k1::PublicKey;
@@ -768,6 +769,20 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     rpc_client
         .set_configuration(set_configuration_payload.clone())
         .await?;
+
+    // Verify info works with the new password.
+    // Need to retry because the webserver might be restarting.
+    retry(
+        "Get info after restart".to_string(),
+        || async {
+            let rpc_client = rpc_client.with_password(Some("new_password".to_string()));
+            rpc_client.get_info().await?;
+            Ok(())
+        },
+        Duration::from_secs(1),
+        5,
+    )
+    .await?;
 
     Ok(())
 }

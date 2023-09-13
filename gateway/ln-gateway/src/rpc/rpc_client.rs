@@ -92,7 +92,11 @@ impl GatewayRpcClient {
         self.call(url, payload).await
     }
 
-    async fn call<P, T: DeserializeOwned>(&self, url: SafeUrl, payload: P) -> Result<T, GatewayRpcError>
+    async fn call<P, T: DeserializeOwned>(
+        &self,
+        url: SafeUrl,
+        payload: P,
+    ) -> Result<T, GatewayRpcError>
     where
         P: Serialize,
     {
