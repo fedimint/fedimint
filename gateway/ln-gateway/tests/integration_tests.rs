@@ -771,6 +771,10 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     )
     .await;
 
+    // Verify that the gateway's state is "Configuring"
+    let gw_info = rpc_client.get_info().await?;
+    assert_eq!(gw_info.gateway_state, "Configuring".to_string());
+
     let test_password = "test_password".to_string();
     let set_configuration_payload = SetConfigurationPayload {
         password: test_password.clone(),
@@ -792,7 +796,8 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     rpc_client.connect_federation(join_payload.clone()).await?;
 
-    rpc_client.get_info().await?;
+    let gw_info = rpc_client.get_info().await?;
+    assert_eq!(gw_info.gateway_state, "Running".to_string());
     verify_rpc(|| bad_rpc_client.get_info(), StatusCode::UNAUTHORIZED).await;
 
     let federation_id = fed.invite_code().id;

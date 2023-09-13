@@ -158,6 +158,17 @@ pub enum GatewayState {
     Disconnected,
 }
 
+impl From<GatewayState> for String {
+    fn from(gw_state: GatewayState) -> Self {
+        match gw_state {
+            GatewayState::Initializing => "Initializing".to_string(),
+            GatewayState::Configuring => "Configuring".to_string(),
+            GatewayState::Running { .. } => "Running".to_string(),
+            GatewayState::Disconnected => "Disconnected".to_string(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Gateway {
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
@@ -503,6 +514,7 @@ impl Gateway {
                 fees: self.fees,
                 route_hints,
                 gateway_id: self.gateway_id,
+                gateway_state: self.state.read().await.clone().into(),
             });
         }
 
@@ -514,6 +526,7 @@ impl Gateway {
             fees: self.fees,
             route_hints: vec![],
             gateway_id: self.gateway_id,
+            gateway_state: self.state.read().await.clone().into(),
         })
     }
 

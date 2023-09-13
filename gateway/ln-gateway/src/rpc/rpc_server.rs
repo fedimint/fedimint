@@ -42,7 +42,9 @@ pub async fn run_webserver(
             .layer(ValidateRequestHeaderLayer::bearer(&gateway_config.password));
         (routes, admin_routes)
     } else {
-        let routes = Router::new().route("/set_configuration", post(set_configuration));
+        let routes = Router::new()
+            .route("/set_configuration", post(set_configuration))
+            .route("/info", post(info));
         (routes, Router::new())
     };
 
