@@ -14,29 +14,37 @@ use tracing::{error, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
-    RestorePayload, WithdrawPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
+use crate::db::GatewayConfiguration;
 use crate::{Gateway, GatewayError};
 
 pub async fn run_webserver(
-    authkey: String,
+    config: Option<GatewayConfiguration>,
     bind_addr: SocketAddr,
     gateway: Gateway,
     task_group: &mut TaskGroup,
 ) -> axum::response::Result<()> {
-    // Public routes on gateway webserver
-    let routes = Router::new().route("/pay_invoice", post(pay_invoice));
+    let (routes, admin_routes) = if let Some(gateway_config) = config {
+        // Public routes on gateway webserver
+        let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
-    // Authenticated, public routes used for gateway administration
-    let admin_routes = Router::new()
-        .route("/info", post(info))
-        .route("/balance", post(balance))
-        .route("/address", post(address))
-        .route("/withdraw", post(withdraw))
-        .route("/connect-fed", post(connect_fed))
-        .route("/backup", post(backup))
-        .route("/restore", post(restore))
-        .layer(ValidateRequestHeaderLayer::bearer(&authkey));
+        // Authenticated, public routes used for gateway administration
+        let admin_routes = Router::new()
+            .route("/info", post(info))
+            .route("/balance", post(balance))
+            .route("/address", post(address))
+            .route("/withdraw", post(withdraw))
+            .route("/connect-fed", post(connect_fed))
+            .route("/backup", post(backup))
+            .route("/restore", post(restore))
+            .route("/set_configuration", post(set_configuration))
+            .layer(ValidateRequestHeaderLayer::bearer(&gateway_config.password));
+        (routes, admin_routes)
+    } else {
+        let routes = Router::new().route("/set_configuration", post(set_configuration));
+        (routes, Router::new())
+    };
 
     let app = Router::new()
         .merge(routes)
@@ -143,4 +151,13 @@ async fn restore(
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_restore_msg(payload).await?;
     Ok(())
+}
+
+#[instrument(skip_all, err)]
+async fn set_configuration(
+    Extension(gateway): Extension<Gateway>,
+    Json(payload): Json<SetConfigurationPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    gateway.handle_set_configuration_msg(payload).await?;
+    Ok(Json(json!(())))
 }

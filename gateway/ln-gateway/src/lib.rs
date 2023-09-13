@@ -27,7 +27,9 @@ use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
-use db::{FederationRegistrationKey, GatewayPublicKey};
+use db::{
+    FederationRegistrationKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
+};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
 use fedimint_core::api::{FederationError, InviteCode};
@@ -57,7 +59,7 @@ use ng::pay::OutgoingPaymentError;
 use ng::GatewayClientExt;
 use rand::rngs::OsRng;
 use rand::Rng;
-use rpc::FederationInfo;
+use rpc::{FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -118,7 +120,7 @@ pub struct GatewayOpts {
 
     /// Gateway webserver authentication password
     #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
-    pub password: String,
+    pub password: Option<String>,
 
     /// Configured gateway routing fees
     /// Format: <base_msat>,<proportional_millionths>
@@ -137,12 +139,15 @@ pub struct GatewayOpts {
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///    Initializing -- begin intercepting HTLCs --> Running
+///    Initializing -- gateway needs config --> Configuring
+///    Configuring -- configuration set --> Running
 ///    Running -- disconnected from lightning node --> Disconnected
 ///    Disconnected -- re-established lightning connection --> Running
 /// ```
 #[derive(Clone)]
 pub enum GatewayState {
     Initializing,
+    Configuring,
     Running {
         lnrpc: Arc<dyn ILnRpcClient>,
         lightning_public_key: PublicKey,
@@ -156,8 +161,8 @@ pub struct Gateway {
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
     listen: SocketAddr,
     api_addr: SafeUrl,
-    password: String,
     num_route_hints: usize,
+    cli_password: Option<String>,
     pub state: Arc<RwLock<GatewayState>>,
     client_builder: StandardGatewayClientBuilder,
     gateway_db: Database,
@@ -175,7 +180,7 @@ impl Gateway {
         client_builder: StandardGatewayClientBuilder,
         listen: SocketAddr,
         api_addr: SafeUrl,
-        password: String,
+        cli_password: Option<String>,
         fees: RoutingFees,
         num_route_hints: usize,
         gateway_db: Database,
@@ -184,8 +189,8 @@ impl Gateway {
             lightning_builder,
             listen,
             api_addr,
-            password,
             num_route_hints,
+            cli_password,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_db: gateway_db.clone(),
@@ -248,10 +253,10 @@ impl Gateway {
             }),
             listen,
             api_addr,
-            password,
             channel_id_generator: Arc::new(Mutex::new(AtomicU64::new(INITIAL_SCID))),
             fees: fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
             num_route_hints: num_route_hints.unwrap_or(0),
+            cli_password: password,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: Self::get_gateway_id(gateway_db.clone()).await,
@@ -275,18 +280,73 @@ impl Gateway {
         }
     }
 
-    pub async fn run(self) -> anyhow::Result<TaskShutdownToken> {
+    pub async fn run(mut self) -> anyhow::Result<TaskShutdownToken> {
         let mut tg = TaskGroup::new();
 
-        run_webserver(self.password.clone(), self.listen, self.clone(), &mut tg)
-            .await
-            .expect("Failed to start webserver");
-        info!("Successfully started webserver");
-
+        self.start_webserver(&mut tg).await;
         self.start_gateway(&mut tg).await?;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
+    }
+
+    async fn start_webserver(&mut self, task_group: &mut TaskGroup) {
+        let gateway_db = self.gateway_db.clone();
+
+        let listen = self.listen;
+        let gateway = self.clone();
+        let cli_password = self.cli_password.clone();
+        let subgroup = task_group.make_subgroup().await;
+        task_group
+            .spawn("Webserver", move |handle| async move {
+                while !handle.is_shutting_down() {
+                    // Re-fetch the configuration because the password has changed.
+                    let gateway_config = Gateway::get_gateway_configuration(
+                        gateway_db.clone(),
+                        cli_password.clone(),
+                    )
+                    .await;
+                    let mut webserver_group = subgroup.make_subgroup().await;
+                    run_webserver(
+                        gateway_config.clone(),
+                        listen,
+                        gateway.clone(),
+                        &mut webserver_group,
+                    )
+                    .await
+                    .expect("Failed to start webserver");
+                    info!("Successfully started webserver");
+
+                    gateway_db
+                        .wait_key_check(&GatewayConfigurationKey, |v| {
+                            v.filter(|cfg| {
+                                if let Some(old_config) = gateway_config.clone() {
+                                    old_config.password != cfg.clone().password
+                                } else {
+                                    true
+                                }
+                            })
+                        })
+                        .await;
+
+                    info!("GatewayConfiguration has been updated, restarting webserver...");
+                    if let Err(e) = webserver_group.shutdown_join_all(None).await {
+                        panic!("Error shutting down server: {e:?}");
+                    }
+                }
+            })
+            .await;
+
+        let gateway_config =
+            Gateway::get_gateway_configuration(self.gateway_db.clone(), self.cli_password.clone())
+                .await;
+        if gateway_config.is_none() {
+            self.set_gateway_state(GatewayState::Configuring).await;
+            info!("Waiting for gateway to be configured...");
+            self.gateway_db
+                .wait_key_exists(&GatewayConfigurationKey)
+                .await;
+        }
     }
 
     async fn start_gateway(mut self, task_group: &mut TaskGroup) -> Result<()> {
@@ -636,6 +696,52 @@ impl Gateway {
         RestorePayload { federation_id: _ }: RestorePayload,
     ) -> Result<()> {
         unimplemented!("Restore is not currently supported");
+    }
+
+    pub async fn handle_set_configuration_msg(
+        &self,
+        SetConfigurationPayload { password }: SetConfigurationPayload,
+    ) -> Result<()> {
+        let gw_state = self.state.read().await.clone();
+        let can_set_config = matches!(gw_state, GatewayState::Running { .. })
+            || matches!(gw_state, GatewayState::Configuring);
+        if !can_set_config {
+            return Err(GatewayError::Disconnected);
+        }
+
+        let gateway_config = GatewayConfiguration { password };
+
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        dbtx.insert_entry(&GatewayConfigurationKey, &gateway_config)
+            .await;
+        dbtx.commit_tx().await;
+        info!("Set GatewayConfiguration successfully");
+
+        Ok(())
+    }
+
+    /// This function will return a `GatewayConfiguration` one of two
+    /// ways. To avoid conflicting configs, the below order is the
+    /// order in which the gateway will respect configurations:
+    /// - `GatewayConfiguration` is read from the database.
+    /// - All cli or environment variables are set such that we can create a
+    ///   `GatewayConfiguration`
+    pub async fn get_gateway_configuration(
+        gateway_db: Database,
+        cli_password: Option<String>,
+    ) -> Option<GatewayConfiguration> {
+        let mut dbtx = gateway_db.begin_transaction().await;
+        if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
+            info!("Gateway using configuration from database.");
+            return Some(gateway_config);
+        }
+
+        if let Some(password) = cli_password.clone() {
+            info!("Gateway using configuration from environment.");
+            return Some(GatewayConfiguration { password });
+        }
+
+        None
     }
 
     pub async fn remove_client(

@@ -21,10 +21,6 @@ name = "gateway-cln-extension"
 path = "src/bin/cln_extension.rs"
 
 [[test]]
-name = "gateway-authentication-tests"
-path = "tests/authentication_tests.rs"
-
-[[test]]
 name = "gatewayd-integration-tests"
 path = "tests/integration_tests.rs"
 

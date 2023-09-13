@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
-    WithdrawPayload,
+    SetConfigurationPayload, WithdrawPayload,
 };
 use crate::rpc::{FederationInfo, GatewayInfo};
 
@@ -21,11 +21,11 @@ pub struct GatewayRpcClient {
     // A request client
     client: reqwest::Client,
     // Password
-    password: String,
+    password: Option<String>,
 }
 
 impl GatewayRpcClient {
-    pub fn new(base_url: SafeUrl, password: String) -> Self {
+    pub fn new(base_url: SafeUrl, password: Option<String>) -> Self {
         Self {
             base_url,
             client: reqwest::Client::new(),
@@ -33,7 +33,7 @@ impl GatewayRpcClient {
         }
     }
 
-    pub fn with_password(&self, password: String) -> Self {
+    pub fn with_password(&self, password: Option<String>) -> Self {
         GatewayRpcClient::new(self.base_url.clone(), password)
     }
 
@@ -81,6 +81,17 @@ impl GatewayRpcClient {
         self.call(url, payload).await
     }
 
+    pub async fn set_configuration(
+        &self,
+        payload: SetConfigurationPayload,
+    ) -> GatewayRpcResult<()> {
+        let url = self
+            .base_url
+            .join("/set_configuration")
+            .expect("invalid base url");
+        self.call(url, payload).await
+    }
+
     async fn call<P, T: DeserializeOwned>(
         &self,
         url: SafeUrl,
@@ -89,10 +100,11 @@ impl GatewayRpcClient {
     where
         P: Serialize,
     {
-        let response = self
-            .client
-            .post(url.reap_guts())
-            .bearer_auth(self.password.clone())
+        let mut builder = self.client.post(url.reap_guts());
+        if let Some(password) = self.password.clone() {
+            builder = builder.bearer_auth(password);
+        }
+        let response = builder
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .json(&payload)
             .send()

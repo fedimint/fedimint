@@ -76,6 +76,11 @@ pub struct GatewayInfo {
     pub gateway_id: secp256k1::PublicKey,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetConfigurationPayload {
+    pub password: String,
+}
+
 #[derive(Debug)]
 pub enum GatewayRequest {
     Info(GatewayRequestInner<InfoPayload>),
@@ -87,6 +92,7 @@ pub enum GatewayRequest {
     Backup(GatewayRequestInner<BackupPayload>),
     Restore(GatewayRequestInner<RestorePayload>),
     Shutdown,
+    SetConfiguration(GatewayRequestInner<SetConfigurationPayload>),
 }
 
 #[derive(Debug)]
@@ -131,6 +137,11 @@ impl_gateway_request_trait!(
 impl_gateway_request_trait!(WithdrawPayload, Txid, GatewayRequest::Withdraw);
 impl_gateway_request_trait!(BackupPayload, (), GatewayRequest::Backup);
 impl_gateway_request_trait!(RestorePayload, (), GatewayRequest::Restore);
+impl_gateway_request_trait!(
+    SetConfigurationPayload,
+    (),
+    GatewayRequest::SetConfiguration
+);
 
 impl<T> GatewayRequestInner<T>
 where

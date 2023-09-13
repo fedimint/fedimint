@@ -10,7 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::sleep;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::StandardGatewayClientBuilder;
@@ -27,14 +27,14 @@ use crate::ln::mock::FakeLightningTest;
 use crate::ln::real::{ClnLightningTest, LndLightningTest};
 use crate::ln::LightningTest;
 
+pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
+
 /// Fixture for creating a gateway
 pub struct GatewayTest {
-    /// Password for the RPC
-    pub password: String,
     /// URL for the RPC
     api: SafeUrl,
     /// Handle of the running gateway
-    gateway: Gateway,
+    pub gateway: Gateway,
     /// Temporary dir that stores the gateway config
     _config_dir: Option<TempDir>,
     // Public key of the lightning node
@@ -46,7 +46,7 @@ pub struct GatewayTest {
 impl GatewayTest {
     /// RPC client for communicating with the gateway admin API
     pub async fn get_rpc(&self) -> GatewayRpcClient {
-        GatewayRpcClient::new(self.api.clone(), self.password.clone())
+        GatewayRpcClient::new(self.api.clone(), None)
     }
 
     /// Removes a client from the gateway
@@ -61,7 +61,10 @@ impl GatewayTest {
     /// Connects to a new federation and stores the info
     pub async fn connect_fed(&mut self, fed: &FederationTest) -> FederationInfo {
         let invite_code = fed.invite_code().to_string();
-        let rpc = self.get_rpc().await;
+        let rpc = self
+            .get_rpc()
+            .await
+            .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
         rpc.connect_federation(ConnectFedPayload { invite_code })
             .await
             .unwrap()
@@ -73,7 +76,7 @@ impl GatewayTest {
 
     pub(crate) async fn new(
         base_port: u16,
-        password: String,
+        cli_password: Option<String>,
         lightning: Box<dyn LightningTest>,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleInitRegistry,
@@ -103,7 +106,7 @@ impl GatewayTest {
             client_builder,
             listen,
             address.clone(),
-            password.clone(),
+            cli_password,
             RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
@@ -113,21 +116,39 @@ impl GatewayTest {
         )
         .await
         .expect("Failed to create gateway");
-        gateway
-            .clone()
-            .run()
-            .await
-            .expect("Failed to start gateway");
 
-        // Wait for the gateway to be in the running state
+        let mut task_group = TaskGroup::new();
+        let gateway_run = gateway.clone();
+        task_group
+            .spawn("Gateway Run", |_handle| async move {
+                gateway_run.run().await.expect("Failed to start gateway");
+            })
+            .await;
+
+        // Wait for the gateway to be in the configuring or running state
+        GatewayTest::wait_for_gateway_state(gateway.clone(), |gw_state| {
+            matches!(gw_state, GatewayState::Configuring)
+                || matches!(gw_state, GatewayState::Running { .. })
+        })
+        .await;
+
+        let listening_addr = lightning.listening_address();
+        let info = lightning.info().await.unwrap();
+
+        Self {
+            api: address,
+            _config_dir,
+            gateway,
+            node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
+            listening_addr,
+        }
+    }
+
+    pub async fn wait_for_gateway_state(gateway: Gateway, func: impl Fn(GatewayState) -> bool) {
         let mut gateway_state_iterations = 0;
         loop {
-            if let GatewayState::Running {
-                lnrpc: _,
-                lightning_public_key: _,
-                lightning_alias: _,
-            } = gateway.state.read().await.clone()
-            {
+            let gw_state = gateway.state.read().await.clone();
+            if func(gw_state) {
                 break;
             }
 
@@ -137,18 +158,6 @@ impl GatewayTest {
 
             gateway_state_iterations += 1;
             sleep(Duration::from_secs(1)).await;
-        }
-
-        let listening_addr = lightning.listening_address();
-        let info = lightning.info().await.unwrap();
-
-        Self {
-            password,
-            api: address,
-            _config_dir,
-            gateway,
-            node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
-            listening_addr,
         }
     }
 }
