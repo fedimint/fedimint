@@ -18,3 +18,18 @@ jobs:
         uses: korthout/backport-action@v1
         with:
           github_token: ${{ secrets.BACKPORT_TOKEN }}
+  open-issue:
+    name: Open issue for failed backports
+    runs-on: ubuntu-latest
+    needs: backport
+    steps:
+      - uses: actions/checkout@v4
+        # Open an issue only if the backport job failed
+        if: ${{ needs.backport.outputs.was_successful }} == 'false'
+      - name: Create issue
+        uses: JasonEtco/create-an-issue@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.number }}
+        with:
+          filename: .github/templates/failed-backport-issue.md
