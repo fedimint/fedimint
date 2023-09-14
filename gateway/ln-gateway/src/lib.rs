@@ -631,9 +631,10 @@ impl Gateway {
                     .await
                 {
                     Ok(gw_client_cfg) => break gw_client_cfg,
-                    Err(_) => {
+                    Err(error) => {
                         let random_delay: f64 = rand::thread_rng().gen();
                         tracing::warn!(
+                            %error,
                             "Error downloading client config, trying again in {random_delay}"
                         );
                         sleep(Duration::from_secs_f64(random_delay)).await;
