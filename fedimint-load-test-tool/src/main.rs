@@ -16,6 +16,7 @@ use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::Client;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::task::spawn;
 use fedimint_core::util::{BoxFuture, SafeUrl};
 use fedimint_core::Amount;
 use fedimint_mint_client::OOBNotes;
@@ -215,10 +216,11 @@ async fn main() -> anyhow::Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
     let opts = Opts::parse();
     let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let summary_handle = tokio::spawn({
+    let summary_handle = spawn("handle metrics summary", {
         let opts = opts.clone();
         async move { handle_metrics_summary(opts, event_receiver).await }
-    });
+    })
+    .expect("some handle on non-wasm");
     let futures = match opts.command.clone() {
         Command::TestConnect {
             invite_code,

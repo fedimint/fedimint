@@ -270,7 +270,7 @@ where
         );
 
         let task_runner_inner = self.inner.clone();
-        let _handle = spawn(async move {
+        let _handle = spawn("client state machine", async move {
             let executor_runner = task_runner_inner.run(context_gen);
             select! {
                 shutdown_happened_sender = shutdown_receiver => {

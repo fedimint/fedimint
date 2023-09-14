@@ -40,7 +40,7 @@ fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 serde_json = "1.0.91"
-tokio = { version = "1.26.0", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
 tokio-rustls = "0.23.4"
 tokio-stream = "0.1.11"
 tracing ="0.1.37"

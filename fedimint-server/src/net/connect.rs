@@ -257,7 +257,7 @@ pub mod mock {
     use std::time::Duration;
 
     use anyhow::{anyhow, Error};
-    use fedimint_core::task::sleep;
+    use fedimint_core::task::{sleep, spawn};
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{task, PeerId};
     use futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
@@ -725,7 +725,10 @@ pub mod mock {
         let conn_b = net.connector(peer_b, StreamReliability::FullyReliable);
 
         let mut listener = Connector::<u64>::listen(&conn_a, bind_addr).await.unwrap();
-        let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
+        let conn_a_fut = spawn("listener next await", async move {
+            listener.next().await.unwrap().unwrap()
+        })
+        .expect("some handle on non-wasm");
 
         let (auth_peer_b, mut conn_b) = Connector::<u64>::connect_framed(&conn_b, url, peer_a)
             .await
@@ -799,7 +802,10 @@ pub mod mock {
         let mut listener = Connector::<Vec<u8>>::listen(&conn_a, bind_addr)
             .await
             .unwrap();
-        let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
+        let conn_a_fut = spawn("listener next await", async move {
+            listener.next().await.unwrap().unwrap()
+        })
+        .expect("some handle on non-wasm");
 
         let (auth_peer_b, mut conn_b) = Connector::<Vec<u8>>::connect_framed(&conn_b, url, peer_a)
             .await
@@ -829,6 +835,7 @@ pub mod mock {
 mod tests {
     use std::net::SocketAddr;
 
+    use fedimint_core::task::spawn;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::PeerId;
     use futures::{SinkExt, StreamExt};
@@ -878,14 +885,15 @@ mod tests {
 
         let mut server: ConnectionListener<u64> = connectors[0].listen(bind_addr).await.unwrap();
 
-        let server_task = tokio::spawn(async move {
+        let server_task = spawn("server next await", async move {
             let (peer, mut conn) = server.next().await.unwrap().unwrap();
             assert_eq!(peer.to_usize(), 2);
             let received = conn.next().await.unwrap().unwrap();
             assert_eq!(received, 42);
             conn.send(21).await.unwrap();
             assert!(conn.next().await.unwrap().is_err());
-        });
+        })
+        .expect("some handle on non-wasm");
 
         let (peer_of_a, mut client_a): (_, AnyFramedTransport<u64>) = connectors[2]
             .connect_framed(url.clone(), PeerId::from(0))
@@ -916,13 +924,14 @@ mod tests {
         {
             let mut server: ConnectionListener<u64> = honest.listen(bind_addr).await.unwrap();
 
-            let server_task = tokio::spawn(async move {
+            let server_task = spawn("server next await", async move {
                 let conn_res = server.next().await.unwrap();
                 assert_eq!(
                     conn_res.err().unwrap().to_string().as_str(),
                     "invalid peer certificate signature"
                 );
-            });
+            })
+            .expect("some handle on non-wasm");
 
             let err_anytime = async {
                 let (_peer, mut conn): (_, AnyFramedTransport<u64>) = malicious_wrong_key
@@ -950,13 +959,14 @@ mod tests {
             let mut server: ConnectionListener<u64> =
                 malicious_wrong_key.listen(bind_addr).await.unwrap();
 
-            let server_task = tokio::spawn(async move {
+            let server_task = spawn("server next await", async move {
                 let conn_res = server.next().await.unwrap();
                 assert_eq!(
                     conn_res.err().unwrap().to_string().as_str(),
                     "received fatal alert: BadCertificate"
                 );
-            });
+            })
+            .expect("some handle on non-wasm");
 
             let err_anytime = async {
                 let (_peer, mut conn): (_, AnyFramedTransport<u64>) =
@@ -986,13 +996,14 @@ mod tests {
                     .await
                     .unwrap();
 
-            let server_task = tokio::spawn(async move {
+            let server_task = spawn("server next await", async move {
                 let conn_res = server.next().await.unwrap();
                 assert_eq!(
                     conn_res.err().unwrap().to_string().as_str(),
                     "received fatal alert: BadCertificate"
                 );
-            });
+            })
+            .expect("some handle on non-wasm");
 
             let err_anytime = async {
                 let (_peer, mut conn): (_, AnyFramedTransport<u64>) =

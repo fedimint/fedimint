@@ -11,6 +11,7 @@ use fedimint_core::config::{DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISuppor
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::PeerHandle;
 use fedimint_core::net::peers::MuxPeerConnections;
+use fedimint_core::task::spawn;
 use fedimint_core::{BitcoinHash, PeerId};
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
@@ -315,7 +316,7 @@ where
                 let key = serde_json::to_string(&key).expect("serialization can't fail");
                 let send = send.clone();
 
-                tokio::spawn(async move {
+                spawn("dkg runner", async move {
                     let (dkg, step) = Dkg::new(group, our_id, peers, threshold, &mut OsRng);
                     let result =
                         Self::run_dkg_key((module_id, key.clone()), connections, dkg, step).await;

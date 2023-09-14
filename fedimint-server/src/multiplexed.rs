@@ -5,6 +5,7 @@ use std::hash::Hash;
 use async_trait::async_trait;
 use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
+use fedimint_core::task::spawn;
 use fedimint_logging::LOG_NET_PEER;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -79,13 +80,16 @@ where
         let (receive_callbacks_tx, receive_callbacks_rx) = channel(1000);
         let (peer_bans_tx, peer_bans_rx) = channel(1000);
 
-        tokio::spawn(Self::run(
-            connections,
-            Default::default(),
-            send_requests_rx,
-            receive_callbacks_rx,
-            peer_bans_rx,
-        ));
+        spawn(
+            "peer connection multiplexer",
+            Self::run(
+                connections,
+                Default::default(),
+                send_requests_rx,
+                receive_callbacks_rx,
+                peer_bans_rx,
+            ),
+        );
 
         Self {
             send_requests_tx,
