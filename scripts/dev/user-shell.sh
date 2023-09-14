@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # shellcheck shell=bash
 
 eval "$(devimint env)"
@@ -26,3 +27,7 @@ echo "  gateway-cln    - cli client for the CLN gateway"
 echo "  gateway-lnd    - cli client for the LND gateway"
 echo
 echo "Use '--help' on each command for more information"
+
+# exec into a new bash instance that will ask for commands
+# --norc to avoid touching the environment in any way
+exec bash --norc

@@ -1,7 +1,7 @@
 server: 127.0.0.1:4050
 procs:
   user:
-    shell: bash --init-file scripts/dev/mprocs/user-shell.sh
+    shell: bash -c scripts/dev/mprocs/user-shell.sh
     stop: SIGKILL
   fedimint0:
     shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-0.log
