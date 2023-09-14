@@ -641,20 +641,6 @@
 <a href="#641" id="641">641</a>
 <a href="#642" id="642">642</a>
 <a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
-<a href="#654" id="654">654</a>
-<a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a>
-<a href="#657" id="657">657</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -916,49 +902,35 @@
             .<span class="kw">await
             </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>peers_response = client
-            .call(cln_rpc::Request::ListPeers(
-                model::requests::ListpeersRequest {
-                    id: <span class="prelude-val">None</span>,
-                    level: <span class="prelude-val">None</span>,
-                },
+        <span class="kw">let </span>active_peer_channels_response = client
+            .call(cln_rpc::Request::ListPeerChannels(
+                model::requests::ListpeerchannelsRequest { id: <span class="prelude-val">None </span>},
             ))
             .<span class="kw">await
             </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>peers = <span class="kw">match </span>peers_response {
-            cln_rpc::Response::ListPeers(peers) =&gt; <span class="prelude-val">Ok</span>(peers.peers),
+        <span class="kw">let </span><span class="kw-2">mut </span>active_peer_channels = <span class="kw">match </span>active_peer_channels_response {
+            cln_rpc::Response::ListPeerChannels(channels) =&gt; <span class="prelude-val">Ok</span>(channels.channels),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
         }
-        .map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>active_peer_channels = peers
-            .into_iter()
-            .flat_map(|peer| {
-                <span class="comment">// TODO: figure out how to get channels now
-                </span><span class="attr">#[allow(deprecated)]
-                </span>peer.channels
-                    .into_iter()
-                    .flatten()
-                    .map(<span class="kw">move </span>|chan| (peer.id, chan))
-            })
-            .filter_map(|(peer_id, chan)| {
-                <span class="comment">// TODO: upstream eq derive
-                </span><span class="kw">if </span>!<span class="macro">matches!</span>(
-                    chan.state,
-                    model::responses::ListpeersPeersChannelsState::CHANNELD_NORMAL
+        .map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?
+        </span>.unwrap_or(Vec::new())
+        .into_iter()
+        .filter_map(|chan| {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = chan.state {
+                <span class="kw">if </span><span class="macro">matches!</span>(
+                    state,
+                    model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
                 ) {
-                    <span class="kw">return </span><span class="prelude-val">None</span>;
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(peer_id) = chan.peer_id {
+                        <span class="kw">return </span>chan.short_channel_id.map(|scid| (peer_id, scid));
+                    }
                 }
+            }
 
-                <span class="kw">let </span><span class="prelude-val">Some</span>(scid) = chan.short_channel_id <span class="kw">else </span>{
-                    <span class="macro">warn!</span>(<span class="string">&quot;Encountered channel without short channel id&quot;</span>);
-                    <span class="kw">return </span><span class="prelude-val">None</span>;
-                };
-
-                <span class="prelude-val">Some</span>((peer_id, scid))
-            })
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            <span class="prelude-val">None
+        </span>})
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="macro">debug!</span>(
             <span class="string">&quot;Found {} active channels to use as route hints&quot;</span>,
