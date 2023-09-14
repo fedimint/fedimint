@@ -259,49 +259,35 @@ impl GatewayLightning for ClnRpcService {
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
-        let peers_response = client
-            .call(cln_rpc::Request::ListPeers(
-                model::requests::ListpeersRequest {
-                    id: None,
-                    level: None,
-                },
+        let active_peer_channels_response = client
+            .call(cln_rpc::Request::ListPeerChannels(
+                model::requests::ListpeerchannelsRequest { id: None },
             ))
             .await
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
 
-        let peers = match peers_response {
-            cln_rpc::Response::ListPeers(peers) => Ok(peers.peers),
+        let mut active_peer_channels = match active_peer_channels_response {
+            cln_rpc::Response::ListPeerChannels(channels) => Ok(channels.channels),
             _ => Err(ClnExtensionError::RpcWrongResponse),
         }
-        .map_err(|err| tonic::Status::internal(err.to_string()))?;
-
-        let mut active_peer_channels = peers
-            .into_iter()
-            .flat_map(|peer| {
-                // TODO: figure out how to get channels now
-                #[allow(deprecated)]
-                peer.channels
-                    .into_iter()
-                    .flatten()
-                    .map(move |chan| (peer.id, chan))
-            })
-            .filter_map(|(peer_id, chan)| {
-                // TODO: upstream eq derive
-                if !matches!(
-                    chan.state,
-                    model::responses::ListpeersPeersChannelsState::CHANNELD_NORMAL
+        .map_err(|err| tonic::Status::internal(err.to_string()))?
+        .unwrap_or(Vec::new())
+        .into_iter()
+        .filter_map(|chan| {
+            if let Some(state) = chan.state {
+                if matches!(
+                    state,
+                    model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
                 ) {
-                    return None;
+                    if let Some(peer_id) = chan.peer_id {
+                        return chan.short_channel_id.map(|scid| (peer_id, scid));
+                    }
                 }
+            }
 
-                let Some(scid) = chan.short_channel_id else {
-                    warn!("Encountered channel without short channel id");
-                    return None;
-                };
-
-                Some((peer_id, scid))
-            })
-            .collect::<Vec<_>>();
+            None
+        })
+        .collect::<Vec<_>>();
 
         debug!(
             "Found {} active channels to use as route hints",
