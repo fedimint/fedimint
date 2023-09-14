@@ -173,7 +173,10 @@
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot};
 <span class="kw">use </span>tokio::task::JoinHandle;
@@ -208,7 +211,7 @@
         <span class="kw">let </span>db_clone = db.clone();
         <span class="kw">let </span>sender_clone = outgoing_message_sender.clone();
 
-        <span class="kw">let </span>relay_handle = tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span>relay_handle = spawn(<span class="string">&quot;atomic relay&quot;</span>, <span class="kw">async move </span>{
             <span class="kw">while let </span><span class="prelude-val">Ok</span>((message, peer_id)) = incoming_message_receiver.recv().<span class="kw">await </span>{
                 <span class="kw">match </span>message {
                     Message::NetworkData(network_data) =&gt; {
@@ -239,7 +242,8 @@
             }
 
             std::future::pending().<span class="kw">await
-        </span>});
+        </span>})
+        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
         <span class="self">Self </span>{
             keychain,
@@ -267,7 +271,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(signed_block) = db::load_block(<span class="kw-2">&amp;</span><span class="self">self</span>.db, index).<span class="kw">await </span>{
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Loaded block with index {}&quot;</span>, index);
 
-            tokio::spawn(<span class="kw">async move </span>{
+            spawn(<span class="string">&quot;atomic run session db&quot;</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>decision_receivers = <span class="macro">vec!</span>[];
 
                 <span class="kw">for </span>ordered_item <span class="kw">in </span>signed_block.block.items.into_iter() {
@@ -303,7 +307,7 @@
             <span class="kw">let </span>outgoing_message_sender = <span class="self">self</span>.outgoing_message_sender.clone();
             <span class="kw">let </span>signed_block_receiver = <span class="self">self</span>.signed_block_receiver.clone();
 
-            tokio::spawn(<span class="kw">async move </span>{
+            spawn(<span class="string">&quot;atomic run session&quot;</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span>session_result = session::run(
                     index,
                     keychain,

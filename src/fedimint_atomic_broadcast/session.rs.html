@@ -260,13 +260,18 @@
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>async_channel::{Receiver, Sender};
 <span class="kw">use </span>bitcoin_hashes::Hash;
-<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::task::{sleep, spawn};
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot, watch};
 
 <span class="kw">use </span><span class="kw">crate</span>::conversion::{to_node_index, to_peer_id};
@@ -334,24 +339,28 @@
     <span class="kw">let </span>(signature_sender, signature_receiver) = watch::channel(<span class="prelude-val">None</span>);
     <span class="kw">let </span>(terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
-    <span class="kw">let </span>aleph_handle = tokio::spawn(aleph_bft::run_session(
-        config,
-        aleph_bft::LocalIO::new(
-            DataProvider::new(keychain.clone(), item_receiver, signature_receiver),
-            FinalizationHandler::new(unit_data_sender),
-            backup_saver,
-            backup_loader,
+    <span class="kw">let </span>aleph_handle = spawn(
+        <span class="string">&quot;aleph run session&quot;</span>,
+        aleph_bft::run_session(
+            config,
+            aleph_bft::LocalIO::new(
+                DataProvider::new(keychain.clone(), item_receiver, signature_receiver),
+                FinalizationHandler::new(unit_data_sender),
+                backup_saver,
+                backup_loader,
+            ),
+            Network::new(network_data_receiver, outgoing_message_sender.clone()),
+            keychain.clone(),
+            Spawner::new(),
+            aleph_bft::Terminator::create_root(terminator_receiver, <span class="string">&quot;Terminator&quot;</span>),
         ),
-        Network::new(network_data_receiver, outgoing_message_sender.clone()),
-        keychain.clone(),
-        Spawner::new(),
-        aleph_bft::Terminator::create_root(terminator_receiver, <span class="string">&quot;Terminator&quot;</span>),
-    ));
+    )
+    .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
     <span class="comment">// we periodically request the signed block corresponding to the current session
     // to recover in case we have been left behind by our peers
     </span><span class="kw">let </span>peer_count = keychain.peer_count();
-    <span class="kw">let </span>block_request_handle = tokio::spawn(<span class="kw">async move </span>{
+    <span class="kw">let </span>block_request_handle = spawn(<span class="string">&quot;atomic block request&quot;</span>, <span class="kw">async move </span>{
         <span class="kw">for </span>peer_id <span class="kw">in </span>(<span class="number">0</span>..peer_count)
             .map(|peer_index| to_peer_id(peer_index.into()))
             .cycle()
@@ -369,7 +378,8 @@
 
             sleep(BLOCK_REQUEST_DELAY).<span class="kw">await</span>;
         }
-    });
+    })
+    .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
     <span class="comment">// this is the minimum number of unit data that will be ordered before we reach
     // the EXPONENTIAL_SLOWDOWN_OFFSET even if no malicious peer attaches unit

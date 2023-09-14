@@ -655,7 +655,7 @@
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{spawn, TaskGroup};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
@@ -773,13 +773,13 @@
             .hook(
                 <span class="string">&quot;htlc_accepted&quot;</span>,
                 |plugin: Plugin&lt;Arc&lt;ClnHtlcInterceptor&gt;&gt;, value: serde_json::Value| <span class="kw">async move </span>{
-                    <span class="comment">// This callback needs to be `Sync`, so we use tokio::spawn
-                    </span><span class="kw">let </span>handle = tokio::spawn(<span class="kw">async move </span>{
+                    <span class="comment">// This callback needs to be `Sync`, so we use task::spawn
+                    </span><span class="kw">let </span>handle = spawn(<span class="string">&quot;cln intercept htlc&quot;</span>, <span class="kw">async move </span>{
                         <span class="comment">// Handle core-lightning &quot;htlc_accepted&quot; events
                         // by passing the HTLC to the interceptor in the plugin state
                         </span><span class="kw">let </span>payload: HtlcAccepted = serde_json::from_value(value)<span class="question-mark">?</span>;
                         <span class="prelude-val">Ok</span>(plugin.state().intercept_htlc(payload).<span class="kw">await</span>)
-                    });
+                    }).expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
                     handle.<span class="kw">await</span><span class="question-mark">?
                 </span>},
             )

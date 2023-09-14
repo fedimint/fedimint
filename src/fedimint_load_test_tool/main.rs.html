@@ -757,6 +757,8 @@
 <a href="#757" id="757">757</a>
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -775,6 +777,7 @@
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+<span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, SafeUrl};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
@@ -974,10 +977,11 @@
     fedimint_logging::TracingSetup::default().init()<span class="question-mark">?</span>;
     <span class="kw">let </span>opts = Opts::parse();
     <span class="kw">let </span>(event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
-    <span class="kw">let </span>summary_handle = tokio::spawn({
+    <span class="kw">let </span>summary_handle = spawn(<span class="string">&quot;handle metrics summary&quot;</span>, {
         <span class="kw">let </span>opts = opts.clone();
         <span class="kw">async move </span>{ handle_metrics_summary(opts, event_receiver).<span class="kw">await </span>}
-    });
+    })
+    .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
     <span class="kw">let </span>futures = <span class="kw">match </span>opts.command.clone() {
         Command::TestConnect {
             invite_code,

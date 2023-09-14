@@ -653,6 +653,16 @@
 <a href="#653" id="653">653</a>
 <a href="#654" id="654">654</a>
 <a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 
 </span><span class="kw">use </span>std::collections::VecDeque;
@@ -809,7 +819,7 @@
                 <span class="kw">_ </span>= terminate =&gt; {},
             }
         }
-        tokio::spawn({
+        spawn(<span class="string">&quot;kill handlers&quot;</span>, {
             <span class="kw">let </span>task_group = <span class="self">self</span>.clone();
             <span class="kw">async move </span>{
                 wait_for_shutdown_signal().<span class="kw">await</span>;
@@ -841,7 +851,7 @@
         <span class="kw">let </span>handle = <span class="self">self</span>.make_handle();
 
         <span class="kw">let </span>(tx, rx) = oneshot::channel();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn(<span class="kw">async move </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn(name.as_str(), <span class="kw">async move </span>{
             <span class="comment">// if receiver is not interested, just drop the message
             </span><span class="kw">let _ </span>= tx.send(f(handle).<span class="kw">await</span>);
         }) {
@@ -868,7 +878,7 @@
         };
         <span class="kw">let </span>handle = <span class="self">self</span>.make_handle();
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn_local(<span class="kw">async move </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn_local(name.as_str(), <span class="kw">async move </span>{
             f(handle).<span class="kw">await</span>;
         }) {
             <span class="self">self</span>.inner.join.lock().<span class="kw">await</span>.push_back((name, handle));
@@ -895,7 +905,7 @@
         <span class="kw">let </span>handle = <span class="self">self</span>.make_handle();
 
         <span class="kw">let </span>(tx, rx) = oneshot::channel();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn(<span class="kw">async move </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn(name.as_str(), <span class="kw">async move </span>{
             <span class="kw">let _ </span>= tx.send(f(handle).<span class="kw">await</span>);
         }) {
             <span class="self">self</span>.inner.join.lock().<span class="kw">await</span>.push_back((name, handle));
@@ -1048,18 +1058,28 @@
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-    <span class="kw">pub fn </span>spawn&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">pub fn </span>spawn&lt;F, V: Send + <span class="lifetime">&#39;static</span>&gt;(name: <span class="kw-2">&amp;</span>str, future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;V&gt;&gt;
     <span class="kw">where
-        </span>F: Future&lt;Output = ()&gt; + Send + <span class="lifetime">&#39;static</span>,
+        </span>F: Future&lt;Output = V&gt; + Send + <span class="lifetime">&#39;static</span>,
     {
-        <span class="prelude-val">Some</span>(tokio::spawn(future))
+        <span class="prelude-val">Some</span>(
+            tokio::task::Builder::new()
+                .name(name)
+                .spawn(future)
+                .expect(<span class="string">&quot;spawn failed&quot;</span>),
+        )
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn_local&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn_local&lt;F&gt;(name: <span class="kw-2">&amp;</span>str, future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
     <span class="kw">where
         </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">&#39;static</span>,
     {
-        <span class="prelude-val">Some</span>(tokio::task::spawn_local(future))
+        <span class="prelude-val">Some</span>(
+            tokio::task::Builder::new()
+                .name(name)
+                .spawn_local(future)
+                .expect(<span class="string">&quot;spawn failed&quot;</span>),
+        )
     }
 
     <span class="kw">pub fn </span>block_in_place&lt;F, R&gt;(f: F) -&gt; R
@@ -1095,7 +1115,7 @@
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-    <span class="kw">pub fn </span>spawn&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">pub fn </span>spawn&lt;F&gt;(_name: <span class="kw-2">&amp;</span>str, future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
     <span class="kw">where
         </span><span class="comment">// No Send needed on wasm
         </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">&#39;static</span>,
@@ -1104,12 +1124,12 @@
         <span class="prelude-val">None
     </span>}
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn_local&lt;F&gt;(future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn_local&lt;F&gt;(_name: <span class="kw-2">&amp;</span>str, future: F) -&gt; <span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;
     <span class="kw">where
         </span><span class="comment">// No Send needed on wasm
         </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">&#39;static</span>,
     {
-        <span class="self">self</span>::spawn(future)
+        <span class="self">self</span>::spawn(_name, future)
     }
 
     <span class="kw">pub fn </span>block_in_place&lt;F, R&gt;(f: F) -&gt; R

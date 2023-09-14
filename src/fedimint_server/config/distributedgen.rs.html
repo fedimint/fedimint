@@ -563,6 +563,7 @@
 <a href="#563" id="563">563</a>
 <a href="#564" id="564">564</a>
 <a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -576,6 +577,7 @@
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::module::PeerHandle;
 <span class="kw">use </span>fedimint_core::net::peers::MuxPeerConnections;
+<span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, PeerId};
 <span class="kw">use </span>hbbft::crypto::poly::Commitment;
 <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
@@ -880,7 +882,7 @@
                 <span class="kw">let </span>key = serde_json::to_string(<span class="kw-2">&amp;</span>key).expect(<span class="string">&quot;serialization can&#39;t fail&quot;</span>);
                 <span class="kw">let </span>send = send.clone();
 
-                tokio::spawn(<span class="kw">async move </span>{
+                spawn(<span class="string">&quot;dkg runner&quot;</span>, <span class="kw">async move </span>{
                     <span class="kw">let </span>(dkg, step) = Dkg::new(group, our_id, peers, threshold, <span class="kw-2">&amp;mut </span>OsRng);
                     <span class="kw">let </span>result =
                         <span class="self">Self</span>::run_dkg_key((module_id, key.clone()), connections, dkg, step).<span class="kw">await</span>;

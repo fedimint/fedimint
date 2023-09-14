@@ -271,6 +271,10 @@
 <a href="#271" id="271">271</a>
 <a href="#272" id="272">272</a>
 <a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, VecDeque};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -278,6 +282,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
+<span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -352,13 +357,16 @@
         <span class="kw">let </span>(receive_callbacks_tx, receive_callbacks_rx) = channel(<span class="number">1000</span>);
         <span class="kw">let </span>(peer_bans_tx, peer_bans_rx) = channel(<span class="number">1000</span>);
 
-        tokio::spawn(<span class="self">Self</span>::run(
-            connections,
-            Default::default(),
-            send_requests_rx,
-            receive_callbacks_rx,
-            peer_bans_rx,
-        ));
+        spawn(
+            <span class="string">&quot;peer connection multiplexer&quot;</span>,
+            <span class="self">Self</span>::run(
+                connections,
+                Default::default(),
+                send_requests_rx,
+                receive_callbacks_rx,
+                peer_bans_rx,
+            ),
+        );
 
         <span class="self">Self </span>{
             send_requests_tx,

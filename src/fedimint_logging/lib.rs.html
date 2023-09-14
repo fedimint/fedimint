@@ -131,6 +131,7 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::io;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -210,7 +211,8 @@
         };
 
         <span class="kw">let </span>fmt_layer = tracing_subscriber::fmt::layer()
-            .with_writer(fmt_writer)
+            .with_thread_names(<span class="bool-val">false</span>) <span class="comment">// can be enabled for debugging
+            </span>.with_writer(fmt_writer)
             .with_filter(filter_layer);
 
         <span class="kw">let </span>console_opt = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;&gt; {

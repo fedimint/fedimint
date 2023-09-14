@@ -1015,6 +1015,17 @@
 <a href="#1015" id="1015">1015</a>
 <a href="#1016" id="1016">1016</a>
 <a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple
 //! implementations
 
@@ -1274,7 +1285,7 @@
     <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>anyhow::{anyhow, Error};
-    <span class="kw">use </span>fedimint_core::task::sleep;
+    <span class="kw">use </span>fedimint_core::task::{sleep, spawn};
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::{task, PeerId};
     <span class="kw">use </span>futures::{pin_mut, FutureExt, SinkExt, Stream, StreamExt};
@@ -1742,7 +1753,10 @@
         <span class="kw">let </span>conn_b = net.connector(peer_b, StreamReliability::FullyReliable);
 
         <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;u64&gt;::listen(<span class="kw-2">&amp;</span>conn_a, bind_addr).<span class="kw">await</span>.unwrap();
-        <span class="kw">let </span>conn_a_fut = tokio::spawn(<span class="kw">async move </span>{ listener.next().<span class="kw">await</span>.unwrap().unwrap() });
+        <span class="kw">let </span>conn_a_fut = spawn(<span class="string">&quot;listener next await&quot;</span>, <span class="kw">async move </span>{
+            listener.next().<span class="kw">await</span>.unwrap().unwrap()
+        })
+        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
         <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) = Connector::&lt;u64&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, url, peer_a)
             .<span class="kw">await
@@ -1816,7 +1830,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;Vec&lt;u8&gt;&gt;::listen(<span class="kw-2">&amp;</span>conn_a, bind_addr)
             .<span class="kw">await
             </span>.unwrap();
-        <span class="kw">let </span>conn_a_fut = tokio::spawn(<span class="kw">async move </span>{ listener.next().<span class="kw">await</span>.unwrap().unwrap() });
+        <span class="kw">let </span>conn_a_fut = spawn(<span class="string">&quot;listener next await&quot;</span>, <span class="kw">async move </span>{
+            listener.next().<span class="kw">await</span>.unwrap().unwrap()
+        })
+        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
         <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) = Connector::&lt;Vec&lt;u8&gt;&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, url, peer_a)
             .<span class="kw">await
@@ -1846,6 +1863,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::net::SocketAddr;
 
+    <span class="kw">use </span>fedimint_core::task::spawn;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>futures::{SinkExt, StreamExt};
@@ -1895,14 +1913,15 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = connectors[<span class="number">0</span>].listen(bind_addr).<span class="kw">await</span>.unwrap();
 
-        <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
             <span class="kw">let </span>(peer, <span class="kw-2">mut </span>conn) = server.next().<span class="kw">await</span>.unwrap().unwrap();
             <span class="macro">assert_eq!</span>(peer.to_usize(), <span class="number">2</span>);
             <span class="kw">let </span>received = conn.next().<span class="kw">await</span>.unwrap().unwrap();
             <span class="macro">assert_eq!</span>(received, <span class="number">42</span>);
             conn.send(<span class="number">21</span>).<span class="kw">await</span>.unwrap();
             <span class="macro">assert!</span>(conn.next().<span class="kw">await</span>.unwrap().is_err());
-        });
+        })
+        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
         <span class="kw">let </span>(peer_of_a, <span class="kw-2">mut </span>client_a): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = connectors[<span class="number">2</span>]
             .connect_framed(url.clone(), PeerId::from(<span class="number">0</span>))
@@ -1933,13 +1952,14 @@
         </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = honest.listen(bind_addr).<span class="kw">await</span>.unwrap();
 
-            <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
                     <span class="string">&quot;invalid peer certificate signature&quot;
                 </span>);
-            });
+            })
+            .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
                 <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = malicious_wrong_key
@@ -1967,13 +1987,14 @@
             <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
                 malicious_wrong_key.listen(bind_addr).<span class="kw">await</span>.unwrap();
 
-            <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
                     <span class="string">&quot;received fatal alert: BadCertificate&quot;
                 </span>);
-            });
+            })
+            .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
                 <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) =
@@ -2003,13 +2024,14 @@
                     .<span class="kw">await
                     </span>.unwrap();
 
-            <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span>server_task = spawn(<span class="string">&quot;server next await&quot;</span>, <span class="kw">async move </span>{
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
                     <span class="string">&quot;received fatal alert: BadCertificate&quot;
                 </span>);
-            });
+            })
+            .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
             <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
                 <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) =

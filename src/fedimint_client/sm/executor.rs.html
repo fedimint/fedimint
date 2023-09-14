@@ -1390,7 +1390,7 @@
         </span>);
 
         <span class="kw">let </span>task_runner_inner = <span class="self">self</span>.inner.clone();
-        <span class="kw">let </span>_handle = spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span>_handle = spawn(<span class="string">&quot;client state machine&quot;</span>, <span class="kw">async move </span>{
             <span class="kw">let </span>executor_runner = task_runner_inner.run(context_gen);
             <span class="macro">select! </span>{
                 shutdown_happened_sender = shutdown_receiver =&gt; {
