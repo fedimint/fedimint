@@ -17,10 +17,11 @@ fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-client = { path = "../../fedimint-client" }
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-core = { path = "../../fedimint-core" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 tokio = { version = "1.26.0", features = ["sync"] }
+tracing = "0.1.37"
 
 [dev-dependencies]
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }

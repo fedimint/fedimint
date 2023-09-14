@@ -958,6 +958,7 @@ mod fedimint_migration_tests {
         blind_message, combine_valid_shares, sign_blinded_msg, BlindingKey, FromRandom, Message,
         Scalar, SecretKeyShare,
     };
+    use tracing::instrument;
 
     use crate::{Mint, MintGen};
 
@@ -1038,6 +1039,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
         prepare_db_migration_snapshot(
             "mint-v0",
@@ -1056,6 +1058,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_migrations() {
         validate_migrations(
             "mint",

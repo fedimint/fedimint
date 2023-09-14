@@ -6,14 +6,18 @@ use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
 use fedimint_dummy_server::DummyGen;
 use fedimint_testing::fixtures::Fixtures;
+use tracing::{info_span, instrument};
 
 fn fixtures() -> Fixtures {
     Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default())
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn can_print_and_send_money() -> anyhow::Result<()> {
-    let fed = fixtures().new_fed().await;
+    let fed = fixtures()
+        .new_fed(info_span!("can_print_and_send_money"))
+        .await;
     let (client1, client2) = fed.two_clients().await;
 
     let (_, outpoint) = client1.print_money(sats(1000)).await?;
@@ -28,8 +32,11 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn can_threshold_sign_message() {
-    let fed = fixtures().new_fed().await;
+    let fed = fixtures()
+        .new_fed(info_span!("can_threshold_sign_message"))
+        .await;
     let client = fed.new_client().await;
 
     let message = "Hello fed!";
@@ -38,8 +45,11 @@ async fn can_threshold_sign_message() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn client_ignores_unknown_module() {
-    let fed = fixtures().new_fed().await;
+    let fed = fixtures()
+        .new_fed(info_span!("client_ignores_unknown_module"))
+        .await;
     let client = fed.new_client().await;
 
     let mut cfg = client.get_config().clone();

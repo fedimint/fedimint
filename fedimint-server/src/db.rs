@@ -156,6 +156,7 @@ mod fedimint_migration_tests {
     use secp256k1_zkp::Message;
     use strum::IntoEnumIterator;
     use threshold_crypto::SignatureShare;
+    use tracing::instrument;
 
     use super::{
         AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
@@ -263,6 +264,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
         prepare_db_migration_snapshot(
             "global-v0",
@@ -281,6 +283,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_migrations() -> anyhow::Result<()> {
         validate_migrations(
             "global",

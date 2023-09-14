@@ -1347,6 +1347,7 @@ mod fedimint_migration_tests {
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
+    use tracing::instrument;
 
     use crate::{
         ContractAccount, Lightning, LightningGateway, LightningGen, LightningOutputOutcome,
@@ -1475,6 +1476,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
         prepare_db_migration_snapshot(
             "lightning-v0",
@@ -1493,6 +1495,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_migrations() -> anyhow::Result<()> {
         validate_migrations(
             "lightning",

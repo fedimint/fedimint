@@ -1632,6 +1632,7 @@ mod test_utils {
     use std::time::Duration;
 
     use futures::{Future, FutureExt, StreamExt};
+    use tracing::instrument;
 
     use super::{
         apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
@@ -2212,6 +2213,7 @@ mod test_utils {
 
     #[cfg(test)]
     #[tokio::test]
+    #[instrument(level = "info")]
     pub async fn verify_test_migration() {
         // Insert a bunch of old dummy data that needs to be migrated to a new version
         let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
@@ -2276,6 +2278,7 @@ mod test_utils {
 
     #[cfg(test)]
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_autocommit() {
         use std::marker::PhantomData;
 
@@ -2425,6 +2428,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_wait_key_before_transaction() {
         let key = TestKey(1);
         let val = TestVal(2);
@@ -2444,6 +2448,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_wait_key_before_insert() {
         let key = TestKey(1);
         let val = TestVal(2);
@@ -2462,6 +2467,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_wait_key_after_insert() {
         let key = TestKey(1);
         let val = TestVal(2);
@@ -2482,6 +2488,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_wait_key_after_commit() {
         let key = TestKey(1);
         let val = TestVal(2);
@@ -2500,6 +2507,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_wait_key_isolated_db() {
         let module_instance_id = 10;
         let key = TestKey(1);
@@ -2521,6 +2529,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_wait_key_isolated_tx() {
         let module_instance_id = 10;
         let key = TestKey(1);
@@ -2543,6 +2552,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_wait_key_no_transaction() {
         let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
 

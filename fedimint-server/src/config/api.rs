@@ -706,6 +706,7 @@ mod tests {
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
+    use tracing::{info_span, instrument};
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
@@ -874,6 +875,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_config_api() {
         let _ = TracingSetup::default().init();
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-config-api");
@@ -1015,9 +1017,13 @@ mod tests {
             all_peers
         };
 
+        let span = info_span!("test_config_api");
         // Run the Fedimint servers and test concurrently
         let (_, followers) = tokio::join!(
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
+            join_all(
+                apis.iter_mut()
+                    .map(|api| api.run(TaskGroup::new(), span.clone()))
+            ),
             test
         );
 
@@ -1037,7 +1043,10 @@ mod tests {
 
         //  Restart the Fedimint servers and a new test concurrently
         tokio::join!(
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
+            join_all(
+                apis.iter_mut()
+                    .map(|api| api.run(TaskGroup::new(), span.clone()))
+            ),
             test2
         );
     }

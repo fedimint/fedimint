@@ -112,12 +112,12 @@ impl Fixtures {
     }
 
     /// Starts a new federation with default number of peers for testing
-    pub async fn new_fed(&self) -> FederationTest {
-        self.new_fed_with_peers(self.num_peers).await
+    pub async fn new_fed(&self, span: tracing::Span) -> FederationTest {
+        self.new_fed_with_peers(self.num_peers, span).await
     }
 
     /// Starts a new federation with number of peers
-    pub async fn new_fed_with_peers(&self, num_peers: u16) -> FederationTest {
+    pub async fn new_fed_with_peers(&self, num_peers: u16, span: tracing::Span) -> FederationTest {
         FederationTest::new(
             num_peers,
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
@@ -126,6 +126,7 @@ impl Fixtures {
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_client,
+            span,
         )
         .await
     }

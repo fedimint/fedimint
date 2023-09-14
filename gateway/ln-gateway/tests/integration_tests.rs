@@ -11,8 +11,10 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::gateway::GatewayTest;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{BalancePayload, ConnectFedPayload};
+use tracing::instrument;
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_supports_connecting_multiple_federations() {
     let (_, rpc, fed1, fed2, _) = fixtures::fixtures().await;
 
@@ -39,6 +41,7 @@ async fn gatewayd_supports_connecting_multiple_federations() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_shows_info_about_all_connected_federations() {
     let (_, rpc, fed1, fed2, _) = fixtures::fixtures().await;
 
@@ -63,6 +66,7 @@ async fn gatewayd_shows_info_about_all_connected_federations() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_shows_balance_for_any_connected_federation() {
     let (gateway, rpc, fed1, fed2, _) = fixtures::fixtures().await;
 
@@ -85,6 +89,7 @@ async fn gatewayd_shows_balance_for_any_connected_federation() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_allows_deposit_to_any_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
@@ -92,6 +97,7 @@ async fn gatewayd_allows_deposit_to_any_connected_federation() -> anyhow::Result
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_allows_withdrawal_from_any_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
@@ -99,6 +105,7 @@ async fn gatewayd_allows_withdrawal_from_any_connected_federation() -> anyhow::R
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_supports_backup_of_any_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
@@ -106,6 +113,7 @@ async fn gatewayd_supports_backup_of_any_connected_federation() -> anyhow::Resul
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_supports_restore_of_any_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
@@ -115,6 +123,7 @@ async fn gatewayd_supports_restore_of_any_connected_federation() -> anyhow::Resu
 // Internal payments within a federation should not involve the gateway. See
 // Issue #613: Federation facilitates internal payments w/o involving gateway
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_pays_internal_invoice_within_a_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 
@@ -122,6 +131,7 @@ async fn gatewayd_pays_internal_invoice_within_a_connected_federation() -> anyho
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_pays_outgoing_invoice_to_generic_ln() -> anyhow::Result<()> {
     // todo: implement test case
 
@@ -129,6 +139,7 @@ async fn gatewayd_pays_outgoing_invoice_to_generic_ln() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_pays_outgoing_invoice_between_federations_connected() -> anyhow::Result<()> {
     // todo: implement test case
 
@@ -136,6 +147,7 @@ async fn gatewayd_pays_outgoing_invoice_between_federations_connected() -> anyho
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn gatewayd_intercepts_htlc_and_settles_to_connected_federation() -> anyhow::Result<()> {
     // todo: implement test case
 

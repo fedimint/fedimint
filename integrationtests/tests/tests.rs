@@ -28,10 +28,12 @@ use fedimint_core::{msats, sats};
 use fedimint_server::epoch::ConsensusItem;
 use futures::future::{join_all, Either};
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use crate::fixtures::{peers, test};
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
     test(2, |fed, user, bitcoin| async move {
         // at least one epoch needed to establish fees
@@ -75,11 +77,13 @@ async fn wallet_peg_outs_must_wait_for_available_utxos() -> Result<()> {
 // this test had to be removed to switch to aleph bft and should be ported to
 // the new testing framework.
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn ecash_cannot_double_spent_with_different_nodes() -> Result<()> {
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
     test(2, |fed, user_send, bitcoin| async move {
         let dummy_user = user_send.new_client_with_peers(peers(&[0]));
@@ -128,6 +132,7 @@ async fn ecash_in_wallet_can_sent_through_a_tx() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn runs_consensus_if_tx_submitted() -> Result<()> {
     test(2, |fed, user_send, bitcoin| async move {
         fed.run_consensus_epochs(1).await;
@@ -156,6 +161,7 @@ async fn runs_consensus_if_tx_submitted() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn runs_consensus_if_new_block() -> Result<()> {
     test(2, |fed, user, bitcoin| async move {
         // to assert we have no pending epochs, we need to make sure
@@ -194,6 +200,7 @@ async fn runs_consensus_if_new_block() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 #[should_panic]
 async fn audit_negative_balance_sheet_panics() {
     test(2, |fed, user, _| async move {
@@ -205,6 +212,7 @@ async fn audit_negative_balance_sheet_panics() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn unbalanced_transactions_get_rejected() -> Result<()> {
     test(2, |fed, user, _| async move {
         // cannot make change for this invoice (results in unbalanced tx)
@@ -217,6 +225,7 @@ async fn unbalanced_transactions_get_rejected() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn can_have_federations_with_one_peer() -> Result<()> {
     test(1, |fed, user, bitcoin| async move {
         bitcoin.mine_blocks(110).await;
@@ -228,6 +237,7 @@ async fn can_have_federations_with_one_peer() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn can_get_signed_epoch_history() -> Result<()> {
     test(2, |fed, user, bitcoin| async move {
         fed.mine_and_mint(&*user, &*bitcoin, sats(1000)).await;
@@ -245,6 +255,7 @@ async fn can_get_signed_epoch_history() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn rejoin_consensus_single_peer() -> Result<()> {
     test(4, |fed, user, bitcoin| async move {
         let bitcoin = bitcoin.lock_exclusive().await;
@@ -285,6 +296,7 @@ async fn rejoin_consensus_single_peer() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn rejoin_consensus_threshold_peers() -> Result<()> {
     test(2, |fed, _user, bitcoin| async move {
         // Simulate a rejoin where all nodes stop
@@ -299,6 +311,7 @@ async fn rejoin_consensus_threshold_peers() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn rejoin_consensus_split_peers() -> Result<()> {
     test(4, |fed, user, bitcoin| async move {
         // Simulate a rejoin where half the nodes didn't process the outcomes
@@ -326,6 +339,7 @@ async fn rejoin_consensus_split_peers() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn ecash_backup_can_recover_metadata() -> Result<()> {
     test(2, |_fed, user_send, _bitcoin| async move {
         #[derive(Serialize, Deserialize)]
@@ -359,11 +373,13 @@ async fn ecash_backup_can_recover_metadata() -> Result<()> {
 // this test had to be removed to switch to aleph bft and should be ported to
 // the new testing framework.
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn ecash_can_be_recovered() -> Result<()> {
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn limits_client_config_downloads() -> Result<()> {
     test(2, |fed, user, _| async move {
         let connect = &fed.invite_code.clone();
@@ -386,6 +402,7 @@ async fn limits_client_config_downloads() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn cannot_replay_transactions() -> Result<()> {
     test(4, |fed, user, bitcoin| async move {
         fed.mine_and_mint(&*user, &*bitcoin, sats(5000)).await;

@@ -214,6 +214,7 @@ mod tests {
 
     use fedimint_core::task::Elapsed;
     use futures::FutureExt;
+    use tracing::instrument;
 
     use crate::task::timeout;
     use crate::util::{NextOrPending, SafeUrl};
@@ -266,6 +267,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_next_or_pending() {
         let mut stream = futures::stream::iter(vec![1, 2]);
         assert_eq!(stream.next_or_pending().now_or_never(), Some(1));

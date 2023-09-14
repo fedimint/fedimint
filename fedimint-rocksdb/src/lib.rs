@@ -311,6 +311,7 @@ mod fedimint_rocksdb_tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::{impl_db_lookup, impl_db_record};
     use futures::StreamExt;
+    use tracing::instrument;
 
     use super::*;
 
@@ -327,12 +328,14 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_insert_elements() {
         fedimint_core::db::verify_insert_elements(open_temp_db("fcb-rocksdb-test-insert-elements"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_remove_nonexisting() {
         fedimint_core::db::verify_remove_nonexisting(open_temp_db(
             "fcb-rocksdb-test-remove-nonexisting",
@@ -341,18 +344,21 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_remove_existing() {
         fedimint_core::db::verify_remove_existing(open_temp_db("fcb-rocksdb-test-remove-existing"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_read_own_writes() {
         fedimint_core::db::verify_read_own_writes(open_temp_db("fcb-rocksdb-test-read-own-writes"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_prevent_dirty_reads() {
         fedimint_core::db::verify_prevent_dirty_reads(open_temp_db(
             "fcb-rocksdb-test-prevent-dirty-reads",
@@ -361,17 +367,20 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_find_by_prefix() {
         fedimint_core::db::verify_find_by_prefix(open_temp_db("fcb-rocksdb-test-find-by-prefix"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_commit() {
         fedimint_core::db::verify_commit(open_temp_db("fcb-rocksdb-test-commit")).await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_prevent_nonrepeatable_reads() {
         fedimint_core::db::verify_prevent_nonrepeatable_reads(open_temp_db(
             "fcb-rocksdb-test-prevent-nonrepeatable-reads",
@@ -380,6 +389,7 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_rollback_to_savepoint() {
         fedimint_core::db::verify_rollback_to_savepoint(open_temp_db(
             "fcb-rocksdb-test-rollback-to-savepoint",
@@ -388,18 +398,21 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_phantom_entry() {
         fedimint_core::db::verify_phantom_entry(open_temp_db("fcb-rocksdb-test-phantom-entry"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_write_conflict() {
         fedimint_core::db::expect_write_conflict(open_temp_db("fcb-rocksdb-test-write-conflict"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_dbtx_remove_by_prefix() {
         fedimint_core::db::verify_remove_by_prefix(open_temp_db(
             "fcb-rocksdb-test-remove-by-prefix",
@@ -408,12 +421,14 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_module_dbtx() {
         fedimint_core::db::verify_module_prefix(open_temp_db("fcb-rocksdb-test-module-prefix"))
             .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_module_db() {
         let module_instance_id = 1;
         let path = tempfile::Builder::new()
@@ -434,6 +449,7 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     #[should_panic(expected = "Cannot isolate and already isolated database.")]
     async fn test_cannot_isolate_already_isolated_db() {
         let module_instance_id = 1;
@@ -502,6 +518,7 @@ mod fedimint_rocksdb_tests {
     impl_db_lookup!(key = TestKey2, query_prefix = DbPrefixTestPrefixMax);
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_retrieve_descending_order() {
         let path = tempfile::Builder::new()
             .prefix("fcb-rocksdb-test-descending-order")

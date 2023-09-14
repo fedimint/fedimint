@@ -43,6 +43,7 @@ use ln_gateway::utils::retry;
 use ln_gateway::GatewayState;
 use reqwest::StatusCode;
 use secp256k1::PublicKey;
+use tracing::{info_span, instrument};
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -50,6 +51,7 @@ fn fixtures() -> Fixtures {
     fixtures.with_module(LightningClientGen, LightningGen, ln_params)
 }
 
+#[instrument(skip_all, level = "info")]
 async fn gateway_test<B>(
     f: impl FnOnce(
             GatewayTest,
@@ -70,7 +72,8 @@ where
     let cln2 = fixtures.cln().await;
 
     for (gateway_ln, other_node) in [(lnd1, cln1), (cln2, lnd2)] {
-        let fed = fixtures.new_fed().await;
+        // TODO: get span from outer context?
+        let fed = fixtures.new_fed(info_span!("gateway-test")).await;
         let user_client = fed.new_client().await;
         let mut gateway = fixtures
             .new_gateway(gateway_ln, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
@@ -123,6 +126,7 @@ async fn pay_valid_invoice(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
     // Running LDK Node with the mock services doesnt provide any additional
     // coverage, since `FakeLightningTest` does not open any channels.
@@ -160,6 +164,7 @@ async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
     gateway_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -184,6 +189,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     gateway_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -246,6 +252,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     gateway_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -291,6 +298,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
     gateway_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client(&fed).await;
@@ -337,6 +345,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<()> {
     gateway_test(|gateway, _, fed, _, _| async move {
         let gateway = gateway.remove_client(&fed).await;
@@ -370,6 +379,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
     gateway_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client(&fed).await;
@@ -401,6 +411,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()> {
     gateway_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -499,10 +510,13 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let node = fixtures.lnd().await;
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures
+        .new_fed(info_span!("test_gateway_register_with_federation"))
+        .await;
     let user_client = fed.new_client().await;
     let mut gateway_test = fixtures
         .new_gateway(node, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
@@ -542,6 +556,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     gateway_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -595,6 +610,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
     if !Fixtures::is_real_test() {
         return Ok(());
@@ -624,7 +640,9 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
 
             tracing::info!("Creating federation with gateway type {gateway_type}. Number of route hints: {num_route_hints}");
 
-            let fed = fixtures.new_fed().await;
+            let span = tracing::info_span!("test_gateway_filters_route_hints_by_inbound");
+            let fed = fixtures.new_fed(span.clone()).await;
+            let _enter = span.enter();
             let user_client = fed.new_client().await;
             let mut gateway = fixtures
                 .new_gateway(
@@ -708,10 +726,13 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn test_gateway_configuration() -> anyhow::Result<()> {
     let fixtures = fixtures();
 
-    let fed = fixtures.new_fed().await;
+    let span = tracing::info_span!("test_gateway_configuration");
+    let fed = fixtures.new_fed(span.clone()).await;
+    let _enter = span.enter();
     let lnd = fixtures.lnd().await;
     let gateway = fixtures.new_gateway(lnd, 0, None).await;
     let rpc_client = gateway.get_rpc().await;

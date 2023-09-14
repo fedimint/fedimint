@@ -1654,6 +1654,7 @@ mod fedimint_migration_tests {
     use rand::rngs::OsRng;
     use secp256k1::Message;
     use strum::IntoEnumIterator;
+    use tracing::instrument;
 
     use crate::{Wallet, WalletGen};
 
@@ -1813,6 +1814,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn prepare_db_migration_snapshots() -> anyhow::Result<()> {
         prepare_db_migration_snapshot(
             "wallet-v0",
@@ -1831,6 +1833,7 @@ mod fedimint_migration_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[instrument(level = "info")]
     async fn test_migrations() -> anyhow::Result<()> {
         validate_migrations(
             "wallet",

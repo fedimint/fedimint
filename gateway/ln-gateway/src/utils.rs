@@ -50,10 +50,12 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::anyhow;
+    use tracing::instrument;
 
     use super::retry;
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn retry_succeed_with_one_attempt() {
         let counter = AtomicU8::new(0);
         let closure = || async {
@@ -68,6 +70,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn retry_fail_with_three_attempts() {
         let counter = AtomicU8::new(0);
         let closure = || async {

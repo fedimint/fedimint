@@ -10,6 +10,7 @@ use fedimint_core::task::{sleep, spawn};
 use fedimint_core::PeerId;
 use secp256k1_zkp::{rand, Secp256k1, SecretKey};
 use tokio::task::JoinHandle;
+use tracing::instrument;
 
 fn to_peer_id(peer_index: usize) -> PeerId {
     u16::try_from(peer_index)
@@ -177,6 +178,7 @@ impl Federation {
 }
 
 #[tokio::test]
+#[instrument(level = "info")]
 #[ignore] // https://github.com/fedimint/fedimint/issues/2741 too slow
 async fn crash_recovery() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();

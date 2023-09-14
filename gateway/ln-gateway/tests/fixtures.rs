@@ -33,8 +33,10 @@ pub async fn fixtures() -> (
         .await
         .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
 
-    let fed1 = fixtures.new_fed().await;
-    let fed2 = fixtures.new_fed().await;
+    let span = tracing::info_span!("test_gateway_configuration");
+    let fed1 = fixtures.new_fed(span.clone()).await;
+    let fed2 = fixtures.new_fed(span.clone()).await;
+    let _enter = span.enter();
 
     (gateway, client, fed1, fed2, fixtures.bitcoin())
 }

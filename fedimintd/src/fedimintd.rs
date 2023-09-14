@@ -25,7 +25,7 @@ use fedimint_server::FedimintServer;
 use fedimint_wallet_server::WalletGen;
 use futures::FutureExt;
 use tokio::select;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, debug_span, error, info, warn};
 
 use crate::attach_default_module_init_params;
 
@@ -302,15 +302,16 @@ async fn run(
         },
         db,
     };
+    let span = debug_span!("fedimintd");
     if let Some(bind_metrics_api) = opts.bind_metrics_api.as_ref() {
         let (api_result, metrics_api_result) = futures::join!(
-            api.run(task_group.clone()),
+            api.run(task_group.clone(), span),
             spawn_metrics_server(bind_metrics_api, task_group)
         );
         api_result?;
         metrics_api_result?;
     } else {
-        api.run(task_group).await?;
+        api.run(task_group, span).await?;
     }
     Ok(())
 }

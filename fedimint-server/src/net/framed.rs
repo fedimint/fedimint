@@ -245,10 +245,12 @@ mod tests {
     use futures::{SinkExt, StreamExt};
     use serde::{Deserialize, Serialize};
     use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
+    use tracing::instrument;
 
     use crate::net::framed::BidiFramed;
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_roundtrip() {
         #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         enum TestEnum {
@@ -279,6 +281,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_not_try_parse_partial() {
         #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         enum TestEnum {

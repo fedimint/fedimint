@@ -15,6 +15,7 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::DEFAULT_GATEWAY_PASSWORD;
 use lightning_invoice::Bolt11Invoice;
+use tracing::{info_span, instrument};
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -32,9 +33,12 @@ async fn gateway(fixtures: &Fixtures, fed: &FederationTest) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn can_switch_active_gateway() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures
+        .new_fed(info_span!("can_switch_active_gateway"))
+        .await;
     let client = fed.new_client().await;
     let mut gateway1 = fixtures
         .new_gateway(
@@ -67,9 +71,12 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures
+        .new_fed(info_span!("makes_internal_payments_within_federation"))
+        .await;
     let (client1, client2) = fed.two_clients().await;
 
     // Print money for client2
@@ -122,9 +129,12 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures
+        .new_fed(info_span!("rejects_wrong_network_invoice"))
+        .await;
     let client1 = fed.new_client().await;
     gateway(&fixtures, &fed).await;
 

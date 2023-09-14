@@ -255,6 +255,7 @@ mod tests {
     use serde_json::Value;
     use tokio::sync::Mutex;
     use tokio::time::timeout;
+    use tracing::instrument;
 
     use crate::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationId, OperationState};
     use crate::transaction::{
@@ -436,6 +437,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     #[tracing_test::traced_test]
     async fn test_submission() {
         let db = Database::new(

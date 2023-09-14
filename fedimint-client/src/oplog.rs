@@ -341,6 +341,7 @@ mod tests {
     use fedimint_core::db::Database;
     use futures::stream::StreamExt;
     use serde::{Deserialize, Serialize};
+    use tracing::instrument;
 
     use super::UpdateStreamOrOutcome;
     use crate::db::ChronologicalOperationLogKey;
@@ -381,6 +382,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_operation_log_update() {
         let op_id = OperationId([0x32; 32]);
 
@@ -419,6 +421,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_operation_log_update_from_stream() {
         let op_id = OperationId([0x32; 32]);
 
@@ -445,6 +448,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_pagination() {
         let db = Database::new(MemDatabase::new(), Default::default());
         let op_log = OperationLog::new(db.clone());

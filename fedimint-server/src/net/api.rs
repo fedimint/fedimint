@@ -733,10 +733,12 @@ mod tests {
     use std::time::Duration;
 
     use fedimint_core::task;
+    use tracing::instrument;
 
     use crate::net::api::ExpiringCache;
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_expiring_cache() {
         let cache = ExpiringCache::new(Duration::from_secs(1));
         let mut counter = 0;

@@ -268,7 +268,7 @@ pub mod mock {
     use tokio::sync::mpsc::Sender;
     use tokio::sync::Mutex;
     use tokio_util::sync::CancellationToken;
-    use tracing::error;
+    use tracing::{error, instrument};
 
     use crate::net::connect::{parse_host_port, ConnectResult, Connector};
     use crate::net::framed::{BidiFramed, FramedTransport};
@@ -714,6 +714,7 @@ pub mod mock {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_mock_network() {
         let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
         let url: SafeUrl = "ws://127.0.0.1:7000".parse().unwrap();
@@ -746,6 +747,7 @@ pub mod mock {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_unreliable_components() {
         assert!(!FailureRate::new(0f64).random_fail());
         assert!(FailureRate::new(1f64).random_fail());
@@ -789,6 +791,7 @@ pub mod mock {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_large_messages() {
         let bind_addr: SocketAddr = "127.0.0.1:7000".parse().unwrap();
         let url: SafeUrl = "ws://127.0.0.1:7000".parse().unwrap();
@@ -839,6 +842,7 @@ mod tests {
     use fedimint_core::util::SafeUrl;
     use fedimint_core::PeerId;
     use futures::{SinkExt, StreamExt};
+    use tracing::instrument;
 
     use crate::config::gen_cert_and_key;
     use crate::net::connect::{ConnectionListener, Connector, TlsConfig};
@@ -872,6 +876,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn connect_success() {
         // FIXME: don't actually bind here, probably requires yet another Box<dyn Trait>
         // layer :(
@@ -909,6 +914,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn connect_reject() {
         let bind_addr: SocketAddr = "127.0.0.1:7001".parse().unwrap();
         let url: SafeUrl = "wss://127.0.0.1:7001".parse().unwrap();

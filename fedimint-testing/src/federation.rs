@@ -23,6 +23,7 @@ use fedimint_server::net::connect::{parse_host_port, Connector};
 use fedimint_server::net::peers::DelayCalculator;
 use fedimint_server::FedimintServer;
 use tokio_rustls::rustls;
+use tracing::Instrument;
 
 /// Test fixture for a running fedimint federation
 pub struct FederationTest {
@@ -82,6 +83,7 @@ impl FederationTest {
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
         primary_client: ModuleInstanceId,
+        span: tracing::Span,
     ) -> Self {
         let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
         let params =
@@ -110,10 +112,14 @@ impl FederationTest {
             .await
             .expect("Failed to init server");
 
-            let api_handle = FedimintServer::spawn_consensus_api(&server, false).await;
-            task.spawn("fedimintd", move |handle| async {
-                server.run_consensus(handle).await.unwrap();
-                api_handle.stop().await;
+            let api_handle =
+                FedimintServer::spawn_consensus_api(&server, false, span.clone()).await;
+            task.spawn("fedimintd", {
+                let span = span.clone();
+                move |handle| async {
+                    server.run_consensus(handle).instrument(span).await.unwrap();
+                    api_handle.stop().await;
+                }
             })
             .await;
         }

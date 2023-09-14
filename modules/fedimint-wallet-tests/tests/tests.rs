@@ -29,7 +29,7 @@ use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletGen;
 use futures::stream::StreamExt;
 use miniscript::ToPublicKey;
-use tracing::info;
+use tracing::{info, info_span, instrument};
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
@@ -102,9 +102,12 @@ async fn await_consensus_to_catch_up(client: &Client, block_count: u64) -> anyho
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures
+        .new_fed(info_span!("sanity_check_bitcoin_blocks"))
+        .await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // Avoid other tests from interfering here
@@ -144,9 +147,12 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures
+        .new_fed(info_span!("on_chain_peg_in_and_peg_out_happy_case"))
+        .await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
@@ -187,9 +193,10 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_fed(info_span!("peg_out_fail_refund")).await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
@@ -232,9 +239,10 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_fed(info_span!("peg_outs_support_rbf")).await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // Need lock to keep tx in mempool from getting mined
@@ -307,6 +315,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let bitcoin = fixtures.bitcoin();

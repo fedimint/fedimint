@@ -68,7 +68,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use tokio::sync::{Mutex, OnceCell};
 use tokio_rustls::rustls;
-use tracing::info;
+use tracing::{info, info_span};
 
 use crate::fixtures::user::ILegacyTestClient;
 use crate::ConsensusItem;
@@ -873,10 +873,12 @@ impl FederationTest {
     /// Runs the consensus APIs for clients to communicate with, returning the
     /// API handles
     pub async fn run_consensus_apis(&self) -> Vec<FedimintApiHandler> {
+        let span = info_span!("integration tests");
         let mut handles = vec![];
         for server in &self.servers {
             let s = server.lock().await;
-            handles.push(FedimintServer::spawn_consensus_api(&s.fedimint, true).await);
+            handles
+                .push(FedimintServer::spawn_consensus_api(&s.fedimint, true, span.clone()).await);
         }
         handles
     }

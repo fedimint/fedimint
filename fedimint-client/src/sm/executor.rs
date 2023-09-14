@@ -935,7 +935,7 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::task::{self};
     use tokio::sync::broadcast::Sender;
-    use tracing::{info, trace};
+    use tracing::{info, instrument, trace};
 
     use crate::sm::state::{Context, DynContext, DynState};
     use crate::sm::{Executor, Notifier, OperationId, State, StateTransition};
@@ -1067,6 +1067,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     #[tracing_test::traced_test]
     async fn test_executor() {
         const MOCK_INSTANCE_1: ModuleInstanceId = 42;

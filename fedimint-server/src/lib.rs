@@ -25,7 +25,7 @@ use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
 use rand::rngs::OsRng;
 use tokio::runtime::Runtime;
-use tracing::{error, info};
+use tracing::{error, info, Instrument, Span};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::consensus::server::ConsensusServer;
@@ -78,10 +78,10 @@ pub struct FedimintServer {
 impl FedimintServer {
     /// Starts the `ConfigGenApi` unless configs already exist
     /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
-    pub async fn run(&mut self, mut task_group: TaskGroup) -> anyhow::Result<()> {
+    pub async fn run(&mut self, mut task_group: TaskGroup, span: Span) -> anyhow::Result<()> {
         info!(target: LOG_CONSENSUS, "Starting config gen");
         let cfg = self
-            .run_config_gen(task_group.make_subgroup().await)
+            .run_config_gen(task_group.make_subgroup().await, span.clone())
             .await?;
 
         let server = ConsensusServer::new(
@@ -94,7 +94,7 @@ impl FedimintServer {
         .unwrap();
 
         info!(target: LOG_CONSENSUS, "Starting consensus API");
-        let handler = Self::spawn_consensus_api(&server, true).await;
+        let handler = Self::spawn_consensus_api(&server, true, span).await;
 
         server.run_consensus(task_group.make_handle()).await?;
         handler.stop().await;
@@ -109,7 +109,11 @@ impl FedimintServer {
     ///
     /// If a local password file exists, will try to read the configs from the
     /// filesystem.  Otherwise, it will start the `ConfigGenApi`.
-    async fn run_config_gen(&self, mut task_group: TaskGroup) -> anyhow::Result<ServerConfig> {
+    async fn run_config_gen(
+        &self,
+        mut task_group: TaskGroup,
+        span: Span,
+    ) -> anyhow::Result<ServerConfig> {
         let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
         let config_gen = ConfigGenApi::new(
             self.data_dir.clone(),
@@ -135,7 +139,12 @@ impl FedimintServer {
         }
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
-        Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
+        Self::attach_endpoints(
+            &mut rpc_module,
+            config::api::server_endpoints(),
+            None,
+            span.clone(),
+        );
         let handler =
             Self::spawn_api("config-gen", &self.settings.api_bind, rpc_module, 10, true).await;
 
@@ -149,13 +158,24 @@ impl FedimintServer {
     pub async fn spawn_consensus_api(
         server: &ConsensusServer,
         force_shutdown: bool,
+        span: Span,
     ) -> FedimintApiHandler {
         let api = &server.consensus.api;
         let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
-        Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
+        Self::attach_endpoints(
+            &mut rpc_module,
+            net::api::server_endpoints(),
+            None,
+            span.clone(),
+        );
         for (id, _, module) in api.modules.iter_modules() {
-            Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
+            Self::attach_endpoints(
+                &mut rpc_module,
+                module.api_endpoints(),
+                Some(id),
+                span.clone(),
+            );
         }
 
         Self::spawn_api(
@@ -210,6 +230,7 @@ impl FedimintServer {
         rpc_module: &mut RpcModule<RpcHandlerCtx<T>>,
         endpoints: Vec<ApiEndpoint<State>>,
         module_instance_id: Option<ModuleInstanceId>,
+        span: Span,
     ) where
         T: HasApiContext<State> + Sync + Send + 'static,
         State: Sync + Send + 'static,
@@ -234,43 +255,52 @@ impl FedimintServer {
             let handler: &'static _ = Box::leak(endpoint.handler);
 
             rpc_module
-                .register_async_method(path, move |params, rpc_state| async move {
-                    let params = params.one::<serde_json::Value>()?;
-                    let rpc_context = &rpc_state.rpc_context;
+                .register_async_method(path, {
+                    let span = span.clone();
+                    move |params, rpc_state| {
+                        let span = span.clone();
+                        async move {
+                            let params = params.one::<serde_json::Value>()?;
+                            let rpc_context = &rpc_state.rpc_context;
 
-                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
-                        let request = serde_json::from_value(params)
-                            .map_err(|e| ApiError::bad_request(e.to_string()))?;
-                        let (state, context) =
-                            rpc_context.context(&request, module_instance_id).await;
+                            // Using AssertUnwindSafe here is far from ideal. In theory this means
+                            // we could end up with an inconsistent
+                            // state. In practice most API functions are
+                            // only reading and the few that do write anything are atomic. Lastly,
+                            // this is only the last line of defense
+                            AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
+                                let request = serde_json::from_value(params)
+                                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                                let (state, context) =
+                                    rpc_context.context(&request, module_instance_id).await;
 
-                        (handler)(state, context, request).await
-                    }))
-                    .catch_unwind()
-                    .await
-                    .map_err(|_| {
-                        error!(
-                            target: LOG_NET_API,
-                            path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
-                        );
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            500,
-                            "API handler panicked",
-                            None::<()>,
-                        )))
-                    })?
-                    .map_err(|tokio::time::error::Elapsed { .. }| {
-                        jsonrpsee::core::Error::RequestTimeout
-                    })?
-                    .map_err(|e| {
-                        jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
-                            e.code, e.message, None::<()>,
-                        )))
-                    })
+                                (handler)(state, context, request)
+                                    .instrument(span.clone())
+                                    .await
+                            }))
+                            .catch_unwind()
+                            .await
+                            .map_err(|_| {
+                                error!(
+                                    target: LOG_NET_API,
+                                    path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                                );
+                                jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                    500,
+                                    "API handler panicked",
+                                    None::<()>,
+                                )))
+                            })?
+                            .map_err(|tokio::time::error::Elapsed { .. }| {
+                                jsonrpsee::core::Error::RequestTimeout
+                            })?
+                            .map_err(|e| {
+                                jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                    e.code, e.message, None::<()>,
+                                )))
+                            })
+                        }
+                    }
                 })
                 .expect("Failed to register async method");
         }

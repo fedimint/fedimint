@@ -188,10 +188,12 @@ impl<'a> ISingleUseDatabaseTransaction<'a> for NotifyingTransaction<'a> {
 #[cfg(test)]
 mod tests {
     use fedimint_core::db::test_utils::future_returns_shortly;
+    use tracing::instrument;
 
     use super::*;
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_notification_after_notify() {
         let notifs = Notifications::new();
         let key = 1;
@@ -201,6 +203,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_no_notification_without_notify() {
         let notifs = Notifications::new();
         let key = 1;
@@ -212,6 +215,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_multi() {
         let notifs = Notifications::new();
         let key1 = 1;
@@ -231,6 +235,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument(level = "info")]
     async fn test_notify_queue() {
         let notifs = Notifications::new();
         let key1 = 1;

@@ -9,6 +9,7 @@ use fedimint_mint_client::{
 use fedimint_mint_common::config::MintGenParams;
 use fedimint_mint_server::MintGen;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
+use tracing::instrument;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(MintClientGen, MintGen, MintGenParams::default());
@@ -16,9 +17,13 @@ fn fixtures() -> Fixtures {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[instrument(level = "info")]
 async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_fed().await;
+    let fixtures = fixtures();
+    let span = tracing::info_span!("sends_ecash_out_of_band");
+    let fed = fixtures.new_fed(span.clone()).await;
+    let _enter = span.enter();
     let (client1, client2) = fed.two_clients().await;
     let (op, outpoint) = client1.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
