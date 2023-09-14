@@ -10,10 +10,6 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    flake-compat = {
-      url = "github:edolstra/flake-compat";
-      flake = false;
-    };
     advisory-db = {
       url = "github:rustsec/advisory-db";
       flake = false;
@@ -24,7 +20,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, flake-compat, fenix, crane, advisory-db, android-nixpkgs }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-kitman, flake-utils, fenix, crane, advisory-db, android-nixpkgs }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
@@ -38,6 +34,20 @@
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
                 cargo-nextest = pkgs-unstable.cargo-nextest;
+
+                cargo-llvm-cov = prev.rustPlatform.buildRustPackage rec {
+                  pname = "cargo-llvm-cov";
+                  version = "0.5.31";
+                  buildInputs = [ ];
+
+                  src = pkgs.fetchCrate {
+                    inherit pname version;
+                    sha256 = "sha256-HjnP9H1t660PJ5eXzgAhrdDEgqdzzb+9Dbk5RGUPjaQ=";
+                  };
+                  doCheck = false;
+                  cargoHash = "sha256-p6zpRRNX4g+jESNSwouWMjZlFhTBFJhe7LirYtFrZ1g=";
+                };
+
                 # TODO: switch to mainstream after https://github.com/crate-ci/typos/pull/708 is released
                 typos = prev.rustPlatform.buildRustPackage {
                   pname = "typos";

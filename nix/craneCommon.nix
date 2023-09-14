@@ -63,18 +63,6 @@ in
   # Like `filterWorkspaceFiles` but with `./scripts/` included
   filterWorkspaceTestFiles = src: self.filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "scripts/.*" ]) src;
 
-  cargo-llvm-cov = self.buildPackage rec {
-    pname = "cargo-llvm-cov";
-    version = "0.4.14";
-    buildInputs = [ ];
-
-    src = pkgs.fetchCrate {
-      inherit pname version;
-      sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
-    };
-    doCheck = false;
-  };
-
   # env variables we want to set in all nix derivations & nix develop shell
   commonEnvsShell = {
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
