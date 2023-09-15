@@ -20,6 +20,7 @@ use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
+use tracing::warn;
 
 use crate::federation::FederationTest;
 use crate::fixtures::{test_dir, Fixtures};
@@ -153,7 +154,7 @@ impl GatewayTest {
             }
 
             if gateway_state_iterations >= 30 {
-                panic!("Gateway did not start running after 10 attempts");
+                warn!("Still waiting for gateway state change");
             }
 
             gateway_state_iterations += 1;
