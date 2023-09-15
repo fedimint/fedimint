@@ -40,6 +40,12 @@ test-ci-all:
 test-count:
   ./scripts/tests/test-cov.sh
 
+semgrep:
+  env SEMGREP_ENABLE_VERSION_CHECK=0 \
+    semgrep --error --config .semgrep.all.yaml
+  env SEMGREP_ENABLE_VERSION_CHECK=0 \
+    semgrep --error --config .semgrep.log.yaml fedimint-server/ fedimint-core/
+
 # run lints (quick)
 lint:
   env NO_STASH=true misc/git-hooks/pre-commit
