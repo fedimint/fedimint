@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::{
@@ -22,7 +23,7 @@ use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
     SupportedApiVersionsSummary,
 };
-use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::Transaction;
@@ -276,6 +277,34 @@ impl ConsensusApi {
         VerificationCaches { caches }
     }
 
+    pub async fn await_output_outcome(&self, outpoint: OutPoint) -> Result<SerdeOutputOutcome> {
+        let (module_ids, mut dbtx) = self.await_transaction(outpoint.txid).await;
+
+        let module_id = module_ids
+            .into_iter()
+            .nth(outpoint.out_idx as usize)
+            .ok_or(anyhow!("Outpoint index out of bounds {:?}", outpoint))?;
+
+        let outcome = self
+            .modules
+            .get_expect(module_id)
+            .output_status(&mut dbtx.with_module_prefix(module_id), outpoint, module_id)
+            .await
+            .expect("The transaction is accepted");
+
+        Ok((&outcome).into())
+    }
+
+    pub async fn await_transaction(
+        &self,
+        txid: TransactionId,
+    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction) {
+        self.db
+            .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
+            .await
+    }
+
+    // TODO: this can be removed with the legacy client
     pub async fn transaction_status(&self, txid: TransactionId) -> Option<TransactionStatus> {
         let mut dbtx = self.db.begin_transaction().await;
 
@@ -288,6 +317,7 @@ impl ConsensusApi {
         Some(status)
     }
 
+    // TODO: this can be removed with the legacy client
     pub async fn wait_transaction_status(&self, txid: TransactionId) -> TransactionStatus {
         let (outputs, mut dbtx) = self
             .db
@@ -298,6 +328,7 @@ impl ConsensusApi {
             .await
     }
 
+    // TODO: this can be removed with the legacy client
     async fn accepted_transaction_status(
         &self,
         txid: TransactionId,
@@ -545,7 +576,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             "transaction",
             async |fedimint: &ConsensusApi, _context, serde_transaction: SerdeTransaction| -> TransactionId {
-                let transaction = serde_transaction.try_into_inner(&fedimint.modules.decoder_registry()).map_err(|e| ApiError::bad_request(e.to_string()))?;
+                let transaction = serde_transaction
+                    .try_into_inner(&fedimint.modules.decoder_registry())
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 let tx_id = transaction.tx_hash();
 
@@ -556,6 +589,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok(tx_id)
             }
         },
+        // TODO: this can be removed with the legacy client
         api_endpoint! {
             "fetch_transaction",
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> Option<TransactionStatus> {
@@ -568,6 +602,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok(tx_status)
             }
         },
+        // TODO: this can be removed with the legacy client
         api_endpoint! {
             "wait_transaction",
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionStatus {
@@ -578,6 +613,25 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
 
                 debug!(transaction = %tx_hash, "Sending outcome");
                 Ok(tx_status)
+            }
+        },
+        api_endpoint! {
+            "await_transaction",
+            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
+                fedimint.await_transaction(tx_hash).await;
+
+                Ok(tx_hash)
+            }
+        },
+        api_endpoint! {
+            "await_output_outcome",
+            async |fedimint: &ConsensusApi, _context, outpoint: OutPoint| -> SerdeOutputOutcome {
+                let outcome = fedimint
+                    .await_output_outcome(outpoint)
+                    .await
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+                Ok(outcome)
             }
         },
         api_endpoint! {
