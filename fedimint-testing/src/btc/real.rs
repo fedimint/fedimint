@@ -2,6 +2,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
@@ -175,14 +176,26 @@ impl RealBitcoinTest {
 /// locked version - locks the global lock during construction
 pub struct RealBitcoinTestLocked {
     inner: RealBitcoinTestNoLock,
-    _guard: tokio::sync::MutexGuard<'static, ()>,
+    _guard: fs_lock::FileLock,
 }
 
 #[async_trait]
 impl BitcoinTest for RealBitcoinTest {
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
         trace!("Trying to acquire global bitcoin lock");
-        let _guard = REAL_BITCOIN_LOCK.lock().await;
+        let _guard = tokio::task::block_in_place(|| {
+            let lock_file_path = std::env::temp_dir().join("fm-test-bitcoind-lock");
+            fs_lock::FileLock::new_exclusive(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(&lock_file_path)
+                    .with_context(|| format!("Failed to open {}", lock_file_path.display()))?,
+            )
+            .context("Failed to acquire exclusive lock file")
+        })
+        .expect("Failed to lock");
         trace!("Acquired global bitcoin lock");
         Box::new(RealBitcoinTestLocked {
             inner: self.inner.clone(),

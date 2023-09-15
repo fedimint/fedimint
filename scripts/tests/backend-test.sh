@@ -37,7 +37,6 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
 
   cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
     -E 'package(ln-gateway)' \
-    -E 'package(fedimint-ln)' \
     -E 'package(fedimint-dummy-tests)' \
     -E 'package(fedimint-mint-tests)' \
     -E 'package(fedimint-ln-tests)' \

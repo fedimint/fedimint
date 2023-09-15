@@ -26,6 +26,7 @@ fedimint-server  = { path = "../fedimint-server" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
+fs-lock = "0.1.0"
 lazy_static = "1.4.0"
 ln-gateway = { path = "../gateway/ln-gateway" }
 ldk-node = { git = "https://github.com/lightningdevkit/ldk-node", rev = "5029b2f88642864ed32835a31c1fa8b1405129dd" }
