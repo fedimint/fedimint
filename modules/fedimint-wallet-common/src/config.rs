@@ -139,6 +139,7 @@ impl Default for FeeConsensus {
 }
 
 impl WalletConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
