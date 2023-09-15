@@ -113,7 +113,27 @@ pub struct PeerUrl {
 pub struct ClientConfig {
     #[serde(flatten)]
     pub global: GlobalClientConfig,
+    #[serde(deserialize_with = "de_int_key")]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+}
+
+// FIXME: workaround for https://github.com/serde-rs/json/issues/989
+fn de_int_key<'de, D, K, V>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
+where
+    D: Deserializer<'de>,
+    K: Eq + Ord + FromStr,
+    K::Err: Display,
+    V: Deserialize<'de>,
+{
+    let string_map = <BTreeMap<String, V>>::deserialize(deserializer)?;
+    let map = string_map
+        .into_iter()
+        .map(|(key_str, value)| {
+            let key = K::from_str(&key_str).map_err(serde::de::Error::custom)?;
+            Ok((key, value))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    Ok(map)
 }
 
 /// Client config that cannot be cryptographically verified but is easier to
@@ -130,6 +150,7 @@ pub struct GlobalClientConfig {
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
+    #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,

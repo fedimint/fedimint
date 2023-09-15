@@ -73,6 +73,14 @@ hash_newtype!(
 )]
 pub struct PeerId(u16);
 
+impl FromStr for PeerId {
+    type Err = <u16 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse().map(PeerId)
+    }
+}
+
 /// Represents an amount of BTC inside the system. The base denomination is
 /// milli satoshi for now, this is also why the amount type from rust-bitcoin
 /// isn't used instead.
