@@ -39,6 +39,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::Database;
+use fedimint_core::fmt_utils::OptStracktrace;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
@@ -631,9 +632,10 @@ impl Gateway {
                     .await
                 {
                     Ok(gw_client_cfg) => break gw_client_cfg,
-                    Err(_) => {
+                    Err(error) => {
                         let random_delay: f64 = rand::thread_rng().gen();
                         tracing::warn!(
+                            %error,
                             "Error downloading client config, trying again in {random_delay}"
                         );
                         sleep(Duration::from_secs_f64(random_delay)).await;
@@ -965,19 +967,19 @@ pub enum LightningMode {
 
 #[derive(Debug, Error)]
 pub enum GatewayError {
-    #[error("Federation error: {0:?}")]
+    #[error("Federation error: {}", OptStracktrace(0))]
     FederationError(#[from] FederationError),
-    #[error("Other: {0:?}")]
+    #[error("Other: {}", OptStracktrace(0))]
     ClientStateMachineError(#[from] anyhow::Error),
-    #[error("Failed to open the database: {0:?}")]
+    #[error("Failed to open the database: {}", OptStracktrace(0))]
     DatabaseError(anyhow::Error),
     #[error("Federation client error")]
     LightningRpcError(#[from] LightningRpcError),
-    #[error("Outgoing Payment Error {0:?}")]
+    #[error("Outgoing Payment Error {}", OptStracktrace(0))]
     OutgoingPaymentError(#[from] Box<OutgoingPaymentError>),
-    #[error("Invalid Metadata: {0}")]
+    #[error("Invalid Metadata: {}", OptStracktrace(0))]
     InvalidMetadata(String),
-    #[error("Unexpected state: {0}")]
+    #[error("Unexpected state: {}", OptStracktrace(0))]
     UnexpectedState(String),
     #[error("The gateway is disconnected")]
     Disconnected,
