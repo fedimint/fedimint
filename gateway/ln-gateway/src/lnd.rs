@@ -111,7 +111,7 @@ impl GatewayLndClient {
             })?;
 
         task_group
-            .spawn("LND HTLC Subscription", move |_handle| async move {
+            .spawn("LND HTLC Subscription", move |handle| async move {
                 let mut htlc_stream = match client
                     .router()
                     .htlc_interceptor(ReceiverStream::new(lnd_rx))
@@ -127,12 +127,27 @@ impl GatewayLndClient {
                     }
                 };
 
-                while let Some(htlc) = match htlc_stream.message().await {
-                    Ok(htlc) => htlc,
-                    Err(e) => {
-                        error!("Error received over HTLC stream: {:?}", e);
+                // To gracefully handle shutdown signals, we need to be able to receive signals
+                // while waiting for the next message from the HTLC stream.
+                //
+                // If we're in the middle of processing a message from the stream, we need to
+                // finish before stopping the spawned task. Checking if the task group is
+                // shutting down at the start of each iteration will cause shutdown signals to
+                // not process until another message arrives from the HTLC stream, which may
+                // take a long time, or never.
+                while let Some(htlc) = tokio::select! {
+                    _ = handle.make_shutdown_rx().await => {
+                        info!("LND HTLC Subscription task received shutdown signal");
                         None
                     }
+                    htlc_message = htlc_stream.message() => {
+                        match htlc_message {
+                            Ok(htlc) => htlc,
+                            Err(e) => {
+                                error!("Error received over HTLC stream: {:?}", e);
+                                None
+                            }
+                    }}
                 } {
                     trace!("handling htlc {:?}", htlc);
 
