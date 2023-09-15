@@ -106,13 +106,20 @@ impl FakeBitcoinTest {
         }
     }
 
-    fn mine_block(blocks: &mut Vec<Block>, pending: &mut Vec<Transaction>) {
+    fn mine_block(
+        addresses: &mut BTreeMap<Txid, Amount>,
+        blocks: &mut Vec<Block>,
+        pending: &mut Vec<Transaction>,
+    ) {
         debug!(
             "Mining block: {} transactions, {} blocks",
             pending.len(),
             blocks.len()
         );
         let root = BlockHash::hash(&[0]);
+        for tx in pending.iter() {
+            addresses.insert(tx.txid(), Amount::from_sats(output_sum(tx)));
+        }
         // all blocks need at least one transaction
         if pending.is_empty() {
             pending.push(Self::new_transaction(vec![]));
@@ -147,9 +154,10 @@ impl BitcoinTest for FakeBitcoinTest {
     async fn mine_blocks(&self, block_num: u64) {
         let mut blocks = self.blocks.lock().unwrap();
         let mut pending = self.pending.lock().unwrap();
+        let mut addresses = self.addresses.lock().unwrap();
 
         for _ in 1..=block_num {
-            FakeBitcoinTest::mine_block(&mut blocks, &mut pending);
+            FakeBitcoinTest::mine_block(&mut addresses, &mut blocks, &mut pending);
         }
     }
 
@@ -182,7 +190,7 @@ impl BitcoinTest for FakeBitcoinTest {
         pending.push(transaction.clone());
         let merkle_proof = FakeBitcoinTest::pending_merkle_tree(&pending);
 
-        FakeBitcoinTest::mine_block(&mut blocks, &mut pending);
+        FakeBitcoinTest::mine_block(&mut addresses, &mut blocks, &mut pending);
         let block_header = blocks.last().unwrap().header;
         let proof = TxOutProof {
             block_header,
@@ -235,7 +243,7 @@ impl BitcoinTest for FakeBitcoinTest {
             for input in tx.input.iter() {
                 fee += *addresses
                     .get(&input.previous_output.txid)
-                    .expect("tx has sats");
+                    .expect("previous transaction should be known");
             }
 
             for output in tx.output.iter() {
