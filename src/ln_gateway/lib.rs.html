@@ -1008,6 +1008,8 @@
 <a href="#1008" id="1008">1008</a>
 <a href="#1009" id="1009">1009</a>
 <a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1049,6 +1051,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::fmt_utils::OptStracktrace;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::now;
@@ -1641,9 +1644,10 @@
                     .<span class="kw">await
                 </span>{
                     <span class="prelude-val">Ok</span>(gw_client_cfg) =&gt; <span class="kw">break </span>gw_client_cfg,
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="prelude-val">Err</span>(error) =&gt; {
                         <span class="kw">let </span>random_delay: f64 = rand::thread_rng().gen();
                         <span class="macro">tracing::warn!</span>(
+                            %error,
                             <span class="string">&quot;Error downloading client config, trying again in {random_delay}&quot;
                         </span>);
                         sleep(Duration::from_secs_f64(random_delay)).<span class="kw">await</span>;
@@ -1975,19 +1979,19 @@
 
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>GatewayError {
-    <span class="attr">#[error(<span class="string">&quot;Federation error: {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Federation error: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
     </span>FederationError(<span class="attr">#[from] </span>FederationError),
-    <span class="attr">#[error(<span class="string">&quot;Other: {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Other: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
     </span>ClientStateMachineError(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">&quot;Failed to open the database: {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Failed to open the database: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
     </span>DatabaseError(anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Federation client error&quot;</span>)]
     </span>LightningRpcError(<span class="attr">#[from] </span>LightningRpcError),
-    <span class="attr">#[error(<span class="string">&quot;Outgoing Payment Error {0:?}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Outgoing Payment Error {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
     </span>OutgoingPaymentError(<span class="attr">#[from] </span>Box&lt;OutgoingPaymentError&gt;),
-    <span class="attr">#[error(<span class="string">&quot;Invalid Metadata: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Invalid Metadata: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
     </span>InvalidMetadata(String),
-    <span class="attr">#[error(<span class="string">&quot;Unexpected state: {0}&quot;</span>)]
+    <span class="attr">#[error(<span class="string">&quot;Unexpected state: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
     </span>UnexpectedState(String),
     <span class="attr">#[error(<span class="string">&quot;The gateway is disconnected&quot;</span>)]
     </span>Disconnected,
