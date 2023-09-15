@@ -368,6 +368,7 @@ impl ServerModule for Wallet {
                     bail!("Block count vote decreased");
                 }
 
+                info!(block_count, %current_vote, "Some check 3");
                 if block_count == current_vote {
                     debug!(
                         ?peer_id,
@@ -379,6 +380,7 @@ impl ServerModule for Wallet {
 
                 let old_consensus_block_count = self.consensus_block_count(dbtx).await;
 
+                info!(block_count, %peer_id, "Updating block count vote");
                 dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
                     .await;
 
@@ -886,6 +888,8 @@ impl Wallet {
         }
 
         counts.sort_unstable();
+
+        info!(?counts, "consensus_block_count");
 
         counts[peer_count / 2]
     }

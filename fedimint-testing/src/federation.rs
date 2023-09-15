@@ -23,6 +23,7 @@ use fedimint_server::net::connect::{parse_host_port, Connector};
 use fedimint_server::net::peers::DelayCalculator;
 use fedimint_server::FedimintServer;
 use tokio_rustls::rustls;
+use tracing::{debug, info};
 
 /// Test fixture for a running fedimint federation
 pub struct FederationTest {
@@ -50,6 +51,7 @@ impl FederationTest {
     }
 
     pub async fn new_client_with_config(&self, client_config: ClientConfig) -> Client {
+        debug!("Creating new client");
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
@@ -83,6 +85,7 @@ impl FederationTest {
         client_init: ClientModuleInitRegistry,
         primary_client: ModuleInstanceId,
     ) -> Self {
+        info!("Setting up new federation test fixture foo4");
         let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
         let params =
             local_config_gen_params(&peers, base_port, params).expect("Generates local config");
