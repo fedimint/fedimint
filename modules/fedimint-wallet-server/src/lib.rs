@@ -326,24 +326,20 @@ impl ServerModule for Wallet {
 
         let block_count = self.block_count().await;
         let block_count_proposal = block_count.saturating_sub(self.cfg.consensus.finality_delay);
-        let consensus_block_count = self.consensus_block_count(dbtx).await;
 
         debug!(
             ?block_count_proposal,
             ?block_count,
-            ?consensus_block_count,
             "Considering proposing block count"
         );
 
-        if Some(block_count_proposal) != consensus_block_count {
-            let current_vote = dbtx
-                .get_value(&BlockCountVoteKey(self.cfg.local.our_peer_id))
-                .await
-                .unwrap_or(0);
+        let current_vote = dbtx
+            .get_value(&BlockCountVoteKey(self.cfg.local.our_peer_id))
+            .await
+            .unwrap_or(0);
 
-            if current_vote < block_count_proposal {
-                items.push(WalletConsensusItem::BlockCount(block_count_proposal));
-            }
+        if current_vote < block_count_proposal {
+            items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
         let fee_rate_proposal = self.fee_rate().await;
