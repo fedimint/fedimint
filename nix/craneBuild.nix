@@ -15,7 +15,7 @@ craneLib.overrideScope' (self: prev: {
     pnameSuffix = "-workspace-build";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
-    buildPhaseCargoCommand = "cargo build --workspace --all-targets --locked --profile $CARGO_PROFILE; cargo test --no-run --locked --workspace --all-targets --profile $CARGO_PROFILE";
+    buildPhaseCargoCommand = "cargo build --workspace --all-targets --locked --profile $CARGO_PROFILE; cargo nextest run --no-run --locked --workspace --all-targets --profile $CARGO_PROFILE";
     doCheck = false;
   });
 
