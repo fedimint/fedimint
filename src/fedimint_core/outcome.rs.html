@@ -16,10 +16,12 @@
 <a href="#16" id="16">16</a>
 <a href="#17" id="17">17</a>
 <a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+<span class="comment">// TODO: this can be removed with the legacy client
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub enum </span>TransactionStatus {
     <span class="doccomment">/// The rejected state is only recorded if the error happens after consensus
     /// is achieved on the transaction. This should happen only rarely, e.g.
