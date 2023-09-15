@@ -61,6 +61,8 @@ pub struct WalletConfig {
 pub struct WalletConfigLocal {
     /// Configures which bitcoin RPC to use
     pub bitcoin_rpc: BitcoinRpcConfig,
+    /// Our own peer_id
+    pub our_peer_id: PeerId,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -140,6 +142,7 @@ impl WalletConfig {
     pub fn new(
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
+        our_peer_id: PeerId,
         threshold: usize,
         network: Network,
         finality_delay: u32,
@@ -151,7 +154,10 @@ impl WalletConfig {
         );
 
         Self {
-            local: WalletConfigLocal { bitcoin_rpc },
+            local: WalletConfigLocal {
+                bitcoin_rpc,
+                our_peer_id,
+            },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
