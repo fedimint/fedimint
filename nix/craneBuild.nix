@@ -7,7 +7,7 @@ craneLib.overrideScope' (self: prev: {
   workspaceDeps = self.buildDepsOnly (prev.commonArgsDepsOnly // {
     version = "0.0.1";
     # note: cargo doc does not have --all-targets
-    buildPhaseCargoCommand = "cargo doc --workspace --locked --profile $CARGO_PROFILE ; cargo check --workspace --all-targets --locked --profile $CARGO_PROFILE ; cargo build --locked --profile $CARGO_PROFILE --workspace --all-targets";
+    buildPhaseCargoCommand = "cargo build --locked --profile $CARGO_PROFILE --workspace --all-targets";
     doCheck = false;
   });
 
