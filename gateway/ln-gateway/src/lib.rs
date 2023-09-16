@@ -516,7 +516,7 @@ impl Gateway {
                 fees: self.fees,
                 route_hints,
                 gateway_id: self.gateway_id,
-                gateway_state: self.state.read().await.clone().to_string(),
+                gateway_state: self.state.read().await.to_string(),
             });
         }
 
@@ -528,7 +528,7 @@ impl Gateway {
             fees: self.fees,
             route_hints: vec![],
             gateway_id: self.gateway_id,
-            gateway_state: self.state.read().await.clone().to_string(),
+            gateway_state: self.state.read().await.to_string(),
         })
     }
 
