@@ -227,6 +227,8 @@
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -243,8 +245,9 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-<span class="kw">use </span>fedimint_logging::TracingSetup;
+<span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_TEST};
 <span class="kw">use </span>tempfile::TempDir;
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinFactory;
 <span class="kw">use </span><span class="kw">crate</span>::btc::real::RealBitcoinTest;
@@ -347,6 +350,7 @@
 
     <span class="doccomment">/// Starts a new federation with number of peers
     </span><span class="kw">pub async fn </span>new_fed_with_peers(<span class="kw-2">&amp;</span><span class="self">self</span>, num_peers: u16) -&gt; FederationTest {
+        <span class="macro">info!</span>(target: LOG_TEST, num_peers, <span class="string">&quot;Setting federation with peers&quot;</span>);
         FederationTest::new(
             num_peers,
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))

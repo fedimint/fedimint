@@ -196,6 +196,9 @@
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
@@ -213,6 +216,7 @@
 <span class="kw">use </span>fedimint_core::module::ApiAuth;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenParamsLocal;
 <span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::consensus::server::ConsensusServer;
@@ -221,6 +225,7 @@
 <span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
 <span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>tokio_rustls::rustls;
+<span class="kw">use </span>tracing::info;
 
 <span class="doccomment">/// Test fixture for a running fedimint federation
 </span><span class="kw">pub struct </span>FederationTest {
@@ -248,6 +253,7 @@
     </span>}
 
     <span class="kw">pub async fn </span>new_client_with_config(<span class="kw-2">&amp;</span><span class="self">self</span>, client_config: ClientConfig) -&gt; Client {
+        <span class="macro">info!</span>(target: LOG_TEST, <span class="string">&quot;Setting new client with config&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
         client_builder.with_module_inits(<span class="self">self</span>.client_init.clone());
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);

@@ -160,6 +160,9 @@
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -171,6 +174,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning_invoice::{
     Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder,
@@ -183,6 +187,7 @@
 <span class="kw">use </span>ln_gateway::lnrpc_client::{HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>tokio::sync::mpsc;
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">super</span>::LightningTest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway::LightningNodeType;
@@ -199,6 +204,7 @@
 
 <span class="kw">impl </span>FakeLightningTest {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="macro">info!</span>(target: LOG_TEST, <span class="string">&quot;Setting up fake lightning test fixture&quot;</span>);
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
         <span class="kw">let </span>kp = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>amount_sent = Arc::new(Mutex::new(<span class="number">0</span>));

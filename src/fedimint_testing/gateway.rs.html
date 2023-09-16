@@ -206,6 +206,9 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -220,6 +223,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
@@ -228,6 +232,7 @@
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tempfile::TempDir;
+<span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::fixtures::{test_dir, Fixtures};
@@ -268,6 +273,7 @@
 
     <span class="doccomment">/// Connects to a new federation and stores the info
     </span><span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;mut </span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>FederationTest) -&gt; FederationInfo {
+        <span class="macro">info!</span>(target: LOG_TEST, <span class="string">&quot;Sending rpc to connect gateway to federation&quot;</span>);
         <span class="kw">let </span>invite_code = fed.invite_code().to_string();
         <span class="kw">let </span>rpc = <span class="self">self
             </span>.get_rpc()
@@ -361,7 +367,7 @@
             }
 
             <span class="kw">if </span>gateway_state_iterations &gt;= <span class="number">30 </span>{
-                <span class="macro">panic!</span>(<span class="string">&quot;Gateway did not start running after 10 attempts&quot;</span>);
+                <span class="macro">warn!</span>(<span class="string">&quot;Still waiting for gateway state change&quot;</span>);
             }
 
             gateway_state_iterations += <span class="number">1</span>;

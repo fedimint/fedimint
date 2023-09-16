@@ -771,6 +771,8 @@
 <a href="#771" id="771">771</a>
 <a href="#772" id="772">772</a>
 <a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::TcpListener;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -784,6 +786,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>ldk_node::io::SqliteStore;
 <span class="kw">use </span>ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -1076,6 +1079,7 @@
 
 <span class="kw">impl </span>LndLightningTest {
     <span class="kw">pub async fn </span>new() -&gt; LndLightningTest {
+        <span class="macro">info!</span>(target: LOG_TEST, <span class="string">&quot;Setting up lnd lightning test fixture&quot;</span>);
         <span class="kw">let </span>lnd_rpc_addr = env::var(<span class="string">&quot;FM_LND_RPC_ADDR&quot;</span>).unwrap();
         <span class="kw">let </span>lnd_macaroon = env::var(<span class="string">&quot;FM_LND_MACAROON&quot;</span>).unwrap();
         <span class="kw">let </span>lnd_tls_cert = env::var(<span class="string">&quot;FM_LND_TLS_CERT&quot;</span>).unwrap();
