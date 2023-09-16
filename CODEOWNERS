@@ -28,8 +28,11 @@ db/                  @fedimint/database
 **/db.rs             @fedimint/database
 **/db/               @fedimint/database
 
-fedimint-server/src/consensus @fedimint/consensus
-fedimint-server/src/config    @fedimint/consensus
-./fedimint-core/src/config.rs @fedimint/consensus
+fedimint-server/src/consensus  @fedimint/consensus
+fedimint-server/src/config     @fedimint/consensus
+modules/fedimint-ln-server     @fedimint/consensus
+modules/fedimint-mint-server   @fedimint/consensus
+modules/fedimint-wallet-server @fedimint/consensus
+./fedimint-core/src/config.rs  @fedimint/consensus
 
 crypto/             @fedimint/crypto
