@@ -315,6 +315,14 @@
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
 <a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -423,13 +431,20 @@
         }
     }
 
-    <span class="kw">fn </span>mine_block(blocks: <span class="kw-2">&amp;mut </span>Vec&lt;Block&gt;, pending: <span class="kw-2">&amp;mut </span>Vec&lt;Transaction&gt;) {
+    <span class="kw">fn </span>mine_block(
+        addresses: <span class="kw-2">&amp;mut </span>BTreeMap&lt;Txid, Amount&gt;,
+        blocks: <span class="kw-2">&amp;mut </span>Vec&lt;Block&gt;,
+        pending: <span class="kw-2">&amp;mut </span>Vec&lt;Transaction&gt;,
+    ) {
         <span class="macro">debug!</span>(
             <span class="string">&quot;Mining block: {} transactions, {} blocks&quot;</span>,
             pending.len(),
             blocks.len()
         );
         <span class="kw">let </span>root = BlockHash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>]);
+        <span class="kw">for </span>tx <span class="kw">in </span>pending.iter() {
+            addresses.insert(tx.txid(), Amount::from_sats(output_sum(tx)));
+        }
         <span class="comment">// all blocks need at least one transaction
         </span><span class="kw">if </span>pending.is_empty() {
             pending.push(<span class="self">Self</span>::new_transaction(<span class="macro">vec!</span>[]));
@@ -464,9 +479,10 @@
     <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) {
         <span class="kw">let </span><span class="kw-2">mut </span>blocks = <span class="self">self</span>.blocks.lock().unwrap();
         <span class="kw">let </span><span class="kw-2">mut </span>pending = <span class="self">self</span>.pending.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>addresses = <span class="self">self</span>.addresses.lock().unwrap();
 
         <span class="kw">for _ in </span><span class="number">1</span>..=block_num {
-            FakeBitcoinTest::mine_block(<span class="kw-2">&amp;mut </span>blocks, <span class="kw-2">&amp;mut </span>pending);
+            FakeBitcoinTest::mine_block(<span class="kw-2">&amp;mut </span>addresses, <span class="kw-2">&amp;mut </span>blocks, <span class="kw-2">&amp;mut </span>pending);
         }
     }
 
@@ -499,7 +515,7 @@
         pending.push(transaction.clone());
         <span class="kw">let </span>merkle_proof = FakeBitcoinTest::pending_merkle_tree(<span class="kw-2">&amp;</span>pending);
 
-        FakeBitcoinTest::mine_block(<span class="kw-2">&amp;mut </span>blocks, <span class="kw-2">&amp;mut </span>pending);
+        FakeBitcoinTest::mine_block(<span class="kw-2">&amp;mut </span>addresses, <span class="kw-2">&amp;mut </span>blocks, <span class="kw-2">&amp;mut </span>pending);
         <span class="kw">let </span>block_header = blocks.last().unwrap().header;
         <span class="kw">let </span>proof = TxOutProof {
             block_header,
@@ -552,7 +568,7 @@
             <span class="kw">for </span>input <span class="kw">in </span>tx.input.iter() {
                 fee += <span class="kw-2">*</span>addresses
                     .get(<span class="kw-2">&amp;</span>input.previous_output.txid)
-                    .expect(<span class="string">&quot;tx has sats&quot;</span>);
+                    .expect(<span class="string">&quot;previous transaction should be known&quot;</span>);
             }
 
             <span class="kw">for </span>output <span class="kw">in </span>tx.output.iter() {
