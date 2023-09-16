@@ -697,6 +697,10 @@
 <a href="#697" id="697">697</a>
 <a href="#698" id="698">698</a>
 <a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>client_db;
@@ -1217,6 +1221,10 @@
             amount: output.amount().into(),
             fee: <span class="self">self</span>.cfg.fee_consensus.peg_out_abs,
         }
+    }
+
+    <span class="kw">fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;<span class="self">Self </span><span class="kw">as </span>ClientModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::ClientConfig {
+        <span class="self">self</span>.cfg.clone()
     }
 }
 

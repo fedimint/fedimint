@@ -2000,7 +2000,7 @@
                 .expect(<span class="string">&quot;needs mint module client config&quot;</span>)
                 .<span class="number">1
                 </span>.clone(),
-            epoch_pk: <span class="self">self</span>.config.as_ref().epoch_pk,
+            epoch_pk: <span class="self">self</span>.config.as_ref().global.epoch_pk,
             context: <span class="self">self</span>.context.clone(),
             secret: <span class="self">Self</span>::mint_secret_static(<span class="kw-2">&amp;</span><span class="self">self</span>.root_secret),
         }
@@ -2902,7 +2902,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>payload = PayInvoicePayload::new(<span class="self">self</span>.config.<span class="number">0</span>.federation_id, contract_id);
+        <span class="kw">let </span>payload = PayInvoicePayload::new(<span class="self">self</span>.config.<span class="number">0</span>.global.federation_id, contract_id);
 
         <span class="kw">let </span>future = reqwest::Client::new()
             .post(

@@ -1732,7 +1732,7 @@
                 }
             };
 
-            <span class="kw">let </span>federation_id = gw_client_cfg.config.federation_id;
+            <span class="kw">let </span>federation_id = gw_client_cfg.config.global.federation_id;
             <span class="kw">let </span>route_hints =
                 <span class="self">Self</span>::fetch_lightning_route_hints(lnrpc.clone(), <span class="self">self</span>.num_route_hints).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>old_client = <span class="self">self</span>.clients.read().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>federation_id).cloned();
@@ -1877,7 +1877,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
             <span class="kw">for </span>config <span class="kw">in </span>configs {
-                <span class="kw">let </span>federation_id = config.config.federation_id;
+                <span class="kw">let </span>federation_id = config.config.global.federation_id;
                 <span class="kw">let </span>old_client = <span class="self">self</span>.clients.read().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>federation_id).cloned();
                 <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = <span class="self">self
                     </span>.client_builder

@@ -627,6 +627,10 @@
 <a href="#627" id="627">627</a>
 <a href="#628" id="628">628</a>
 <a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -649,7 +653,7 @@
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -888,7 +892,7 @@
             gateway_id,
         );
 
-        <span class="kw">let </span>federation_id = <span class="self">self</span>.get_config().federation_id;
+        <span class="kw">let </span>federation_id = <span class="self">self</span>.get_config().global.federation_id;
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
         gateway
             .register_with_federation(<span class="kw-2">&amp;mut </span>dbtx, federation_id, registration_info)
@@ -1077,6 +1081,10 @@
                 }
             }
         }
+    }
+
+    <span class="kw">fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;<span class="self">Self </span><span class="kw">as </span>ClientModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::ClientConfig {
+        <span class="self">self</span>.cfg.clone()
     }
 }
 

@@ -416,13 +416,36 @@
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::api::DynGlobalApi;
-<span class="kw">use </span>fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::core::{
+    Decoder, DynClientConfig, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId,
+};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{ModuleCommon, TransactionItemAmount};
@@ -432,6 +455,7 @@
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+<span class="kw">use </span>serde_json::Value;
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, Executor, OperationId, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput};
@@ -601,6 +625,9 @@
     </span><span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
         <span class="macro">unimplemented!</span>()
     }
+
+    <span class="doccomment">/// Returns the configuration of this module
+    </span><span class="kw">fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;<span class="self">Self </span><span class="kw">as </span>ClientModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::ClientConfig;
 }
 
 <span class="doccomment">/// Type-erased version of [`ClientModule`]
@@ -680,6 +707,12 @@
     ) -&gt; Amount;
 
     <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt;;
+
+    <span class="doccomment">/// Returns the configuration of this module as an `Encodable` dyn object
+    </span><span class="kw">fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance: ModuleInstanceId) -&gt; DynClientConfig;
+
+    <span class="doccomment">/// Returns the configuration of this module as a JSON object
+    </span><span class="kw">fn </span>get_config_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; serde_json::Value;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -819,6 +852,15 @@
     <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
         &lt;T <span class="kw">as </span>ClientModule&gt;::subscribe_balance_changes(<span class="self">self</span>).<span class="kw">await
     </span>}
+
+    <span class="kw">fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance: ModuleInstanceId) -&gt; DynClientConfig {
+        &lt;T <span class="kw">as </span>ClientModule&gt;::get_config(<span class="self">self</span>).into_dyn(module_instance)
+    }
+
+    <span class="kw">fn </span>get_config_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Value {
+        serde_json::to_value(&lt;T <span class="kw">as </span>ClientModule&gt;::get_config(<span class="self">self</span>))
+            .expect(<span class="string">&quot;Config can be encoded to JSON&quot;</span>)
+    }
 }
 
 <span class="macro">dyn_newtype_define!</span>(

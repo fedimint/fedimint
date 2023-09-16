@@ -837,6 +837,8 @@
 <a href="#837" id="837">837</a>
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1024,10 +1026,13 @@
         module_config_gens: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynServerModuleInit&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig, anyhow::Error&gt; {
         <span class="kw">let </span>client = ClientConfig {
-            federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
-            epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
-            api_endpoints: <span class="self">self</span>.api_endpoints.clone(),
-            consensus_version: <span class="self">self</span>.version,
+            global: GlobalClientConfig {
+                federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
+                epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
+                api_endpoints: <span class="self">self</span>.api_endpoints.clone(),
+                consensus_version: <span class="self">self</span>.version,
+                meta: <span class="self">self</span>.meta.clone(),
+            },
             modules: <span class="self">self
                 </span>.modules
                 .iter()
@@ -1038,7 +1043,6 @@
                     <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>k, gen.get_client_config(<span class="kw-2">*</span>k, v)<span class="question-mark">?</span>))
                 })
                 .collect::&lt;anyhow::Result&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
-            meta: <span class="self">self</span>.meta.clone(),
         };
         <span class="prelude-val">Ok</span>(client)
     }

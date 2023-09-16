@@ -869,6 +869,41 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -982,9 +1017,46 @@
 /// This includes global settings and client-side module configs.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ClientConfig {
+    <span class="attr">#[serde(flatten)]
+    </span><span class="kw">pub </span>global: GlobalClientConfig,
+    <span class="attr">#[serde(deserialize_with = <span class="string">&quot;de_int_key&quot;</span>)]
+    </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ClientModuleConfig&gt;,
+}
+
+<span class="comment">// FIXME: workaround for https://github.com/serde-rs/json/issues/989
+</span><span class="kw">fn </span>de_int_key&lt;<span class="lifetime">&#39;de</span>, D, K, V&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;K, V&gt;, D::Error&gt;
+<span class="kw">where
+    </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
+    K: Eq + Ord + FromStr,
+    K::Err: Display,
+    V: Deserialize&lt;<span class="lifetime">&#39;de</span>&gt;,
+{
+    <span class="kw">let </span>string_map = &lt;BTreeMap&lt;String, V&gt;&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
+    <span class="kw">let </span>map = string_map
+        .into_iter()
+        .map(|(key_str, value)| {
+            <span class="kw">let </span>key = K::from_str(<span class="kw-2">&amp;</span>key_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>((key, value))
+        })
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(map)
+}
+
+<span class="doccomment">/// Client config that cannot be cryptographically verified but is easier to
+/// parse by external tools
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>JsonClientConfig {
+    <span class="kw">pub </span>global: GlobalClientConfig,
+    <span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
+}
+
+<span class="doccomment">/// Federation-wide client config
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>GlobalClientConfig {
     <span class="comment">// Stable and unique id and threshold pubkey of the federation for authenticating configs
     </span><span class="kw">pub </span>federation_id: FederationId,
     <span class="doccomment">/// API endpoints for each federation member
+    </span><span class="attr">#[serde(deserialize_with = <span class="string">&quot;de_int_key&quot;</span>)]
     </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
     <span class="doccomment">/// Threshold pubkey for authenticating epoch history
     </span><span class="kw">pub </span>epoch_pk: threshold_crypto::PublicKey,
@@ -993,8 +1065,6 @@
     <span class="comment">// TODO: make it a String -&gt; serde_json::Value map?
     </span><span class="doccomment">/// Additional config the federation wants to transmit to the clients
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
-    <span class="doccomment">/// Configs from other client modules
-    </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ClientModuleConfig&gt;,
 }
 
 <span class="kw">impl </span>ClientConfig {
@@ -1153,7 +1223,7 @@
 
     <span class="doccomment">/// Federation name from config metadata (if set)
     </span><span class="kw">pub fn </span>federation_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
-        <span class="self">self</span>.meta.get(META_FEDERATION_NAME_KEY).map(|x| <span class="kw-2">&amp;**</span>x)
+        <span class="self">self</span>.global.meta.get(META_FEDERATION_NAME_KEY).map(|x| <span class="kw-2">&amp;**</span>x)
     }
 }
 

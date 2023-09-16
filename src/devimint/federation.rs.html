@@ -528,6 +528,7 @@
 <a href="#528" id="528">528</a>
 <a href="#529" id="529">529</a>
 <a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fs;
 
@@ -759,7 +760,8 @@
             </span>.unwrap()
             .config()
             .<span class="number">0
-            </span>.federation_id
+            </span>.global
+            .federation_id
             .to_string()
     }
 

@@ -1709,6 +1709,28 @@
 <a href="#1709" id="1709">1709</a>
 <a href="#1710" id="1710">1710</a>
 <a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1792,7 +1814,9 @@
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     InviteCode, WsFederationApi,
 };
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
+<span class="kw">use </span>fedimint_core::config::{
+    ClientConfig, FederationId, JsonClientConfig, JsonWithKind, ModuleInitRegistry,
+};
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -2469,6 +2493,26 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.inner.config
     }
 
+    <span class="doccomment">/// Returns the config of the client in JSON format.
+    ///
+    /// Compared to the consensus module format where module configs are binary
+    /// encoded this format cannot be cryptographically verified but is easier
+    /// to consume and to some degree human-readable.
+    </span><span class="kw">pub fn </span>get_config_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JsonClientConfig {
+        JsonClientConfig {
+            global: <span class="self">self</span>.get_config().global.clone(),
+            modules: <span class="self">self
+                </span>.inner
+                .modules
+                .iter_modules()
+                .map(|(instance_id, kind, module)| {
+                    <span class="kw">let </span>config = JsonWithKind::new(kind.clone(), module.get_config_json());
+                    (instance_id, config)
+                })
+                .collect(),
+        }
+    }
+
     <span class="doccomment">/// Get the primary module
     </span><span class="kw">pub fn </span>primary_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynClientModule {
         <span class="self">self</span>.inner
@@ -2548,7 +2592,7 @@
     ) -&gt; SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
-                core_consensus: config.consensus_version,
+                core_consensus: config.global.consensus_version,
                 api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
                     .expect(<span class="string">&quot;must not have conflicting versions&quot;</span>),
             },
@@ -2562,7 +2606,7 @@
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
-                                    core_consensus: config.consensus_version,
+                                    core_consensus: config.global.consensus_version,
                                     module_consensus: module_config.version,
                                     api: module_init.supported_api_versions(),
                                 },
@@ -3152,7 +3196,7 @@
 
                 <span class="kw">let </span>module = module_init
                     .init(
-                        config.federation_id,
+                        config.global.federation_id,
                         module_config,
                         db.clone(),
                         module_instance,
@@ -3192,8 +3236,8 @@
             config: config.clone(),
             decoders,
             db: db.clone(),
-            federation_id: config.federation_id,
-            federation_meta: config.meta,
+            federation_id: config.global.federation_id,
+            federation_meta: config.global.meta,
             primary_module_instance,
             modules,
             module_inits: <span class="self">self</span>.module_inits.clone(),
@@ -3246,7 +3290,7 @@
             </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             dbtx.insert_new_entry(
                 <span class="kw-2">&amp;</span>ClientConfigKey {
-                    id: config.federation_id,
+                    id: config.global.federation_id,
                 },
                 <span class="kw-2">&amp;</span>config,
             )
