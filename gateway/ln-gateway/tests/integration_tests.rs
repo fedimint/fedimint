@@ -768,11 +768,31 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         invite_code: fed.invite_code().to_string(),
     };
 
-    verify_rpc(
-        || rpc_client.connect_federation(join_payload.clone()),
-        StatusCode::NOT_FOUND,
+    // We need to retry `connect_federation` because it is possible that the
+    // webserver is not up yet.
+    retry(
+        "Connect federation".to_string(),
+        || async {
+            let status_err = rpc_client
+                .connect_federation(join_payload.clone())
+                .await
+                .expect_err(
+                    "connect_federation returned successfully when it was supposed to fail.",
+                );
+            if let GatewayRpcError::BadStatus(status_code) = status_err {
+                if status_code != StatusCode::NOT_FOUND {
+                    anyhow::bail!("connect_federation returned the incorrect error code");
+                }
+
+                return Ok(());
+            }
+
+            anyhow::bail!("connection_federation returned the incorrect error type")
+        },
+        Duration::from_secs(5),
+        5,
     )
-    .await;
+    .await?;
 
     // Verify that the gateway's state is "Configuring"
     let gw_info = rpc_client.get_info().await?;
