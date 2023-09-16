@@ -335,7 +335,6 @@ pub trait GlobalFederationApi {
         &self,
         txid: &TransactionId,
     ) -> FederationResult<Option<TransactionStatus>>;
-    async fn await_tx_outcome(&self, txid: &TransactionId) -> FederationResult<TransactionStatus>;
 
     async fn fetch_epoch_history(
         &self,
@@ -354,7 +353,7 @@ pub trait GlobalFederationApi {
     where
         R: OutputOutcome;
 
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()>;
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
 
     async fn await_output_outcome<R>(
         &self,
@@ -455,13 +454,6 @@ where
             .await
     }
 
-    // TODO: this can be removed with the legacy client
-    /// Await the outcome of an entire transaction
-    async fn await_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
-        self.request_current_consensus("wait_transaction".to_owned(), ApiRequestErased::new(tx))
-            .await
-    }
-
     async fn fetch_epoch_history(
         &self,
         epoch: u64,
@@ -533,8 +525,8 @@ where
             .transpose()?)
     }
 
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()> {
-        self.request_current_consensus("await_transaction".to_owned(), ApiRequestErased::new(txid))
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {
+        self.request_current_consensus("wait_transaction".to_owned(), ApiRequestErased::new(txid))
             .await
     }
 

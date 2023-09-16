@@ -602,23 +602,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok(tx_status)
             }
         },
-        // TODO: this can be removed with the legacy client
         api_endpoint! {
             "wait_transaction",
-            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionStatus {
+            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
                 debug!(transaction = %tx_hash, "Received request");
 
-                let tx_status = fedimint.wait_transaction_status(tx_hash)
-                    .await;
+                fedimint.await_transaction(tx_hash).await;
 
                 debug!(transaction = %tx_hash, "Sending outcome");
-                Ok(tx_status)
-            }
-        },
-        api_endpoint! {
-            "await_transaction",
-            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
-                fedimint.await_transaction(tx_hash).await;
 
                 Ok(tx_hash)
             }
