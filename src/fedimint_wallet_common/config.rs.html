@@ -194,6 +194,13 @@
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -257,6 +264,8 @@
 </span><span class="kw">pub struct </span>WalletConfigLocal {
     <span class="doccomment">/// Configures which bitcoin RPC to use
     </span><span class="kw">pub </span>bitcoin_rpc: BitcoinRpcConfig,
+    <span class="doccomment">/// Our own peer_id
+    </span><span class="kw">pub </span>our_peer_id: PeerId,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
@@ -333,9 +342,11 @@
 }
 
 <span class="kw">impl </span>WalletConfig {
-    <span class="kw">pub fn </span>new(
+    <span class="attr">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">pub fn </span>new(
         pubkeys: BTreeMap&lt;PeerId, CompressedPublicKey&gt;,
         sk: SecretKey,
+        our_peer_id: PeerId,
         threshold: usize,
         network: Network,
         finality_delay: u32,
@@ -347,7 +358,10 @@
         );
 
         <span class="self">Self </span>{
-            local: WalletConfigLocal { bitcoin_rpc },
+            local: WalletConfigLocal {
+                bitcoin_rpc,
+                our_peer_id,
+            },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network,
