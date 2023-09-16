@@ -13,8 +13,9 @@ use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, Amount};
+use fedimint_logging::LOG_TEST;
 use lazy_static::lazy_static;
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::btc::BitcoinTest;
 
@@ -63,7 +64,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             loop {
                 let current_block_count = self.rpc.get_block_count().await.expect("rpc failed");
                 if current_block_count < expected_block_count {
-                    trace!(
+                    debug!(
+                        target: LOG_TEST,
                         ?block_num,
                         ?expected_block_count,
                         ?current_block_count,
@@ -71,7 +73,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     );
                     sleep(Duration::from_millis(200)).await;
                 } else {
-                    trace!(
+                    debug!(
+                        target: LOG_TEST,
                         ?block_num,
                         ?expected_block_count,
                         ?current_block_count,

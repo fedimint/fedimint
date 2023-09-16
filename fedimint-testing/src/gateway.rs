@@ -12,6 +12,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
+use fedimint_logging::LOG_TEST;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
@@ -20,7 +21,7 @@ use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::federation::FederationTest;
 use crate::fixtures::{test_dir, Fixtures};
@@ -61,6 +62,7 @@ impl GatewayTest {
 
     /// Connects to a new federation and stores the info
     pub async fn connect_fed(&mut self, fed: &FederationTest) -> FederationInfo {
+        info!(target: LOG_TEST, "Sending rpc to connect gateway to federation");
         let invite_code = fed.invite_code().to_string();
         let rpc = self
             .get_rpc()

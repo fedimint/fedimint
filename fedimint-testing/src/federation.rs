@@ -15,6 +15,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::PeerId;
+use fedimint_logging::LOG_TEST;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::ConsensusServer;
@@ -23,6 +24,7 @@ use fedimint_server::net::connect::{parse_host_port, Connector};
 use fedimint_server::net::peers::DelayCalculator;
 use fedimint_server::FedimintServer;
 use tokio_rustls::rustls;
+use tracing::info;
 
 /// Test fixture for a running fedimint federation
 pub struct FederationTest {
@@ -50,6 +52,7 @@ impl FederationTest {
     }
 
     pub async fn new_client_with_config(&self, client_config: ClientConfig) -> Client {
+        info!(target: LOG_TEST, "Setting new client with config");
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);

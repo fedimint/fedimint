@@ -30,6 +30,7 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use fedimint_ln_server::LightningGen;
+use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
@@ -48,8 +49,10 @@ use ln_gateway::utils::retry;
 use ln_gateway::GatewayState;
 use reqwest::StatusCode;
 use secp256k1::PublicKey;
+use tracing::info;
 
 fn fixtures() -> Fixtures {
+    info!(target: LOG_TEST, "Setting up fixtures");
     let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
     fixtures.with_module(LightningClientGen, LightningGen, ln_params)

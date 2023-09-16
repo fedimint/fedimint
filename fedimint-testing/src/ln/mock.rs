@@ -9,6 +9,7 @@ use bitcoin::{secp256k1, KeyPair};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
+use fedimint_logging::LOG_TEST;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{
     Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder,
@@ -21,6 +22,7 @@ use ln_gateway::gateway_lnrpc::{
 use ln_gateway::lnrpc_client::{HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
+use tracing::info;
 
 use super::LightningTest;
 use crate::gateway::LightningNodeType;
@@ -37,6 +39,7 @@ pub struct FakeLightningTest {
 
 impl FakeLightningTest {
     pub fn new() -> Self {
+        info!(target: LOG_TEST, "Setting up fake lightning test fixture");
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut OsRng);
         let amount_sent = Arc::new(Mutex::new(0));
