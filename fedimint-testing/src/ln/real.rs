@@ -11,6 +11,7 @@ use cln_rpc::{model, ClnRpc, Request, Response};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::Amount;
+use fedimint_logging::LOG_TEST;
 use ldk_node::io::SqliteStore;
 use ldk_node::{Builder, Event, LogLevel, NetAddress, Node};
 use lightning_invoice::Bolt11Invoice;
@@ -303,6 +304,7 @@ impl ILnRpcClient for LndLightningTest {
 
 impl LndLightningTest {
     pub async fn new() -> LndLightningTest {
+        info!(target: LOG_TEST, "Setting up lnd lightning test fixture");
         let lnd_rpc_addr = env::var("FM_LND_RPC_ADDR").unwrap();
         let lnd_macaroon = env::var("FM_LND_MACAROON").unwrap();
         let lnd_tls_cert = env::var("FM_LND_TLS_CERT").unwrap();

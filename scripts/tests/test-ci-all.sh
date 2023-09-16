@@ -24,7 +24,7 @@ fi
 cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 # Avoid re-building tests in parallel in all test derivations
 >&2 echo "Pre-building tests..."
-cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+cargo nextest run --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 
 # We've just built everything there is to built, so we should not have a
 # need to be build things again from now on, but since cargo does not

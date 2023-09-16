@@ -2,6 +2,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
@@ -12,8 +13,9 @@ use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, Amount};
+use fedimint_logging::LOG_TEST;
 use lazy_static::lazy_static;
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::btc::BitcoinTest;
 
@@ -62,7 +64,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             loop {
                 let current_block_count = self.rpc.get_block_count().await.expect("rpc failed");
                 if current_block_count < expected_block_count {
-                    trace!(
+                    debug!(
+                        target: LOG_TEST,
                         ?block_num,
                         ?expected_block_count,
                         ?current_block_count,
@@ -70,7 +73,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     );
                     sleep(Duration::from_millis(200)).await;
                 } else {
-                    trace!(
+                    debug!(
+                        target: LOG_TEST,
                         ?block_num,
                         ?expected_block_count,
                         ?current_block_count,
@@ -175,14 +179,26 @@ impl RealBitcoinTest {
 /// locked version - locks the global lock during construction
 pub struct RealBitcoinTestLocked {
     inner: RealBitcoinTestNoLock,
-    _guard: tokio::sync::MutexGuard<'static, ()>,
+    _guard: fs_lock::FileLock,
 }
 
 #[async_trait]
 impl BitcoinTest for RealBitcoinTest {
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync> {
         trace!("Trying to acquire global bitcoin lock");
-        let _guard = REAL_BITCOIN_LOCK.lock().await;
+        let _guard = tokio::task::block_in_place(|| {
+            let lock_file_path = std::env::temp_dir().join("fm-test-bitcoind-lock");
+            fs_lock::FileLock::new_exclusive(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(&lock_file_path)
+                    .with_context(|| format!("Failed to open {}", lock_file_path.display()))?,
+            )
+            .context("Failed to acquire exclusive lock file")
+        })
+        .expect("Failed to lock");
         trace!("Acquired global bitcoin lock");
         Box::new(RealBitcoinTestLocked {
             inner: self.inner.clone(),

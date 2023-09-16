@@ -14,8 +14,9 @@ use fedimint_core::config::{
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-use fedimint_logging::TracingSetup;
+use fedimint_logging::{TracingSetup, LOG_TEST};
 use tempfile::TempDir;
+use tracing::info;
 
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
@@ -118,6 +119,7 @@ impl Fixtures {
 
     /// Starts a new federation with number of peers
     pub async fn new_fed_with_peers(&self, num_peers: u16) -> FederationTest {
+        info!(target: LOG_TEST, num_peers, "Setting federation with peers");
         FederationTest::new(
             num_peers,
             tokio::task::block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))

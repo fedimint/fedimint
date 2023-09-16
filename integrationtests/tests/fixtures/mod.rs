@@ -38,7 +38,7 @@ use fedimint_core::{
 };
 use fedimint_ln_client::LightningClientGen;
 use fedimint_ln_server::LightningGen;
-use fedimint_logging::TracingSetup;
+use fedimint_logging::{TracingSetup, LOG_TEST};
 use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::common::db::NonceKeyPrefix;
 use fedimint_mint_server::common::MintOutput;
@@ -588,6 +588,7 @@ impl FederationTest {
         bitcoin: &dyn BitcoinTest,
         amount: Amount,
     ) {
+        info!(target: LOG_TEST, ?amount, "Mine and mint");
         assert_eq!(amount.msats % 1000, 0);
         let sats = bitcoin::Amount::from_sat(amount.msats / 1000);
         self.mine_spendable_utxo(user, bitcoin, sats).await;
