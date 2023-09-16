@@ -62,26 +62,6 @@ impl<T> TieredMulti<T> {
         self.count_items() == 0
     }
 
-    /// Applies the given closure to every `(Amount, T)` pair
-    pub fn map<F, N, E>(self, f: F) -> Result<TieredMulti<N>, E>
-    where
-        F: Fn(Amount, T) -> Result<N, E>,
-    {
-        let res = self
-            .0
-            .into_iter()
-            .map(|(amt, notes)| -> Result<_, E> {
-                let notes = notes
-                    .into_iter()
-                    .map(|note| f(amt, note))
-                    .collect::<Result<Vec<_>, E>>()?;
-                Ok((amt, notes))
-            })
-            .collect::<Result<BTreeMap<Amount, Vec<N>>, E>>()?;
-
-        Ok(TieredMulti(res))
-    }
-
     /// Verifies whether the structure of `self` and `other` is identical
     pub fn structural_eq<O>(&self, other: &TieredMulti<O>) -> bool {
         let tier_eq = self.0.keys().eq(other.0.keys());
