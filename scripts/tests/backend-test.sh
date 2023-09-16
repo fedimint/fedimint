@@ -35,13 +35,19 @@ export FM_TEST_USE_REAL_DAEMONS=1
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
   >&2 echo "### Testing against bitcoind"
 
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
-    -E 'package(ln-gateway)' \
-    -E 'package(fedimint-dummy-tests)' \
-    -E 'package(fedimint-mint-tests)' \
-    -E 'package(fedimint-ln-tests)' \
-    -E 'package(fedimint-wallet-tests)' \
+  # Note: Ideally `-E` flags can be used together, but that seems to trigger lots of problems
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-dummy-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-mint-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-wallet-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-ln-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
     -E 'package(fedimint-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=1 \
+    -E 'package(ln-gateway)'
   >&2 echo "### Testing against bitcoind - complete"
 fi
 
@@ -51,8 +57,9 @@ export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:50001"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
   >&2 echo "### Testing against electrs"
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
-    -E 'package(fedimint-wallet-tests)' \
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-wallet-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
     -E 'package(fedimint-tests)'
   >&2 echo "### Testing against electrs - complete"
 fi
@@ -63,8 +70,9 @@ export FM_BITCOIN_RPC_URL="http://127.0.0.1:50002"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
   >&2 echo "### Testing against esplora"
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
-    -E 'package(fedimint-wallet-tests)' \
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-wallet-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
     -E 'package(fedimint-tests)'
   >&2 echo "### Testing against esplora - complete"
 fi
