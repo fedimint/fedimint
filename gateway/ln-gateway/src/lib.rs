@@ -14,6 +14,7 @@ pub mod gateway_lnrpc {
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::env;
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -156,6 +157,18 @@ pub enum GatewayState {
         lightning_alias: String,
     },
     Disconnected,
+}
+
+impl Display for GatewayState {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            GatewayState::Initializing => write!(f, "Initializing"),
+            GatewayState::Configuring => write!(f, "Configuring"),
+            GatewayState::Connected => write!(f, "Connected"),
+            GatewayState::Running { .. } => write!(f, "Running"),
+            GatewayState::Disconnected => write!(f, "Disconnected"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -503,6 +516,7 @@ impl Gateway {
                 fees: self.fees,
                 route_hints,
                 gateway_id: self.gateway_id,
+                gateway_state: self.state.read().await.to_string(),
             });
         }
 
@@ -514,6 +528,7 @@ impl Gateway {
             fees: self.fees,
             route_hints: vec![],
             gateway_id: self.gateway_id,
+            gateway_state: self.state.read().await.to_string(),
         })
     }
 
