@@ -1980,49 +1980,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-trait",
- "bitcoin 0.29.2",
- "cln-rpc",
- "erased-serde",
- "fedimint-bitcoind",
- "fedimint-client",
- "fedimint-client-legacy",
- "fedimint-core",
- "fedimint-ln-client",
- "fedimint-ln-server",
- "fedimint-logging",
- "fedimint-mint-client",
- "fedimint-mint-server",
- "fedimint-portalloc",
- "fedimint-rocksdb",
- "fedimint-server",
- "fedimint-testing",
- "fedimint-wallet-client",
- "fedimint-wallet-server",
- "fedimintd",
- "futures",
- "hbbft",
- "itertools",
- "lightning 0.0.116",
- "lightning-invoice 0.24.0",
- "ln-gateway",
- "rand",
- "serde",
- "serde_json",
- "threshold_crypto",
- "tokio",
- "tokio-rustls 0.23.4",
- "tokio-stream",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "fedimint-wallet-client"
 version = "0.1.0"
 dependencies = [

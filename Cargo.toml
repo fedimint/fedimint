@@ -41,7 +41,6 @@ members = [
     "modules/fedimint-wallet-tests",
     "utils/portalloc",
     "devimint",
-    "integrationtests",
     "fedimint-build",
     "recoverytool"
 ]

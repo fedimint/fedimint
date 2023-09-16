@@ -273,7 +273,6 @@ craneLib.overrideScope' (self: prev: {
     pkgs = {
       fedimintd = { };
       fedimint-cli = { };
-      fedimint-tests = { };
       fedimint-dbtool = { };
     };
 

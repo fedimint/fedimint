@@ -10,7 +10,6 @@ The [Fedimint federation](#Federation-Nodes) consists of nodes that are primaril
 * `fedimint` - the main consensus code for processing transactions and REST API
 * `fedimint-derive` - helper macros for serialization
 * `crypto/tbs` - helper cryptography library for threshold blind signatures
-* `integrationtests/fedimint-tests` - integration testing framework
 
 [Modules](#Modules) can be added to the `FedimintConsensus` to allow for new types of transactions and federated actions:
 * `modules/fedimint-wallet` - an on-chain bitcoin wallet
