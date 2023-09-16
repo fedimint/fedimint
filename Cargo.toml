@@ -61,6 +61,13 @@ license-file = "LICENSE"
 keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 
+# Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
+#             https://github.com/ipetkov/crane/issues/370
+[profile.dev.build-override]
+debug = false
+[profile.ci.build-override]
+debug = false
+
 [profile.dev]
 
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
