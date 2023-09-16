@@ -1456,7 +1456,6 @@ dependencies = [
  "clap",
  "erased-serde",
  "fedimint-aead",
- "fedimint-client-legacy",
  "fedimint-core",
  "fedimint-ln-server",
  "fedimint-logging",

@@ -3,10 +3,6 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use erased_serde::Serialize;
-use fedimint_client_legacy::db as ClientRange;
-use fedimint_client_legacy::ln::db as ClientLightningRange;
-use fedimint_client_legacy::mint::db as ClientMintRange;
-use fedimint_client_legacy::wallet::db as ClientWalletRange;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::notifications::Notifications;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
@@ -14,7 +10,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::SerdeSignatureShare;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{push_db_key_items, push_db_pair_items, push_db_pair_items_no_serde};
+use fedimint_core::{push_db_pair_items, push_db_pair_items_no_serde};
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
@@ -275,188 +271,24 @@ impl<'a> DatabaseDump<'a> {
     /// Iterates through each of the prefixes within the lightning client range
     /// and retrieves the corresponding data.
     async fn retrieve_ln_client_data(&mut self) {
-        let mut ln_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let dbtx = &mut self.read_only;
-        let prefix_names = &self.prefixes;
-        let filtered_prefixes = ClientLightningRange::DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-        for table in filtered_prefixes {
-            match table {
-                ClientLightningRange::DbKeyPrefix::ConfirmedInvoice => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientLightningRange::ConfirmedInvoiceKeyPrefix,
-                        ClientLightningRange::ConfirmedInvoiceKey,
-                        fedimint_client_legacy::ln::incoming::ConfirmedInvoice,
-                        ln_client,
-                        "Confirmed Invoices"
-                    );
-                }
-                ClientLightningRange::DbKeyPrefix::LightningGateway => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientLightningRange::LightningGatewayKeyPrefix,
-                        ClientLightningRange::LightningGatewayKey,
-                        fedimint_ln_server::common::LightningGateway,
-                        ln_client,
-                        "Lightning Gateways"
-                    );
-                }
-                ClientLightningRange::DbKeyPrefix::OutgoingContractAccount => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientLightningRange::OutgoingContractAccountKeyPrefix,
-                        ClientLightningRange::OutgoingContractAccountKey,
-                        fedimint_client_legacy::ln::outgoing::OutgoingContractAccount,
-                        ln_client,
-                        "Outgoing Contract Accounts"
-                    );
-                }
-                ClientLightningRange::DbKeyPrefix::OutgoingPayment => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientLightningRange::OutgoingPaymentKeyPrefix,
-                        ClientLightningRange::OutgoingPaymentKey,
-                        fedimint_client_legacy::ln::outgoing::OutgoingContractData,
-                        ln_client,
-                        "Outgoing Payments"
-                    );
-                }
-                ClientLightningRange::DbKeyPrefix::OutgoingPaymentClaim => {
-                    push_db_key_items!(
-                        dbtx,
-                        ClientLightningRange::OutgoingPaymentClaimKeyPrefix,
-                        ClientLightningRange::OutgoingPaymentClaimKey,
-                        ln_client,
-                        "Outgoing Payment Claims"
-                    );
-                }
-            }
-        }
-
-        self.serialized
-            .insert("Client Lightning".to_string(), Box::new(ln_client));
+        unimplemented!()
     }
 
     /// Iterates through each of the prefixes within the mint client range and
     /// retrieves the corresponding data.
     async fn retrieve_mint_client_data(&mut self) {
-        let mut mint_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let dbtx = &mut self.read_only;
-        let prefix_names = &self.prefixes;
-        let filtered_prefixes = ClientMintRange::DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-        for table in filtered_prefixes {
-            match table {
-                ClientMintRange::DbKeyPrefix::Note => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientMintRange::NoteKeyPrefix,
-                        ClientMintRange::NoteKey,
-                        fedimint_client_legacy::mint::SpendableNote,
-                        mint_client,
-                        "Notes"
-                    );
-                }
-                ClientMintRange::DbKeyPrefix::OutputFinalizationData => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientMintRange::OutputFinalizationKeyPrefix,
-                        ClientMintRange::OutputFinalizationKey,
-                        fedimint_client_legacy::mint::NoteIssuanceRequests,
-                        mint_client,
-                        "Output Finalization"
-                    );
-                }
-                ClientMintRange::DbKeyPrefix::PendingNotes => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientMintRange::PendingNotesKeyPrefix,
-                        ClientMintRange::PendingNotesKey,
-                        fedimint_core::TieredMulti<fedimint_client_legacy::mint::SpendableNote>,
-                        mint_client,
-                        "Pending Notes"
-                    );
-                }
-                ClientMintRange::DbKeyPrefix::NextECashNoteIndex => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientMintRange::NextECashNoteIndexKeyPrefix,
-                        ClientMintRange::NextECashNoteIndexKey,
-                        u64,
-                        mint_client,
-                        "Last e-cash note index"
-                    );
-                }
-                ClientMintRange::DbKeyPrefix::NotesPerDenomination => {
-                    let notes = dbtx
-                        .get_value(&ClientMintRange::NotesPerDenominationKey)
-                        .await;
-                    if let Some(notes) = notes {
-                        mint_client.insert("NotesPerDenomination".to_string(), Box::new(notes));
-                    }
-                }
-            }
-        }
-
-        self.serialized
-            .insert("Client Mint".to_string(), Box::new(mint_client));
+        unimplemented!()
     }
 
     /// Iterates through each of the prefixes within the wallet client range and
     /// retrieves the corresponding data.
     async fn retrieve_wallet_client_data(&mut self) {
-        let mut wallet_client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let dbtx = &mut self.read_only;
-        let prefix_names = &self.prefixes;
-        let filtered_prefixes = ClientWalletRange::DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-        for table in filtered_prefixes {
-            match table {
-                ClientWalletRange::DbKeyPrefix::PegIn => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ClientWalletRange::PegInPrefixKey,
-                        ClientWalletRange::PegInKey,
-                        [u8; 32],
-                        wallet_client,
-                        "Peg Ins"
-                    );
-                }
-            }
-        }
-
-        self.serialized
-            .insert("Client Wallet".to_string(), Box::new(wallet_client));
+        unimplemented!()
     }
 
     /// Iterates through each of the prefixes within the client range and
     /// retrieves the corresponding data.
     async fn retrieve_client_data(&mut self) {
-        let mut client: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let prefix_names = &self.prefixes;
-        let filtered_prefixes = ClientRange::DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-
-        for table in filtered_prefixes {
-            match table {
-                ClientRange::DbKeyPrefix::ClientSecret => {
-                    let secret = self
-                        .read_only
-                        .get_value(&ClientRange::ClientSecretKey)
-                        .await;
-                    if let Some(secret) = secret {
-                        client.insert("Client Secret".to_string(), Box::new(secret));
-                    }
-                }
-            }
-        }
-
-        self.serialized
-            .insert("Client".to_string(), Box::new(client));
+        unimplemented!()
     }
 }
