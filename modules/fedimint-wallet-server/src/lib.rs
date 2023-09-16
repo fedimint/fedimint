@@ -120,6 +120,7 @@ impl ServerModuleInit for WalletGen {
                         .map(|(peer_id, (_, pk))| (*peer_id, CompressedPublicKey { key: *pk }))
                         .collect(),
                     *sk,
+                    *id,
                     peers.threshold(),
                     params.consensus.network,
                     params.consensus.finality_delay,
@@ -155,6 +156,7 @@ impl ServerModuleInit for WalletGen {
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
+            peers.our_id,
             peers.peer_ids().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
@@ -325,16 +327,19 @@ impl ServerModule for Wallet {
         // TODO: We should not be panicking
         let block_count = self.get_block_count().await.expect("bitcoind rpc failed");
         let block_count_proposal = block_count.saturating_sub(self.cfg.consensus.finality_delay);
-        let consensus_block_count = self.consensus_block_count(dbtx).await;
 
         debug!(
             ?block_count_proposal,
             ?block_count,
-            ?consensus_block_count,
             "Considering proposing block count"
         );
 
-        if Some(block_count_proposal) != consensus_block_count {
+        let current_vote = dbtx
+            .get_value(&BlockCountVoteKey(self.cfg.local.our_peer_id))
+            .await
+            .unwrap_or(0);
+
+        if current_vote < block_count_proposal {
             items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
