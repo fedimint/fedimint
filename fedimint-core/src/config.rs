@@ -111,9 +111,46 @@ pub struct PeerUrl {
 /// This includes global settings and client-side module configs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ClientConfig {
+    #[serde(flatten)]
+    pub global: GlobalClientConfig,
+    #[serde(deserialize_with = "de_int_key")]
+    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+}
+
+// FIXME: workaround for https://github.com/serde-rs/json/issues/989
+fn de_int_key<'de, D, K, V>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
+where
+    D: Deserializer<'de>,
+    K: Eq + Ord + FromStr,
+    K::Err: Display,
+    V: Deserialize<'de>,
+{
+    let string_map = <BTreeMap<String, V>>::deserialize(deserializer)?;
+    let map = string_map
+        .into_iter()
+        .map(|(key_str, value)| {
+            let key = K::from_str(&key_str).map_err(serde::de::Error::custom)?;
+            Ok((key, value))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    Ok(map)
+}
+
+/// Client config that cannot be cryptographically verified but is easier to
+/// parse by external tools
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct JsonClientConfig {
+    pub global: GlobalClientConfig,
+    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+}
+
+/// Federation-wide client config
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct GlobalClientConfig {
     // Stable and unique id and threshold pubkey of the federation for authenticating configs
     pub federation_id: FederationId,
     /// API endpoints for each federation member
+    #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Threshold pubkey for authenticating epoch history
     pub epoch_pk: threshold_crypto::PublicKey,
@@ -122,8 +159,6 @@ pub struct ClientConfig {
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
-    /// Configs from other client modules
-    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
 impl ClientConfig {
@@ -282,7 +317,7 @@ impl ClientConfig {
 
     /// Federation name from config metadata (if set)
     pub fn federation_name(&self) -> Option<&str> {
-        self.meta.get(META_FEDERATION_NAME_KEY).map(|x| &**x)
+        self.global.meta.get(META_FEDERATION_NAME_KEY).map(|x| &**x)
     }
 }
 

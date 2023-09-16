@@ -519,6 +519,10 @@ impl ClientModule for WalletClientModule {
             fee: self.cfg.fee_consensus.peg_out_abs,
         }
     }
+
+    fn get_config(&self) -> <<Self as ClientModule>::Common as ModuleCommon>::ClientConfig {
+        self.cfg.clone()
+    }
 }
 
 #[derive(Debug, Clone)]

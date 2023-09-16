@@ -20,7 +20,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
@@ -259,7 +259,7 @@ impl GatewayClientExt for Client {
             gateway_id,
         );
 
-        let federation_id = self.get_config().federation_id;
+        let federation_id = self.get_config().global.federation_id;
         let mut dbtx = self.db().begin_transaction().await;
         gateway
             .register_with_federation(&mut dbtx, federation_id, registration_info)
@@ -448,6 +448,10 @@ impl ClientModule for GatewayClientModule {
                 }
             }
         }
+    }
+
+    fn get_config(&self) -> <<Self as ClientModule>::Common as ModuleCommon>::ClientConfig {
+        self.cfg.clone()
     }
 }
 

@@ -273,7 +273,7 @@ impl LightningClientExt for Client {
                     instance.api,
                     invoice.clone(),
                     active_gateway,
-                    self.get_config().federation_id,
+                    self.get_config().global.federation_id,
                     rand::rngs::OsRng,
                 )
                 .await?;
@@ -631,6 +631,10 @@ impl ClientModule for LightningClientModule {
                 }
             }
         }
+    }
+
+    fn get_config(&self) -> <<Self as ClientModule>::Common as ModuleCommon>::ClientConfig {
+        self.cfg.clone()
     }
 }
 
