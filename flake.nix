@@ -33,7 +33,10 @@
             overlays = [
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
-                cargo-nextest = pkgs-unstable.cargo-nextest;
+
+                # Note: we are using cargo-nextest from pkgs-unstable because it has some fixes we need
+                # Note: shell script adding DYLD_FALLBACK_LIBRARY_PATH because of: https://github.com/nextest-rs/nextest/issues/962
+                cargo-nextest = pkgs.writeShellScriptBin "cargo-nextest" "exec env DYLD_FALLBACK_LIBRARY_PATH=\"$(dirname $(which rustc))/../lib\" ${pkgs-unstable.cargo-nextest}/bin/cargo-nextest \"$@\"";
 
                 cargo-llvm-cov = prev.rustPlatform.buildRustPackage rec {
                   pname = "cargo-llvm-cov";
