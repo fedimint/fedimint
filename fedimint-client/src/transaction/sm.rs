@@ -5,7 +5,6 @@ use std::time::{Duration, SystemTime};
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::task::sleep;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
@@ -146,7 +145,7 @@ impl State for TxSubmissionStates {
                         move |_dbtx, res, _state| {
                             Box::pin(async move {
                                 match res {
-                                    Ok(_epoch) => TxSubmissionStates::Accepted { txid },
+                                    Ok(()) => TxSubmissionStates::Accepted { txid },
                                     Err(error) => TxSubmissionStates::Rejected {
                                         txid,
                                         error: TxSubmissionError::ConsensusRejected(error),
@@ -206,12 +205,11 @@ async fn trigger_created_submit(
 async fn trigger_created_accepted(
     txid: TransactionId,
     context: DynGlobalClientContext,
-) -> Result<u64, String> {
+) -> Result<(), String> {
     // FIXME: use ws subscriptions once they land
     loop {
-        match context.api().await_tx_outcome(&txid).await {
-            Ok(TransactionStatus::Accepted { epoch, .. }) => break Ok(epoch),
-            Ok(TransactionStatus::Rejected(error)) => break Err(error),
+        match context.api().await_transaction(txid).await {
+            Ok(..) => break Ok(()),
             Err(error) => {
                 if error.is_retryable() {
                     // FIXME: what to do in this case?
@@ -311,7 +309,7 @@ mod tests {
 
                     Ok(serde_json::to_value(tx.tx_hash()).unwrap())
                 }
-                "wait_transaction" => {
+                "await_transaction" => {
                     let api_req: ApiRequestErased =
                         serde_json::from_value(params[0].clone()).unwrap();
                     let txid: TransactionId = serde_json::from_value(api_req.params).unwrap();
@@ -326,11 +324,7 @@ mod tests {
                         sleep(Duration::from_millis(10)).await;
                     }
 
-                    let outcome = fedimint_core::outcome::TransactionStatus::Accepted {
-                        epoch: 0,
-                        outputs: vec![],
-                    };
-                    Ok(serde_json::to_value(outcome).unwrap())
+                    Ok(serde_json::to_value(txid).unwrap())
                 }
                 _ => unimplemented!(),
             }

@@ -354,7 +354,7 @@ pub trait GlobalFederationApi {
     where
         R: OutputOutcome;
 
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()>;
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
 
     async fn await_output_outcome<R>(
         &self,
@@ -533,7 +533,7 @@ where
             .transpose()?)
     }
 
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()> {
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {
         self.request_current_consensus("await_transaction".to_owned(), ApiRequestErased::new(txid))
             .await
     }
