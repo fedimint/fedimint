@@ -161,6 +161,8 @@
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -205,7 +207,9 @@
             .layer(ValidateRequestHeaderLayer::bearer(<span class="kw-2">&amp;</span>gateway_config.password));
         (routes, admin_routes)
     } <span class="kw">else </span>{
-        <span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration));
+        <span class="kw">let </span>routes = Router::new()
+            .route(<span class="string">&quot;/set_configuration&quot;</span>, post(set_configuration))
+            .route(<span class="string">&quot;/info&quot;</span>, post(info));
         (routes, Router::new())
     };
 
