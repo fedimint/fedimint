@@ -1,6 +1,6 @@
 # Fedimint Lightning Gateways
 
-Lightning gateways provide routing services in and out of Fedimint Federations. In essence, a gateway is a specialized Fedimint client, paired up with a running instance of lightning node like [Core Lightning (CLN)](https://github.com/ElementsProject/lightning) or [Lightning Network Daemon (LND)](https://github.com/lightningnetwork/lnd), so it can route payments on behalf of the Federation.
+Lightning gateways provide routing services in and out of Fedimint Federations. In essence, a gateway is a specialized Fedimint client, paired up with a running instance of lightning node, like [Core Lightning (CLN)](https://github.com/ElementsProject/lightning) or [Lightning Network Daemon (LND)](https://github.com/lightningnetwork/lnd), so it can route payments on behalf of the Federation.
 
 A single Gateway can serve multiple Federations.
 
@@ -20,7 +20,7 @@ A webserver daemon that runs all the business logic of a gateway. Think of this 
 
 > **Additional Notes:**
 >
-> Just like other Federation clients, the client within the gateway actor interfaces with the Federation through a well defined **FederationAPI**
+> Just like other Federation clients, the client within the gateway actor interfaces with the Federation through a well-defined **FederationAPI**
 >
 > - To receive incoming lightning payments, the client within a gateway actor calls to **FederationAPI**s to complete certain incoming contract functions
 > - To make outgoing lightning payments, clients within a federation served by the gateway will use gatewayd `pay_invoice` API.

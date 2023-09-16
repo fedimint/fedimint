@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The client uses [the deterministic e-cash derivation scheme](./recoverable_e-cash.md). This allows e-cash recovery from the root key (exported and backed up securely during wallet creation) in case of data corruption or losing access to the wallet.
+The client uses [the deterministic e-cash derivation scheme](./recoverable_e-cash.md). This allows e-cash recovery from the root key (exported and backed up securely during wallet creation) in case of data corruption or loss of access to the wallet.
 
 Using the root key it's possible to deterministically derive all the secret material, and by matching it against publicly available Fedimint federation history, recreate all the lost data.
 
@@ -31,14 +31,14 @@ In principle, the encrypted backup snapshot could be stored anywhere, privately 
 The client creates a backup request containing:
 
 * `ID` (backup signing public key),
-* `timestamp` (current time, to prevent any reply attacks)
+* `timestamp` (current time, to prevent any replay attacks)
 * `payload` (encrypted snapshot)
 
 then the request is signed with the deterministically derived backup signing secret key.
 
 The backup request is then sent to the Federation members. The `ID` is used as an anonymous identifier of the user and their most recent backup snapshot.
 
-Each member verifies the signature is valid and matches the backup `ID`, then compares the `timestamp` against any already stored snapshot for this `ID`, to ensure only the most copy is stored.
+Each member verifies the signature is valid and matches the backup `ID`, then compares the `timestamp` against any already stored snapshot for this `ID`, to ensure only the most recent copy is stored.
 
 The Federation also provides an ability for the client to download the most recent backup snapshot of a given ID.
 
@@ -46,5 +46,5 @@ The Federation also provides an ability for the client to download the most rece
 
 Backup recovery works by starting from the recent snapshot, then sequentially querying the Federation for consensus epoch history since the backup snapshot was taken until the present time, and for each epoch,  scanning all the relevant consensus data and matching it against the existing (e.g. known spendable notes) and predicted client state (e.g. next in sequence deterministic blind nonces).
 
-In essence, the recovery code is (in limited scope) replaying the Federation consensus history to fast-forward the snapshot to the final and up-to-date state.
+In essence, the recovery code is (in limited scope) replaying the Federation consensus history to fast-forward the snapshot to the final, up-to-date state.
 

@@ -45,7 +45,7 @@ using `apply_migrations`.
 Since introducing a database breaking change is easy (just modifying a struct), tests have been introduced to catch DB breaking changes. `just prepare_db_migration_snapshots` will prepare a database backup of dummy data for a module. `test_migrations` will try to read from this database backup. If the
 structure of the data has changed and the backup cannot be reading, this test will fail.
 
-There are sometimes when making a DB breaking change (not backwards compatible) is intentional. In that case, to fix the migration tests, `just prepare_db_migration_snapshot` needs to be updated
+There are some times when making a DB breaking change (not backwards compatible) is intentional. In that case, to fix the migration tests, `just prepare_db_migration_snapshot` needs to be updated
 to reflect the new structure of the data. Then, the db/ folder at the root of the repository needs to be deleted. Then `just prepare_db_migration_snapshot` can
 be run to re-generate the database backup. `test_migrations` will need to be updated to read the newly added/modified data.
 

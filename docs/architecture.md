@@ -31,9 +31,9 @@ The [LN gateway](#LN-Gateway):
 ## Federation Nodes
 Each of the nodes spawns three long-running tasks in parallel: an API task, a [HBBFT protocol](https://docs.rs/hbbft/latest/hbbft/) task, and a Fedimint consensus task.
 
-The API task in `net:api:run_server` allows clients to submit a `Transaction` and retrieve the `TransactionStatus`.
+The API task in `net:api:run_server` allows clients to submit a `Transaction` and retrieve its `TransactionStatus`.
 Transactions are validated by the `FedimintConsensus` logic before being stored as proposals in the database.
-The proposed list of `ConsensusItem` includes all possible consensus state changes, such as mint transactions or updates to the agreed-upon block height.
+The proposed list of `ConsensusItem`s includes all possible consensus state changes, such as mint transactions or updates to the agreed-upon block height.
 
 The HBBFT protocol task handles communication between federation nodes, combining different `ConsensusItem` proposals from each node into an identical `ConsensusOutcome` during an epoch.
 So long as enough nodes can communicate, epochs will be continually generated, and every node will share the same sequence of `ConsensusOutcome` data.
@@ -42,7 +42,7 @@ The `FedimintConsensus` task processes each `ConsensusOutcome` by validating the
 For instance, the consensus thread may receive a peg-out proposal, validate the PSBT signature and transaction balances, then sign and submit the transaction to the Bitcoin network.
 
 ## Modules
-There currently are three `FederationModule` used in `FedimintConsensus` that exist in the [crates](#Crate-organization) previously described:
+There currently are three `FederationModule`s used in `FedimintConsensus` that exist in the [crates](#Crate-organization) previously described:
 * [Wallet module](wallet_module.md) - handles bitcoin on-chain `PegInProof` inputs and `PegOut` outputs
 * `Mint` module - verifies `Note` input signatures and issues `BlindNote` outputs of different denominations
 * `LightningModule` - creates `ContractInput` inputs and `ContractOrOfferOutput` outputs representing a payment sent or received by a gateway on behalf of a user
@@ -65,7 +65,7 @@ Requests are delegated to an underlying `LnClient`, `MintClient`, or `WalletClie
 A submitted `Transaction` often requires multiple epochs to become spendable, usually because they require signatures from a quorum of federation members.
 Clients query for the `TransactionStatus` by unique `OutPoint` that includes the `TransactionId`.
 
-After enough epochs have passed, the `TransactionStatus` contain either return an `Error` message or the `OutputOutcome` indicating how the inputs were spent and possibly returning data to the user such as blind-signed notes.
+After enough epochs have passed, the `TransactionStatus` resolves either to an `Error` message or the `OutputOutcome` indicating how the inputs were spent and possibly returning data to the user such as blind-signed notes.
 
 ## LN Gateway
 The `LnGateway` communicates with a local Lightning node in order to provide an API that can pay invoices.
