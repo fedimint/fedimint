@@ -24,8 +24,6 @@ rules:
       - devimint/
       # server only
       - fedimint-server/
-      # being phased out
-      - fedimint-client-legacy/
 
 - id: ban-fs-write
   languages:

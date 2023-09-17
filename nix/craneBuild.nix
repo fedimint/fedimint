@@ -294,7 +294,6 @@ craneLib.overrideScope' (self: prev: {
     inherit target;
 
     pkgs = {
-      fedimint-client-legacy = { };
       fedimint-client = { };
     };
   };

@@ -2,9 +2,9 @@
 The wallet module allows users to peg-in or peg-out from the fed using on-chain bitcoin transactions.
 
 ### Pegging In - User Client
-- [WalletClient::get_new_pegin_address](../fedimint-client-legacy/src/wallet/mod.rs) - the user client generates a new peg-in address by creating a random private/public key pair, and tweaking the fed's public multisig with the random public key.
+- [WalletClient::get_new_pegin_address](../modules/fedimint-wallet-client/src/lib.rs) - the user client generates a new peg-in address by creating a random private/public key pair, and tweaking the fed's public multisig with the random public key.
 - Next the user sends an on-chain bitcoin transaction to the generated peg-in address using whatever wallet software they prefer.
-- [WalletClient::create_pegin_input](../fedimint-client-legacy/src/wallet/mod.rs) - after sending bitcoin on-chain to the address, the client sends a `PegInProof` to the fed which includes the public key tweak that allows the federation to spend the UTXO, and signs the transaction using the private key tweak to prove they sent the bitcoin.
+- [WalletClient::create_pegin_input](../modules/fedimint-wallet-client/src/lib.rs) - after sending bitcoin on-chain to the address, the client sends a `PegInProof` to the fed which includes the public key tweak that allows the federation to spend the UTXO, and signs the transaction using the private key tweak to prove they sent the bitcoin.
 
 ```rust
 let address = user_client.get_new_pegin_address();
@@ -22,8 +22,8 @@ Using a public key tweak instead of querying the federation for a new address av
 - [Wallet::begin_consensus_epoch](../modules/fedimint-wallet-server/src/lib.rs) - determines the `RoundConsensus` containing the consensus block height which is delayed by a configurable `finality_delay` of 10 blocks after which peg-ins accepted.
 
 ### Pegging Out - User Client
-- [Client::new_peg_out_with_fees](../fedimint-client-legacy/src/lib.rs) - creates a new `PegOut` for users by requesting the current peg-out fees from the fed's wallet API which is estimated based on the on-chain size of the transaction and the sats/byte to confirm in a `CONFIRMATION_TARGET` of 10 blocks.
-- [Client::peg_out](../fedimint-client-legacy/src/lib.rs) - submits a transaction to the fed to spend input ecash and receive bitcoin on-chain.
+- [Client::new_peg_out_with_fees](../fedimint-client/src/lib.rs) - creates a new `PegOut` for users by requesting the current peg-out fees from the fed's wallet API which is estimated based on the on-chain size of the transaction and the sats/byte to confirm in a `CONFIRMATION_TARGET` of 10 blocks.
+- [Client::peg_out](../fedimint-client/src/lib.rs) - submits a transaction to the fed to spend input ecash and receive bitcoin on-chain.
 
 ```rust
 let peg_out = user_client.new_peg_out_with_fees(amount, address);

@@ -1348,54 +1348,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-client-legacy"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.20.0",
- "bincode",
- "bitcoin 0.29.2",
- "bitcoin_hashes 0.11.0",
- "fedimint-aead",
- "fedimint-client",
- "fedimint-core",
- "fedimint-derive-secret",
- "fedimint-ln-client",
- "fedimint-logging",
- "fedimint-mint-client",
- "fedimint-wallet-client",
- "fedimint-wallet-common",
- "futures",
- "hkdf",
- "itertools",
- "jsonrpsee-core 0.18.2",
- "jsonrpsee-types 0.18.2",
- "jsonrpsee-wasm-client",
- "jsonrpsee-ws-client",
- "lightning 0.0.116",
- "lightning-invoice 0.24.0",
- "miniscript",
- "once_cell",
- "rand",
- "reqwest",
- "ring",
- "secp256k1 0.24.3",
- "secp256k1-zkp",
- "serde",
- "serde_json",
- "strum",
- "strum_macros",
- "tbs",
- "thiserror",
- "threshold_crypto",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
 name = "fedimint-core"
 version = "0.1.0"
 dependencies = [
