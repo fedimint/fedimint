@@ -93,7 +93,7 @@ impl<R> VerifiableResponse<R> {
     ) -> Self {
         Self {
             verifier: Box::new(verifier),
-            threshold_consensus: ThresholdConsensus::new(total_peers),
+            threshold_consensus: ThresholdConsensus::overcome_evil(total_peers),
             allow_threshold_fallback,
         }
     }
@@ -174,7 +174,9 @@ pub struct ThresholdConsensus<R> {
 }
 
 impl<R> ThresholdConsensus<R> {
-    pub fn new(total_peers: usize) -> Self {
+    // Require that enough participants return the same message to ensure that we
+    // overcome the threshold for malicious nodes
+    pub fn overcome_evil(total_peers: usize) -> Self {
         let max_evil = (total_peers - 1) / 3;
         let threshold = total_peers - max_evil;
 
@@ -186,6 +188,7 @@ impl<R> ThresholdConsensus<R> {
         }
     }
 
+    // Require that all participants return the same message
     pub fn full_participation(total_peers: usize) -> Self {
         Self {
             error_strategy: ErrorStrategy::new(1),
