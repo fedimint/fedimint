@@ -591,12 +591,8 @@ where
     }
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
-        self.request_with_strategy(
-            ThresholdConsensus::new(self.all_peers().total()),
-            "backup".to_owned(),
-            ApiRequestErased::new(request),
-        )
-        .await
+        self.request_current_consensus("backup".to_owned(), ApiRequestErased::new(request))
+            .await
     }
 
     async fn download_backup(
