@@ -689,7 +689,7 @@
 <span class="kw">use </span>fedimint_core::epoch::{
     ConsensusItem, EpochOutcome, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
-<span class="kw">use </span>fedimint_core::fmt_utils::OptStracktrace;
+<span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
@@ -721,7 +721,7 @@
 <span class="kw">use crate</span>::{LOG_CONSENSUS, LOG_CORE};
 <span class="kw">type </span>PeerMessage = (PeerId, EpochMessage);
 
-<span class="doccomment">/// how many epochs ahead of consensus to rejoin
+<span class="doccomment">/// How many epochs ahead of consensus to rejoin
 </span><span class="kw">const </span>NUM_EPOCHS_REJOIN_AHEAD: u64 = <span class="number">10</span>;
 
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
@@ -932,7 +932,7 @@
         })
     }
 
-    <span class="doccomment">/// Loop `run_conensus_epoch` until shut down
+    <span class="doccomment">/// Loop `run_consensus_epoch` until shut down
     </span><span class="kw">pub async fn </span>run_consensus(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
 
@@ -943,7 +943,7 @@
                 <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == our_hash =&gt; <span class="kw">break</span>,
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Could not check consensus config hash: {}&quot;</span>, OptStracktrace(e))
+                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Could not check consensus config hash: {}&quot;</span>, OptStacktrace(e))
                 }
             }
             sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
@@ -1150,7 +1150,7 @@
         <span class="prelude-val">Ok</span>(outcomes)
     }
 
-    <span class="comment">// save any API events we have in the channel then create a proposal
+    <span class="comment">// Save any API events we have in the channel then create a proposal
     </span><span class="kw">async fn </span>process_events_then_propose(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         override_proposal: <span class="prelude-ty">Option</span>&lt;ConsensusProposal&gt;,

@@ -264,9 +264,9 @@
 /// `RUST_LOG_FULL` env variable.
 ///
 /// Meant for logging errors.
-</span><span class="kw">pub struct </span>OptStracktrace&lt;T&gt;(<span class="kw">pub </span>T);
+</span><span class="kw">pub struct </span>OptStacktrace&lt;T&gt;(<span class="kw">pub </span>T);
 
-<span class="kw">impl</span>&lt;T&gt; fmt::Display <span class="kw">for </span>OptStracktrace&lt;T&gt;
+<span class="kw">impl</span>&lt;T&gt; fmt::Display <span class="kw">for </span>OptStacktrace&lt;T&gt;
 <span class="kw">where
     </span>T: fmt::Debug + fmt::Display,
 {

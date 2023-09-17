@@ -1099,7 +1099,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::fmt_utils::OptStracktrace;
+<span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::now;
@@ -2073,19 +2073,19 @@
 
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>GatewayError {
-    <span class="attr">#[error(<span class="string">&quot;Federation error: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Federation error: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
     </span>FederationError(<span class="attr">#[from] </span>FederationError),
-    <span class="attr">#[error(<span class="string">&quot;Other: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Other: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
     </span>ClientStateMachineError(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">&quot;Failed to open the database: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Failed to open the database: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
     </span>DatabaseError(anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Federation client error&quot;</span>)]
     </span>LightningRpcError(<span class="attr">#[from] </span>LightningRpcError),
-    <span class="attr">#[error(<span class="string">&quot;Outgoing Payment Error {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Outgoing Payment Error {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
     </span>OutgoingPaymentError(<span class="attr">#[from] </span>Box&lt;OutgoingPaymentError&gt;),
-    <span class="attr">#[error(<span class="string">&quot;Invalid Metadata: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Invalid Metadata: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
     </span>InvalidMetadata(String),
-    <span class="attr">#[error(<span class="string">&quot;Unexpected state: {}&quot;</span>, OptStracktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Unexpected state: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
     </span>UnexpectedState(String),
     <span class="attr">#[error(<span class="string">&quot;The gateway is disconnected&quot;</span>)]
     </span>Disconnected,

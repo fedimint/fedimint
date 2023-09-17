@@ -410,26 +410,6 @@
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -493,26 +473,6 @@
     </span><span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.count_items() == <span class="number">0
     </span>}
-
-    <span class="doccomment">/// Applies the given closure to every `(Amount, T)` pair
-    </span><span class="kw">pub fn </span>map&lt;F, N, E&gt;(<span class="self">self</span>, f: F) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;N&gt;, E&gt;
-    <span class="kw">where
-        </span>F: Fn(Amount, T) -&gt; <span class="prelude-ty">Result</span>&lt;N, E&gt;,
-    {
-        <span class="kw">let </span>res = <span class="self">self
-            </span>.<span class="number">0
-            </span>.into_iter()
-            .map(|(amt, notes)| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, E&gt; {
-                <span class="kw">let </span>notes = notes
-                    .into_iter()
-                    .map(|note| f(amt, note))
-                    .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, E&gt;&gt;()<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>((amt, notes))
-            })
-            .collect::&lt;<span class="prelude-ty">Result</span>&lt;BTreeMap&lt;Amount, Vec&lt;N&gt;&gt;, E&gt;&gt;()<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(TieredMulti(res))
-    }
 
     <span class="doccomment">/// Verifies whether the structure of `self` and `other` is identical
     </span><span class="kw">pub fn </span>structural_eq&lt;O&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>TieredMulti&lt;O&gt;) -&gt; bool {
