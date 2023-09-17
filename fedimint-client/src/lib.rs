@@ -108,6 +108,7 @@ use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
 use serde::Serialize;
+#[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tracing::{debug, error, info, warn};
 
