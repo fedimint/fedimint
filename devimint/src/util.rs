@@ -282,6 +282,9 @@ macro_rules! cmd {
     };
 }
 
+// Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
+pub(crate) use cmd;
+
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Will retry calling `f` until it returns `Ok(true)` or `retries` times.
