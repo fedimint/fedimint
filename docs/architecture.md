@@ -10,7 +10,6 @@ The [Fedimint federation](#Federation-Nodes) consists of nodes that are primaril
 * `fedimint` - the main consensus code for processing transactions and REST API
 * `fedimint-derive` - helper macros for serialization
 * `crypto/tbs` - helper cryptography library for threshold blind signatures
-* `integrationtests/fedimint-tests` - integration testing framework
 
 [Modules](#Modules) can be added to the `FedimintConsensus` to allow for new types of transactions and federated actions:
 * `modules/fedimint-wallet` - an on-chain bitcoin wallet
@@ -20,8 +19,7 @@ The [Fedimint federation](#Federation-Nodes) consists of nodes that are primaril
 * `fedimint-core` - common code used by both client and server
 
 The [user client](#User-Client):
-* `fedimint-client-legacy` - provides a library for sending transactions to the federation which is being phased out
-* `fedimint-client` - provides a library for sending transactions to the federation which is still being developed and will replace `fedimint-client-legacy` 
+* `fedimint-client` - provides a library for sending transactions to the federation
 * `fedimint-cli` - cli wrapper around the client library
 
 The [LN gateway](#LN-Gateway):

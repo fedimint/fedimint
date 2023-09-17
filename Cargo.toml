@@ -11,7 +11,6 @@ members = [
     "fedimint-bip39",
     "fedimint-bitcoind",
     "fedimint-cli",
-    "fedimint-client-legacy",
     "fedimint-client",
     "fedimint-core",
     "fedimint-dbtool",
@@ -41,7 +40,6 @@ members = [
     "modules/fedimint-wallet-tests",
     "utils/portalloc",
     "devimint",
-    "integrationtests",
     "fedimint-build",
     "recoverytool"
 ]

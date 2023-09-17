@@ -44,8 +44,6 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
     -E 'package(fedimint-wallet-tests)'
   cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
     -E 'package(fedimint-ln-tests)'
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
-    -E 'package(fedimint-tests)'
   cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=1 \
     -E 'package(ln-gateway)'
   >&2 echo "### Testing against bitcoind - complete"
@@ -59,8 +57,6 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
   >&2 echo "### Testing against electrs"
   cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
     -E 'package(fedimint-wallet-tests)'
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
-    -E 'package(fedimint-tests)'
   >&2 echo "### Testing against electrs - complete"
 fi
 
@@ -72,8 +68,6 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
   >&2 echo "### Testing against esplora"
   cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
     -E 'package(fedimint-wallet-tests)'
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
-    -E 'package(fedimint-tests)'
   >&2 echo "### Testing against esplora - complete"
 fi
 
