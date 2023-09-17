@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{format_err, Context as _};
+use anyhow::{anyhow, format_err, Context as _};
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -128,7 +128,11 @@ impl DummyClientExt for Client {
             .await?;
 
         let tx_subscription = self.transaction_updates(op_id).await;
-        tx_subscription.await_tx_accepted(txid).await?;
+
+        tx_subscription
+            .await_tx_accepted(txid)
+            .await
+            .map_err(|e| anyhow!(e))?;
 
         Ok(OutPoint { txid, out_idx: 0 })
     }

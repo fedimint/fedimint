@@ -129,7 +129,7 @@ use crate::sm::{
 };
 use crate::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
+    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
@@ -222,7 +222,7 @@ impl DynGlobalClientContext {
         &self,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -> Result<(), TxSubmissionError> {
+    ) -> Result<(), String> {
         let update_stream = self.transaction_update_stream(operation_id).await;
 
         let query_txid = txid;
@@ -1209,10 +1209,7 @@ pub struct TransactionUpdates {
 impl TransactionUpdates {
     /// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
-    pub async fn await_tx_accepted(
-        self,
-        await_txid: TransactionId,
-    ) -> Result<(), TxSubmissionError> {
+    pub async fn await_tx_accepted(self, await_txid: TransactionId) -> Result<(), String> {
         self.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {

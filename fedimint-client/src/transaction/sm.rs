@@ -8,10 +8,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::{task, TransactionId};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-use tracing::warn;
+use fedimint_core::TransactionId;
 
 use crate::sm::{Context, DynContext, OperationId, OperationState, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState};
@@ -78,18 +75,7 @@ pub enum TxSubmissionStates {
     /// after consensus was reached
     ///
     /// **This state is final**
-    Rejected {
-        txid: TransactionId,
-        error: TxSubmissionError,
-    },
-}
-
-#[derive(Debug, Error, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
-pub enum TxSubmissionError {
-    #[error("Tx submission rejected: {0}")]
-    SubmitRejected(String),
-    #[error("Tx rejected by consensus: {0}")]
-    ConsensusRejected(String),
+    Rejected { txid: TransactionId, error: String },
 }
 
 impl State for TxSubmissionStates {
@@ -132,26 +118,15 @@ impl State for TxSubmissionStates {
                                         tx,
                                         next_submission: next_submission + RESUBMISSION_INTERVAL,
                                     },
-                                    Err(error) => TxSubmissionStates::Rejected {
-                                        txid,
-                                        error: TxSubmissionError::SubmitRejected(error),
-                                    },
+                                    Err(error) => TxSubmissionStates::Rejected { txid, error },
                                 }
                             })
                         },
                     ),
                     StateTransition::new(
                         trigger_created_accepted(tx.tx_hash(), global_context.clone()),
-                        move |_dbtx, res, _state| {
-                            Box::pin(async move {
-                                match res {
-                                    Ok(_epoch) => TxSubmissionStates::Accepted { txid },
-                                    Err(error) => TxSubmissionStates::Rejected {
-                                        txid,
-                                        error: TxSubmissionError::ConsensusRejected(error),
-                                    },
-                                }
-                            })
+                        move |_dbtx, _res, _state| {
+                            Box::pin(async move { TxSubmissionStates::Accepted { txid } })
                         },
                     ),
                 ]
@@ -202,22 +177,14 @@ async fn trigger_created_submit(
     }
 }
 
-async fn trigger_created_accepted(
-    txid: TransactionId,
-    context: DynGlobalClientContext,
-) -> Result<(), String> {
+async fn trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
     // FIXME: use ws subscriptions once they land
     loop {
-        match context.api().await_transaction(txid).await {
-            Ok(..) => break Ok(()),
-            Err(error) => {
-                if error.is_retryable() {
-                    // FIXME: what to do in this case?
-                    warn!(target: LOG_TARGET, ?error, "Federation returned error");
-                }
-            }
+        if context.api().await_transaction(txid).await.is_ok() {
+            break;
         }
-        task::sleep(FETCH_INTERVAL).await;
+
+        sleep(FETCH_INTERVAL).await;
     }
 }
 
