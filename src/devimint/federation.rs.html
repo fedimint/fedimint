@@ -525,10 +525,6 @@
 <a href="#525" id="525">525</a>
 <a href="#526" id="526">526</a>
 <a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fs;
 
@@ -537,10 +533,10 @@
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 <span class="kw">use </span>fedimint_core::api::ServerStatus;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-<span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_core::module::ApiAuth;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::{ApiAuth, ModuleCommon};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
@@ -662,20 +658,10 @@
         })
     }
 
-    <span class="kw">pub async fn </span>client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UserClient&gt; {
+    <span class="kw">pub async fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig&gt; {
         <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>cfg_path = workdir.join(<span class="string">&quot;client.json&quot;</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path)<span class="question-mark">?</span>;
-        <span class="kw">let </span>decoders = module_decode_stubs();
-        cfg.<span class="number">0 </span>= cfg.<span class="number">0</span>.redecode_raw(<span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-        <span class="kw">let </span>db = Database::new(MemDatabase::new(), module_decode_stubs());
-        <span class="kw">let </span>module_inits = ClientModuleInitRegistry::from(<span class="macro">vec!</span>[
-            DynClientModuleInit::from(WalletClientGen::default()),
-            DynClientModuleInit::from(MintClientGen),
-            DynClientModuleInit::from(LightningClientGen),
-        ]);
-        <span class="kw">let </span>client = UserClient::new(cfg, decoders, module_inits, db, Default::default()).<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(client)
+        load_from_file(<span class="kw-2">&amp;</span>cfg_path)
     }
 
     <span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
@@ -755,12 +741,10 @@
     }
 
     <span class="kw">pub async fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="self">self</span>.client()
+        <span class="self">self</span>.client_config()
             .<span class="kw">await
             </span>.unwrap()
-            .config()
-            .<span class="number">0
-            </span>.global
+            .global
             .federation_id
             .to_string()
     }
@@ -782,11 +766,19 @@
     }
 
     <span class="kw">async fn </span>get_finality_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u32, anyhow::Error&gt; {
-        <span class="kw">let </span>client: fedimint_client_legacy::Client&lt;UserClientConfig&gt; = <span class="self">self</span>.client().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = client
-            .config_ref()
-            .<span class="number">0
-            </span>.get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)<span class="question-mark">?</span>;
+        <span class="kw">let </span>client_config = <span class="kw-2">&amp;</span><span class="self">self</span>.client_config().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>wallet_cfg = client_config
+            .modules
+            .get(<span class="kw-2">&amp;</span>LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .context(<span class="string">&quot;wallet module not found&quot;</span>)<span class="question-mark">?
+            </span>.clone()
+            .redecode_raw(<span class="kw-2">&amp;</span>ModuleDecoderRegistry::new([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                fedimint_wallet_client::KIND,
+                fedimint_wallet_client::WalletModuleTypes::decoder(),
+            )]))<span class="question-mark">?</span>;
+        <span class="kw">let </span>wallet_cfg: <span class="kw-2">&amp;</span>WalletClientConfig = wallet_cfg.cast()<span class="question-mark">?</span>;
+
         <span class="kw">let </span>finality_delay = wallet_cfg.finality_delay;
         <span class="prelude-val">Ok</span>(finality_delay)
     }
