@@ -6,10 +6,10 @@ use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 use fedimint_core::api::ServerStatus;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
+use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::module::ApiAuth;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
 use fedimint_server::config::ConfigGenParams;
@@ -131,20 +131,10 @@ impl Federation {
         })
     }
 
-    pub async fn client(&self) -> Result<UserClient> {
+    pub async fn client_config(&self) -> Result<ClientConfig> {
         let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
         let cfg_path = workdir.join("client.json");
-        let mut cfg: UserClientConfig = load_from_file(&cfg_path)?;
-        let decoders = module_decode_stubs();
-        cfg.0 = cfg.0.redecode_raw(&decoders)?;
-        let db = Database::new(MemDatabase::new(), module_decode_stubs());
-        let module_inits = ClientModuleInitRegistry::from(vec![
-            DynClientModuleInit::from(WalletClientGen::default()),
-            DynClientModuleInit::from(MintClientGen),
-            DynClientModuleInit::from(LightningClientGen),
-        ]);
-        let client = UserClient::new(cfg, decoders, module_inits, db, Default::default()).await;
-        Ok(client)
+        load_from_file(&cfg_path)
     }
 
     pub fn invite_code(&self) -> Result<String> {
@@ -224,11 +214,9 @@ impl Federation {
     }
 
     pub async fn federation_id(&self) -> String {
-        self.client()
+        self.client_config()
             .await
             .unwrap()
-            .config()
-            .0
             .global
             .federation_id
             .to_string()
@@ -251,11 +239,19 @@ impl Federation {
     }
 
     async fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
-        let client: fedimint_client_legacy::Client<UserClientConfig> = self.client().await?;
-        let wallet_cfg: &WalletClientConfig = client
-            .config_ref()
-            .0
-            .get_module(LEGACY_HARDCODED_INSTANCE_ID_WALLET)?;
+        let client_config = &self.client_config().await?;
+        let wallet_cfg = client_config
+            .modules
+            .get(&LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .context("wallet module not found")?
+            .clone()
+            .redecode_raw(&ModuleDecoderRegistry::new([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                fedimint_wallet_client::KIND,
+                fedimint_wallet_client::WalletModuleTypes::decoder(),
+            )]))?;
+        let wallet_cfg: &WalletClientConfig = wallet_cfg.cast()?;
+
         let finality_delay = wallet_cfg.finality_delay;
         Ok(finality_delay)
     }
