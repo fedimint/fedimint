@@ -21,10 +21,8 @@ fedimint-core  = { path = "../fedimint-core" }
 fedimint-cli  = { path = "../fedimint-cli" }
 fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
-fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
-fedimint-client-legacy = { path = "../fedimint-client-legacy" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { path = "../fedimint-testing" }
 futures = "0.3.24"

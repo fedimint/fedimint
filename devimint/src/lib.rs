@@ -8,15 +8,9 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use bitcoincore_rpc::RpcApi;
 use federation::Federation;
-use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
-use fedimint_client_legacy::modules::mint::MintClientGen;
-use fedimint_client_legacy::{module_decode_stubs, UserClient, UserClientConfig};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::config::load_from_file;
-use fedimint_core::db::Database;
-use fedimint_ln_client::LightningClientGen;
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_wallet_client::WalletClientGen;
 use tracing::{debug, info};
 
 pub mod util;
