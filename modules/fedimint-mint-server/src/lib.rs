@@ -16,7 +16,6 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};
-use fedimint_core::tiered::InvalidAmountTierError;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
@@ -559,10 +558,7 @@ impl ServerModule for Mint {
         }
 
         // TODO: move actual signing to worker thread
-        // TODO: get rid of clone
-        let partial_sig = self
-            .blind_sign(output.clone().0)
-            .into_module_error_other()?;
+        let partial_sig = self.blind_sign(&output.0).into_module_error_other()?;
 
         dbtx.insert_new_entry(&ProposedPartialSignatureKey(out_point), &partial_sig)
             .await;
@@ -754,15 +750,15 @@ impl Mint {
 
     fn blind_sign(
         &self,
-        output: TieredMulti<BlindNonce>,
+        output: &TieredMulti<BlindNonce>,
     ) -> Result<MintOutputSignatureShare, MintError> {
-        Ok(MintOutputSignatureShare(output.map(
-            |amt, msg| -> Result<_, InvalidAmountTierError> {
-                let sec_key = self.sec_key.tier(&amt)?;
-                let blind_signature = sign_blinded_msg(msg.0, *sec_key);
-                Ok((msg.0, blind_signature))
-            },
-        )?))
+        let mut signatures = Vec::new();
+        for (amt, msg) in output.iter_items() {
+            let sec_key = self.sec_key.tier(&amt)?;
+            let blind_signature = sign_blinded_msg(msg.0, *sec_key);
+            signatures.push((amt, (msg.0, blind_signature)));
+        }
+        Ok(MintOutputSignatureShare(TieredMulti::from_iter(signatures)))
     }
 }
 
