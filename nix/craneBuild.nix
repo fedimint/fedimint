@@ -15,7 +15,7 @@ craneLib.overrideScope' (self: prev: {
     pnameSuffix = "-workspace-build";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDeps;
-    buildPhaseCargoCommand = "cargo build --workspace --all-targets --locked --profile $CARGO_PROFILE; cargo nextest run --no-run --locked --workspace --all-targets --profile $CARGO_PROFILE";
+    buildPhaseCargoCommand = "cargo build --workspace --all-targets --locked --profile $CARGO_PROFILE; cargo nextest run --no-run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE";
     doCheck = false;
   });
 
@@ -23,6 +23,8 @@ craneLib.overrideScope' (self: prev: {
     version = "0.0.1";
     cargoArtifacts = self.workspaceBuild;
     cargoExtraArgs = "--workspace --all-targets --locked";
+
+    FM_CARGO_DENY_COMPILATION = "1";
   });
 
   workspaceTestDoc = self.cargoTest (self.commonArgs // {
@@ -115,7 +117,7 @@ craneLib.overrideScope' (self: prev: {
     pname = "fedimint-workspace-lcov";
     version = "0.0.1";
     cargoArtifacts = self.workspaceDepsCov;
-    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo nextest run --locked --workspace --all-targets --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2)); mkdir -p $out ; cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info";
+    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE; env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2)); mkdir -p $out ; cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info";
     installPhaseCommand = "true";
     nativeBuildInputs = self.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-llvm-cov ];
     doCheck = false;
