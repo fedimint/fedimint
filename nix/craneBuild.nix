@@ -23,6 +23,8 @@ craneLib.overrideScope' (self: prev: {
     version = "0.0.1";
     cargoArtifacts = self.workspaceBuild;
     cargoExtraArgs = "--workspace --all-targets --locked";
+
+    FM_CARGO_DENY_COMPILATION = "1";
   });
 
   workspaceTestDoc = self.cargoTest (self.commonArgs // {
