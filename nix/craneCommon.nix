@@ -131,7 +131,7 @@ in
 
 
     # https://github.com/ipetkov/crane/issues/76#issuecomment-1296025495
-    installCargoArtifactsMode = "use-zstd";
+    installCargoArtifactsMode = "use-symlink";
 
     CI = "true";
     HOME = "/tmp";
