@@ -14,16 +14,15 @@ use fedimint_core::api::{
 use fedimint_core::backup::ClientBackupKey;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, SerdeModuleEncoding,
     SupportedApiVersionsSummary,
 };
-use fedimint_core::outcome::SerdeOutputOutcome;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::Transaction;
@@ -51,6 +50,8 @@ use crate::db::{
 use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
 use crate::{check_auth, ApiResult, HasApiContext};
+
+pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]

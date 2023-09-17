@@ -39,7 +39,6 @@ pub mod hex;
 pub mod macros;
 pub mod module;
 pub mod net;
-pub mod outcome;
 pub mod query;
 pub mod task;
 pub mod tiered;

@@ -15,10 +15,11 @@ use bech32::{FromBase32, ToBase32};
 use bitcoin::secp256k1;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::time::now;
 use fedimint_core::{
@@ -45,7 +46,6 @@ use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
-use crate::outcome::SerdeOutputOutcome;
 use crate::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
     VerifiableResponse,
@@ -57,6 +57,7 @@ use crate::{serde_as_encodable_hex, task};
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, jsonrpsee_core::Error>;
 pub type FederationResult<T> = Result<T, FederationError>;
+pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
 /// An API request error when calling a single federation peer
 #[derive(Debug, Error)]
