@@ -196,6 +196,18 @@ impl<R> ThresholdConsensus<R> {
     }
 }
 
+impl<R: Eq> ThresholdConsensus<R> {
+    /// Get the most common response that has been processed so far. If there is
+    /// a tie between two values, the value picked is arbitrary and stability
+    /// between calls is not guaranteed.
+    fn get_most_common_response(&self) -> Option<&R> {
+        // TODO: This implementation scales poorly as `self.responses` increases (n^2)
+        self.responses
+            .values()
+            .max_by_key(|response| self.responses.values().filter(|r| r == response).count())
+    }
+}
+
 impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
     fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<R> {
         match result {
@@ -203,13 +215,15 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
                 self.responses.insert(peer, response);
                 assert!(self.retry.insert(peer));
 
-                if let Some(response) = self.responses.values().max_by_key(|response| {
-                    self.responses.values().filter(|r| r == response).count()
-                }) {
-                    let count = self.responses.values().filter(|r| r == &response).count();
+                if let Some(most_common_response) = self.get_most_common_response() {
+                    let count = self
+                        .responses
+                        .values()
+                        .filter(|r| r == &most_common_response)
+                        .count();
 
                     if count >= self.threshold {
-                        return QueryStep::Success(response.clone());
+                        return QueryStep::Success(most_common_response.clone());
                     }
                 }
 
