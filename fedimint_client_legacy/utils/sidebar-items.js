@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["from_hex","network_to_currency","parse_bitcoin_amount","parse_ecash","parse_fedimint_amount","parse_gateway_id","parse_peer_id","serialize_ecash"],"struct":["ClientContext"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["WalletClientError"],"mod":["db"],"struct":["WalletClient"],"type":["Result"]};

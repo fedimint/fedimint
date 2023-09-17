@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["DbKeyPrefixIter","NextECashNoteIndexKey","NextECashNoteIndexKeyPrefix","NoteKey","NoteKeyPrefix","NotesPerDenominationKey","OutputFinalizationKey","OutputFinalizationKeyPrefix","PendingNotesKey","PendingNotesKeyPrefix"]};
