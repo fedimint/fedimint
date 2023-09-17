@@ -12,7 +12,7 @@ use fedimint_core::encoding::DecodeError;
 use fedimint_core::epoch::{
     ConsensusItem, EpochOutcome, EpochVerifyError, SerdeConsensusItem, SignedEpochOutcome,
 };
-use fedimint_core::fmt_utils::OptStracktrace;
+use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
@@ -44,7 +44,7 @@ use crate::net::peers::{DelayCalculator, PeerConnector, PeerSlice, ReconnectPeer
 use crate::{LOG_CONSENSUS, LOG_CORE};
 type PeerMessage = (PeerId, EpochMessage);
 
-/// how many epochs ahead of consensus to rejoin
+/// How many epochs ahead of consensus to rejoin
 const NUM_EPOCHS_REJOIN_AHEAD: u64 = 10;
 
 /// How many txs can be stored in memory before blocking the API
@@ -255,7 +255,7 @@ impl ConsensusServer {
         })
     }
 
-    /// Loop `run_conensus_epoch` until shut down
+    /// Loop `run_consensus_epoch` until shut down
     pub async fn run_consensus(mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
         let our_hash = self.cfg.consensus.consensus_hash();
 
@@ -266,7 +266,7 @@ impl ConsensusServer {
                 Ok(consensus_hash) if consensus_hash == our_hash => break,
                 Ok(_) => bail!("Our consensus config doesn't match peers!"),
                 Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStracktrace(e))
+                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
                 }
             }
             sleep(Duration::from_millis(100)).await;
@@ -473,7 +473,7 @@ impl ConsensusServer {
         Ok(outcomes)
     }
 
-    // save any API events we have in the channel then create a proposal
+    // Save any API events we have in the channel then create a proposal
     async fn process_events_then_propose(
         &mut self,
         override_proposal: Option<ConsensusProposal>,

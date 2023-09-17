@@ -40,7 +40,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::Database;
-use fedimint_core::fmt_utils::OptStracktrace;
+use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
@@ -1014,19 +1014,19 @@ pub enum LightningMode {
 
 #[derive(Debug, Error)]
 pub enum GatewayError {
-    #[error("Federation error: {}", OptStracktrace(0))]
+    #[error("Federation error: {}", OptStacktrace(0))]
     FederationError(#[from] FederationError),
-    #[error("Other: {}", OptStracktrace(0))]
+    #[error("Other: {}", OptStacktrace(0))]
     ClientStateMachineError(#[from] anyhow::Error),
-    #[error("Failed to open the database: {}", OptStracktrace(0))]
+    #[error("Failed to open the database: {}", OptStacktrace(0))]
     DatabaseError(anyhow::Error),
     #[error("Federation client error")]
     LightningRpcError(#[from] LightningRpcError),
-    #[error("Outgoing Payment Error {}", OptStracktrace(0))]
+    #[error("Outgoing Payment Error {}", OptStacktrace(0))]
     OutgoingPaymentError(#[from] Box<OutgoingPaymentError>),
-    #[error("Invalid Metadata: {}", OptStracktrace(0))]
+    #[error("Invalid Metadata: {}", OptStacktrace(0))]
     InvalidMetadata(String),
-    #[error("Unexpected state: {}", OptStracktrace(0))]
+    #[error("Unexpected state: {}", OptStacktrace(0))]
     UnexpectedState(String),
     #[error("The gateway is disconnected")]
     Disconnected,

@@ -18,9 +18,9 @@ pub fn rust_log_full_enabled() -> bool {
 /// `RUST_LOG_FULL` env variable.
 ///
 /// Meant for logging errors.
-pub struct OptStracktrace<T>(pub T);
+pub struct OptStacktrace<T>(pub T);
 
-impl<T> fmt::Display for OptStracktrace<T>
+impl<T> fmt::Display for OptStacktrace<T>
 where
     T: fmt::Debug + fmt::Display,
 {
