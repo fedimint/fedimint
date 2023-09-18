@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -37,11 +37,12 @@ use crate::net::peers::DelayCalculator;
 use crate::{check_auth, ApiResult, HasApiContext};
 
 /// Serves the config gen API endpoints
+#[derive(Clone)]
 pub struct ConfigGenApi {
     /// Directory the configs will be created in
     data_dir: PathBuf,
     /// In-memory state machine
-    state: Mutex<ConfigGenState>,
+    state: Arc<Mutex<ConfigGenState>>,
     /// DB not really used
     db: Database,
     /// Tracks when the config is generated
@@ -60,7 +61,7 @@ impl ConfigGenApi {
     ) -> Self {
         Self {
             data_dir,
-            state: Mutex::new(ConfigGenState::new(settings)),
+            state: Arc::new(Mutex::new(ConfigGenState::new(settings))),
             db,
             config_generated_tx,
             task_group: task_group.clone(),
@@ -102,10 +103,7 @@ impl ConfigGenApi {
         let local = state.local.clone();
 
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
-            // Note PeerIds don't really exist at this point, but id doesn't matter because
-            // it's not used in the WS client for anything, perhaps it should be removed
-            let client = WsAdminClient::new(url);
-            client
+            WsAdminClient::new(url)
                 .add_config_gen_peer(state.our_peer_info()?)
                 .await
                 .map_err(|_| ApiError::not_found("Unable to connect to the leader".to_string()))?;
@@ -180,8 +178,13 @@ impl ConfigGenApi {
         })
     }
 
-    /// Once configs are generated, starts DKG and await its
-    /// completion, calling a second time will return an error
+    /// Once configs are generated, updates status to ReadyForConfigGen and
+    /// spawns a task to coordinate DKG, then returns. Coordinating DKG in a
+    /// separate thread allows clients to poll the server status instead of
+    /// blocking until completion, which can be fragile due to timeouts, poor
+    /// network connections, etc.
+    ///
+    /// Calling a second time will return an error.
     pub async fn run_dkg(&self) -> ApiResult<()> {
         let leader = {
             let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
@@ -196,62 +199,70 @@ impl ConfigGenApi {
 
         self.update_leader().await?;
 
-        // Followers wait for leader to signal readiness for DKG
-        if let Some(client) = leader {
-            loop {
-                let status = client.status().await.map_err(|_| {
-                    ApiError::not_found("Unable to connect to the leader".to_string())
-                })?;
-                if status.server == ServerStatus::ReadyForConfigGen {
-                    break;
-                }
-                sleep(Duration::from_millis(100)).await;
-            }
-        };
+        let self_clone = self.clone();
+        let mut sub_group = self.task_group.make_subgroup().await;
+        sub_group
+            .spawn("run dkg", move |_handle| async move {
+                // Followers wait for leader to signal readiness for DKG
+                if let Some(client) = leader {
+                    loop {
+                        let status = client.status().await.map_err(|_| {
+                            ApiError::not_found("Unable to connect to the leader".to_string())
+                        })?;
+                        if status.server == ServerStatus::ReadyForConfigGen {
+                            break;
+                        }
+                        sleep(Duration::from_millis(100)).await;
+                    }
+                };
 
-        // Get params and registry
-        let request = self.get_requested_params()?;
-        let response = self.get_consensus_config_gen_params(&request).await?;
-        let (params, registry) = {
-            let state: MutexGuard<'_, ConfigGenState> =
-                self.require_status(ServerStatus::ReadyForConfigGen)?;
-            let params = state.get_config_gen_params(&request, response.consensus)?;
-            let registry = state.settings.registry.clone();
-            (params, registry)
-        };
+                // Get params and registry
+                let request = self_clone.get_requested_params()?;
+                let response = self_clone.get_consensus_config_gen_params(&request).await?;
+                let (params, registry) = {
+                    let state: MutexGuard<'_, ConfigGenState> =
+                        self_clone.require_status(ServerStatus::ReadyForConfigGen)?;
+                    let params = state.get_config_gen_params(&request, response.consensus)?;
+                    let registry = state.settings.registry.clone();
+                    (params, registry)
+                };
 
-        // Run DKG
-        let mut task_group: TaskGroup = self.task_group.make_subgroup().await;
-        let config = ServerConfig::distributed_gen(
-            &params,
-            registry,
-            DelayCalculator::PROD_DEFAULT,
-            &mut task_group,
-        )
-        .await;
-        task_group
-            .shutdown_join_all(None)
-            .await
-            .expect("shuts down");
+                // Run DKG
+                let mut task_group: TaskGroup = self_clone.task_group.make_subgroup().await;
+                let config = ServerConfig::distributed_gen(
+                    &params,
+                    registry,
+                    DelayCalculator::PROD_DEFAULT,
+                    &mut task_group,
+                )
+                .await;
+                task_group
+                    .shutdown_join_all(None)
+                    .await
+                    .expect("shuts down");
 
-        {
-            let mut state = self.state.lock().expect("lock poisoned");
-            match config {
-                Ok(config) => {
-                    self.write_configs(&config, &state)?;
-                    state.status = ServerStatus::VerifyingConfigs;
-                    state.config = Some(config);
+                {
+                    let mut state = self_clone.state.lock().expect("lock poisoned");
+                    match config {
+                        Ok(config) => {
+                            self_clone.write_configs(&config, &state)?;
+                            state.status = ServerStatus::VerifyingConfigs;
+                            state.config = Some(config);
+                        }
+                        Err(e) => {
+                            error!(
+                                target: fedimint_logging::LOG_NET_PEER_DKG,
+                                "DKG failed with {:?}", e
+                            );
+                            state.status = ServerStatus::ConfigGenFailed;
+                        }
+                    }
                 }
-                Err(e) => {
-                    error!(
-                        target: fedimint_logging::LOG_NET_PEER_DKG,
-                        "DKG failed with {:?}", e
-                    );
-                    state.status = ServerStatus::ConfigGenFailed;
-                }
-            }
-        }
-        self.update_leader().await
+                self_clone.update_leader().await
+            })
+            .await;
+
+        Ok(())
     }
 
     /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
@@ -973,7 +984,7 @@ mod tests {
                         .iter()
                         .map(|peer| peer.client.run_dkg(peer.auth.clone()))
                 ),
-                all_peers[0].wait_status(ServerStatus::ReadyForConfigGen)
+                all_peers[0].wait_status(ServerStatus::VerifyingConfigs)
             );
             for result in results {
                 result.expect("DKG failed");

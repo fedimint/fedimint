@@ -70,7 +70,7 @@ impl TaskGroupInner {
 /// A group of task working together
 ///
 /// Using this struct it is possible to spawn one or more
-/// main thread collabarating, which can cooperatively gracefully
+/// main thread collaborating, which can cooperatively gracefully
 /// shut down, either due to external request, or failure of
 /// one of them.
 ///
