@@ -750,74 +750,6 @@
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a>
-<a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -834,16 +766,15 @@
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
-<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+<span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, SerdeModuleEncoding,
     SupportedApiVersionsSummary,
 };
-<span class="kw">use </span>fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
@@ -871,6 +802,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::SerdeTransaction;
 <span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
+
+<span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;DynOutputOutcome&gt;;
 
 <span class="doccomment">/// A state that has context for the API, passed to each rpc handler callback
 </span><span class="attr">#[derive(Clone)]
@@ -1017,24 +950,28 @@
     }
 
     <span class="kw">pub async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>txid = transaction.tx_hash();
+
+        <span class="macro">debug!</span>(%txid, <span class="string">&quot;Received mint transaction&quot;</span>);
+
         <span class="comment">// we already processed the transaction before the request was received
         </span><span class="kw">if </span><span class="self">self
-            </span>.transaction_status(transaction.tx_hash())
+            </span>.db
+            .begin_transaction()
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid))
             .<span class="kw">await
             </span>.is_some()
         {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
-        <span class="kw">let </span>tx_hash = transaction.tx_hash();
-        <span class="macro">debug!</span>(%tx_hash, <span class="string">&quot;Received mint transaction&quot;</span>);
-
         <span class="comment">// Create read-only DB tx so that the read state is consistent
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+
         <span class="comment">// We ignore any writes, as we only verify if the transaction is valid here
         </span>dbtx.ignore_uncommitted();
 
-        <span class="kw">let </span>txid = transaction.tx_hash();
         <span class="kw">let </span>caches = <span class="self">self</span>.build_verification_caches(transaction.clone());
 
         <span class="kw">let </span><span class="kw-2">mut </span>funding_verifier = FundingVerifier::default();
@@ -1097,6 +1034,15 @@
         VerificationCaches { caches }
     }
 
+    <span class="kw">pub async fn </span>await_transaction(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        txid: TransactionId,
+    ) -&gt; (Vec&lt;ModuleInstanceId&gt;, DatabaseTransaction) {
+        <span class="self">self</span>.db
+            .wait_key_check(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), std::convert::identity)
+            .<span class="kw">await
+    </span>}
+
     <span class="kw">pub async fn </span>await_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;SerdeOutputOutcome&gt; {
         <span class="kw">let </span>(module_ids, <span class="kw-2">mut </span>dbtx) = <span class="self">self</span>.await_transaction(outpoint.txid).<span class="kw">await</span>;
 
@@ -1113,66 +1059,6 @@
             </span>.expect(<span class="string">&quot;The transaction is accepted&quot;</span>);
 
         <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>outcome).into())
-    }
-
-    <span class="kw">pub async fn </span>await_transaction(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        txid: TransactionId,
-    ) -&gt; (Vec&lt;ModuleInstanceId&gt;, DatabaseTransaction) {
-        <span class="self">self</span>.db
-            .wait_key_check(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), std::convert::identity)
-            .<span class="kw">await
-    </span>}
-
-    <span class="comment">// TODO: this can be removed with the legacy client
-    </span><span class="kw">pub async fn </span>transaction_status(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionStatus&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-
-        <span class="kw">let </span>module_ids = dbtx.get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid)).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>status = <span class="self">self
-            </span>.accepted_transaction_status(txid, module_ids, <span class="kw-2">&amp;mut </span>dbtx)
-            .<span class="kw">await</span>;
-
-        <span class="prelude-val">Some</span>(status)
-    }
-
-    <span class="comment">// TODO: this can be removed with the legacy client
-    </span><span class="kw">pub async fn </span>wait_transaction_status(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; TransactionStatus {
-        <span class="kw">let </span>(outputs, <span class="kw-2">mut </span>dbtx) = <span class="self">self
-            </span>.db
-            .wait_key_check(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), std::convert::identity)
-            .<span class="kw">await</span>;
-
-        <span class="self">self</span>.accepted_transaction_status(txid, outputs, <span class="kw-2">&amp;mut </span>dbtx)
-            .<span class="kw">await
-    </span>}
-
-    <span class="comment">// TODO: this can be removed with the legacy client
-    </span><span class="kw">async fn </span>accepted_transaction_status(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        txid: TransactionId,
-        module_ids: Vec&lt;ModuleInstanceId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; TransactionStatus {
-        <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
-
-        <span class="kw">for </span>(module_id, out_idx) <span class="kw">in </span>module_ids.into_iter().zip(<span class="number">0u64</span>..) {
-            <span class="kw">let </span>outcome = <span class="self">self
-                </span>.modules
-                .get_expect(module_id)
-                .output_status(
-                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_id),
-                    OutPoint { txid, out_idx },
-                    module_id,
-                )
-                .<span class="kw">await
-                </span>.expect(<span class="string">&quot;the transaction was accepted&quot;</span>);
-
-            outputs.push((<span class="kw-2">&amp;</span>outcome).into())
-        }
-
-        TransactionStatus::Accepted { epoch: <span class="number">0</span>, outputs }
     }
 
     <span class="kw">pub async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: InviteCode) -&gt; ApiResult&lt;ClientConfig&gt; {
@@ -1409,36 +1295,14 @@
                 <span class="prelude-val">Ok</span>(tx_id)
             }
         },
-        <span class="comment">// TODO: this can be removed with the legacy client
-        </span><span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;fetch_transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; <span class="prelude-ty">Option</span>&lt;TransactionStatus&gt; {
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
-
-                <span class="kw">let </span>tx_status = fedimint.transaction_status(tx_hash)
-                    .<span class="kw">await</span>;
-
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Sending outcome&quot;</span>);
-                <span class="prelude-val">Ok</span>(tx_status)
-            }
-        },
-        <span class="comment">// TODO: this can be removed with the legacy client
-        </span><span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;wait_transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionStatus {
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
-
-                <span class="kw">let </span>tx_status = fedimint.wait_transaction_status(tx_hash)
-                    .<span class="kw">await</span>;
-
-                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Sending outcome&quot;</span>);
-                <span class="prelude-val">Ok</span>(tx_status)
-            }
-        },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;await_transaction&quot;</span>,
+            <span class="string">&quot;wait_transaction&quot;</span>,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionId {
+                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
+
                 fedimint.await_transaction(tx_hash).<span class="kw">await</span>;
+
+                <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Sending outcome&quot;</span>);
 
                 <span class="prelude-val">Ok</span>(tx_hash)
             }

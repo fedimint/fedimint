@@ -1191,76 +1191,6 @@
 <a href="#1191" id="1191">1191</a>
 <a href="#1192" id="1192">1192</a>
 <a href="#1193" id="1193">1193</a>
-<a href="#1194" id="1194">1194</a>
-<a href="#1195" id="1195">1195</a>
-<a href="#1196" id="1196">1196</a>
-<a href="#1197" id="1197">1197</a>
-<a href="#1198" id="1198">1198</a>
-<a href="#1199" id="1199">1199</a>
-<a href="#1200" id="1200">1200</a>
-<a href="#1201" id="1201">1201</a>
-<a href="#1202" id="1202">1202</a>
-<a href="#1203" id="1203">1203</a>
-<a href="#1204" id="1204">1204</a>
-<a href="#1205" id="1205">1205</a>
-<a href="#1206" id="1206">1206</a>
-<a href="#1207" id="1207">1207</a>
-<a href="#1208" id="1208">1208</a>
-<a href="#1209" id="1209">1209</a>
-<a href="#1210" id="1210">1210</a>
-<a href="#1211" id="1211">1211</a>
-<a href="#1212" id="1212">1212</a>
-<a href="#1213" id="1213">1213</a>
-<a href="#1214" id="1214">1214</a>
-<a href="#1215" id="1215">1215</a>
-<a href="#1216" id="1216">1216</a>
-<a href="#1217" id="1217">1217</a>
-<a href="#1218" id="1218">1218</a>
-<a href="#1219" id="1219">1219</a>
-<a href="#1220" id="1220">1220</a>
-<a href="#1221" id="1221">1221</a>
-<a href="#1222" id="1222">1222</a>
-<a href="#1223" id="1223">1223</a>
-<a href="#1224" id="1224">1224</a>
-<a href="#1225" id="1225">1225</a>
-<a href="#1226" id="1226">1226</a>
-<a href="#1227" id="1227">1227</a>
-<a href="#1228" id="1228">1228</a>
-<a href="#1229" id="1229">1229</a>
-<a href="#1230" id="1230">1230</a>
-<a href="#1231" id="1231">1231</a>
-<a href="#1232" id="1232">1232</a>
-<a href="#1233" id="1233">1233</a>
-<a href="#1234" id="1234">1234</a>
-<a href="#1235" id="1235">1235</a>
-<a href="#1236" id="1236">1236</a>
-<a href="#1237" id="1237">1237</a>
-<a href="#1238" id="1238">1238</a>
-<a href="#1239" id="1239">1239</a>
-<a href="#1240" id="1240">1240</a>
-<a href="#1241" id="1241">1241</a>
-<a href="#1242" id="1242">1242</a>
-<a href="#1243" id="1243">1243</a>
-<a href="#1244" id="1244">1244</a>
-<a href="#1245" id="1245">1245</a>
-<a href="#1246" id="1246">1246</a>
-<a href="#1247" id="1247">1247</a>
-<a href="#1248" id="1248">1248</a>
-<a href="#1249" id="1249">1249</a>
-<a href="#1250" id="1250">1250</a>
-<a href="#1251" id="1251">1251</a>
-<a href="#1252" id="1252">1252</a>
-<a href="#1253" id="1253">1253</a>
-<a href="#1254" id="1254">1254</a>
-<a href="#1255" id="1255">1255</a>
-<a href="#1256" id="1256">1256</a>
-<a href="#1257" id="1257">1257</a>
-<a href="#1258" id="1258">1258</a>
-<a href="#1259" id="1259">1259</a>
-<a href="#1260" id="1260">1260</a>
-<a href="#1261" id="1261">1261</a>
-<a href="#1262" id="1262">1262</a>
-<a href="#1263" id="1263">1263</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1278,10 +1208,11 @@
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
-<span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
+<span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{
@@ -1308,7 +1239,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
-<span class="kw">use </span><span class="kw">crate</span>::outcome::{SerdeOutputOutcome, TransactionStatus};
 <span class="kw">use </span><span class="kw">crate</span>::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
     VerifiableResponse,
@@ -1320,6 +1250,7 @@
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
 <span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, jsonrpsee_core::Error&gt;;
 <span class="kw">pub type </span>FederationResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, FederationError&gt;;
+<span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;DynOutputOutcome&gt;;
 
 <span class="doccomment">/// An API request error when calling a single federation peer
 </span><span class="attr">#[derive(Debug, Error)]
@@ -1594,11 +1525,6 @@
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>GlobalFederationApi {
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt;;
-    <span class="kw">async fn </span>fetch_tx_outcome(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        txid: <span class="kw-2">&amp;</span>TransactionId,
-    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;TransactionStatus&gt;&gt;;
-    <span class="kw">async fn </span>await_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt;;
 
     <span class="kw">async fn </span>fetch_epoch_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1609,15 +1535,7 @@
 
     <span class="kw">async fn </span>fetch_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
-    <span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        out_point: OutPoint,
-        module_decoder: <span class="kw-2">&amp;</span>Decoder,
-    ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
-    <span class="kw">where
-        </span>R: OutputOutcome;
-
-    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;()&gt;;
+    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt;;
 
     <span class="kw">async fn </span>await_output_outcome&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1646,32 +1564,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client_versions: <span class="kw-2">&amp;</span>SupportedApiVersionsSummary,
     ) -&gt; FederationResult&lt;ApiVersionSet&gt;;
-}
-
-<span class="comment">// TODO: this can be removed with the legacy client
-</span><span class="kw">fn </span>map_tx_outcome_outpoint&lt;R&gt;(
-    tx_outcome: TransactionStatus,
-    out_point: OutPoint,
-    module_decoder: <span class="kw-2">&amp;</span>Decoder,
-) -&gt; OutputOutcomeResult&lt;R&gt;
-<span class="kw">where
-    </span>R: OutputOutcome + MaybeSend,
-{
-    <span class="kw">match </span>tx_outcome {
-        TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(OutputOutcomeError::Rejected(e)),
-        TransactionStatus::Accepted { outputs, .. } =&gt; {
-            <span class="kw">let </span>outputs_len = outputs.len();
-
-            outputs
-                .into_iter()
-                .nth(out_point.out_idx <span class="kw">as </span>usize) <span class="comment">// avoid clone as would be necessary with .get(…)
-                </span>.ok_or(OutputOutcomeError::InvalidVout {
-                    outputs_num: outputs_len,
-                    out_idx: out_point.out_idx,
-                })
-                .and_then(|output| deserialize_outcome(output, module_decoder))
-        }
-    }
 }
 
 <span class="kw">fn </span>deserialize_outcome&lt;R&gt;(
@@ -1707,22 +1599,6 @@
             ApiRequestErased::new(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
         )
         .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Fetch the outcome of an entire transaction
-    </span><span class="kw">async fn </span>fetch_tx_outcome(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        tx: <span class="kw-2">&amp;</span>TransactionId,
-    ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;TransactionStatus&gt;&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;fetch_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
-            .<span class="kw">await
-    </span>}
-
-    <span class="comment">// TODO: this can be removed with the legacy client
-    </span><span class="doccomment">/// Await the outcome of an entire transaction
-    </span><span class="kw">async fn </span>await_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>TransactionId) -&gt; FederationResult&lt;TransactionStatus&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_transaction&quot;</span>.to_owned(), ApiRequestErased::new(tx))
-            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_epoch_history(
@@ -1780,24 +1656,8 @@
             .<span class="kw">await
     </span>}
 
-    <span class="comment">// TODO: this can be removed with the legacy client
-    </span><span class="kw">async fn </span>fetch_output_outcome&lt;R&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        out_point: OutPoint,
-        module_decoder: <span class="kw-2">&amp;</span>Decoder,
-    ) -&gt; OutputOutcomeResult&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;
-    <span class="kw">where
-        </span>R: OutputOutcome,
-    {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.fetch_tx_outcome(<span class="kw-2">&amp;</span>out_point.txid)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.map(<span class="kw">move </span>|tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, module_decoder))
-            .transpose()<span class="question-mark">?</span>)
-    }
-
-    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;await_transaction&quot;</span>.to_owned(), ApiRequestErased::new(txid))
+    <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt; {
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_transaction&quot;</span>.to_owned(), ApiRequestErased::new(txid))
             .<span class="kw">await
     </span>}
 

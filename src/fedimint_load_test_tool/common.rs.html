@@ -281,11 +281,14 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{ClnLightningCli, FedimintCli, LnCli};
@@ -551,7 +554,10 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>tx_subscription = client.transaction_updates(operation_id).<span class="kw">await</span>;
-    tx_subscription.await_tx_accepted(txid).<span class="kw">await</span><span class="question-mark">?</span>;
+    tx_subscription
+        .await_tx_accepted(txid)
+        .<span class="kw">await
+        </span>.map_err(|e| <span class="macro">anyhow!</span>(e))<span class="question-mark">?</span>;
     dbtx.commit_tx().<span class="kw">await</span>;
     <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..quantity {
         <span class="kw">let </span>out_point = OutPoint {

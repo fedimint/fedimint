@@ -124,11 +124,9 @@
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{DynState, OperationId, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::TxSubmissionError;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
@@ -217,7 +215,7 @@
     context: DynGlobalClientContext,
     id: OperationId,
     txid: TransactionId,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
     context.await_tx_accepted(id, txid).<span class="kw">await
 </span>}
 

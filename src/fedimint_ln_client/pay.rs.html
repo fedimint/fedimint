@@ -495,7 +495,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, TxSubmissionError};
+<span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -938,14 +938,14 @@
         common: LightningPayCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
         global_context
             .await_tx_accepted(common.operation_id, refund_txid)
             .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_refund_success(
-        result: <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;(), String&gt;,
         old_state: LightningPayStateMachine,
         refund_txid: TransactionId,
     ) -&gt; LightningPayStateMachine {

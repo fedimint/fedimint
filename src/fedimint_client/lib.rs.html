@@ -1729,9 +1729,6 @@
 <a href="#1729" id="1729">1729</a>
 <a href="#1730" id="1730">1730</a>
 <a href="#1731" id="1731">1731</a>
-<a href="#1732" id="1732">1732</a>
-<a href="#1733" id="1733">1733</a>
-<a href="#1734" id="1734">1734</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1863,7 +1860,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{
     tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionError, TxSubmissionStates,
+    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
@@ -1956,7 +1953,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
         <span class="kw">let </span>update_stream = <span class="self">self</span>.transaction_update_stream(operation_id).<span class="kw">await</span>;
 
         <span class="kw">let </span>query_txid = txid;
@@ -2943,10 +2940,7 @@
 <span class="kw">impl </span>TransactionUpdates {
     <span class="doccomment">/// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
-    </span><span class="kw">pub async fn </span>await_tx_accepted(
-        <span class="self">self</span>,
-        await_txid: TransactionId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TxSubmissionError&gt; {
+    </span><span class="kw">pub async fn </span>await_tx_accepted(<span class="self">self</span>, await_txid: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
         <span class="self">self</span>.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(<span class="kw">match </span>tx_update.state {
