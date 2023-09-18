@@ -58,6 +58,9 @@ repository = "https://github.com/fedimint/fedimint"
 license-file = "LICENSE"
 keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
+[workspace.dependencies]
+threshold_crypto = { version = "0.1", package = "fedimint-threshold-crypto" }
+hbbft = { version= "0.1", package = "fedimint-hbbft" }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
@@ -84,7 +87,7 @@ zeroize = { opt-level = 3 }
 bls12_381 = { opt-level = 3 }
 subtle = { opt-level = 3 }
 ring = { opt-level = 3 }
-threshold_crypto = { opt-level = 3 }
+fedimint-threshold-crypto = { opt-level = 3 }
 
 
 [profile.ci]
