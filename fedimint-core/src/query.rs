@@ -93,7 +93,7 @@ impl<R> VerifiableResponse<R> {
     ) -> Self {
         Self {
             verifier: Box::new(verifier),
-            threshold_consensus: ThresholdConsensus::new(total_peers),
+            threshold_consensus: ThresholdConsensus::overcome_evil(total_peers),
             allow_threshold_fallback,
         }
     }
@@ -174,7 +174,9 @@ pub struct ThresholdConsensus<R> {
 }
 
 impl<R> ThresholdConsensus<R> {
-    pub fn new(total_peers: usize) -> Self {
+    // Require that enough participants return the same message to ensure that we
+    // overcome the threshold for malicious nodes
+    pub fn overcome_evil(total_peers: usize) -> Self {
         let max_evil = (total_peers - 1) / 3;
         let threshold = total_peers - max_evil;
 
@@ -186,6 +188,7 @@ impl<R> ThresholdConsensus<R> {
         }
     }
 
+    // Require that all participants return the same message
     pub fn full_participation(total_peers: usize) -> Self {
         Self {
             error_strategy: ErrorStrategy::new(1),
@@ -196,6 +199,18 @@ impl<R> ThresholdConsensus<R> {
     }
 }
 
+impl<R: Eq> ThresholdConsensus<R> {
+    /// Get the most common response that has been processed so far. If there is
+    /// a tie between two values, the value picked is arbitrary and stability
+    /// between calls is not guaranteed.
+    fn get_most_common_response(&self) -> Option<&R> {
+        // TODO: This implementation scales poorly as `self.responses` increases (n^2)
+        self.responses
+            .values()
+            .max_by_key(|response| self.responses.values().filter(|r| r == response).count())
+    }
+}
+
 impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
     fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<R> {
         match result {
@@ -203,13 +218,15 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
                 self.responses.insert(peer, response);
                 assert!(self.retry.insert(peer));
 
-                if let Some(response) = self.responses.values().max_by_key(|response| {
-                    self.responses.values().filter(|r| r == response).count()
-                }) {
-                    let count = self.responses.values().filter(|r| r == &response).count();
+                if let Some(most_common_response) = self.get_most_common_response() {
+                    let count = self
+                        .responses
+                        .values()
+                        .filter(|r| r == &most_common_response)
+                        .count();
 
                     if count >= self.threshold {
-                        return QueryStep::Success(response.clone());
+                        return QueryStep::Success(most_common_response.clone());
                     }
                 }
 
