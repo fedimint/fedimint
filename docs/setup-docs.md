@@ -201,9 +201,13 @@ The install script lets you install one or all of:
 
 and it'll start the services on the following ports:
 
+<!-- markdown-link-check-disable -->
+
 - Fedimintd Guardian Dashboard: http://your.ip.add.ress:3000
 - Lightning Gateway Dashboard: http://your.ip.add.ress:3001
 - RTL Lightning Node Management: http://your.ip.add.ress.198:3003
+
+<!-- markdown-link-check-enable -->
 
 <p align="center">
 <img src="setup-docs-assets/install_scripts.png" alt="Install Scripts" width="500">
@@ -399,7 +403,11 @@ docker-compose -f fedimintd/docker-compose.yaml exec fedimintd fedimint-cli help
 
 ### Lightning Gateway Dashboard
 
+<!-- markdown-link-check-disable -->
+
 Now that you're connected, you can go to the lightning gateway dashboard at http://your.ip.add.ress:3001 and see the gateway status.
+
+<!-- markdown-link-check-enable -->
 
 <p align="center">
 <img src="setup-docs-assets/fed_deposit_addr.png" alt="Fed Deposit Address" width="500">
@@ -455,7 +463,7 @@ Send some sats through your channel to the fedi alpha signet faucet. We'll be in
 <img src="setup-docs-assets/received.png" alt="Received" width="500">
 </p>
 
-Your federation gateway is now ready to provide lightning services to the federation! You should be able to send and receive lightning payments to users of the federation via the gateway, give it a try using a compatible client like the fedimint-cli or [webimint-rs](https://github.com/fedimint/webimint-rs) (demo at https://webimint.sirion.io/) ,
+Your federation gateway is now ready to provide lightning services to the federation! You should be able to send and receive lightning payments to users of the federation via the gateway, give it a try using a compatible client like the fedimint-cli.
 
 > [!WARNING]  
 > Fedimint 0.1 is alpha software released under an MIT License, do not use it with real bitcoin (yet), only use regtest or test networks like mutinynet.

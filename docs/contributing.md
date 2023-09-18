@@ -32,7 +32,7 @@ Below are some broad and general areas of contribution to get you started
     * [Developing Gateway UI](https://github.com/fedimint/ui)
 * [Fedimint Guardian UI](https://github.com/fedimint/ui)
 * [Nix Build System](./nix-ci.md)
-* [Integration tests](../integrationtests/README.md)
+* [Devimint](../devimint/)
 * [Scripts](../scripts/README.md)
 
 ## Developer Certificate of Origin

@@ -7,4 +7,4 @@ In order to build such an application, you need to fork the `fedimint` git repo.
 
 Lastly, plug your module into [fedimintd](https://github.com/fedimint/fedimint/blob/master/fedimintd/src/bin/main.rs)
 
-In order to interact with your module you may want to add some functionality to the [Client](https://github.com/fedimint/fedimint/blob/3a808c44c94856c80d4b716ed853a882e83cb5c3/client/client-lib/src/lib.rs#L219) and the [CLI](https://github.com/fedimint/fedimint/tree/master/fedimint-cli) which is built on top of the `Client`. It can also help to write an [integration test](https://github.com/fedimint/fedimint/blob/master/integrationtests/tests/tests.rs).
+In order to interact with your module you may want to add some functionality to the [Client](https://github.com/fedimint/fedimint/blob/3a808c44c94856c80d4b716ed853a882e83cb5c3/client/client-lib/src/lib.rs#L219) and the [CLI](https://github.com/fedimint/fedimint/tree/master/fedimint-cli) which is built on top of the `Client`. It can also help to write an integration test.
