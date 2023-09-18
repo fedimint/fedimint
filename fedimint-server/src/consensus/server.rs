@@ -257,20 +257,7 @@ impl ConsensusServer {
 
     /// Loop `run_consensus_epoch` until shut down
     pub async fn run_consensus(mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        let our_hash = self.cfg.consensus.consensus_hash();
-
-        // Confirm our hash matches with peers
-        loop {
-            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
-            match self.api.consensus_config_hash().await {
-                Ok(consensus_hash) if consensus_hash == our_hash => break,
-                Ok(_) => bail!("Our consensus config doesn't match peers!"),
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
-                }
-            }
-            sleep(Duration::from_millis(100)).await;
-        }
+        self.confirm_consensus_config_hash().await?;
 
         let mut rng = OsRng;
         self.start_consensus().await;
@@ -592,6 +579,26 @@ impl ConsensusServer {
                 Ok(vec![])
             }
         }
+    }
+
+    /// Verify that a safe number of nodes are running the same configuration
+    /// settings as the current node
+    async fn confirm_consensus_config_hash(&mut self) -> anyhow::Result<()> {
+        let our_hash = self.cfg.consensus.consensus_hash();
+
+        loop {
+            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
+            match self.api.consensus_config_hash().await {
+                Ok(consensus_hash) if consensus_hash == our_hash => break,
+                Ok(_) => bail!("Our consensus config doesn't match peers!"),
+                Err(e) => {
+                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        Ok(())
     }
 
     /// If we are rejoining and received a threshold of messages from the same
