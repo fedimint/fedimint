@@ -1042,10 +1042,21 @@
 <a href="#1042" id="1042">1042</a>
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::sync::{Mutex, MutexGuard};
+<span class="kw">use </span>std::sync::{Arc, Mutex, MutexGuard};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -1081,11 +1092,12 @@
 <span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
 
 <span class="doccomment">/// Serves the config gen API endpoints
+</span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ConfigGenApi {
     <span class="doccomment">/// Directory the configs will be created in
     </span>data_dir: PathBuf,
     <span class="doccomment">/// In-memory state machine
-    </span>state: Mutex&lt;ConfigGenState&gt;,
+    </span>state: Arc&lt;Mutex&lt;ConfigGenState&gt;&gt;,
     <span class="doccomment">/// DB not really used
     </span>db: Database,
     <span class="doccomment">/// Tracks when the config is generated
@@ -1104,7 +1116,7 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             data_dir,
-            state: Mutex::new(ConfigGenState::new(settings)),
+            state: Arc::new(Mutex::new(ConfigGenState::new(settings))),
             db,
             config_generated_tx,
             task_group: task_group.clone(),
@@ -1146,10 +1158,7 @@
         <span class="kw">let </span>local = state.local.clone();
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = local.and_then(|local| local.leader_api_url) {
-            <span class="comment">// Note PeerIds don&#39;t really exist at this point, but id doesn&#39;t matter because
-            // it&#39;s not used in the WS client for anything, perhaps it should be removed
-            </span><span class="kw">let </span>client = WsAdminClient::new(url);
-            client
+            WsAdminClient::new(url)
                 .add_config_gen_peer(state.our_peer_info()<span class="question-mark">?</span>)
                 .<span class="kw">await
                 </span>.map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string()))<span class="question-mark">?</span>;
@@ -1224,8 +1233,13 @@
         })
     }
 
-    <span class="doccomment">/// Once configs are generated, starts DKG and await its
-    /// completion, calling a second time will return an error
+    <span class="doccomment">/// Once configs are generated, updates status to ReadyForConfigGen and
+    /// spawns a task to coordinate DKG, then returns. Coordinating DKG in a
+    /// separate thread allows clients to poll the server status instead of
+    /// blocking until completion, which can be fragile due to timeouts, poor
+    /// network connections, etc.
+    ///
+    /// Calling a second time will return an error.
     </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span>leader = {
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
@@ -1240,63 +1254,71 @@
 
         <span class="self">self</span>.update_leader().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// Followers wait for leader to signal readiness for DKG
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {
-            <span class="kw">loop </span>{
-                <span class="kw">let </span>status = client.status().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| {
-                    ApiError::not_found(<span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string())
-                })<span class="question-mark">?</span>;
-                <span class="kw">if </span>status.server == ServerStatus::ReadyForConfigGen {
-                    <span class="kw">break</span>;
-                }
-                sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-            }
-        };
+        <span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>sub_group = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
+        sub_group
+            .spawn(<span class="string">&quot;run dkg&quot;</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
+                <span class="comment">// Followers wait for leader to signal readiness for DKG
+                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {
+                    <span class="kw">loop </span>{
+                        <span class="kw">let </span>status = client.status().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| {
+                            ApiError::not_found(<span class="string">&quot;Unable to connect to the leader&quot;</span>.to_string())
+                        })<span class="question-mark">?</span>;
+                        <span class="kw">if </span>status.server == ServerStatus::ReadyForConfigGen {
+                            <span class="kw">break</span>;
+                        }
+                        sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                    }
+                };
 
-        <span class="comment">// Get params and registry
-        </span><span class="kw">let </span>request = <span class="self">self</span>.get_requested_params()<span class="question-mark">?</span>;
-        <span class="kw">let </span>response = <span class="self">self</span>.get_consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(params, registry) = {
-            <span class="kw">let </span>state: MutexGuard&lt;<span class="lifetime">&#39;_</span>, ConfigGenState&gt; =
-                <span class="self">self</span>.require_status(ServerStatus::ReadyForConfigGen)<span class="question-mark">?</span>;
-            <span class="kw">let </span>params = state.get_config_gen_params(<span class="kw-2">&amp;</span>request, response.consensus)<span class="question-mark">?</span>;
-            <span class="kw">let </span>registry = state.settings.registry.clone();
-            (params, registry)
-        };
+                <span class="comment">// Get params and registry
+                </span><span class="kw">let </span>request = self_clone.get_requested_params()<span class="question-mark">?</span>;
+                <span class="kw">let </span>response = self_clone.get_consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>(params, registry) = {
+                    <span class="kw">let </span>state: MutexGuard&lt;<span class="lifetime">&#39;_</span>, ConfigGenState&gt; =
+                        self_clone.require_status(ServerStatus::ReadyForConfigGen)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>params = state.get_config_gen_params(<span class="kw-2">&amp;</span>request, response.consensus)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>registry = state.settings.registry.clone();
+                    (params, registry)
+                };
 
-        <span class="comment">// Run DKG
-        </span><span class="kw">let </span><span class="kw-2">mut </span>task_group: TaskGroup = <span class="self">self</span>.task_group.make_subgroup().<span class="kw">await</span>;
-        <span class="kw">let </span>config = ServerConfig::distributed_gen(
-            <span class="kw-2">&amp;</span>params,
-            registry,
-            DelayCalculator::PROD_DEFAULT,
-            <span class="kw-2">&amp;mut </span>task_group,
-        )
-        .<span class="kw">await</span>;
-        task_group
-            .shutdown_join_all(<span class="prelude-val">None</span>)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;shuts down&quot;</span>);
+                <span class="comment">// Run DKG
+                </span><span class="kw">let </span><span class="kw-2">mut </span>task_group: TaskGroup = self_clone.task_group.make_subgroup().<span class="kw">await</span>;
+                <span class="kw">let </span>config = ServerConfig::distributed_gen(
+                    <span class="kw-2">&amp;</span>params,
+                    registry,
+                    DelayCalculator::PROD_DEFAULT,
+                    <span class="kw-2">&amp;mut </span>task_group,
+                )
+                .<span class="kw">await</span>;
+                task_group
+                    .shutdown_join_all(<span class="prelude-val">None</span>)
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;shuts down&quot;</span>);
 
-        {
-            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
-            <span class="kw">match </span>config {
-                <span class="prelude-val">Ok</span>(config) =&gt; {
-                    <span class="self">self</span>.write_configs(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>state)<span class="question-mark">?</span>;
-                    state.status = ServerStatus::VerifyingConfigs;
-                    state.config = <span class="prelude-val">Some</span>(config);
+                {
+                    <span class="kw">let </span><span class="kw-2">mut </span>state = self_clone.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
+                    <span class="kw">match </span>config {
+                        <span class="prelude-val">Ok</span>(config) =&gt; {
+                            self_clone.write_configs(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>state)<span class="question-mark">?</span>;
+                            state.status = ServerStatus::VerifyingConfigs;
+                            state.config = <span class="prelude-val">Some</span>(config);
+                        }
+                        <span class="prelude-val">Err</span>(e) =&gt; {
+                            <span class="macro">error!</span>(
+                                target: fedimint_logging::LOG_NET_PEER_DKG,
+                                <span class="string">&quot;DKG failed with {:?}&quot;</span>, e
+                            );
+                            state.status = ServerStatus::ConfigGenFailed;
+                        }
+                    }
                 }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(
-                        target: fedimint_logging::LOG_NET_PEER_DKG,
-                        <span class="string">&quot;DKG failed with {:?}&quot;</span>, e
-                    );
-                    state.status = ServerStatus::ConfigGenFailed;
-                }
-            }
-        }
-        <span class="self">self</span>.update_leader().<span class="kw">await
-    </span>}
+                self_clone.update_leader().<span class="kw">await
+            </span>})
+            .<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
 
     <span class="doccomment">/// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
@@ -2017,7 +2039,7 @@
                         .iter()
                         .map(|peer| peer.client.run_dkg(peer.auth.clone()))
                 ),
-                all_peers[<span class="number">0</span>].wait_status(ServerStatus::ReadyForConfigGen)
+                all_peers[<span class="number">0</span>].wait_status(ServerStatus::VerifyingConfigs)
             );
             <span class="kw">for </span>result <span class="kw">in </span>results {
                 result.expect(<span class="string">&quot;DKG failed&quot;</span>);

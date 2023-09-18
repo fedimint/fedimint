@@ -980,7 +980,7 @@
     <span class="macro">info!</span>(<span class="string">&quot;Running DKG...&quot;</span>);
     <span class="kw">let </span>(dkg_results, leader_wait_result) = <span class="macro">tokio::join!</span>(
         join_all(dkg_results),
-        wait_server_status(leader, ServerStatus::ReadyForConfigGen)
+        wait_server_status(leader, ServerStatus::VerifyingConfigs)
     );
     <span class="kw">for </span>result <span class="kw">in </span>dkg_results {
         result<span class="question-mark">?</span>;
