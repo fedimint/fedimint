@@ -72,7 +72,7 @@ check-wasm:
   nix develop .#crossWasm -c cargo check --target wasm32-unknown-unknown --package fedimint-client
 
 [no-exit-message]
-typos:
+typos *PARAMS:
   #!/usr/bin/env bash
   set -eo pipefail
 
@@ -80,25 +80,14 @@ typos:
   git_ls_nonbinary_files="$(echo "$git_ls_files" |  grep -v -E "^db/|\.png\$|\.ods\$")"
 
 
-  if ! echo "$git_ls_nonbinary_files" | typos --stdin-paths ; then
+  if ! echo "$git_ls_nonbinary_files" | typos {{PARAMS}} --stdin-paths; then
     >&2 echo "Typos found: Valid new words can be added to '_typos.toml'"
     return 1
   fi
 
-
 [no-exit-message]
 typos-fix-all:
-  #!/usr/bin/env bash
-  set -eo pipefail
-
-  git_ls_files="$(git ls-files)"
-  git_ls_nonbinary_files="$(echo "$git_ls_files" | xargs file --mime | grep -v "; charset=binary" | cut -d: -f1)"
-
-  if ! echo "$git_ls_nonbinary_files" | typos --stdin-paths -w  ; then
-    >&2 echo "Typos found: Valid new words can be added to '_typos.toml'"
-    # TODO: not enforcing anything right, just being annoying in the CLI
-    # return 1
-  fi
+  just typos -w
 
 # regenerate migration snapshots
 prepare_db_migration_snapshots +extra_args:
