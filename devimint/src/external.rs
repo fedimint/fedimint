@@ -54,7 +54,7 @@ impl Bitcoind {
             if e.to_string().contains("Database already exists") {
                 break;
             }
-            warn!(LOG_DEVIMINT, "Failed to create wallet ... retrying {}", e);
+            warn!(target: LOG_DEVIMINT, "Failed to create wallet ... retrying {}", e);
             sleep(Duration::from_secs(1)).await
         }
 
@@ -137,7 +137,7 @@ impl LightningdProcessHandle {
             let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", GATEWAY_CLN_EXTENSION);
             if let Err(e) = stop_plugins.out_string().await {
                 warn!(
-                    LOG_DEVIMINT,
+                    target: LOG_DEVIMINT,
                     "failed to terminate lightningd plugins: {e:?}"
                 );
             }
@@ -155,7 +155,7 @@ impl Drop for LightningdProcessHandle {
         block_in_place(move || {
             block_on(async move {
                 if let Err(e) = self.terminate().await {
-                    warn!(LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
+                    warn!(target: LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
                 }
             })
         });
@@ -333,7 +333,7 @@ impl Lnd {
 
 pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> Result<()> {
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-    info!(LOG_DEVIMINT, "block sync done");
+    info!(target: LOG_DEVIMINT, "block sync done");
     let cln_addr = cln
         .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
         .await?
@@ -481,7 +481,7 @@ impl Electrs {
             "--db-dir={electrs_dir}",
         );
         let process = process_mgr.spawn_daemon("electrs", cmd).await?;
-        info!(LOG_DEVIMINT, "electrs started");
+        info!(target: LOG_DEVIMINT, "electrs started");
 
         Ok(Self {
             _bitcoind: bitcoind,
@@ -543,7 +543,7 @@ pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDa
     )?;
     open_channel(&bitcoind, &cln, &lnd).await?;
     info!(
-        LOG_DEVIMINT,
+        target: LOG_DEVIMINT,
         "starting base daemons took {:?}",
         start_time.elapsed()?
     );

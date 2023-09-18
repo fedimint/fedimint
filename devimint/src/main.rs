@@ -885,7 +885,7 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
         }
     }
 
-    info!(LOG_DEVIMINT, "lightning_reconnect_test: success");
+    info!(target: LOG_DEVIMINT, "lightning_reconnect_test: success");
     Ok(())
 }
 
@@ -1004,7 +1004,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     fed.start_server(process_mgr, 0).await?;
     fed.generate_epochs(10).await?;
     fed.await_all_peers().await?;
-    info!(LOG_DEVIMINT, "Server 0 successfully rejoined!");
+    info!(target: LOG_DEVIMINT, "Server 0 successfully rejoined!");
     bitcoind.mine_blocks(100).await?;
 
     // now test what happens if consensus needs to be restarted
@@ -1024,7 +1024,7 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     })
     .await?;
 
-    info!(LOG_DEVIMINT, "fm success: reconnect-test");
+    info!(target: LOG_DEVIMINT, "fm success: reconnect-test");
     Ok(())
 }
 

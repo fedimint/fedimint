@@ -175,7 +175,7 @@ impl<C> RetryClient<C> {
                         return Err(e);
                     }
 
-                    info!(LOG_BLOCKCHAIN, "Bitcoind error {:?}, retrying", e);
+                    info!(target: LOG_BLOCKCHAIN, "Bitcoind error {:?}, retrying", e);
                     std::thread::sleep(retry_time);
                     retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * 2);
                 }

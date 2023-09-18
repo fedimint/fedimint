@@ -59,7 +59,7 @@ impl ProcessHandle {
         let mut inner = self.0.lock().await;
         if let Some(mut child) = inner.child.take() {
             info!(
-                LOG_DEVIMINT,
+                target: LOG_DEVIMINT,
                 "sending SIGTERM to {} and waiting for it to exit", inner.name
             );
             send_sigterm(&child);
@@ -87,12 +87,12 @@ impl Drop for ProcessHandleInner {
         block_in_place(move || {
             block_on(async move {
                 info!(
-                    LOG_DEVIMINT,
+                    target: LOG_DEVIMINT,
                     "sending SIGKILL to {name} and waiting for it to exit"
                 );
                 send_sigkill(child);
                 if let Err(e) = child.wait().await {
-                    warn!(LOG_DEVIMINT, "failed to wait for {name}: {e:?}");
+                    warn!(target: LOG_DEVIMINT, "failed to wait for {name}: {e:?}");
                 }
             })
         })
@@ -195,7 +195,7 @@ impl Command {
     }
 
     pub async fn run_inner(&mut self) -> Result<std::process::Output> {
-        debug!(LOG_DEVIMINT, "> {}", self.command_debug());
+        debug!(target: LOG_DEVIMINT, "> {}", self.command_debug());
         let output = self.cmd.output().await?;
         if !output.status.success() {
             bail!(
@@ -330,7 +330,7 @@ where
         let duration = now().duration_since(start).unwrap_or_default();
         if Duration::from_secs(10) <= duration {
             warn!(
-                LOG_DEVIMINT,
+                target: LOG_DEVIMINT,
                 name,
                 attempt = attempt,
                 duration_secs = %duration.as_secs(),
