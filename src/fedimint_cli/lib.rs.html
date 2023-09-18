@@ -859,6 +859,13 @@
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -1251,12 +1258,19 @@
 
 <span class="attr">#[derive(Debug, Clone, Subcommand)]
 </span><span class="kw">enum </span>DevCmd {
-    <span class="doccomment">/// Send direct method call to the API. If you specify --peer-id, it will
-    /// just ask one server, otherwise it will get consensus from all servers
+    <span class="attr">#[rustfmt::skip]
+    </span><span class="doccomment">/// Send direct method call to the API. If you specify --peer-id, it will
+    /// just ask one server, otherwise it will try to get consensus from all servers.
+    ///
+    /// Example:
+    ///
+    /// fedimint-cli dev api --peer-id config &#39;&quot;fed114znk7uk7ppugdjuytr8venqf2tkywd65cqvg3u93um64tu5cw4yr0n3fvn7qmwvm4g48cpndgnm4gqq4waen5te0xyerwt3s9cczuvf6xyurzde597s7crdvsk2vmyarjw9gwyqjdzj&quot;&#39;
     </span>Api {
         <span class="doccomment">/// JSON-RPC method to call
         </span>method: String,
         <span class="doccomment">/// JSON-RPC parameters for the request
+        ///
+        /// Note: single jsonrpc argument params string, which might require double-quotes (see example above).
         </span><span class="attr">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
         </span>params: String,
         <span class="doccomment">/// Which server to send request to
