@@ -21,6 +21,8 @@ struct Cmd {
     bitcoind_rpc: String,
     #[clap(long, env = "FM_CLN_SOCKET")]
     cln_socket: String,
+    #[clap(long, env = "FM_PORT_GW_LND")]
+    gw_lnd_port: u16,
     #[clap(long, env = "FM_INVITE_CODE")]
     invite_code: Option<String>,
 }
@@ -142,6 +144,10 @@ async fn main() -> anyhow::Result<()> {
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")))
             }),
+        )
+        .route(
+            "/gateway-api",
+            get(move || async move { format!("http://127.0.0.1:{}/", cmd.gw_lnd_port) }),
         )
         .layer(CorsLayer::permissive())
         .with_state(faucet);

@@ -29,8 +29,11 @@ impl WalletGenParams {
                 finality_delay: 10,
                 client_default_bitcoin_rpc: BitcoinRpcConfig {
                     kind: "esplora".to_string(),
-                    url: SafeUrl::parse("http://127.0.0.1:50002/")
-                        .expect("Failed to parse default esplora server"),
+                    url: SafeUrl::parse(&format!(
+                        "http://127.0.0.1:{}/",
+                        std::env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"))
+                    ))
+                    .expect("Failed to parse default esplora server"),
                 },
             },
         }

@@ -37,6 +37,13 @@ mod faucet {
         }
     }
 
+    pub async fn gateway_api() -> anyhow::Result<String> {
+        let resp = gloo_net::http::Request::get("http://localhost:15243/gateway-api")
+            .send()
+            .await?;
+        Ok(resp.text().await?)
+    }
+
     pub async fn generate_invoice(amt: u64) -> anyhow::Result<String> {
         let resp = gloo_net::http::Request::post("http://localhost:15243/invoice")
             .body(amt)
@@ -66,17 +73,23 @@ mod tests {
         Ok(())
     }
 
+    async fn set_gateway(client: &fedimint_client::Client) -> anyhow::Result<()> {
+        let gws = client.fetch_registered_gateways().await?;
+        let gw_api = faucet::gateway_api().await?;
+        let lnd_gw = gws
+            .into_iter()
+            .find(|x| x.api.to_string() == gw_api)
+            .expect("no gateway with api");
+
+        client.set_active_gateway(&lnd_gw.gateway_id).await?;
+        Ok(())
+    }
+
     #[wasm_bindgen_test]
     async fn receive() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
-        let gws = client.fetch_registered_gateways().await?;
-        let lnd_gw = gws
-            .into_iter()
-            .find(|x| x.api.to_string() == "http://127.0.0.1:28175/")
-            .expect("no gateway with api http://127.0.0.1:28175");
-
-        client.set_active_gateway(&lnd_gw.gateway_id).await?;
+        set_gateway(&client).await?;
         let (opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
@@ -111,13 +124,7 @@ mod tests {
     async fn receive_and_pay() -> Result<()> {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
-        let gws = client.fetch_registered_gateways().await?;
-        let lnd_gw = gws
-            .into_iter()
-            .find(|x| x.api.to_string() == "http://127.0.0.1:28175/")
-            .expect("no gateway with api http://127.0.0.1:28175");
-
-        client.set_active_gateway(&lnd_gw.gateway_id).await?;
+        set_gateway(&client).await?;
         let (opid, invoice) = client
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
