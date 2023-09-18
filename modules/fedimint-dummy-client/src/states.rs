@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use fedimint_client::sm::{DynState, OperationId, State, StateTransition};
-use fedimint_client::transaction::TxSubmissionError;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
@@ -90,7 +89,7 @@ async fn await_tx_accepted(
     context: DynGlobalClientContext,
     id: OperationId,
     txid: TransactionId,
-) -> Result<(), TxSubmissionError> {
+) -> Result<(), String> {
     context.await_tx_accepted(id, txid).await
 }
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use bitcoin::secp256k1;
 use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
@@ -268,7 +268,10 @@ pub async fn remint_denomination(
         )
         .await?;
     let tx_subscription = client.transaction_updates(operation_id).await;
-    tx_subscription.await_tx_accepted(txid).await?;
+    tx_subscription
+        .await_tx_accepted(txid)
+        .await
+        .map_err(|e| anyhow!(e))?;
     dbtx.commit_tx().await;
     for i in 0..quantity {
         let out_point = OutPoint {

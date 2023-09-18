@@ -15,10 +15,11 @@ use bech32::{FromBase32, ToBase32};
 use bitcoin::secp256k1;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::time::now;
 use fedimint_core::{
@@ -45,7 +46,6 @@ use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
-use crate::outcome::{SerdeOutputOutcome, TransactionStatus};
 use crate::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
     VerifiableResponse,
@@ -57,6 +57,7 @@ use crate::{serde_as_encodable_hex, task};
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, jsonrpsee_core::Error>;
 pub type FederationResult<T> = Result<T, FederationError>;
+pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
 /// An API request error when calling a single federation peer
 #[derive(Debug, Error)]
@@ -331,11 +332,6 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 #[apply(async_trait_maybe_send!)]
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
-    async fn fetch_tx_outcome(
-        &self,
-        txid: &TransactionId,
-    ) -> FederationResult<Option<TransactionStatus>>;
-    async fn await_tx_outcome(&self, txid: &TransactionId) -> FederationResult<TransactionStatus>;
 
     async fn fetch_epoch_history(
         &self,
@@ -346,15 +342,7 @@ pub trait GlobalFederationApi {
 
     async fn fetch_epoch_count(&self) -> FederationResult<u64>;
 
-    async fn fetch_output_outcome<R>(
-        &self,
-        out_point: OutPoint,
-        module_decoder: &Decoder,
-    ) -> OutputOutcomeResult<Option<R>>
-    where
-        R: OutputOutcome;
-
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()>;
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
 
     async fn await_output_outcome<R>(
         &self,
@@ -383,32 +371,6 @@ pub trait GlobalFederationApi {
         &self,
         client_versions: &SupportedApiVersionsSummary,
     ) -> FederationResult<ApiVersionSet>;
-}
-
-// TODO: this can be removed with the legacy client
-fn map_tx_outcome_outpoint<R>(
-    tx_outcome: TransactionStatus,
-    out_point: OutPoint,
-    module_decoder: &Decoder,
-) -> OutputOutcomeResult<R>
-where
-    R: OutputOutcome + MaybeSend,
-{
-    match tx_outcome {
-        TransactionStatus::Rejected(e) => Err(OutputOutcomeError::Rejected(e)),
-        TransactionStatus::Accepted { outputs, .. } => {
-            let outputs_len = outputs.len();
-
-            outputs
-                .into_iter()
-                .nth(out_point.out_idx as usize) // avoid clone as would be necessary with .get(…)
-                .ok_or(OutputOutcomeError::InvalidVout {
-                    outputs_num: outputs_len,
-                    out_idx: out_point.out_idx,
-                })
-                .and_then(|output| deserialize_outcome(output, module_decoder))
-        }
-    }
 }
 
 fn deserialize_outcome<R>(
@@ -444,22 +406,6 @@ where
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
         )
         .await
-    }
-
-    /// Fetch the outcome of an entire transaction
-    async fn fetch_tx_outcome(
-        &self,
-        tx: &TransactionId,
-    ) -> FederationResult<Option<TransactionStatus>> {
-        self.request_current_consensus("fetch_transaction".to_owned(), ApiRequestErased::new(tx))
-            .await
-    }
-
-    // TODO: this can be removed with the legacy client
-    /// Await the outcome of an entire transaction
-    async fn await_tx_outcome(&self, tx: &TransactionId) -> FederationResult<TransactionStatus> {
-        self.request_current_consensus("wait_transaction".to_owned(), ApiRequestErased::new(tx))
-            .await
     }
 
     async fn fetch_epoch_history(
@@ -517,24 +463,8 @@ where
             .await
     }
 
-    // TODO: this can be removed with the legacy client
-    async fn fetch_output_outcome<R>(
-        &self,
-        out_point: OutPoint,
-        module_decoder: &Decoder,
-    ) -> OutputOutcomeResult<Option<R>>
-    where
-        R: OutputOutcome,
-    {
-        Ok(self
-            .fetch_tx_outcome(&out_point.txid)
-            .await?
-            .map(move |tx_outcome| map_tx_outcome_outpoint(tx_outcome, out_point, module_decoder))
-            .transpose()?)
-    }
-
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<()> {
-        self.request_current_consensus("await_transaction".to_owned(), ApiRequestErased::new(txid))
+    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {
+        self.request_current_consensus("wait_transaction".to_owned(), ApiRequestErased::new(txid))
             .await
     }
 

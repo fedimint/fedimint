@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, TxSubmissionError};
+use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::config::FederationId;
@@ -445,14 +445,14 @@ impl LightningPayRefund {
         common: LightningPayCommon,
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
-    ) -> Result<(), TxSubmissionError> {
+    ) -> Result<(), String> {
         global_context
             .await_tx_accepted(common.operation_id, refund_txid)
             .await
     }
 
     async fn transition_refund_success(
-        result: Result<(), TxSubmissionError>,
+        result: Result<(), String>,
         old_state: LightningPayStateMachine,
         refund_txid: TransactionId,
     ) -> LightningPayStateMachine {

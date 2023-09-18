@@ -14,16 +14,15 @@ use fedimint_core::api::{
 use fedimint_core::backup::ClientBackupKey;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, SerdeModuleEncoding,
     SupportedApiVersionsSummary,
 };
-use fedimint_core::outcome::{SerdeOutputOutcome, TransactionStatus};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::Transaction;
@@ -51,6 +50,8 @@ use crate::db::{
 use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
 use crate::{check_auth, ApiResult, HasApiContext};
+
+pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
@@ -197,24 +198,28 @@ impl ConsensusApi {
     }
 
     pub async fn submit_transaction(&self, transaction: Transaction) -> anyhow::Result<()> {
+        let txid = transaction.tx_hash();
+
+        debug!(%txid, "Received mint transaction");
+
         // we already processed the transaction before the request was received
         if self
-            .transaction_status(transaction.tx_hash())
+            .db
+            .begin_transaction()
+            .await
+            .get_value(&AcceptedTransactionKey(txid))
             .await
             .is_some()
         {
             return Ok(());
         }
 
-        let tx_hash = transaction.tx_hash();
-        debug!(%tx_hash, "Received mint transaction");
-
         // Create read-only DB tx so that the read state is consistent
         let mut dbtx = self.db.begin_transaction().await;
+
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        let txid = transaction.tx_hash();
         let caches = self.build_verification_caches(transaction.clone());
 
         let mut funding_verifier = FundingVerifier::default();
@@ -277,6 +282,15 @@ impl ConsensusApi {
         VerificationCaches { caches }
     }
 
+    pub async fn await_transaction(
+        &self,
+        txid: TransactionId,
+    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction) {
+        self.db
+            .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
+            .await
+    }
+
     pub async fn await_output_outcome(&self, outpoint: OutPoint) -> Result<SerdeOutputOutcome> {
         let (module_ids, mut dbtx) = self.await_transaction(outpoint.txid).await;
 
@@ -293,66 +307,6 @@ impl ConsensusApi {
             .expect("The transaction is accepted");
 
         Ok((&outcome).into())
-    }
-
-    pub async fn await_transaction(
-        &self,
-        txid: TransactionId,
-    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction) {
-        self.db
-            .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
-            .await
-    }
-
-    // TODO: this can be removed with the legacy client
-    pub async fn transaction_status(&self, txid: TransactionId) -> Option<TransactionStatus> {
-        let mut dbtx = self.db.begin_transaction().await;
-
-        let module_ids = dbtx.get_value(&AcceptedTransactionKey(txid)).await?;
-
-        let status = self
-            .accepted_transaction_status(txid, module_ids, &mut dbtx)
-            .await;
-
-        Some(status)
-    }
-
-    // TODO: this can be removed with the legacy client
-    pub async fn wait_transaction_status(&self, txid: TransactionId) -> TransactionStatus {
-        let (outputs, mut dbtx) = self
-            .db
-            .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
-            .await;
-
-        self.accepted_transaction_status(txid, outputs, &mut dbtx)
-            .await
-    }
-
-    // TODO: this can be removed with the legacy client
-    async fn accepted_transaction_status(
-        &self,
-        txid: TransactionId,
-        module_ids: Vec<ModuleInstanceId>,
-        dbtx: &mut DatabaseTransaction<'_>,
-    ) -> TransactionStatus {
-        let mut outputs = Vec::new();
-
-        for (module_id, out_idx) in module_ids.into_iter().zip(0u64..) {
-            let outcome = self
-                .modules
-                .get_expect(module_id)
-                .output_status(
-                    &mut dbtx.with_module_prefix(module_id),
-                    OutPoint { txid, out_idx },
-                    module_id,
-                )
-                .await
-                .expect("the transaction was accepted");
-
-            outputs.push((&outcome).into())
-        }
-
-        TransactionStatus::Accepted { epoch: 0, outputs }
     }
 
     pub async fn download_client_config(&self, info: InviteCode) -> ApiResult<ClientConfig> {
@@ -589,36 +543,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 Ok(tx_id)
             }
         },
-        // TODO: this can be removed with the legacy client
-        api_endpoint! {
-            "fetch_transaction",
-            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> Option<TransactionStatus> {
-                debug!(transaction = %tx_hash, "Received request");
-
-                let tx_status = fedimint.transaction_status(tx_hash)
-                    .await;
-
-                debug!(transaction = %tx_hash, "Sending outcome");
-                Ok(tx_status)
-            }
-        },
-        // TODO: this can be removed with the legacy client
         api_endpoint! {
             "wait_transaction",
-            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionStatus {
+            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
                 debug!(transaction = %tx_hash, "Received request");
 
-                let tx_status = fedimint.wait_transaction_status(tx_hash)
-                    .await;
+                fedimint.await_transaction(tx_hash).await;
 
                 debug!(transaction = %tx_hash, "Sending outcome");
-                Ok(tx_status)
-            }
-        },
-        api_endpoint! {
-            "await_transaction",
-            async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
-                fedimint.await_transaction(tx_hash).await;
 
                 Ok(tx_hash)
             }

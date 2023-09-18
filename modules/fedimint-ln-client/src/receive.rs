@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use bitcoin::util::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, TxSubmissionError};
+use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -127,12 +127,12 @@ impl LightningReceiveSubmittedOffer {
         global_context: DynGlobalClientContext,
         operation_id: OperationId,
         txid: TransactionId,
-    ) -> Result<(), TxSubmissionError> {
+    ) -> Result<(), String> {
         global_context.await_tx_accepted(operation_id, txid).await
     }
 
     async fn transition_confirmed_invoice(
-        result: Result<(), TxSubmissionError>,
+        result: Result<(), String>,
         old_state: LightningReceiveStateMachine,
         invoice: Bolt11Invoice,
         keypair: KeyPair,
@@ -300,12 +300,12 @@ impl LightningReceiveFunded {
         operation_id: OperationId,
         global_context: DynGlobalClientContext,
         txid: TransactionId,
-    ) -> Result<(), TxSubmissionError> {
+    ) -> Result<(), String> {
         global_context.await_tx_accepted(operation_id, txid).await
     }
 
     async fn transition_claim_success(
-        result: Result<(), TxSubmissionError>,
+        result: Result<(), String>,
         old_state: LightningReceiveStateMachine,
         txid: TransactionId,
     ) -> LightningReceiveStateMachine {
