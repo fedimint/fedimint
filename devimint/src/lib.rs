@@ -41,49 +41,35 @@ pub struct DevFed {
     pub gw_lnd: Gatewayd,
     pub electrs: Electrs,
     pub esplora: Esplora,
-    pub faucet: Faucet,
 }
 
 #[derive(Clone)]
 pub struct Gatewayd {
     _process: ProcessHandle,
     pub ln: Option<LightningNode>,
+    addr: String,
 }
 
 impl Gatewayd {
     pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
         let ln_name = ln.name();
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
-        let gateway_env: HashMap<String, String> = match ln {
-            LightningNode::Cln(_) => HashMap::from_iter([
-                (
-                    "FM_GATEWAY_DATA_DIR".to_owned(),
-                    format!("{}/gw-cln", utf8(test_dir)),
-                ),
-                (
-                    "FM_GATEWAY_LISTEN_ADDR".to_owned(),
-                    "127.0.0.1:8175".to_owned(),
-                ),
-                (
-                    "FM_GATEWAY_API_ADDR".to_owned(),
-                    "http://127.0.0.1:8175".to_owned(),
-                ),
-            ]),
-            LightningNode::Lnd(_) => HashMap::from_iter([
-                (
-                    "FM_GATEWAY_DATA_DIR".to_owned(),
-                    format!("{}/gw-lnd", utf8(test_dir)),
-                ),
-                (
-                    "FM_GATEWAY_LISTEN_ADDR".to_owned(),
-                    "127.0.0.1:28175".to_owned(),
-                ),
-                (
-                    "FM_GATEWAY_API_ADDR".to_owned(),
-                    "http://127.0.0.1:28175".to_owned(),
-                ),
-            ]),
+        let port = match ln {
+            LightningNode::Cln(_) => process_mgr.globals.FM_PORT_GW_CLN,
+            LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_GW_LND,
         };
+        let addr = format!("http://127.0.0.1:{port}");
+        let gateway_env: HashMap<String, String> = HashMap::from_iter([
+            (
+                "FM_GATEWAY_DATA_DIR".to_owned(),
+                format!("{}/{ln_name}", utf8(test_dir)),
+            ),
+            (
+                "FM_GATEWAY_LISTEN_ADDR".to_owned(),
+                format!("127.0.0.1:{port}"),
+            ),
+            ("FM_GATEWAY_API_ADDR".to_owned(), addr.clone()),
+        ]);
         let process = process_mgr
             .spawn_daemon(
                 &format!("gatewayd-{ln_name}"),
@@ -94,6 +80,7 @@ impl Gatewayd {
         Ok(Self {
             ln: Some(ln),
             _process: process,
+            addr,
         })
     }
 
@@ -113,22 +100,12 @@ impl Gatewayd {
     }
 
     pub async fn cmd(&self) -> Command {
-        match &self.ln {
-            Some(LightningNode::Cln(_)) => {
-                cmd!("gateway-cli", "--rpcpassword=theresnosecondbest")
-            }
-            Some(LightningNode::Lnd(_)) => {
-                cmd!(
-                    "gateway-cli",
-                    "--rpcpassword=theresnosecondbest",
-                    "-a",
-                    "http://127.0.0.1:28175"
-                )
-            }
-            None => {
-                panic!("Cannot execute command when gateway is disconnected from Lightning Node");
-            }
-        }
+        cmd!(
+            "gateway-cli",
+            "--rpcpassword=theresnosecondbest",
+            "-a",
+            &self.addr
+        )
     }
 
     pub async fn gateway_id(&self) -> Result<String> {
@@ -156,37 +133,23 @@ impl Gatewayd {
     }
 }
 
-#[derive(Clone)]
-pub struct Faucet {
-    _process: ProcessHandle,
-}
-
-impl Faucet {
-    pub async fn new(process_mgr: &ProcessManager) -> Result<Self> {
-        Ok(Self {
-            _process: process_mgr.spawn_daemon("faucet", cmd!("faucet")).await?,
-        })
-    }
-}
-
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr).await?;
-    let ((cln, lnd, gw_cln, gw_lnd, faucet), electrs, esplora, fed) = tokio::try_join!(
+    let ((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = tokio::try_join!(
         async {
             let (cln, lnd) = tokio::try_join!(
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )?;
             info!(LOG_DEVIMINT, "lightning started");
-            let (gw_cln, gw_lnd, _, faucet) = tokio::try_join!(
+            let (gw_cln, gw_lnd, _) = tokio::try_join!(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-                open_channel(&bitcoind, &cln, &lnd),
-                Faucet::new(process_mgr)
+                open_channel(process_mgr, &bitcoind, &cln, &lnd),
             )?;
             info!(LOG_DEVIMINT, "gateways started");
-            Ok((cln, lnd, gw_cln, gw_lnd, faucet))
+            Ok((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
@@ -214,7 +177,6 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         bitcoind,
         cln,
         lnd,
-        faucet,
         fed,
         gw_cln,
         gw_lnd,

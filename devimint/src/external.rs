@@ -10,6 +10,7 @@ use bitcoincore_rpc::{bitcoin, RpcApi};
 use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{block_in_place, sleep};
+use fedimint_core::util::write_overwrite_async;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use futures::executor::block_on;
@@ -32,6 +33,14 @@ pub struct Bitcoind {
 impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager) -> Result<Self> {
         let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
+        let conf = format!(
+            include_str!("cfg/bitcoin.conf"),
+            rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
+            p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
+            zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
+            zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+        );
+        write_overwrite_async(processmgr.globals.FM_BTC_DIR.join("bitcoin.conf"), conf).await?;
         let process = processmgr
             .spawn_daemon("bitcoind", cmd!("bitcoind", "-datadir={btc_dir}"))
             .await?;
@@ -161,6 +170,12 @@ pub struct Lightningd {
 impl Lightningd {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
         let cln_dir = &process_mgr.globals.FM_CLN_DIR;
+        let conf = format!(
+            include_str!("cfg/lightningd.conf"),
+            port = process_mgr.globals.FM_PORT_CLN,
+            bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
+        );
+        write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join("config"), conf).await?;
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
@@ -249,6 +264,16 @@ impl Lnd {
     }
 
     pub async fn start(process_mgr: &ProcessManager) -> Result<(ProcessHandle, LndClient)> {
+        let conf = format!(
+            include_str!("cfg/lnd.conf"),
+            listen_port = process_mgr.globals.FM_PORT_LND_LISTEN,
+            rpc_port = process_mgr.globals.FM_PORT_LND_RPC,
+            rest_port = process_mgr.globals.FM_PORT_LND_REST,
+            btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
+            zmq_pub_raw_block = process_mgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
+            zmq_pub_raw_tx = process_mgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+        );
+        write_overwrite_async(process_mgr.globals.FM_LND_DIR.join("lnd.conf"), conf).await?;
         let cmd = cmd!(
             "lnd",
             format!("--lnddir={}", utf8(&process_mgr.globals.FM_LND_DIR))
@@ -320,7 +345,12 @@ impl Lnd {
     }
 }
 
-pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> Result<()> {
+pub async fn open_channel(
+    process_mgr: &ProcessManager,
+    bitcoind: &Bitcoind,
+    cln: &Lightningd,
+    lnd: &Lnd,
+) -> Result<()> {
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     info!(LOG_DEVIMINT, "block sync done");
     let cln_addr = cln
@@ -337,7 +367,7 @@ pub async fn open_channel(bitcoind: &Bitcoind, cln: &Lightningd, lnd: &Lnd) -> R
     cln.request(cln_rpc::model::ConnectRequest {
         id: lnd_pubkey.parse()?,
         host: Some("127.0.0.1".to_owned()),
-        port: Some(9734),
+        port: Some(process_mgr.globals.FM_PORT_LND_LISTEN),
     })
     .await?;
 
@@ -404,6 +434,17 @@ impl Electrs {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
         let electrs_dir = env::var("FM_ELECTRS_DIR")?;
 
+        let conf = format!(
+            include_str!("cfg/electrs.toml"),
+            rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
+            p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
+            electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
+        );
+        write_overwrite_async(
+            process_mgr.globals.FM_ELECTRS_DIR.join("electrs.toml"),
+            conf,
+        )
+        .await?;
         let cmd = cmd!(
             "electrs",
             "--conf-dir={electrs_dir}",
@@ -430,6 +471,8 @@ impl Esplora {
         let daemon_dir = env::var("FM_BTC_DIR")?;
         let esplora_dir = env::var("FM_ESPLORA_DIR")?;
 
+        let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
+        let esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
         // spawn esplora
         let cmd = cmd!(
             "esplora",
@@ -437,9 +480,9 @@ impl Esplora {
             "--db-dir={esplora_dir}",
             "--cookie=bitcoin:bitcoin",
             "--network=regtest",
-            "--daemon-rpc-addr=127.0.0.1:18443",
-            "--http-addr=127.0.0.1:50002",
-            "--monitoring-addr=127.0.0.1:50003",
+            "--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}",
+            "--http-addr=127.0.0.1:{esplora_port}",
+            "--monitoring-addr=127.0.0.1:0",
             "--jsonrpc-import", // Workaround for incompatible on-disk format
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
@@ -470,7 +513,7 @@ pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDa
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
     )?;
-    open_channel(&bitcoind, &cln, &lnd).await?;
+    open_channel(process_mgr, &bitcoind, &cln, &lnd).await?;
     info!(
         LOG_DEVIMINT,
         "starting base daemons took {:?}",

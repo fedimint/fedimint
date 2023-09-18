@@ -1052,6 +1052,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-logging",
+ "fedimint-portalloc",
  "fedimint-server",
  "fedimint-testing",
  "fedimint-wallet-client",

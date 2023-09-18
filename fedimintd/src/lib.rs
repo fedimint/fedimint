@@ -76,9 +76,11 @@ pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
             .expect("Failed to parse default esplora server"),
         Network::Testnet => Url::parse("https://blockstream.info/testnet/api/")
             .expect("Failed to parse default esplora server"),
-        Network::Regtest => {
-            Url::parse("http://127.0.0.1:50002/").expect("Failed to parse default esplora server")
-        }
+        Network::Regtest => Url::parse(&format!(
+            "http://127.0.0.1:{}/",
+            std::env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"))
+        ))
+        .expect("Failed to parse default esplora server"),
         Network::Signet => Url::parse("https://mutinynet.com/api/")
             .expect("Failed to parse default esplora server"),
     };
