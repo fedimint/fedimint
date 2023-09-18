@@ -230,7 +230,6 @@ impl ConsensusServer {
         // Build consensus processor
         let consensus = FedimintConsensus {
             cfg: cfg.clone(),
-            module_inits,
             modules: modules.clone(),
             db: db.clone(),
             api: consensus_api,

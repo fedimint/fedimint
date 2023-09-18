@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::iter::FromIterator;
 
 use anyhow::bail;
-use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::epoch::*;
@@ -74,17 +73,15 @@ pub enum ApiEvent {
 #[non_exhaustive]
 pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
-    pub cfg: ServerConfig,
-    /// Modules config gen information
-    pub module_inits: ServerModuleInitRegistry,
+    cfg: ServerConfig,
     /// Modules registered with the federation
-    pub modules: ServerModuleRegistry,
+    modules: ServerModuleRegistry,
     /// Database storing the result of processing consensus outcomes
-    pub db: Database,
+    db: Database,
     /// API for accessing state
-    pub api: ConsensusApi,
+    api: ConsensusApi,
     /// Cache of `ApiEvent` to include in a proposal
-    pub api_event_cache: HashSet<ApiEvent>,
+    api_event_cache: HashSet<ApiEvent>,
 }
 
 #[derive(Debug)]
@@ -510,6 +507,10 @@ impl FedimintConsensus {
             drop_peers,
             force_new_epoch,
         }
+    }
+
+    pub fn get_api(&self) -> &ConsensusApi {
+        &self.api
     }
 
     fn build_verification_caches(&self, transaction: Transaction) -> VerificationCaches {

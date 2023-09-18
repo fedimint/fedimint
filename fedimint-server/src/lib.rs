@@ -150,7 +150,7 @@ impl FedimintServer {
         server: &ConsensusServer,
         force_shutdown: bool,
     ) -> FedimintApiHandler {
-        let api = &server.get_consensus().api;
+        let api = server.get_consensus().get_api();
         let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
