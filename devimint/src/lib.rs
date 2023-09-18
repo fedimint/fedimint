@@ -172,14 +172,14 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )?;
-            info!(LOG_DEVIMINT, "lightning started");
+            info!(target: LOG_DEVIMINT, "lightning started");
             let (gw_cln, gw_lnd, _, faucet) = tokio::try_join!(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
                 open_channel(&bitcoind, &cln, &lnd),
                 Faucet::new(process_mgr)
             )?;
-            info!(LOG_DEVIMINT, "gateways started");
+            info!(target: LOG_DEVIMINT, "gateways started");
             Ok((cln, lnd, gw_cln, gw_lnd, faucet))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
@@ -190,25 +190,25 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         },
     )?;
 
-    info!(LOG_DEVIMINT, "federation and gateways started");
+    info!(target: LOG_DEVIMINT, "federation and gateways started");
 
     tokio::try_join!(gw_cln.connect_fed(&fed), gw_lnd.connect_fed(&fed), async {
-        info!(LOG_DEVIMINT, "Joining federation with the main client");
+        info!(target: LOG_DEVIMINT, "Joining federation with the main client");
         cmd!(fed, "join-federation", fed.invite_code()?)
             .run()
             .await?;
-        info!(LOG_DEVIMINT, "Generating first epoch");
+        info!(target: LOG_DEVIMINT, "Generating first epoch");
         fed.generate_first_epoch().await?;
         Ok(())
     })?;
 
     // Initialize fedimint-cli
-    info!(LOG_DEVIMINT, "await gateways registered");
+    info!(target: LOG_DEVIMINT, "await gateways registered");
     fed.await_gateways_registered().await?;
-    info!(LOG_DEVIMINT, "gateways registered");
+    info!(target: LOG_DEVIMINT, "gateways registered");
     fed.use_gateway(&gw_cln).await?;
     info!(
-        LOG_DEVIMINT,
+        target: LOG_DEVIMINT,
         "starting dev federation took {:?}",
         start_time.elapsed()?
     );
