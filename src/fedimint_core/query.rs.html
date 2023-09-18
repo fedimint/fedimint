@@ -592,6 +592,23 @@
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -687,7 +704,7 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             verifier: Box::new(verifier),
-            threshold_consensus: ThresholdConsensus::new(total_peers),
+            threshold_consensus: ThresholdConsensus::overcome_evil(total_peers),
             allow_threshold_fallback,
         }
     }
@@ -768,7 +785,9 @@
 }
 
 <span class="kw">impl</span>&lt;R&gt; ThresholdConsensus&lt;R&gt; {
-    <span class="kw">pub fn </span>new(total_peers: usize) -&gt; <span class="self">Self </span>{
+    <span class="comment">// Require that enough participants return the same message to ensure that we
+    // overcome the threshold for malicious nodes
+    </span><span class="kw">pub fn </span>overcome_evil(total_peers: usize) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>max_evil = (total_peers - <span class="number">1</span>) / <span class="number">3</span>;
         <span class="kw">let </span>threshold = total_peers - max_evil;
 
@@ -780,13 +799,26 @@
         }
     }
 
-    <span class="kw">pub fn </span>full_participation(total_peers: usize) -&gt; <span class="self">Self </span>{
+    <span class="comment">// Require that all participants return the same message
+    </span><span class="kw">pub fn </span>full_participation(total_peers: usize) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             error_strategy: ErrorStrategy::new(<span class="number">1</span>),
             responses: BTreeMap::new(),
             retry: BTreeSet::new(),
             threshold: total_peers,
         }
+    }
+}
+
+<span class="kw">impl</span>&lt;R: Eq&gt; ThresholdConsensus&lt;R&gt; {
+    <span class="doccomment">/// Get the most common response that has been processed so far. If there is
+    /// a tie between two values, the value picked is arbitrary and stability
+    /// between calls is not guaranteed.
+    </span><span class="kw">fn </span>get_most_common_response(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>R&gt; {
+        <span class="comment">// TODO: This implementation scales poorly as `self.responses` increases (n^2)
+        </span><span class="self">self</span>.responses
+            .values()
+            .max_by_key(|response| <span class="self">self</span>.responses.values().filter(|r| r == response).count())
     }
 }
 
@@ -797,13 +829,15 @@
                 <span class="self">self</span>.responses.insert(peer, response);
                 <span class="macro">assert!</span>(<span class="self">self</span>.retry.insert(peer));
 
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(response) = <span class="self">self</span>.responses.values().max_by_key(|response| {
-                    <span class="self">self</span>.responses.values().filter(|r| r == response).count()
-                }) {
-                    <span class="kw">let </span>count = <span class="self">self</span>.responses.values().filter(|r| r == <span class="kw-2">&amp;</span>response).count();
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(most_common_response) = <span class="self">self</span>.get_most_common_response() {
+                    <span class="kw">let </span>count = <span class="self">self
+                        </span>.responses
+                        .values()
+                        .filter(|r| r == <span class="kw-2">&amp;</span>most_common_response)
+                        .count();
 
                     <span class="kw">if </span>count &gt;= <span class="self">self</span>.threshold {
-                        <span class="kw">return </span>QueryStep::Success(response.clone());
+                        <span class="kw">return </span>QueryStep::Success(most_common_response.clone());
                     }
                 }
 

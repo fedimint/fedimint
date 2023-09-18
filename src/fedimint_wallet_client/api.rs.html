@@ -37,18 +37,11 @@
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
 <a href="#39" id="39">39</a>
-<a href="#40" id="40">40</a>
-<a href="#41" id="41">41</a>
-<a href="#42" id="42">42</a>
-<a href="#43" id="43">43</a>
-<a href="#44" id="44">44</a>
-<a href="#45" id="45">45</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>fedimint_wallet_common::PegOutFees;
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -67,12 +60,8 @@
     </span>T: IModuleFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            ThresholdConsensus::new(<span class="self">self</span>.all_peers().total()),
-            <span class="string">&quot;block_count&quot;</span>.to_string(),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await
+        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;block_count&quot;</span>.to_string(), ApiRequestErased::default())
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_peg_out_fees(
@@ -80,8 +69,7 @@
         address: <span class="kw-2">&amp;</span>Address,
         amount: bitcoin::Amount,
     ) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            ThresholdConsensus::new(<span class="self">self</span>.all_peers().total()),
+        <span class="self">self</span>.request_current_consensus(
             <span class="string">&quot;peg_out_fees&quot;</span>.to_string(),
             ApiRequestErased::new((address, amount.to_sat())),
         )
