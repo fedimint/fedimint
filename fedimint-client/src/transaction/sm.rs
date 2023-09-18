@@ -9,6 +9,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
+use tracing::warn;
 
 use crate::sm::{Context, DynContext, OperationId, OperationState, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState};
@@ -178,10 +179,15 @@ async fn trigger_created_submit(
 }
 
 async fn trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
-    // FIXME: use ws subscriptions once they land
     loop {
-        if context.api().await_transaction(txid).await.is_ok() {
-            break;
+        match context.api().await_transaction(txid).await {
+            Ok(..) => break,
+            Err(error) => {
+                if !error.is_retryable() {
+                    // FIXME: what to do in this case?
+                    warn!(target: LOG_TARGET, ?error, "Federation returned non-retryable error");
+                }
+            }
         }
 
         sleep(FETCH_INTERVAL).await;
