@@ -50,7 +50,7 @@ jsonrpsee-types = "0.18.0"
 jsonrpsee-core = { version = "0.18.0", features = [ "client" ] }
 serde_json = "1.0.91"
 url = { version = "2.3.1", features = ["serde"] }
-threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+threshold_crypto = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.18.0", features = ["webpki-tls"], default-features = false }
