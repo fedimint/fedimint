@@ -74,34 +74,33 @@ pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
 
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
-    /// `TaskGroup` that is running the server
-    pub task_group: TaskGroup,
     /// Delegate for processing consensus information
-    pub consensus: FedimintConsensus,
+    consensus: FedimintConsensus,
     /// Receives event notifications from the API (triggers epochs)
-    pub api_receiver: Peekable<ReceiverStream<ApiEvent>>,
+    api_receiver: Peekable<ReceiverStream<ApiEvent>>,
     /// P2P connections for running consensus
-    pub connections: PeerConnections<EpochMessage>,
+    connections: PeerConnections<EpochMessage>,
     /// Our configuration
-    pub cfg: ServerConfig,
+    cfg: ServerConfig,
     /// Runs the HBBFT consensus algorithm
-    pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
+    hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     /// Used to make API calls to our peers
-    pub api: DynGlobalApi,
+    api: DynGlobalApi,
     /// The list of all other peers
-    pub other_peers: BTreeSet<PeerId>,
-    /// If `Some` then we restarted and look for the epoch to rejoin at
-    pub rejoin_at_epoch: HashMap<u64, HashSet<PeerId>>,
+    other_peers: BTreeSet<PeerId>,
+    /// If non-empty then we restarted and are looking for the epoch to rejoin
+    /// at
+    rejoin_at_epoch: HashMap<u64, HashSet<PeerId>>,
     /// Under the HBBFT consensus algorithm, this will track the latest epoch
     /// message received by each peer and when it was received
-    pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
+    latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     /// Number of pending forced epochs (requested by peers to help join
     /// consensus faster)
-    pub pending_forced_epochs: u64,
+    pending_forced_epochs: u64,
     /// Tracks the last epoch outcome from consensus
-    pub last_processed_epoch: Option<SignedEpochOutcome>,
+    last_processed_epoch: Option<SignedEpochOutcome>,
     /// Used for decoding module specific-values
-    pub decoders: ModuleDecoderRegistry,
+    decoders: ModuleDecoderRegistry,
 }
 
 impl ConsensusServer {
@@ -239,7 +238,6 @@ impl ConsensusServer {
         };
 
         Ok(ConsensusServer {
-            task_group: task_group.clone(),
             connections,
             hbbft,
             consensus,
@@ -458,6 +456,10 @@ impl ConsensusServer {
             outcomes = self.handle_message(msg).await?;
         }
         Ok(outcomes)
+    }
+
+    pub fn get_consensus(&self) -> &FedimintConsensus {
+        &self.consensus
     }
 
     // Save any API events we have in the channel then create a proposal
