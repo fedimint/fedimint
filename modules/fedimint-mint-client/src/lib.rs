@@ -848,8 +848,10 @@ impl ClientModule for MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
-        self.create_input(dbtx, operation_id, min_amount).await
+    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+        self.create_input(dbtx, operation_id, min_amount)
+            .await
+            .map(|input| vec![input])
     }
 
     async fn create_exact_output(
@@ -857,9 +859,9 @@ impl ClientModule for MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         amount: Amount,
-    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
+    ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
         // FIXME: don't hardcode notes per denomination
-        self.create_output(dbtx, operation_id, 2, amount).await
+        vec![self.create_output(dbtx, operation_id, 2, amount).await]
     }
 
     async fn await_primary_module_output(

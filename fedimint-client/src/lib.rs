@@ -53,7 +53,7 @@
 //! module and its smart contracts are only used to incentivize LN payments, not
 //! to hold money. The mint module on the other hand holds e-cash note and can
 //! thus be used to fund transactions and to absorb change. Module clients with
-//! this ability should implement [`ClientModule::supports_being_primary`] and
+//! this ability should implement [`ClientModule::  supports_being_primary`] and
 //! related methods.
 //!
 //! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
@@ -1091,7 +1091,7 @@ impl ClientInner {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let input = self
+            let inputs = self
                 .primary_module()
                 .create_sufficient_input(
                     self.primary_module_instance,
@@ -1100,14 +1100,14 @@ impl ClientInner {
                     missing_amount,
                 )
                 .await?;
-            partial_transaction.inputs.push(input);
+            partial_transaction.inputs.extend(inputs);
         }
 
         let mut change_idx: Option<u64> = None;
         if let TransactionBuilderBalance::Overfunded(excess_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let output = self
+            let outputs = self
                 .primary_module()
                 .create_exact_output(
                     self.primary_module_instance,
@@ -1117,7 +1117,7 @@ impl ClientInner {
                 )
                 .await;
             change_idx = Some(partial_transaction.outputs.len() as u64);
-            partial_transaction.outputs.push(output);
+            partial_transaction.outputs.extend(outputs);
         }
 
         assert!(

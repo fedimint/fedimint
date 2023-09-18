@@ -118,7 +118,6 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         false
     }
 
-    // TODO: unclear if we should return a vec of inputs
     /// Creates an input of **at least** a given `min_amount` from the holdings
     /// managed by the module.
     ///
@@ -140,7 +139,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _operation_id: OperationId,
         _min_amount: Amount,
-    ) -> anyhow::Result<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>> {
+    ) -> anyhow::Result<Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>> {
         unimplemented!()
     }
 
@@ -158,7 +157,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
         _operation_id: OperationId,
         _amount: Amount,
-    ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States> {
+    ) -> Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>> {
         unimplemented!()
     }
 
@@ -241,7 +240,7 @@ pub trait IClientModule: Debug {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<ClientInput>;
+    ) -> anyhow::Result<Vec<ClientInput>>;
 
     async fn create_exact_output(
         &self,
@@ -249,7 +248,7 @@ pub trait IClientModule: Debug {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         amount: Amount,
-    ) -> ClientOutput;
+    ) -> Vec<ClientOutput>;
 
     async fn await_primary_module_output(
         &self,
@@ -356,7 +355,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<ClientInput> {
+    ) -> anyhow::Result<Vec<ClientInput>> {
         Ok(<T as ClientModule>::create_sufficient_input(
             self,
             &mut dbtx.with_module_prefix(module_instance),
@@ -364,7 +363,9 @@ where
             min_amount,
         )
         .await?
-        .into_dyn(module_instance))
+        .into_iter()
+        .map(|input| input.into_dyn(module_instance))
+        .collect())
     }
 
     async fn create_exact_output(
@@ -373,7 +374,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         amount: Amount,
-    ) -> ClientOutput {
+    ) -> Vec<ClientOutput> {
         <T as ClientModule>::create_exact_output(
             self,
             &mut dbtx.with_module_prefix(module_instance),
@@ -381,7 +382,9 @@ where
             amount,
         )
         .await
-        .into_dyn(module_instance)
+        .into_iter()
+        .map(|output| output.into_dyn(module_instance))
+        .collect()
     }
 
     async fn await_primary_module_output(

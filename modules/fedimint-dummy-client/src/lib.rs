@@ -128,13 +128,17 @@ impl DummyClientExt for Client {
 
         // TODO: Building a tx could be easier
         // Create input using our own account
-        let input = fedimint_client::module::ClientModule::create_sufficient_input(
+        let inputs = fedimint_client::module::ClientModule::create_sufficient_input(
             dummy,
             &mut dbtx.get_isolated(),
             op_id,
             amount,
         )
-        .await?;
+        .await?
+        .into_iter()
+        .map(|input| input.into_dyn(instance.id))
+        .collect();
+
         dbtx.commit_tx().await;
 
         // Create output using another account
@@ -145,8 +149,9 @@ impl DummyClientExt for Client {
 
         // Build and send tx to the fed
         let tx = TransactionBuilder::new()
-            .with_input(input.into_dyn(instance.id))
+            .with_inputs(inputs)
             .with_output(output.into_dyn(instance.id));
+
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let txid = self
             .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
@@ -252,7 +257,7 @@ impl ClientModule for DummyClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         id: OperationId,
         amount: Amount,
-    ) -> anyhow::Result<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>> {
+    ) -> anyhow::Result<Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>> {
         // Check and subtract from our funds
         let funds = get_funds(dbtx).await;
         if funds < amount {
@@ -262,7 +267,7 @@ impl ClientModule for DummyClientModule {
         dbtx.insert_entry(&DummyClientFundsKeyV0, &updated).await;
 
         // Construct input and state machine to track the tx
-        Ok(ClientInput {
+        Ok(vec![ClientInput {
             input: DummyInput {
                 amount,
                 account: self.key.x_only_public_key().0,
@@ -271,7 +276,7 @@ impl ClientModule for DummyClientModule {
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Input(amount, txid, id)]
             }),
-        })
+        }])
     }
 
     async fn create_exact_output(
@@ -279,9 +284,9 @@ impl ClientModule for DummyClientModule {
         _dbtx: &mut ModuleDatabaseTransaction<'_>,
         id: OperationId,
         amount: Amount,
-    ) -> ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States> {
+    ) -> Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>> {
         // Construct output and state machine to track the tx
-        ClientOutput {
+        vec![ClientOutput {
             output: DummyOutput {
                 amount,
                 account: self.key.x_only_public_key().0,
@@ -289,7 +294,7 @@ impl ClientModule for DummyClientModule {
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Output(amount, txid, id)]
             }),
-        }
+        }]
     }
 
     async fn await_primary_module_output(
