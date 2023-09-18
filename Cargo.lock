@@ -1364,6 +1364,7 @@ dependencies = [
  "erased-serde",
  "fedimint-derive",
  "fedimint-logging",
+ "fedimint-threshold-crypto",
  "futures",
  "getrandom",
  "gloo-timers",
@@ -1389,7 +1390,6 @@ dependencies = [
  "tbs",
  "test-log",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tokio-rustls 0.23.4",
  "tracing",
@@ -1456,12 +1456,12 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-common",
+ "fedimint-threshold-crypto",
  "futures",
  "rand",
  "secp256k1 0.24.3",
  "serde",
  "thiserror",
- "threshold_crypto",
  "tracing",
 ]
 
@@ -1474,6 +1474,7 @@ dependencies = [
  "bitcoin_hashes 0.11.0",
  "erased-serde",
  "fedimint-core",
+ "fedimint-threshold-crypto",
  "futures",
  "rand",
  "secp256k1 0.24.3",
@@ -1481,7 +1482,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
- "threshold_crypto",
  "tracing",
 ]
 
@@ -1496,6 +1496,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-dummy-common",
  "fedimint-server",
+ "fedimint-threshold-crypto",
  "futures",
  "rand",
  "secp256k1 0.24.3",
@@ -1503,7 +1504,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tracing",
 ]
@@ -1521,8 +1521,30 @@ dependencies = [
  "fedimint-logging",
  "fedimint-server",
  "fedimint-testing",
- "threshold_crypto",
+ "fedimint-threshold-crypto",
  "tokio",
+]
+
+[[package]]
+name = "fedimint-hbbft"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a73e01b656c3d800862b67437b50cdc2a5c69a9c322ed0822ebf6ef973a21e26"
+dependencies = [
+ "bincode",
+ "byteorder",
+ "derivative",
+ "env_logger",
+ "fedimint-threshold-crypto",
+ "hex_fmt",
+ "init_with",
+ "log",
+ "rand",
+ "rand_derive",
+ "reed-solomon-erasure",
+ "serde",
+ "thiserror",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -1540,6 +1562,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-common",
+ "fedimint-threshold-crypto",
  "futures",
  "itertools",
  "lightning 0.0.116",
@@ -1553,7 +1576,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1573,6 +1595,7 @@ dependencies = [
  "erased-serde",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-threshold-crypto",
  "futures",
  "itertools",
  "lightning 0.0.116",
@@ -1584,7 +1607,6 @@ dependencies = [
  "strum",
  "strum_macros",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1603,12 +1625,13 @@ dependencies = [
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-core",
+ "fedimint-hbbft",
  "fedimint-ln-common",
  "fedimint-metrics",
  "fedimint-server",
  "fedimint-testing",
+ "fedimint-threshold-crypto",
  "futures",
- "hbbft",
  "itertools",
  "lightning 0.0.116",
  "lightning-invoice 0.24.0",
@@ -1620,7 +1643,6 @@ dependencies = [
  "strum_macros",
  "test-log",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1724,6 +1746,7 @@ dependencies = [
  "fedimint-derive-secret",
  "fedimint-logging",
  "fedimint-mint-common",
+ "fedimint-threshold-crypto",
  "futures",
  "itertools",
  "rand",
@@ -1737,7 +1760,6 @@ dependencies = [
  "tbs",
  "test-log",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1752,6 +1774,7 @@ dependencies = [
  "bincode",
  "bitcoin_hashes 0.11.0",
  "fedimint-core",
+ "fedimint-threshold-crypto",
  "futures",
  "impl-tools",
  "itertools",
@@ -1763,7 +1786,6 @@ dependencies = [
  "strum_macros",
  "tbs",
  "thiserror",
- "threshold_crypto",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1782,6 +1804,7 @@ dependencies = [
  "fedimint-mint-common",
  "fedimint-server",
  "fedimint-testing",
+ "fedimint-threshold-crypto",
  "futures",
  "impl-tools",
  "itertools",
@@ -1795,7 +1818,6 @@ dependencies = [
  "tbs",
  "test-log",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1865,10 +1887,11 @@ dependencies = [
  "fedimint-core",
  "fedimint-dummy-common",
  "fedimint-dummy-server",
+ "fedimint-hbbft",
  "fedimint-logging",
  "fedimint-testing",
+ "fedimint-threshold-crypto",
  "futures",
- "hbbft",
  "itertools",
  "jsonrpsee",
  "rand",
@@ -1883,7 +1906,6 @@ dependencies = [
  "tempfile",
  "test-log",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tokio-rustls 0.23.4",
  "tokio-stream",
@@ -1929,6 +1951,28 @@ dependencies = [
  "tonic_lnd 0.5.0",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "fedimint-threshold-crypto"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd2930eda59c029045497a7ef03799d01eaba6091a03713bef5366bd79aab423"
+dependencies = [
+ "bls12_381",
+ "byteorder",
+ "ff",
+ "group",
+ "hex_fmt",
+ "log",
+ "pairing",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "subtle",
+ "thiserror",
+ "tiny-keccak",
+ "zeroize",
 ]
 
 [[package]]
@@ -2079,15 +2123,16 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
+ "fedimint-hbbft",
  "fedimint-ln-server",
  "fedimint-logging",
  "fedimint-metrics",
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
+ "fedimint-threshold-crypto",
  "fedimint-wallet-server",
  "futures",
- "hbbft",
  "http",
  "http-body",
  "hyper",
@@ -2103,7 +2148,6 @@ dependencies = [
  "sha3",
  "tbs",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tokio-rustls 0.23.4",
  "tokio-util 0.7.8",
@@ -2463,27 +2507,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8094feaf31ff591f651a2664fb9cfd92bba7a60ce3197265e9482ebe753c8f7"
 dependencies = [
  "hashbrown 0.14.0",
-]
-
-[[package]]
-name = "hbbft"
-version = "0.1.1"
-source = "git+https://github.com/fedimint/hbbft#759eed339497fe4adce2890a83635a27e2b664d2"
-dependencies = [
- "bincode",
- "byteorder",
- "derivative",
- "env_logger",
- "hex_fmt",
- "init_with",
- "log",
- "rand",
- "rand_derive",
- "reed-solomon-erasure",
- "serde",
- "thiserror",
- "threshold_crypto",
- "tiny-keccak",
 ]
 
 [[package]]
@@ -3250,6 +3273,7 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-testing",
+ "fedimint-threshold-crypto",
  "fedimint-wallet-client",
  "futures",
  "lightning 0.0.116",
@@ -3262,7 +3286,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "threshold_crypto",
  "tokio",
  "tokio-stream",
  "tonic 0.9.2",
@@ -4807,27 +4830,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
 dependencies = [
  "num_cpus",
-]
-
-[[package]]
-name = "threshold_crypto"
-version = "0.4.0"
-source = "git+https://github.com/fedimint/threshold_crypto#9b0eeec8f23f41a385174c0d84290cbf8d88a656"
-dependencies = [
- "bls12_381",
- "byteorder",
- "ff",
- "group",
- "hex_fmt",
- "log",
- "pairing",
- "rand",
- "rand_chacha",
- "serde",
- "subtle",
- "thiserror",
- "tiny-keccak",
- "zeroize",
 ]
 
 [[package]]
