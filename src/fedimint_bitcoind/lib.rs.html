@@ -406,7 +406,7 @@
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
 
-                    <span class="macro">info!</span>(LOG_BLOCKCHAIN, <span class="string">&quot;Bitcoind error {:?}, retrying&quot;</span>, e);
+                    <span class="macro">info!</span>(target: LOG_BLOCKCHAIN, <span class="string">&quot;Bitcoind error {:?}, retrying&quot;</span>, e);
                     std::thread::sleep(retry_time);
                     retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * <span class="number">2</span>);
                 }

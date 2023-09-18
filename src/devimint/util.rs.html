@@ -481,7 +481,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.<span class="number">0</span>.lock().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>child) = inner.child.take() {
             <span class="macro">info!</span>(
-                LOG_DEVIMINT,
+                target: LOG_DEVIMINT,
                 <span class="string">&quot;sending SIGTERM to {} and waiting for it to exit&quot;</span>, inner.name
             );
             send_sigterm(<span class="kw-2">&amp;</span>child);
@@ -509,12 +509,12 @@
         block_in_place(<span class="kw">move </span>|| {
             block_on(<span class="kw">async move </span>{
                 <span class="macro">info!</span>(
-                    LOG_DEVIMINT,
+                    target: LOG_DEVIMINT,
                     <span class="string">&quot;sending SIGKILL to {name} and waiting for it to exit&quot;
                 </span>);
                 send_sigkill(child);
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = child.wait().<span class="kw">await </span>{
-                    <span class="macro">warn!</span>(LOG_DEVIMINT, <span class="string">&quot;failed to wait for {name}: {e:?}&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">&quot;failed to wait for {name}: {e:?}&quot;</span>);
                 }
             })
         })
@@ -617,7 +617,7 @@
     }
 
     <span class="kw">pub async fn </span>run_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;std::process::Output&gt; {
-        <span class="macro">debug!</span>(LOG_DEVIMINT, <span class="string">&quot;&gt; {}&quot;</span>, <span class="self">self</span>.command_debug());
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">&quot;&gt; {}&quot;</span>, <span class="self">self</span>.command_debug());
         <span class="kw">let </span>output = <span class="self">self</span>.cmd.output().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!output.status.success() {
             <span class="macro">bail!</span>(
@@ -752,7 +752,7 @@
         <span class="kw">let </span>duration = now().duration_since(start).unwrap_or_default();
         <span class="kw">if </span>Duration::from_secs(<span class="number">10</span>) &lt;= duration {
             <span class="macro">warn!</span>(
-                LOG_DEVIMINT,
+                target: LOG_DEVIMINT,
                 name,
                 attempt = attempt,
                 duration_secs = %duration.as_secs(),

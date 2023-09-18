@@ -398,14 +398,14 @@
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;lightning started&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;lightning started&quot;</span>);
             <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>, faucet) = <span class="macro">tokio::try_join!</span>(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
                 open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
                 Faucet::new(process_mgr)
             )<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateways started&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;gateways started&quot;</span>);
             <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd, faucet))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
@@ -416,25 +416,25 @@
         </span>},
     )<span class="question-mark">?</span>;
 
-    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;federation and gateways started&quot;</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;federation and gateways started&quot;</span>);
 
     <span class="macro">tokio::try_join!</span>(gw_cln.connect_fed(<span class="kw-2">&amp;</span>fed), gw_lnd.connect_fed(<span class="kw-2">&amp;</span>fed), <span class="kw">async </span>{
-        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;Joining federation with the main client&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Joining federation with the main client&quot;</span>);
         <span class="macro">cmd!</span>(fed, <span class="string">&quot;join-federation&quot;</span>, fed.invite_code()<span class="question-mark">?</span>)
             .run()
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;Generating first epoch&quot;</span>);
+        <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;Generating first epoch&quot;</span>);
         fed.generate_first_epoch().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     })<span class="question-mark">?</span>;
 
     <span class="comment">// Initialize fedimint-cli
-    </span><span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;await gateways registered&quot;</span>);
+    </span><span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;await gateways registered&quot;</span>);
     fed.await_gateways_registered().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(LOG_DEVIMINT, <span class="string">&quot;gateways registered&quot;</span>);
+    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;gateways registered&quot;</span>);
     fed.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(
-        LOG_DEVIMINT,
+        target: LOG_DEVIMINT,
         <span class="string">&quot;starting dev federation took {:?}&quot;</span>,
         start_time.elapsed()<span class="question-mark">?
     </span>);
