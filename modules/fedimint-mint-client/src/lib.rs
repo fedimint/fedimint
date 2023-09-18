@@ -266,9 +266,14 @@ impl MintClientExt for Client {
         );
 
         let amount = notes.total_amount();
-        let mint_input = mint.create_input_from_notes(operation_id, notes).await?;
+        let mint_input = mint
+            .create_input_from_notes(operation_id, notes)
+            .await?
+            .into_iter()
+            .map(|input| input.into_dyn(instance.id))
+            .collect();
 
-        let tx = TransactionBuilder::new().with_input(mint_input.into_dyn(instance.id));
+        let tx = TransactionBuilder::new().with_inputs(mint_input);
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::reissue_external_notes extra_meta is serializable");
@@ -849,9 +854,7 @@ impl ClientModule for MintClientModule {
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
-        self.create_input(dbtx, operation_id, min_amount)
-            .await
-            .map(|input| vec![input])
+        self.create_input(dbtx, operation_id, min_amount).await
     }
 
     async fn create_exact_output(
@@ -1025,7 +1028,7 @@ impl MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
+    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
         let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
 
         for (amount, note) in spendable_selected_notes.iter_items() {
@@ -1045,43 +1048,48 @@ impl MintClientModule {
         &self,
         operation_id: OperationId,
         notes: TieredMulti<SpendableNote>,
-    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
-        if let Some((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
-            let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {
-                return true;
-            };
-            !note.note().verify(*mint_key)
-        }) {
-            return Err(anyhow!(
-                "Invalid note in input: amt={} note={:?}",
-                amt,
-                invalid_note
-            ));
+    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+        let mut inputs = Vec::new();
+
+        for (amount, spendable_note) in notes.iter_items() {
+            let key = self
+                .cfg
+                .tbs_pks
+                .get(amount)
+                .ok_or_else(|| anyhow!("Invalid amount tier: {amount}"))?;
+
+            if !spendable_note.note.verify(*key) {
+                bail!("Invalid note");
+            }
+
+            let notes = TieredMulti::from_iter([(amount, *spendable_note)]);
+            let selected_notes = notes
+                .clone()
+                .into_iter()
+                .map(|(amount, note)| (amount, note.note))
+                .collect();
+
+            let sm_gen = Arc::new(move |txid, input_idx| {
+                vec![MintClientStateMachines::Input(MintInputStateMachine {
+                    common: MintInputCommon {
+                        operation_id,
+                        txid,
+                        input_idx,
+                    },
+                    state: MintInputStates::Created(MintInputStateCreated {
+                        notes: notes.clone(),
+                    }),
+                })]
+            });
+
+            inputs.push(ClientInput {
+                input: MintInput(selected_notes),
+                keys: vec![spendable_note.spend_key],
+                state_machines: sm_gen,
+            });
         }
 
-        let (spend_keys, selected_notes) = notes
-            .iter_items()
-            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note())))
-            .unzip();
-
-        let sm_gen = Arc::new(move |txid, input_idx| {
-            vec![MintClientStateMachines::Input(MintInputStateMachine {
-                common: MintInputCommon {
-                    operation_id,
-                    txid,
-                    input_idx,
-                },
-                state: MintInputStates::Created(MintInputStateCreated {
-                    notes: notes.clone(),
-                }),
-            })]
-        });
-
-        Ok(ClientInput {
-            input: MintInput(selected_notes),
-            keys: spend_keys,
-            state_machines: sm_gen,
-        })
+        Ok(inputs)
     }
 
     async fn spend_notes_oob(
