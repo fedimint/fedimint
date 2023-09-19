@@ -390,19 +390,21 @@ enum AdminCmd {
 
 #[derive(Debug, Clone, Subcommand)]
 enum DevCmd {
-    #[rustfmt::skip]
     /// Send direct method call to the API. If you specify --peer-id, it will
-    /// just ask one server, otherwise it will try to get consensus from all servers.
-    ///
-    /// Example:
-    ///
-    /// fedimint-cli dev api --peer-id config '"fed114znk7uk7ppugdjuytr8venqf2tkywd65cqvg3u93um64tu5cw4yr0n3fvn7qmwvm4g48cpndgnm4gqq4waen5te0xyerwt3s9cczuvf6xyurzde597s7crdvsk2vmyarjw9gwyqjdzj"'
+    /// just ask one server, otherwise it will try to get consensus from all
+    /// servers.
+    #[command(after_long_help = r#"
+Examples:
+
+  fedimint-cli dev api --peer-id 0 config '"fed114znk7uk7ppugdjuytr8venqf2tkywd65cqvg3u93um64tu5cw4yr0n3fvn7qmwvm4g48cpndgnm4gqq4waen5te0xyerwt3s9cczuvf6xyurzde597s7crdvsk2vmyarjw9gwyqjdzj"'
+    "#)]
     Api {
         /// JSON-RPC method to call
         method: String,
         /// JSON-RPC parameters for the request
         ///
-        /// Note: single jsonrpc argument params string, which might require double-quotes (see example above).
+        /// Note: single jsonrpc argument params string, which might require
+        /// double-quotes (see example above).
         #[clap(default_value = "null")]
         params: String,
         /// Which server to send request to
