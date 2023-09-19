@@ -15,7 +15,7 @@ use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::Client;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
-use fedimint_core::endpoint_constants::FETCH_EPOCH_COUNT_ENDPOINT;
+use fedimint_core::endpoint_constants::FETCH_BLOCK_COUNT_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::spawn;
 use fedimint_core::util::{BoxFuture, SafeUrl};
@@ -558,12 +558,12 @@ async fn test_connect_raw_client(
                     let m = fedimint_core::time::now();
                     let _epoch: u64 = client
                         .request::<_, _>(
-                            FETCH_EPOCH_COUNT_ENDPOINT,
+                            FETCH_BLOCK_COUNT_ENDPOINT,
                             vec![ApiRequestErased::default()],
                         )
                         .await?;
                     event_sender.send(MetricEvent {
-                        name: FETCH_EPOCH_COUNT_ENDPOINT.into(),
+                        name: FETCH_BLOCK_COUNT_ENDPOINT.into(),
                         duration: m.elapsed()?,
                     })?;
                     fedimint_core::task::sleep(Duration::from_secs(1)).await;

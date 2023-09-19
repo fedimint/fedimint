@@ -52,10 +52,7 @@ impl Fixtures {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
-        let num_peers = match real_testing {
-            true => 2,
-            false => 1,
-        };
+        let num_peers = 4;
         let task_group = TaskGroup::new();
         let (dyn_bitcoin_rpc, bitcoin, config): (
             DynBitcoindRpc,

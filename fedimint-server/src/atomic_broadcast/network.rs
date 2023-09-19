@@ -1,12 +1,12 @@
 use std::io::Write;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes_12::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
-use crate::conversion::to_peer_id;
-use crate::data_provider::UnitData;
-use crate::keychain::Keychain;
-use crate::{Message, Recipient};
+use super::conversion::to_peer_id;
+use super::data_provider::UnitData;
+use super::keychain::Keychain;
+use super::{Message, Recipient};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hasher;
@@ -32,13 +32,13 @@ pub type NetworkData = aleph_bft::NetworkData<
 >;
 
 pub struct Network {
-    network_data_receiver: async_channel::Receiver<Vec<u8>>,
+    network_data_receiver: async_channel::Receiver<Message>,
     outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
 }
 
 impl Network {
     pub fn new(
-        network_data_receiver: async_channel::Receiver<Vec<u8>>,
+        network_data_receiver: async_channel::Receiver<Message>,
         outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
     ) -> Self {
         Self {
@@ -61,13 +61,13 @@ impl aleph_bft::Network<NetworkData> for Network {
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
         self.outgoing_message_sender
-            .try_send((Message::NetworkData(network_data.encode()), recipient))
+            .try_send((Message(network_data.encode()), recipient))
             .ok();
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {
-        while let Ok(network_data) = self.network_data_receiver.recv().await {
-            if let Ok(network_data) = NetworkData::decode(&mut IoReader(&*network_data)) {
+        while let Ok(message) = self.network_data_receiver.recv().await {
+            if let Ok(network_data) = NetworkData::decode(&mut IoReader(message.0.as_slice())) {
                 // in order to bound the RAM consumption of a session we have to bound an
                 // individual units size, hence the size of its attached unitdata in memory
                 if network_data.included_data().iter().all(UnitData::is_valid) {

@@ -178,20 +178,6 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .run()
     .await?;
 
-    // Test load last epoch with admin client
-    info!("Testing load last epoch with admin client");
-    let epoch_json = cmd!(fed, "admin", "last-epoch")
-        .env("FM_PASSWORD", "pass")
-        .env("FM_OUR_ID", "0")
-        .out_json()
-        .await?;
-    let epoch_hex = epoch_json["hex_outcome"].as_str().unwrap();
-    let _force_epoch = cmd!(fed, "admin", "force-epoch", epoch_hex)
-        .env("FM_PASSWORD", "pass")
-        .env("FM_OUR_ID", "0")
-        .out_json()
-        .await?;
-
     let plaintext_one =
         fs::read_to_string(format!("{data_dir}/server-0/config-plaintext.json")).await?;
     let plaintext_two =

@@ -1,11 +1,12 @@
 use std::collections::BTreeSet;
 
 use aleph_bft::Keychain as KeychainTrait;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes_12::{sha256, Hash};
+use fedimint_core::block::{consensus_hash_sha256, SchnorrSignature};
 use tokio::sync::watch;
 
-use crate::consensus_hash_sha256;
-use crate::keychain::Keychain;
+use super::keychain::Keychain;
+use crate::LOG_CONSENSUS;
 
 type ConsensusItem = Vec<u8>;
 
@@ -17,8 +18,8 @@ const BYTE_LIMIT: usize = 10_000;
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
 )]
 pub enum UnitData {
-    Batch(Vec<ConsensusItem>, [u8; 64], aleph_bft::NodeIndex),
-    Signature([u8; 64], aleph_bft::NodeIndex),
+    Batch(Vec<ConsensusItem>, SchnorrSignature, aleph_bft::NodeIndex),
+    Signature(SchnorrSignature, aleph_bft::NodeIndex),
 }
 
 impl UnitData {
@@ -40,7 +41,7 @@ impl UnitData {
 pub struct DataProvider {
     keychain: Keychain,
     mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-    signature_receiver: watch::Receiver<Option<[u8; 64]>>,
+    signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
     submitted_items: BTreeSet<sha256::Hash>,
     leftover_item: Option<Vec<u8>>,
 }
@@ -49,7 +50,7 @@ impl DataProvider {
     pub fn new(
         keychain: Keychain,
         mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-        signature_receiver: watch::Receiver<Option<[u8; 64]>>,
+        signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
     ) -> Self {
         Self {
             keychain,
@@ -65,7 +66,7 @@ impl DataProvider {
 impl aleph_bft::DataProvider<UnitData> for DataProvider {
     async fn get_data(&mut self) -> Option<UnitData> {
         // we only attach our signature as no more items can be ordered in this session
-        if let Some(signature) = *self.signature_receiver.borrow() {
+        if let Some(signature) = self.signature_receiver.borrow().clone() {
             return Some(UnitData::Signature(
                 signature,
                 self.keychain.peer_id().to_usize().into(),
@@ -80,7 +81,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
                     items.push(item);
                 }
             } else {
-                tracing::error!("Consensus item length is over BYTE_LIMIT");
+                tracing::warn!(target: LOG_CONSENSUS,"Consensus item length is over BYTE_LIMIT");
             }
         }
 

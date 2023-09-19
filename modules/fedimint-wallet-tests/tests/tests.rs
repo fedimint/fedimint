@@ -353,7 +353,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     bitcoin.get_mempool_tx_fee(&txid).await;
 
     // Do another peg-out
-    let peg_out2 = PEG_OUT_AMOUNT_SATS * 2;
+    let peg_out2 = PEG_OUT_AMOUNT_SATS;
     let fees2 = client
         .get_withdraw_fee(address.clone(), bsats(peg_out2))
         .await;

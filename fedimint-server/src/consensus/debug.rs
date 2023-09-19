@@ -2,25 +2,10 @@ use std::fmt::Write;
 
 use fedimint_core::transaction::Transaction;
 
-use crate::{ConsensusItem, HbbftConsensusOutcome};
+use crate::ConsensusItem;
 
-/// outputs a useful debug message for epochs indicating what happened
-pub fn epoch_message(consensus: &HbbftConsensusOutcome) -> String {
-    let peers = consensus.contributions.keys();
-    let mut debug = format!("\n- Epoch: {} {:?} -", consensus.epoch, peers);
-
-    for (peer, items) in consensus.contributions.iter() {
-        for item in items {
-            let item_debug = item_message(item);
-            write!(debug, "\n  Peer {peer}: {item_debug}").unwrap();
-        }
-    }
-    debug
-}
-
-fn item_message(item: &ConsensusItem) -> String {
+pub fn item_message(item: &ConsensusItem) -> String {
     match item {
-        ConsensusItem::EpochOutcomeSignatureShare(_) => "Outcome Signature".to_string(),
         ConsensusItem::ClientConfigSignatureShare(_) => "Client Config Signature".to_string(),
         // TODO: make this nice again
         ConsensusItem::Module(mci) => {
@@ -39,6 +24,5 @@ fn item_message(item: &ConsensusItem) -> String {
             }
             tx_debug
         }
-        ConsensusItem::ConsensusUpgrade(_) => "Consensus Upgrade".to_string(),
     }
 }

@@ -14,9 +14,7 @@ use std::{fs, result};
 
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-use fedimint_client::module::init::{
-    ClientModuleInit, ClientModuleInitRegistry, IClientModuleInit,
-};
+use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::{ClientBuilder, ClientSecret};
@@ -27,9 +25,7 @@ use fedimint_core::api::{
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::db::DatabaseValue;
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::ThresholdConsensus;
 use fedimint_core::util::SafeUrl;
@@ -83,17 +79,9 @@ enum CliOutput {
         transaction: String,
     },
 
-    SignalUpgrade,
-
     EpochCount {
         count: u64,
     },
-
-    LastEpoch {
-        hex_outcome: String,
-    },
-
-    ForceEpoch,
 
     ConfigDecrypt,
 
@@ -290,28 +278,6 @@ impl Opts {
             .map_err_cli_msg(CliErrorKind::IOError, "could not open transaction db")
     }
 
-    fn load_decoders(
-        &self,
-        cfg: &ClientConfig,
-        module_inits: &ClientModuleInitRegistry,
-    ) -> ModuleDecoderRegistry {
-        ModuleDecoderRegistry::new(cfg.clone().modules.into_iter().filter_map(
-            |(id, module_cfg)| {
-                let kind = module_cfg.kind().clone();
-                module_inits.get(&kind).map(|module_init| {
-                    (
-                        id,
-                        kind,
-                        IClientModuleInit::decoder(
-                            AsRef::<dyn IClientModuleInit + 'static>::as_ref(module_init),
-                        ),
-                    )
-                })
-            },
-        ))
-        .with_fallback()
-    }
-
     async fn build_client_ng(
         &self,
         module_inits: &ClientModuleInitRegistry,
@@ -370,17 +336,8 @@ enum Command {
 
 #[derive(Debug, Clone, Subcommand)]
 enum AdminCmd {
-    /// Gets the last epoch
-    LastEpoch,
-
-    /// Force processing an epoch
-    ForceEpoch { hex_outcome: String },
-
     /// Show the status according to the `status` endpoint
     Status,
-
-    /// Signal a consensus upgrade
-    SignalUpgrade,
 
     /// Show an audit across all modules
     Audit,
@@ -431,8 +388,8 @@ Examples:
         peer_id: PeerId,
     },
 
-    /// Gets the current epoch count
-    EpochCount,
+    /// Gets the current fedimint AlephBFT block count
+    FedimintBlockCount,
 
     ConfigDecrypt {
         /// Encrypted config file
@@ -611,52 +568,6 @@ impl FedimintCli {
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::LastEpoch) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-                let cfg = user.get_config().clone();
-
-                let decoders = cli.load_decoders(&cfg, &self.module_inits);
-                let client = cli.admin_client(&cfg)?;
-                let last_epoch = client
-                    .fetch_last_epoch_history(cfg.global.epoch_pk, &decoders)
-                    .await?;
-
-                let hex_outcome = last_epoch.consensus_encode_to_hex().map_err_cli_io()?;
-                Ok(CliOutput::LastEpoch { hex_outcome })
-            }
-            Command::Admin(AdminCmd::ForceEpoch { hex_outcome }) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-                let cfg = user.get_config();
-
-                let decoders = cli.load_decoders(cfg, &self.module_inits);
-                let outcome: SignedEpochOutcome = Decodable::consensus_decode_hex(
-                    &hex_outcome,
-                    &decoders,
-                )
-                .map_err_cli_msg(CliErrorKind::SerializationError, "failed to decode outcome")?;
-                let client = cli.admin_client(cfg)?;
-                client
-                    .force_process_epoch(SerdeEpochHistory::from(&outcome), cli.auth()?)
-                    .await?;
-                Ok(CliOutput::ForceEpoch)
-            }
-            Command::Admin(AdminCmd::SignalUpgrade) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-
-                cli.admin_client(user.get_config())?
-                    .signal_upgrade(cli.auth()?)
-                    .await?;
-                Ok(CliOutput::SignalUpgrade)
-            }
             Command::Dev(DevCmd::Api {
                 method,
                 params,
@@ -738,12 +649,12 @@ impl FedimintCli {
                     peer_id,
                 },
             }),
-            Command::Dev(DevCmd::EpochCount) => {
+            Command::Dev(DevCmd::FedimintBlockCount) => {
                 let count = cli
                     .build_client_ng(&self.module_inits, None)
                     .await?
                     .api()
-                    .fetch_epoch_count()
+                    .fetch_block_count()
                     .await?;
                 Ok(CliOutput::EpochCount { count })
             }
