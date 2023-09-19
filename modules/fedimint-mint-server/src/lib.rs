@@ -54,8 +54,79 @@ use tracing::{debug, info};
 #[derive(Debug, Clone)]
 pub struct MintGen;
 
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for MintGen {
     type Common = MintCommonGen;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::NoteNonce => {
+                    push_db_key_items!(dbtx, NonceKeyPrefix, NonceKey, mint, "Used Coins");
+                }
+                DbKeyPrefix::MintAuditItem => {
+                    push_db_pair_items!(
+                        dbtx,
+                        MintAuditItemKeyPrefix,
+                        MintAuditItemKey,
+                        fedimint_core::Amount,
+                        mint,
+                        "Mint Audit Items"
+                    );
+                }
+                DbKeyPrefix::OutputOutcome => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OutputOutcomeKeyPrefix,
+                        OutputOutcomeKey,
+                        MintOutputBlindSignatures,
+                        mint,
+                        "Output Outcomes"
+                    );
+                }
+                DbKeyPrefix::ProposedPartialSig => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ProposedPartialSignaturesKeyPrefix,
+                        ProposedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        "Proposed Signature Shares"
+                    );
+                }
+                DbKeyPrefix::ReceivedPartialSig => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ReceivedPartialSignaturesKeyPrefix,
+                        ReceivedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        "Received Signature Shares"
+                    );
+                }
+                DbKeyPrefix::EcashBackup => {
+                    push_db_pair_items!(
+                        dbtx,
+                        EcashBackupKeyPrefix,
+                        EcashBackupKey,
+                        ECashUserBackupSnapshot,
+                        mint,
+                        "User Ecash Backup"
+                    );
+                }
+            }
+        }
+
+        Box::new(mint.into_iter())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -242,76 +313,6 @@ impl ServerModuleInit for MintGen {
             peer_tbs_pks: config.peer_tbs_pks.clone(),
             max_notes_per_denomination: config.max_notes_per_denomination,
         })
-    }
-
-    async fn dump_database(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
-        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-        for table in filtered_prefixes {
-            match table {
-                DbKeyPrefix::NoteNonce => {
-                    push_db_key_items!(dbtx, NonceKeyPrefix, NonceKey, mint, "Used Coins");
-                }
-                DbKeyPrefix::MintAuditItem => {
-                    push_db_pair_items!(
-                        dbtx,
-                        MintAuditItemKeyPrefix,
-                        MintAuditItemKey,
-                        fedimint_core::Amount,
-                        mint,
-                        "Mint Audit Items"
-                    );
-                }
-                DbKeyPrefix::OutputOutcome => {
-                    push_db_pair_items!(
-                        dbtx,
-                        OutputOutcomeKeyPrefix,
-                        OutputOutcomeKey,
-                        MintOutputBlindSignatures,
-                        mint,
-                        "Output Outcomes"
-                    );
-                }
-                DbKeyPrefix::ProposedPartialSig => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ProposedPartialSignaturesKeyPrefix,
-                        ProposedPartialSignatureKey,
-                        MintOutputSignatureShare,
-                        mint,
-                        "Proposed Signature Shares"
-                    );
-                }
-                DbKeyPrefix::ReceivedPartialSig => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ReceivedPartialSignaturesKeyPrefix,
-                        ReceivedPartialSignatureKey,
-                        MintOutputSignatureShare,
-                        mint,
-                        "Received Signature Shares"
-                    );
-                }
-                DbKeyPrefix::EcashBackup => {
-                    push_db_pair_items!(
-                        dbtx,
-                        EcashBackupKeyPrefix,
-                        EcashBackupKey,
-                        ECashUserBackupSnapshot,
-                        mint,
-                        "User Ecash Backup"
-                    );
-                }
-            }
-        }
-
-        Box::new(mint.into_iter())
     }
 }
 /// Federated mint member mint

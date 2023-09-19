@@ -72,8 +72,106 @@ use tracing::{debug, info, instrument, trace, warn};
 #[derive(Debug, Clone)]
 pub struct WalletGen;
 
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for WalletGen {
     type Common = WalletCommonGen;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut wallet: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::BlockHash => {
+                    push_db_key_items!(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, "Blocks");
+                }
+                DbKeyPrefix::PegOutBitcoinOutPoint => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegOutBitcoinTransactionPrefix,
+                        PegOutBitcoinTransaction,
+                        WalletOutputOutcome,
+                        wallet,
+                        "Peg Out Bitcoin Transaction"
+                    );
+                }
+                DbKeyPrefix::PegOutTxSigCi => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegOutTxSignatureCIPrefix,
+                        PegOutTxSignatureCI,
+                        Vec<secp256k1::ecdsa::Signature>,
+                        wallet,
+                        "Peg Out Transaction Signatures"
+                    );
+                }
+                DbKeyPrefix::PendingTransaction => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PendingTransactionPrefixKey,
+                        PendingTransactionKey,
+                        PendingTransaction,
+                        wallet,
+                        "Pending Transactions"
+                    );
+                }
+                DbKeyPrefix::PegOutNonce => {
+                    if let Some(nonce) = dbtx.get_value(&PegOutNonceKey).await {
+                        wallet.insert("Peg Out Nonce".to_string(), Box::new(nonce));
+                    }
+                }
+                DbKeyPrefix::UnsignedTransaction => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UnsignedTransactionPrefixKey,
+                        UnsignedTransactionKey,
+                        UnsignedTransaction,
+                        wallet,
+                        "Unsigned Transactions"
+                    );
+                }
+                DbKeyPrefix::Utxo => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UTXOPrefixKey,
+                        UTXOKey,
+                        SpendableUTXO,
+                        wallet,
+                        "UTXOs"
+                    );
+                }
+
+                DbKeyPrefix::BlockCountVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        BlockCountVotePrefix,
+                        BlockCountVoteKey,
+                        u32,
+                        wallet,
+                        "Block Count Votes"
+                    );
+                }
+
+                DbKeyPrefix::FeeRateVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FeeRateVotePrefix,
+                        FeeRateVoteKey,
+                        Feerate,
+                        wallet,
+                        "Fee Rate Votes"
+                    );
+                }
+            }
+        }
+
+        Box::new(wallet.into_iter())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -196,103 +294,6 @@ impl ServerModuleInit for WalletGen {
             finality_delay: config.finality_delay,
             default_bitcoin_rpc: config.client_default_bitcoin_rpc,
         })
-    }
-
-    async fn dump_database(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        let mut wallet: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
-        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-        for table in filtered_prefixes {
-            match table {
-                DbKeyPrefix::BlockHash => {
-                    push_db_key_items!(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, "Blocks");
-                }
-                DbKeyPrefix::PegOutBitcoinOutPoint => {
-                    push_db_pair_items!(
-                        dbtx,
-                        PegOutBitcoinTransactionPrefix,
-                        PegOutBitcoinTransaction,
-                        WalletOutputOutcome,
-                        wallet,
-                        "Peg Out Bitcoin Transaction"
-                    );
-                }
-                DbKeyPrefix::PegOutTxSigCi => {
-                    push_db_pair_items!(
-                        dbtx,
-                        PegOutTxSignatureCIPrefix,
-                        PegOutTxSignatureCI,
-                        Vec<secp256k1::ecdsa::Signature>,
-                        wallet,
-                        "Peg Out Transaction Signatures"
-                    );
-                }
-                DbKeyPrefix::PendingTransaction => {
-                    push_db_pair_items!(
-                        dbtx,
-                        PendingTransactionPrefixKey,
-                        PendingTransactionKey,
-                        PendingTransaction,
-                        wallet,
-                        "Pending Transactions"
-                    );
-                }
-                DbKeyPrefix::PegOutNonce => {
-                    if let Some(nonce) = dbtx.get_value(&PegOutNonceKey).await {
-                        wallet.insert("Peg Out Nonce".to_string(), Box::new(nonce));
-                    }
-                }
-                DbKeyPrefix::UnsignedTransaction => {
-                    push_db_pair_items!(
-                        dbtx,
-                        UnsignedTransactionPrefixKey,
-                        UnsignedTransactionKey,
-                        UnsignedTransaction,
-                        wallet,
-                        "Unsigned Transactions"
-                    );
-                }
-                DbKeyPrefix::Utxo => {
-                    push_db_pair_items!(
-                        dbtx,
-                        UTXOPrefixKey,
-                        UTXOKey,
-                        SpendableUTXO,
-                        wallet,
-                        "UTXOs"
-                    );
-                }
-
-                DbKeyPrefix::BlockCountVote => {
-                    push_db_pair_items!(
-                        dbtx,
-                        BlockCountVotePrefix,
-                        BlockCountVoteKey,
-                        u32,
-                        wallet,
-                        "Block Count Votes"
-                    );
-                }
-
-                DbKeyPrefix::FeeRateVote => {
-                    push_db_pair_items!(
-                        dbtx,
-                        FeeRateVotePrefix,
-                        FeeRateVoteKey,
-                        Feerate,
-                        wallet,
-                        "Fee Rate Votes"
-                    );
-                }
-            }
-        }
-
-        Box::new(wallet.into_iter())
     }
 }
 

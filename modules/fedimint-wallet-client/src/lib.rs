@@ -4,12 +4,14 @@ mod client_db;
 mod deposit;
 mod withdraw;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use bitcoin::{Address, Network};
+use client_db::DbKeyPrefix;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::ClientModuleInit;
@@ -39,6 +41,7 @@ use miniscript::ToPublicKey;
 use rand::{thread_rng, Rng};
 use secp256k1::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 
 use crate::api::WalletFederationApi;
 use crate::client_db::NextPegInTweakIndexKey;
@@ -423,8 +426,34 @@ impl WalletClientGen {
     }
 }
 
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for WalletClientGen {
     type Common = WalletCommonGen;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut wallet_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::NextPegInTweakIndex => {
+                    if let Some(index) = dbtx.get_value(&NextPegInTweakIndexKey).await {
+                        wallet_client_items
+                            .insert("NextPegInTweakIndex".to_string(), Box::new(index));
+                    }
+                }
+            }
+        }
+
+        Box::new(wallet_client_items.into_iter())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

@@ -106,8 +106,117 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct LightningGen;
 
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for LightningGen {
     type Common = LightningCommonGen;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut lightning: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::AgreedDecryptionShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        AgreedDecryptionShareKeyPrefix,
+                        AgreedDecryptionShareKey,
+                        PreimageDecryptionShare,
+                        lightning,
+                        "Accepted Decryption Shares"
+                    );
+                }
+                DbKeyPrefix::Contract => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ContractKeyPrefix,
+                        ContractKey,
+                        ContractAccount,
+                        lightning,
+                        "Contracts"
+                    );
+                }
+                DbKeyPrefix::ContractUpdate => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ContractUpdateKeyPrefix,
+                        ContractUpdateKey,
+                        LightningOutputOutcome,
+                        lightning,
+                        "Contract Updates"
+                    );
+                }
+                DbKeyPrefix::LightningGateway => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LightningGatewayKeyPrefix,
+                        LightningGatewayKey,
+                        LightningGateway,
+                        lightning,
+                        "Lightning Gateways"
+                    );
+                }
+                DbKeyPrefix::Offer => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OfferKeyPrefix,
+                        OfferKey,
+                        IncomingContractOffer,
+                        lightning,
+                        "Offers"
+                    );
+                }
+                DbKeyPrefix::ProposeDecryptionShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ProposeDecryptionShareKeyPrefix,
+                        ProposeDecryptionShareKey,
+                        PreimageDecryptionShare,
+                        lightning,
+                        "Proposed Decryption Shares"
+                    );
+                }
+                DbKeyPrefix::BlockCountVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        BlockCountVotePrefix,
+                        BlockCountVoteKey,
+                        u64,
+                        lightning,
+                        "Block Count Votes"
+                    );
+                }
+                DbKeyPrefix::EncryptedPreimageIndex => {
+                    push_db_pair_items!(
+                        dbtx,
+                        EncryptedPreimageIndexKeyPrefix,
+                        EncryptedPreimageIndexKey,
+                        (),
+                        lightning,
+                        "Encrypted Preimage Hashes"
+                    );
+                }
+                DbKeyPrefix::LightningAuditItem => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LightningAuditItemKeyPrefix,
+                        LightningAuditItemKey,
+                        Amount,
+                        lightning,
+                        "Lightning Audit Items"
+                    );
+                }
+            }
+        }
+
+        Box::new(lightning.into_iter())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -223,114 +332,6 @@ impl ServerModuleInit for LightningGen {
             fee_consensus: config.fee_consensus,
             network: config.network,
         })
-    }
-
-    async fn dump_database(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        let mut lightning: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
-            BTreeMap::new();
-        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-        for table in filtered_prefixes {
-            match table {
-                DbKeyPrefix::AgreedDecryptionShare => {
-                    push_db_pair_items!(
-                        dbtx,
-                        AgreedDecryptionShareKeyPrefix,
-                        AgreedDecryptionShareKey,
-                        PreimageDecryptionShare,
-                        lightning,
-                        "Accepted Decryption Shares"
-                    );
-                }
-                DbKeyPrefix::Contract => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ContractKeyPrefix,
-                        ContractKey,
-                        ContractAccount,
-                        lightning,
-                        "Contracts"
-                    );
-                }
-                DbKeyPrefix::ContractUpdate => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ContractUpdateKeyPrefix,
-                        ContractUpdateKey,
-                        LightningOutputOutcome,
-                        lightning,
-                        "Contract Updates"
-                    );
-                }
-                DbKeyPrefix::LightningGateway => {
-                    push_db_pair_items!(
-                        dbtx,
-                        LightningGatewayKeyPrefix,
-                        LightningGatewayKey,
-                        LightningGateway,
-                        lightning,
-                        "Lightning Gateways"
-                    );
-                }
-                DbKeyPrefix::Offer => {
-                    push_db_pair_items!(
-                        dbtx,
-                        OfferKeyPrefix,
-                        OfferKey,
-                        IncomingContractOffer,
-                        lightning,
-                        "Offers"
-                    );
-                }
-                DbKeyPrefix::ProposeDecryptionShare => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ProposeDecryptionShareKeyPrefix,
-                        ProposeDecryptionShareKey,
-                        PreimageDecryptionShare,
-                        lightning,
-                        "Proposed Decryption Shares"
-                    );
-                }
-                DbKeyPrefix::BlockCountVote => {
-                    push_db_pair_items!(
-                        dbtx,
-                        BlockCountVotePrefix,
-                        BlockCountVoteKey,
-                        u64,
-                        lightning,
-                        "Block Count Votes"
-                    );
-                }
-                DbKeyPrefix::EncryptedPreimageIndex => {
-                    push_db_pair_items!(
-                        dbtx,
-                        EncryptedPreimageIndexKeyPrefix,
-                        EncryptedPreimageIndexKey,
-                        (),
-                        lightning,
-                        "Encrypted Preimage Hashes"
-                    );
-                }
-                DbKeyPrefix::LightningAuditItem => {
-                    push_db_pair_items!(
-                        dbtx,
-                        LightningAuditItemKeyPrefix,
-                        LightningAuditItemKey,
-                        Amount,
-                        lightning,
-                        "Lightning Audit Items"
-                    );
-                }
-            }
-        }
-
-        Box::new(lightning.into_iter())
     }
 }
 /// The lightning module implements an account system. It does not have the

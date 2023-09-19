@@ -1,9 +1,17 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::impl_db_record;
 use serde::Serialize;
+use strum_macros::EnumIter;
 
-enum DbKeyPrefix {
+#[derive(Clone, EnumIter, Debug)]
+pub enum DbKeyPrefix {
     NextPegInTweakIndex = 0x2c,
+}
+
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]

@@ -48,8 +48,69 @@ mod db;
 pub struct DummyGen;
 
 // TODO: Boilerplate-code
+#[async_trait]
 impl ExtendsCommonModuleInit for DummyGen {
     type Common = DummyCommonGen;
+
+    /// Dumps all database items for debugging
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        // TODO: Boilerplate-code
+        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::Funds => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DummyFundsPrefixV1,
+                        DummyFundsKeyV1,
+                        Amount,
+                        items,
+                        "Dummy Funds"
+                    );
+                }
+                DbKeyPrefix::Outcome => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DummyOutcomePrefix,
+                        DummyOutcomeKey,
+                        DummyOutputOutcome,
+                        items,
+                        "Dummy Outputs"
+                    );
+                }
+                DbKeyPrefix::SignatureShare => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DummySignatureSharePrefix,
+                        DummySignatureShareKey,
+                        SerdeSignatureShare,
+                        items,
+                        "Dummy Signature Shares"
+                    );
+                }
+                DbKeyPrefix::Signature => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DummySignaturePrefix,
+                        DummySignatureKey,
+                        Option<SerdeSignature>,
+                        items,
+                        "Dummy Signatures"
+                    );
+                }
+            }
+        }
+
+        Box::new(items.into_iter())
+    }
 }
 
 /// Implementation of server module non-consensus functions
@@ -164,66 +225,6 @@ impl ServerModuleInit for DummyGen {
             bail!("Private key doesn't match public key share");
         }
         Ok(())
-    }
-
-    /// Dumps all database items for debugging
-    async fn dump_database(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        // TODO: Boilerplate-code
-        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
-        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-
-        for table in filtered_prefixes {
-            match table {
-                DbKeyPrefix::Funds => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DummyFundsPrefixV1,
-                        DummyFundsKeyV1,
-                        Amount,
-                        items,
-                        "Dummy Funds"
-                    );
-                }
-                DbKeyPrefix::Outcome => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DummyOutcomePrefix,
-                        DummyOutcomeKey,
-                        DummyOutputOutcome,
-                        items,
-                        "Dummy Outputs"
-                    );
-                }
-                DbKeyPrefix::SignatureShare => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DummySignatureSharePrefix,
-                        DummySignatureShareKey,
-                        SerdeSignatureShare,
-                        items,
-                        "Dummy Signature Shares"
-                    );
-                }
-                DbKeyPrefix::Signature => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DummySignaturePrefix,
-                        DummySignatureKey,
-                        Option<SerdeSignature>,
-                        items,
-                        "Dummy Signatures"
-                    );
-                }
-            }
-        }
-
-        Box::new(items.into_iter())
     }
 }
 
