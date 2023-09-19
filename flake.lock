@@ -47,17 +47,17 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1691422976,
-        "narHash": "sha256-A8krh8yi73R8mSUk63EwM4liaqXk1dws44D4aueNOEw=",
-        "owner": "ipetkov",
+        "lastModified": 1694936751,
+        "narHash": "sha256-bKZa7bMnrMbDTvhC3Fv+0SO3EQhmOiOjih4fLlbeRUs=",
+        "owner": "dpc",
         "repo": "crane",
-        "rev": "6c25eff4edca8556df21f55c63e49f20efe4be95",
+        "rev": "0fd1a6da318194d7d035b393bceff3942fcfc111",
         "type": "github"
       },
       "original": {
-        "owner": "ipetkov",
+        "owner": "dpc",
         "repo": "crane",
-        "rev": "6c25eff4edca8556df21f55c63e49f20efe4be95",
+        "rev": "0fd1a6da318194d7d035b393bceff3942fcfc111",
         "type": "github"
       }
     },
