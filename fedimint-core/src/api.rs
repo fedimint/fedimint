@@ -587,6 +587,8 @@ pub struct InviteCode {
     pub download_token: ClientConfigDownloadToken,
     /// Authentication id for the federation
     pub id: FederationId,
+    /// Peer id of the host from the Url
+    pub peer_id: PeerId,
 }
 
 /// Size of a download token
@@ -620,6 +622,8 @@ impl FromStr for InviteCode {
         let mut cursor = Cursor::new(bytes);
         let mut id_bytes = [0; PK_SIZE];
         cursor.read_exact(&mut id_bytes)?;
+        let mut peer_id_bytes = [0; 2];
+        cursor.read_exact(&mut peer_id_bytes)?;
 
         let mut url_len = [0; 2];
         cursor.read_exact(&mut url_len)?;
@@ -635,6 +639,7 @@ impl FromStr for InviteCode {
             url: url.parse()?,
             download_token: ClientConfigDownloadToken(download_token),
             id: FederationId(PublicKey::from_bytes(id_bytes)?),
+            peer_id: PeerId(u16::from_be_bytes(peer_id_bytes)),
         })
     }
 }
@@ -644,6 +649,7 @@ impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let mut data = vec![];
         data.extend(self.id.0.to_bytes());
+        data.extend(self.peer_id.0.to_be_bytes());
         let url_bytes = self.url.as_str().as_bytes();
         data.extend((url_bytes.len() as u16).to_be_bytes());
         data.extend(url_bytes);
@@ -1173,6 +1179,7 @@ mod tests {
         let connect = InviteCode {
             url: "ws://test1".parse().unwrap(),
             id: FederationId::dummy(),
+            peer_id: PeerId(1),
             download_token: ClientConfigDownloadToken(OsRng.gen()),
         };
 

@@ -283,6 +283,7 @@ impl ServerConfig {
             url,
             download_token,
             id,
+            peer_id: self.local.identity,
         }
     }
 

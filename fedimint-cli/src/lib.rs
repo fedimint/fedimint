@@ -429,6 +429,8 @@ Examples:
         download_token: ClientConfigDownloadToken,
         #[clap(long = "id")]
         id: FederationId,
+        #[clap(long = "peer-id")]
+        peer_id: PeerId,
     },
 
     /// Gets the current epoch count
@@ -729,11 +731,13 @@ impl FedimintCli {
                 url,
                 download_token,
                 id,
+                peer_id,
             }) => Ok(CliOutput::InviteCode {
                 invite_code: InviteCode {
                     url,
                     download_token,
                     id,
+                    peer_id,
                 },
             }),
             Command::Dev(DevCmd::EpochCount) => {
