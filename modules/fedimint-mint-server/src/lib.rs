@@ -328,26 +328,18 @@ impl ServerModule for Mint {
     type Gen = MintGen;
     type VerificationCache = VerificationCache;
 
-    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
-        if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            std::future::pending().await
-        }
-    }
-
     async fn consensus_proposal(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ConsensusProposal<MintConsensusItem> {
-        ConsensusProposal::new_auto_trigger(
-            dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
-                .await
-                .map(|(key, signatures)| MintConsensusItem {
-                    out_point: key.0,
-                    signatures,
-                })
-                .collect::<Vec<MintConsensusItem>>()
-                .await,
-        )
+    ) -> Vec<MintConsensusItem> {
+        dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
+            .await
+            .map(|(key, signatures)| MintConsensusItem {
+                out_point: key.0,
+                signatures,
+            })
+            .collect::<Vec<MintConsensusItem>>()
+            .await
     }
 
     async fn process_consensus_item<'a, 'b>(

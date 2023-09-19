@@ -366,16 +366,10 @@ impl ServerModule for Lightning {
     type Gen = LightningGen;
     type VerificationCache = LightningVerificationCache;
 
-    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
-        while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            sleep(Duration::from_millis(1000)).await;
-        }
-    }
-
     async fn consensus_proposal(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ConsensusProposal<LightningConsensusItem> {
+    ) -> Vec<LightningConsensusItem> {
         let mut items: Vec<LightningConsensusItem> = dbtx
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
             .await
@@ -391,7 +385,7 @@ impl ServerModule for Lightning {
             items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
-        ConsensusProposal::new_auto_trigger(items)
+        items
     }
 
     async fn process_consensus_item<'a, 'b>(

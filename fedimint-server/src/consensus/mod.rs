@@ -3,10 +3,11 @@
 pub mod debug;
 pub mod server;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::iter::FromIterator;
+use std::collections::HashMap;
 
 use anyhow::bail;
+use bitcoin_hashes::sha256;
+use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::epoch::*;
@@ -14,85 +15,35 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::server::DynVerificationCache;
-use fedimint_core::{timing, Amount, NumPeers, OutPoint, PeerId, TransactionId};
-use fedimint_logging::LOG_CONSENSUS;
-use futures::future::select_all;
+use fedimint_core::{timing, Amount, OutPoint, PeerId};
 use futures::StreamExt;
-use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use tracing::{debug, instrument, warn};
 
 use crate::config::ServerConfig;
 use crate::db::{
     AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureShareKey,
-    ClientConfigSignatureSharePrefix, ConsensusUpgradeKey, EpochHistoryKey, LastEpochKey,
+    ClientConfigSignatureSharePrefix,
 };
-use crate::net::api::ConsensusApi;
 use crate::transaction::{Transaction, TransactionError};
-
-pub type HbbftSerdeConsensusOutcome = Batch<Vec<SerdeConsensusItem>, PeerId>;
-pub type HbbftConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
-pub type HbbftMessage = hbbft::honey_badger::Message<PeerId>;
-
-// TODO remove HBBFT `Batch` from `ConsensusOutcome`
-#[derive(Debug, Clone)]
-pub struct ConsensusOutcomeConversion(pub HbbftConsensusOutcome);
-
-impl PartialEq<Self> for ConsensusOutcomeConversion {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.epoch.eq(&other.0.epoch) && self.0.contributions.eq(&other.0.contributions)
-    }
-}
-
-impl From<EpochOutcome> for ConsensusOutcomeConversion {
-    fn from(history: EpochOutcome) -> Self {
-        ConsensusOutcomeConversion(Batch {
-            epoch: history.epoch,
-            contributions: BTreeMap::from_iter(history.items),
-        })
-    }
-}
-
-/// Proposed HBBFT consensus changes including removing peers
-#[derive(Debug, Clone)]
-pub struct ConsensusProposal {
-    pub items: Vec<ConsensusItem>,
-    pub drop_peers: Vec<PeerId>,
-    pub force_new_epoch: bool,
-}
-
-/// Events that can be sent from the API to consensus thread
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub enum ApiEvent {
-    Transaction(Transaction),
-    UpgradeSignal,
-    ForceProcessOutcome(EpochOutcome),
-}
 
 // TODO: we should make other fields private and get rid of this
 #[non_exhaustive]
 pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
-    cfg: ServerConfig,
+    pub cfg: ServerConfig,
+    /// Modules config gen information
+    pub module_inits: ServerModuleInitRegistry,
     /// Modules registered with the federation
-    modules: ServerModuleRegistry,
+    pub modules: ServerModuleRegistry,
     /// Database storing the result of processing consensus outcomes
-    db: Database,
+    pub db: Database,
     /// API for accessing state
-    api: ConsensusApi,
-    /// Cache of `ApiEvent` to include in a proposal
-    api_event_cache: HashSet<ApiEvent>,
+    pub client_cfg_hash: sha256::Hash,
 }
 
 #[derive(Debug)]
 pub struct VerificationCaches {
     pub caches: HashMap<ModuleInstanceId, DynVerificationCache>,
-}
-
-pub struct FundingVerifier {
-    input_amount: Amount,
-    output_amount: Amount,
-    fee_amount: Amount,
 }
 
 impl VerificationCaches {
@@ -108,89 +59,17 @@ impl FedimintConsensus {
         self.modules.decoder_registry()
     }
 
-    /// Calculate the result of the `consensus_outcome` and save it/them.
-    ///
-    /// `reference_rejected_txs` should be `Some` if the `consensus_outcome` is
-    /// coming from a a reference (already signed) `OutcomeHistory`, that
-    /// contains `rejected_txs`, so we can check it against our own
-    /// `rejected_txs` we calculate in this function.
-    ///
-    /// **Note**: `reference_rejected_txs` **must** come from a
-    /// validated/trustworthy source and be correct, or it can cause a
-    /// panic.
-    #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
-    pub async fn process_consensus_outcome(
+    pub async fn process_consensus_item(
         &self,
-        consensus_outcome: HbbftConsensusOutcome,
-        reference_rejected_txs: Option<BTreeSet<TransactionId>>,
-    ) -> SignedEpochOutcome {
-        let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_outcome");
-
-        let mut rejected_txs = BTreeSet::new();
-        // Since multiple peers can submit the same tx within epoch, track them
-        // and handle only once.
-        let mut processed_txes = BTreeSet::new();
-
-        let items = consensus_outcome
-            .clone()
-            .contributions
-            .into_iter()
-            .flat_map(|(peer_id, items)| items.into_iter().map(move |item| (peer_id, item)));
+        consensus_item: ConsensusItem,
+        peer_id: PeerId,
+    ) -> anyhow::Result<()> {
+        let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
 
         let mut dbtx = self.db.begin_transaction().await;
 
-        for (peer_id, consensus_item) in items {
-            dbtx.set_tx_savepoint()
-                .await
-                .expect("Setting transaction savepoint failed");
-
-            if let ConsensusItem::Transaction(ref transaction) = consensus_item {
-                if !processed_txes.insert(transaction.tx_hash()) {
-                    continue;
-                }
-            }
-
-            match self
-                .process_consensus_item(&mut dbtx, consensus_item.clone(), peer_id)
-                .await
-            {
-                Ok(()) => {
-                    debug!(
-                        target: LOG_CONSENSUS,
-                        "Accept consensus item from {peer_id}"
-                    );
-                }
-                Err(error) => {
-                    debug!(
-                        target: LOG_CONSENSUS,
-                        "Discard consensus item from {peer_id}: {error}"
-                    );
-
-                    dbtx.rollback_tx_to_savepoint()
-                        .await
-                        .expect("Rolling back transaction to savepoint failed");
-
-                    if let ConsensusItem::Transaction(transaction) = consensus_item {
-                        rejected_txs.insert(transaction.tx_hash());
-                    }
-                }
-            }
-        }
-
-        if let Some(reference_rejected_txs) = reference_rejected_txs.as_ref() {
-            // Result of the consensus are supposed to be deterministic.
-            // If our result is not the same as what the (honest) majority of the federation
-            // signed over, it's a catastrophic bug/mismatch of Federation's fedimintd
-            // implementations.
-            assert_eq!(
-                reference_rejected_txs, &rejected_txs,
-                "rejected_txs mismatch: reference = {reference_rejected_txs:?} != {rejected_txs:?}"
-            );
-        }
-
-        let epoch_history = self
-            .save_epoch_history(consensus_outcome, &mut dbtx, &mut vec![], rejected_txs)
-            .await;
+        self.process_consensus_item_with_db_transaction(&mut dbtx, consensus_item, peer_id)
+            .await?;
 
         dbtx.commit_tx_result()
             .await
@@ -202,10 +81,10 @@ impl FedimintConsensus {
             panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
         }
 
-        epoch_history
+        Ok(())
     }
 
-    async fn process_consensus_item(
+    async fn process_consensus_item_with_db_transaction(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
@@ -305,7 +184,7 @@ impl FedimintConsensus {
 
                 if !pks
                     .public_key_share(peer_id.to_usize())
-                    .verify(&signature_share.0, self.api.client_cfg.consensus_hash())
+                    .verify(&signature_share.0, self.client_cfg_hash)
                 {
                     bail!("Client config signature share is invalid");
                 }
@@ -341,176 +220,42 @@ impl FedimintConsensus {
 
                 Ok(())
             }
-            ConsensusItem::ConsensusUpgrade(..) => {
-                let mut peers = dbtx
-                    .get_value(&ConsensusUpgradeKey)
-                    .await
-                    .unwrap_or_default();
-
-                if !peers.insert(peer_id) {
-                    bail!("Already received an upgrade signal by this peer")
-                }
-
-                dbtx.insert_entry(&ConsensusUpgradeKey, &peers).await;
-
-                Ok(())
-            }
-            // these items are handled in save_epoch_history
-            ConsensusItem::EpochOutcomeSignatureShare(..) => Ok(()),
         }
     }
 
-    /// Returns true if a threshold of peers have signaled to upgrade
-    pub async fn is_at_upgrade_threshold(&self) -> bool {
-        self.db
-            .begin_transaction()
-            .await
-            .get_value(&ConsensusUpgradeKey)
-            .await
-            .filter(|peers| peers.len() >= self.cfg.consensus.api_endpoints.threshold())
-            .is_some()
-    }
-
-    async fn save_epoch_history<'a>(
-        &self,
-        outcome: HbbftConsensusOutcome,
-        dbtx: &mut DatabaseTransaction<'a>,
-        drop_peers: &mut Vec<PeerId>,
-        rejected_txs: BTreeSet<TransactionId>,
-    ) -> SignedEpochOutcome {
-        let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
-        let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
-        let maybe_prev_epoch = dbtx.get_value(&prev_epoch_key).await;
-
-        let current = SignedEpochOutcome::new(
-            outcome.epoch,
-            outcome.contributions,
-            rejected_txs,
-            maybe_prev_epoch.as_ref(),
-        );
-
-        // validate and update sigs on prev epoch
-        if let Some(prev_epoch) = maybe_prev_epoch {
-            let pks = &self.cfg.consensus.epoch_pk_set;
-
-            match current.add_sig_to_prev(pks, prev_epoch) {
-                Ok(prev_epoch) => {
-                    dbtx.insert_entry(&prev_epoch_key, &prev_epoch).await;
-                }
-                Err(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) => {
-                    warn!(
-                        target: LOG_CONSENSUS,
-                        "Unable to sign epoch {}", prev_epoch_key.0
-                    );
-                    for peer in peers {
-                        if !contributing_peers.contains(&peer) {
-                            warn!(
-                                target: LOG_CONSENSUS,
-                                "Dropping {} for not contributing valid epoch sigs.", peer
-                            );
-                            drop_peers.push(peer);
-                        }
-                    }
-                }
-                Err(_) => panic!("Not possible"),
-            }
-        }
-
-        dbtx.insert_entry(&LastEpochKey, &EpochHistoryKey(current.outcome.epoch))
-            .await;
-        dbtx.insert_entry(&EpochHistoryKey(current.outcome.epoch), &current)
-            .await;
-
-        current
-    }
-
-    pub async fn await_consensus_proposal(&self) {
-        let proposal_futures = self
-            .modules
-            .iter_modules()
-            .map(|(module_instance_id, _kind, module)| {
-                Box::pin(async move {
-                    let mut dbtx = self.db.begin_transaction().await;
-                    let mut module_dbtx = dbtx.with_module_prefix(module_instance_id);
-                    module.await_consensus_proposal(&mut module_dbtx).await
-                })
-            })
-            .collect::<Vec<_>>();
-
-        if !proposal_futures.is_empty() {
-            select_all(proposal_futures).await;
-        } else {
-            std::future::pending().await
-        }
-    }
-
-    pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
+    pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         let mut dbtx = self.db.begin_transaction().await;
 
-        let mut items: Vec<ConsensusItem> = self
-            .api_event_cache
-            .iter()
-            .cloned()
-            .filter_map(|event| match event {
-                ApiEvent::Transaction(tx) => Some(ConsensusItem::Transaction(tx)),
-                ApiEvent::UpgradeSignal => Some(ConsensusItem::ConsensusUpgrade(ConsensusUpgrade)),
-                ApiEvent::ForceProcessOutcome(_) => None,
-            })
-            .collect();
-        let mut force_new_epoch = false;
+        // We ignore any writes
+        dbtx.ignore_uncommitted();
+
+        let mut consensus_items = Vec::new();
 
         for (instance_id, _, module) in self.modules.iter_modules() {
-            let consensus_proposal = module
+            let items = module
                 .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
-                .await;
-            if consensus_proposal.forces_new_epoch() {
-                force_new_epoch = true;
-            }
+                .await
+                .into_iter()
+                .map(ConsensusItem::Module);
 
-            items.extend(
-                consensus_proposal
-                    .into_items()
-                    .into_iter()
-                    .map(ConsensusItem::Module),
-            );
+            consensus_items.extend(items);
         }
 
-        if let Some(epoch) = dbtx.get_value(&LastEpochKey).await {
-            let last_epoch = dbtx.get_value(&epoch).await.unwrap();
-
-            let timing = timing::TimeReporter::new("sign last epoch key");
-            let sig = self.cfg.private.epoch_sks.0.sign(last_epoch.hash);
-            drop(timing);
-            let item = ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig));
-            items.push(item);
-        };
-
-        // Add a signature share for the client config hash if we don't have it signed
-        // yet
+        // Add a signature share for the client config hash
         let sig = dbtx
             .get_isolated()
             .get_value(&ClientConfigSignatureKey)
             .await;
+
         if sig.is_none() {
-            let hash = self.api.client_cfg.consensus_hash();
             let timing = timing::TimeReporter::new("sign client config");
-            let share = self.cfg.private.auth_sks.0.sign(hash);
+            let share = self.cfg.private.auth_sks.0.sign(self.client_cfg_hash);
             drop(timing);
             let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
-            items.push(item);
+            consensus_items.push(item);
         }
 
-        let drop_peers = vec![];
-
-        ConsensusProposal {
-            items,
-            drop_peers,
-            force_new_epoch,
-        }
-    }
-
-    pub fn get_api(&self) -> &ConsensusApi {
-        &self.api
+        consensus_items
     }
 
     fn build_verification_caches(&self, transaction: Transaction) -> VerificationCaches {
@@ -546,6 +291,12 @@ impl FedimintConsensus {
         }
         audit
     }
+}
+
+pub struct FundingVerifier {
+    input_amount: Amount,
+    output_amount: Amount,
+    fee_amount: Amount,
 }
 
 impl FundingVerifier {

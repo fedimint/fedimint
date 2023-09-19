@@ -243,17 +243,10 @@ impl ServerModule for Dummy {
     type Gen = DummyGen;
     type VerificationCache = DummyVerificationCache;
 
-    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
-        // Wait until we have a proposal
-        if !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            self.sign_notify.notified().await;
-        }
-    }
-
     async fn consensus_proposal(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ConsensusProposal<DummyConsensusItem> {
+    ) -> Vec<DummyConsensusItem> {
         // Sign and send the print requests to consensus
         let sign_requests: Vec<_> = dbtx
             .find_by_prefix(&DummySignaturePrefix)
@@ -261,14 +254,14 @@ impl ServerModule for Dummy {
             .collect()
             .await;
 
-        let consensus_items = sign_requests
+        sign_requests
             .into_iter()
             .filter(|(_, sig)| sig.is_none())
             .map(|(DummySignatureKey(message), _)| {
                 let sig = self.cfg.private.private_key_share.sign(&message);
                 DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
-            });
-        ConsensusProposal::new_auto_trigger(consensus_items.collect())
+            })
+            .collect()
     }
 
     async fn process_consensus_item<'a, 'b>(

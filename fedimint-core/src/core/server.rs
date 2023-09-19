@@ -13,8 +13,8 @@ use super::*;
 use crate::db::ModuleDatabaseTransaction;
 use crate::maybe_add_send_sync;
 use crate::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal, InputMeta, ModuleCommon,
-    ModuleError, ServerModule, TransactionItemAmount,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ModuleError,
+    ServerModule, TransactionItemAmount,
 };
 use crate::task::{MaybeSend, MaybeSync};
 
@@ -53,15 +53,12 @@ pub trait IServerModule: Debug {
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> Decoder;
 
-    /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>);
-
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> ConsensusProposal<DynModuleConsensusItem>;
+    ) -> Vec<DynModuleConsensusItem>;
 
     /// This function is called once for every consensus item. The function
     /// returns an error if any only if the consensus item does not change
@@ -154,20 +151,17 @@ where
         self
     }
 
-    /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
-        <Self as ServerModule>::await_consensus_proposal(self, dbtx).await
-    }
-
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
-    ) -> ConsensusProposal<DynModuleConsensusItem> {
+    ) -> Vec<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
             .await
+            .into_iter()
             .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
+            .collect()
     }
 
     /// This function is called once for every consensus item. The function
