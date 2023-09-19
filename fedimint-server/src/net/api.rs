@@ -16,7 +16,7 @@ use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+use fedimint_core::epoch::{ConsensusItem, SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
@@ -185,7 +185,7 @@ pub struct ConsensusApi {
     /// Cached client config
     pub client_cfg: ClientConfig,
     /// For sending API events to consensus such as transactions
-    pub api_sender: Sender<ApiEvent>,
+    pub submission_sender: async_channel::Sender<Vec<u8>>,
     pub peer_status_channels: PeerStatusChannels,
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,
@@ -258,8 +258,12 @@ impl ConsensusApi {
 
         funding_verifier.verify_funding()?;
 
-        self.api_sender
-            .send(ApiEvent::Transaction(transaction))
+        self.submission_sender
+            .send(
+                ConsensusItem::Transaction(transaction)
+                    .encode()
+                    .expect("Infallible"),
+            )
             .await?;
 
         Ok(())
@@ -359,18 +363,12 @@ impl ConsensusApi {
 
     /// Sends an upgrade signal to the fedimint server thread
     pub async fn signal_upgrade(&self) -> Result<(), SendError<ApiEvent>> {
-        self.api_sender.send(ApiEvent::UpgradeSignal).await
+        unimplemented!()
     }
 
     /// Force process an outcome
     pub async fn force_process_outcome(&self, outcome: SerdeEpochHistory) -> ApiResult<()> {
-        let event = outcome
-            .try_into_inner(&self.modules.decoder_registry())
-            .map_err(|_| ApiError::bad_request("Unable to decode outcome".to_string()))?;
-        self.api_sender
-            .send(ApiEvent::ForceProcessOutcome(event.outcome))
-            .await
-            .map_err(|_| ApiError::server_error("Unable send event".to_string()))
+        unimplemented!()
     }
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {

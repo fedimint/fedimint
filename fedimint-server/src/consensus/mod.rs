@@ -7,9 +7,9 @@ use std::collections::HashMap;
 
 use anyhow::bail;
 use bitcoin_hashes::sha256;
-use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::encoding::Decodable;
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
@@ -28,11 +28,10 @@ use crate::transaction::{Transaction, TransactionError};
 
 // TODO: we should make other fields private and get rid of this
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub struct FedimintConsensus {
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
-    /// Modules config gen information
-    pub module_inits: ServerModuleInitRegistry,
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Database storing the result of processing consensus outcomes
@@ -61,10 +60,12 @@ impl FedimintConsensus {
 
     pub async fn process_consensus_item(
         &self,
-        consensus_item: ConsensusItem,
+        mut item: Vec<u8>,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
+
+        let consensus_item = ConsensusItem::consensus_decode(item.as_mut(), &self.decoders())?;
 
         let mut dbtx = self.db.begin_transaction().await;
 

@@ -1867,12 +1867,14 @@ name = "fedimint-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "async-trait",
  "bincode",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
  "bytes",
  "fedimint-aead",
+ "fedimint-atomic-broadcast",
  "fedimint-build",
  "fedimint-core",
  "fedimint-dummy-common",

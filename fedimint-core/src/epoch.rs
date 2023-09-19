@@ -115,27 +115,6 @@ impl SignedEpochOutcome {
         }
     }
 
-    pub fn add_sig_to_prev(
-        &self,
-        pks: &PublicKeySet,
-        mut prev_epoch: SignedEpochOutcome,
-    ) -> Result<SignedEpochOutcome, EpochVerifyError> {
-        let _timing /* logs on drop */ = timing::TimeReporter::new("add sig to prev");
-        let sigs: BTreeMap<_, _> = self
-            .outcome
-            .items
-            .iter()
-            .flat_map(|(peer, items)| items.iter().map(|i| (*peer, i)))
-            .filter_map(|(peer, item)| match item {
-                ConsensusItem::EpochOutcomeSignatureShare(sig) => Some((peer, sig.clone())),
-                _ => None,
-            })
-            .collect();
-
-        prev_epoch.signature = Some(combine_sigs(pks, &sigs, &prev_epoch.hash)?);
-        Ok(prev_epoch)
-    }
-
     pub fn verify_sig(&self, pk: &PublicKey) -> Result<(), EpochVerifyError> {
         if let Some(sig) = &self.signature {
             let _timing /* logs on drop */ = timing::TimeReporter::new("verify epoch outcome signature");
@@ -313,52 +292,6 @@ mod tests {
             combine_sigs(&pk_set, &shares, &msg.to_string()),
             Err(BTreeSet::from([PeerId::from(1)]))
         );
-    }
-
-    #[test]
-    fn adds_sig_to_prev_epoch() {
-        let mut rng = OsRng;
-        let sk_set = SecretKeySet::random(2, &mut rng);
-        let pk_set = sk_set.public_keys();
-
-        let epoch0 = history(0, &None, None);
-        let mut epoch1 = history(1, &Some(epoch0.clone()), None);
-
-        let peers = [PeerId::from(0), PeerId::from(1), PeerId::from(2)];
-        let sigs: Vec<(PeerId, Vec<ConsensusItem>)> = peers
-            .iter()
-            .map(|&peer| {
-                let sig = sk_set.secret_key_share(peer.to_usize()).sign(epoch0.hash);
-                (
-                    peer,
-                    vec![ConsensusItem::EpochOutcomeSignatureShare(
-                        SerdeSignatureShare(sig),
-                    )],
-                )
-            })
-            .collect();
-
-        epoch1.outcome = EpochOutcome {
-            epoch: 1,
-            last_hash: None,
-            items: sigs[0..1].to_vec(),
-            rejected_txs: BTreeSet::default(),
-        };
-        let contributing = BTreeSet::from([PeerId::from(0)]);
-        let result = epoch1.add_sig_to_prev(&pk_set, epoch0.clone()).unwrap_err();
-        assert_eq!(
-            result,
-            EpochVerifyError::NotEnoughValidSigShares(contributing)
-        );
-
-        epoch1.outcome = EpochOutcome {
-            epoch: 1,
-            last_hash: None,
-            items: sigs,
-            rejected_txs: BTreeSet::default(),
-        };
-        let epoch0 = epoch1.add_sig_to_prev(&pk_set, epoch0).unwrap();
-        assert_eq!(epoch0.verify_sig(&pk_set.public_key()), Ok(()));
     }
 
     #[test]
