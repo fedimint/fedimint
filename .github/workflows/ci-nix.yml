@@ -84,42 +84,42 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: cachix/install-nix-action@v23
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v12
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
       - name: Build workspace
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceBuild
 
       - name: Clippy workspace
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
         run: nix build -L .#ci.workspaceClippy
 
       - name: Run cargo doc
-        if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && (matrix.host != 'macos')
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
         run: nix build -L .#ci.workspaceDoc
 
       - name: Test docs
-        if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && (matrix.host != 'macos')
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
         run: nix build -L .#ci.workspaceTestDoc
 
       - name: Tests
-        if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
         run: |
           nix build -L .#ci.test.all --keep-failed
 
       - name: Wasm Tests
-        if: (github.ref == 'refs/heads/master' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
+        if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
         run: nix build -L .#ci.wasm-test --keep-failed
 
       - name: Prepare failed test build dirs
@@ -240,22 +240,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: cachix/install-nix-action@v23
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           nix_path: nixpkgs=channel:nixos-22.05
 
       - uses: cachix/cachix-action@v12
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
       - name: Build client packages for ${{ matrix.target }}
-        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
+        if: github.event_name != 'pull_request' || matrix.build-in-pr
         run: nix build -L .#cross.${{ matrix.target }}.client-pkgs
 
   containers:
