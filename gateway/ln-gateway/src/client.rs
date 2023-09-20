@@ -14,7 +14,7 @@ use lightning::routing::gossip::RoutingFees;
 
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::lnrpc_client::ILnRpcClient;
-use crate::ng::GatewayClientGen;
+use crate::state_machine::GatewayClientGen;
 use crate::{GatewayError, Result};
 
 #[derive(Debug, Clone)]

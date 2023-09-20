@@ -381,12 +381,12 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_str()
         .map(|s| s.to_owned())
         .unwrap();
-    let client_ng_reissue_amt = cmd!(fed, "reissue", reissue_notes)
+    let client_reissue_amt = cmd!(fed, "reissue", reissue_notes)
         .out_json()
         .await?
         .as_u64()
         .unwrap();
-    assert_eq!(client_ng_reissue_amt, reissue_amount);
+    assert_eq!(client_reissue_amt, reissue_amount);
 
     // Ensure that client can reissue via module commands
     info!("Testing reissuing e-cash via module commands");
@@ -394,18 +394,18 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_str()
         .map(|s| s.to_owned())
         .unwrap();
-    let client_ng_reissue_amt = cmd!(fed, "module", "--module", "mint", "reissue", reissue_notes)
+    let client_reissue_amt = cmd!(fed, "module", "--module", "mint", "reissue", reissue_notes)
         .out_json()
         .await?
         .as_u64()
         .unwrap();
-    assert_eq!(client_ng_reissue_amt, reissue_amount);
+    assert_eq!(client_reissue_amt, reissue_amount);
 
     // OUTGOING: fedimint-cli pays LND via CLN gateway
     info!("Testing fedimint-cli pays LND via CLN gateway");
     fed.use_gateway(&gw_cln).await?;
 
-    let initial_client_ng_balance = fed.client_balance().await?;
+    let initial_client_balance = fed.client_balance().await?;
     let initial_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -437,7 +437,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
     // Assert balances changed by 3000 msat (amount sent) + 30 msat (fee)
-    let final_cln_outgoing_client_ng_balance = fed.client_balance().await?;
+    let final_cln_outgoing_client_balance = fed.client_balance().await?;
     let final_cln_outgoing_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
@@ -446,9 +446,9 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let expected_diff = 3030;
     anyhow::ensure!(
-        initial_client_ng_balance - final_cln_outgoing_client_ng_balance == expected_diff,
+        initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
         "Client balance changed by {} on CLN outgoing payment, expected {expected_diff}",
-        initial_client_ng_balance - final_cln_outgoing_client_ng_balance
+        initial_client_balance - final_cln_outgoing_client_balance
     );
     anyhow::ensure!(
         final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
@@ -497,16 +497,16 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cmd!(fed, "wait-invoice", operation_id).run().await?;
 
     // Assert balances changed by 1000 msat
-    let final_cln_incoming_client_ng_balance = fed.client_balance().await?;
+    let final_cln_incoming_client_balance = fed.client_balance().await?;
     let final_cln_incoming_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_cln_incoming_client_ng_balance - final_cln_outgoing_client_ng_balance == 1000,
+        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1000,
         "Client balance changed by {} on CLN incoming payment, expected 1000",
-        final_cln_incoming_client_ng_balance - final_cln_outgoing_client_ng_balance
+        final_cln_incoming_client_balance - final_cln_outgoing_client_balance
     );
     anyhow::ensure!(
         final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1000,
@@ -555,16 +555,16 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ));
 
     // Assert balances changed by 1000 msat (amount sent) + 10 msat (fee)
-    let final_lnd_outgoing_client_ng_balance = fed.client_balance().await?;
+    let final_lnd_outgoing_client_balance = fed.client_balance().await?;
     let final_lnd_outgoing_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_cln_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance == 1010,
+        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 1010,
         "Client balance changed by {} on LND outgoing payment, expected 1010",
-        final_cln_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance
+        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance
     );
     anyhow::ensure!(
         final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 1010,
@@ -612,16 +612,16 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cmd!(fed, "wait-invoice", operation_id).run().await?;
 
     // Assert balances changed by 1000 msat
-    let final_lnd_incoming_client_ng_balance = fed.client_balance().await?;
+    let final_lnd_incoming_client_balance = fed.client_balance().await?;
     let final_lnd_incoming_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
         .await?
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_lnd_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance == 1000,
+        final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == 1000,
         "Client balance changed by {} on LND incoming payment, expected 1000",
-        final_lnd_incoming_client_ng_balance - final_lnd_outgoing_client_ng_balance
+        final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance
     );
     anyhow::ensure!(
         final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1000,

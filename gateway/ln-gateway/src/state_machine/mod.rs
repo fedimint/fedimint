@@ -51,7 +51,9 @@ use self::pay::{
 use crate::db::FederationRegistrationKey;
 use crate::gateway_lnrpc::InterceptHtlcRequest;
 use crate::lnrpc_client::ILnRpcClient;
-use crate::ng::complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
+use crate::state_machine::complete::{
+    GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
+};
 
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);

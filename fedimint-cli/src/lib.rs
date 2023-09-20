@@ -317,16 +317,14 @@ impl Opts {
         module_inits: &ClientModuleInitRegistry,
         invite_code: Option<InviteCode>,
     ) -> CliResult<fedimint_client::Client> {
-        let client_builder = self
-            .build_client_ng_builder(module_inits, invite_code)
-            .await?;
+        let client_builder = self.build_client_builder(module_inits, invite_code).await?;
         client_builder
             .build::<PlainRootSecretStrategy>()
             .await
             .map_err_cli_general()
     }
 
-    async fn build_client_ng_builder(
+    async fn build_client_builder(
         &self,
         module_inits: &ClientModuleInitRegistry,
         invite_code: Option<InviteCode>,
@@ -556,7 +554,7 @@ impl FedimintCli {
             }),
             Command::Client(ClientCmd::Restore { secret }) => {
                 let (client, metadata) = cli
-                    .build_client_ng_builder(&self.module_inits, None)
+                    .build_client_builder(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
                     .build_restoring_from_backup(ClientSecret::<PlainRootSecretStrategy>::new(
@@ -581,7 +579,7 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 let config = client.get_config().clone();
                 Ok(CliOutput::Raw(
-                    client::handle_ng_command(command, config, client)
+                    client::handle_command(command, config, client)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))
