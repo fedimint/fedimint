@@ -219,7 +219,8 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
                 "--download-token={}",
                 invite_code["download_token"].as_str().unwrap()
             ),
-            "--id={fed_id}"
+            "--id={fed_id}",
+            "--peer-id=0"
         )
         .out_json()
         .await?["invite_code"]

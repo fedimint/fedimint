@@ -186,7 +186,7 @@ impl ServerConfigConsensus {
     ) -> Result<ClientConfig, anyhow::Error> {
         let client = ClientConfig {
             global: GlobalClientConfig {
-                federation_id: FederationId(self.auth_pk_set.public_key()),
+                federation_id: self.federation_id(),
                 epoch_pk: self.epoch_pk_set.public_key(),
                 api_endpoints: self.api_endpoints.clone(),
                 consensus_version: self.version,
@@ -204,6 +204,10 @@ impl ServerConfigConsensus {
                 .collect::<anyhow::Result<BTreeMap<_, _>>>()?,
         };
         Ok(client)
+    }
+
+    pub fn federation_id(&self) -> FederationId {
+        FederationId(self.auth_pk_set.public_key())
     }
 }
 
@@ -283,6 +287,7 @@ impl ServerConfig {
             url,
             download_token,
             id,
+            peer_id: self.local.identity,
         }
     }
 
