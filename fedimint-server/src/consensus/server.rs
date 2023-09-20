@@ -260,7 +260,7 @@ impl ConsensusServer {
         self.start_consensus().await;
 
         while !task_handle.is_shutting_down() {
-            let outcomes = self.run_consensus_epoch(None, &mut rng).await?;
+            let outcomes = self.run_consensus_epoch(&mut rng).await?;
 
             for outcome in outcomes {
                 info!(
@@ -412,7 +412,6 @@ impl ConsensusServer {
     /// 3. Run HBBFT until a `ConsensusOutcome` can be returned
     async fn run_consensus_epoch(
         &mut self,
-        override_proposal: Option<ConsensusProposal>,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
     ) -> anyhow::Result<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
@@ -423,7 +422,7 @@ impl ConsensusServer {
                     () = self.consensus.await_consensus_proposal() => (),
                 }
             }
-            let proposal = self.process_events_then_propose(override_proposal).await;
+            let proposal = self.process_events_then_propose().await;
             let epoch = self.hbbft.epoch();
             self.hbbft.skip_to_epoch(epoch + 1);
             return Ok(vec![HbbftConsensusOutcome {
@@ -442,7 +441,7 @@ impl ConsensusServer {
                 _ => break vec![],
             };
         };
-        let proposal = self.process_events_then_propose(override_proposal).await;
+        let proposal = self.process_events_then_propose().await;
 
         for peer in proposal.drop_peers.iter() {
             self.connections.ban_peer(*peer).await;
@@ -462,10 +461,7 @@ impl ConsensusServer {
     }
 
     // Save any API events we have in the channel then create a proposal
-    async fn process_events_then_propose(
-        &mut self,
-        override_proposal: Option<ConsensusProposal>,
-    ) -> ConsensusProposal {
+    async fn process_events_then_propose(&mut self) -> ConsensusProposal {
         while let Some(Some(event)) = self.api_receiver.next().now_or_never() {
             match event {
                 ApiEvent::ForceProcessOutcome(outcome) => self.force_process_epoch(outcome).await,
@@ -476,7 +472,7 @@ impl ConsensusServer {
         }
         let consensus_proposal = self.consensus.get_consensus_proposal().await;
         self.consensus.api_event_cache.clear();
-        override_proposal.unwrap_or(consensus_proposal)
+        consensus_proposal
     }
 
     async fn force_process_epoch(&mut self, outcome: EpochOutcome) {
