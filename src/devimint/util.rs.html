@@ -420,23 +420,30 @@
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
-<span class="kw">use </span>std::unreachable;
+<span class="kw">use </span>std::future::Future;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::{env, unreachable};
 
-<span class="kw">use </span>anyhow::{bail, format_err};
+<span class="kw">use </span>anyhow::{bail, format_err, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
 <span class="kw">use </span>fedimint_core::time::now;
+<span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::fs::OpenOptions;
 <span class="kw">use </span>tokio::process::Child;
 <span class="kw">use </span>tokio::sync::Mutex;
-<span class="kw">use </span>tracing::{debug, warn};
+<span class="kw">use </span>tracing::{debug, info, warn};
 
-<span class="kw">use super</span>::<span class="kw-2">*</span>;
-
-<span class="kw">pub fn </span>parse_map(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;BTreeMap&lt;String, String&gt;&gt; {
+<span class="kw">pub fn </span>parse_map(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;String, String&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>map = BTreeMap::new();
 
     <span class="kw">if </span>s.is_empty() {
@@ -522,11 +529,11 @@
 }
 
 <span class="kw">pub struct </span>ProcessManager {
-    <span class="kw">pub </span>globals: vars::Global,
+    <span class="kw">pub </span>globals: <span class="kw">super</span>::vars::Global,
 }
 
 <span class="kw">impl </span>ProcessManager {
-    <span class="kw">pub fn </span>new(globals: vars::Global) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(globals: <span class="kw">super</span>::vars::Global) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ globals }
     }
 
@@ -703,6 +710,9 @@
         }
     };
 }
+
+<span class="comment">// Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>cmd;
 
 <span class="kw">const </span>POLL_INTERVAL: Duration = Duration::from_millis(<span class="number">200</span>);
 

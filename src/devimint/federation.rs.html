@@ -525,15 +525,24 @@
 <a href="#525" id="525">525</a>
 <a href="#526" id="526">526</a>
 <a href="#527" id="527">527</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
-<span class="kw">use </span>std::fs;
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::{env, fs};
 
-<span class="kw">use </span>anyhow::{bail, Context};
+<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
-<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
+<span class="kw">use </span>bitcoincore_rpc::RpcApi;
+<span class="kw">use </span>fedimint_core::admin_client::{
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, WsAdminClient,
+};
 <span class="kw">use </span>fedimint_core::api::ServerStatus;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry};
+<span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ModuleCommon};
@@ -546,10 +555,14 @@
 <span class="kw">use </span>fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>tracing::info;
 
-<span class="kw">use super</span>::<span class="kw-2">*</span>; <span class="comment">// TODO: remove this
+<span class="kw">use </span><span class="kw">super</span>::external::Bitcoind;
+<span class="kw">use </span><span class="kw">super</span>::util::{cmd, parse_map, poll, Command, ProcessHandle, ProcessManager};
+<span class="kw">use </span><span class="kw">super</span>::vars::utf8;
+<span class="kw">use </span><span class="kw">crate</span>::vars;
 
-</span><span class="kw">pub struct </span>Federation {
+<span class="kw">pub struct </span>Federation {
     <span class="comment">// client is only for internal use, use cli commands instead
     </span>members: BTreeMap&lt;usize, Fedimintd&gt;,
     vars: BTreeMap&lt;usize, vars::Fedimintd&gt;,
@@ -716,7 +729,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">info!</span>(amount, <span class="string">&quot;Pegging-in gateway funds&quot;</span>);
         <span class="kw">let </span>fed_id = <span class="self">self</span>.federation_id().<span class="kw">await</span>;
         <span class="kw">let </span>pegin_addr = <span class="macro">cmd!</span>(gw, <span class="string">&quot;address&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
@@ -807,7 +820,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span>Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">pub async fn </span>use_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>gateway_id = gw.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;switch-gateway&quot;</span>, gateway_id.clone())
             .run()
@@ -873,11 +886,11 @@
 <span class="kw">pub async fn </span>run_dkg(
     admin_clients: BTreeMap&lt;PeerId, WsAdminClient&gt;,
     params: HashMap&lt;PeerId, ConfigGenParams&gt;,
-) -&gt; anyhow::Result&lt;()&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>auth_for = |peer: <span class="kw-2">&amp;</span>PeerId| -&gt; ApiAuth { params[peer].local.api_auth.clone() };
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">20</span>;
-        poll_max_retries(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
+        <span class="kw">super</span>::poll_max_retries(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
             <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span>.is_ok())
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1000,7 +1013,7 @@
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Error calling start_consensus: {e:?}, trying to continue...&quot;</span>)
         }
         <span class="kw">const </span>RETRIES: usize = <span class="number">20</span>;
-        poll_max_retries(<span class="string">&quot;waiting-consensus-running-for-peer&quot;</span>, RETRIES, || <span class="kw">async </span>{
+        <span class="kw">super</span>::poll_max_retries(<span class="string">&quot;waiting-consensus-running-for-peer&quot;</span>, RETRIES, || <span class="kw">async </span>{
             <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span><span class="question-mark">?</span>.server == ServerStatus::ConsensusRunning)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1013,7 +1026,7 @@
     client: <span class="kw-2">&amp;</span>WsAdminClient,
     auth: ApiAuth,
     <span class="kw-2">mut </span>server_gen_params: ServerModuleConfigGenParamsRegistry,
-) -&gt; anyhow::Result&lt;()&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
         <span class="kw-2">&amp;mut </span>server_gen_params,
@@ -1041,12 +1054,9 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>wait_server_status(
-    client: <span class="kw-2">&amp;</span>WsAdminClient,
-    expected_status: ServerStatus,
-) -&gt; anyhow::Result&lt;()&gt; {
+<span class="kw">async fn </span>wait_server_status(client: <span class="kw-2">&amp;</span>WsAdminClient, expected_status: ServerStatus) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">const </span>RETRIES: usize = <span class="number">60</span>;
-    poll_max_retries(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
+    <span class="kw">super</span>::poll_max_retries(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
         <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span><span class="question-mark">?</span>.server == expected_status)
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
