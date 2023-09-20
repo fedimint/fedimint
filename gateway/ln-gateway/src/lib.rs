@@ -88,6 +88,7 @@ pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
 const ROUTE_HINT_RETRIES: usize = 30;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
+const DEFAULT_NUM_ROUTE_HINTS: u32 = 0;
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
     /// Base routing fee. Default is 0 msat
@@ -134,7 +135,28 @@ pub struct GatewayOpts {
 
     /// Number of route hints to return in invoices
     #[arg(long = "num-route-hints", env = "FM_NUMBER_OF_ROUTE_HINTS")]
-    pub num_route_hints: Option<usize>,
+    pub num_route_hints: Option<u32>,
+}
+
+impl GatewayOpts {
+    fn to_gateway_parameters(self) -> GatewayParameters {
+        GatewayParameters {
+            listen: self.listen,
+            api_addr: self.api_addr,
+            password: self.password,
+            num_route_hints: self.num_route_hints,
+            fees: self.fees,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct GatewayParameters {
+    listen: SocketAddr,
+    api_addr: SafeUrl,
+    password: Option<String>,
+    num_route_hints: Option<u32>,
+    fees: Option<GatewayFee>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -177,10 +199,7 @@ impl Display for GatewayState {
 #[derive(Clone)]
 pub struct Gateway {
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
-    listen: SocketAddr,
-    api_addr: SafeUrl,
-    num_route_hints: usize,
-    cli_password: Option<String>,
+    gateway_parameters: GatewayParameters,
     pub state: Arc<RwLock<GatewayState>>,
     client_builder: StandardGatewayClientBuilder,
     gateway_db: Database,
@@ -188,7 +207,6 @@ pub struct Gateway {
     scid_to_federation: Arc<RwLock<BTreeMap<u64, FederationId>>>,
     pub gateway_id: secp256k1::PublicKey,
     channel_id_generator: Arc<Mutex<AtomicU64>>,
-    fees: RoutingFees,
 }
 
 impl Gateway {
@@ -200,15 +218,18 @@ impl Gateway {
         api_addr: SafeUrl,
         cli_password: Option<String>,
         fees: RoutingFees,
-        num_route_hints: usize,
+        num_route_hints: u32,
         gateway_db: Database,
     ) -> anyhow::Result<Gateway> {
         Ok(Gateway {
             lightning_builder,
-            listen,
-            api_addr,
-            num_route_hints,
-            cli_password,
+            gateway_parameters: GatewayParameters {
+                listen,
+                api_addr,
+                password: cli_password,
+                num_route_hints: Some(num_route_hints),
+                fees: Some(GatewayFee(fees)),
+            },
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_db: gateway_db.clone(),
@@ -216,7 +237,6 @@ impl Gateway {
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             gateway_id: Gateway::get_gateway_id(gateway_db).await,
             channel_id_generator: Arc::new(Mutex::new(AtomicU64::new(INITIAL_SCID))),
-            fees,
         })
     }
 
@@ -230,16 +250,7 @@ impl Gateway {
             }
         }
 
-        // Read configurations
-        let GatewayOpts {
-            mode,
-            data_dir,
-            listen,
-            api_addr,
-            password,
-            fees,
-            num_route_hints,
-        } = GatewayOpts::parse();
+        let opts = GatewayOpts::parse();
 
         // Gateway module will be attached when the federation clients are created
         // because the LN RPC will be injected with `GatewayClientGen`.
@@ -250,12 +261,12 @@ impl Gateway {
         let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().cloned())?;
 
         let gateway_db = Database::new(
-            fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
+            fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
             decoders.clone(),
         );
 
         let client_builder = StandardGatewayClientBuilder::new(
-            data_dir.clone(),
+            opts.data_dir.clone(),
             registry.clone(),
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
         );
@@ -267,14 +278,10 @@ impl Gateway {
 
         Ok(Self {
             lightning_builder: Arc::new(GatewayLightningBuilder {
-                lightning_mode: mode,
+                lightning_mode: opts.mode.clone(),
             }),
-            listen,
-            api_addr,
             channel_id_generator: Arc::new(Mutex::new(AtomicU64::new(INITIAL_SCID))),
-            fees: fees.unwrap_or(GatewayFee(DEFAULT_FEES)).0,
-            num_route_hints: num_route_hints.unwrap_or(0),
-            cli_password: password,
+            gateway_parameters: opts.to_gateway_parameters(),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: Self::get_gateway_id(gateway_db.clone()).await,
@@ -352,23 +359,17 @@ impl Gateway {
     async fn start_webserver(&mut self, task_group: &mut TaskGroup) {
         let gateway_db = self.gateway_db.clone();
 
-        let listen = self.listen;
         let gateway = self.clone();
-        let cli_password = self.cli_password.clone();
         let subgroup = task_group.make_subgroup().await;
         task_group
             .spawn("Webserver", move |handle| async move {
                 while !handle.is_shutting_down() {
                     // Re-fetch the configuration because the password has changed.
-                    let gateway_config = Gateway::get_gateway_configuration(
-                        gateway_db.clone(),
-                        cli_password.clone(),
-                    )
-                    .await;
+                    let gateway_config = gateway.get_gateway_configuration().await;
                     let mut webserver_group = subgroup.make_subgroup().await;
                     run_webserver(
                         gateway_config.clone(),
-                        listen,
+                        gateway.gateway_parameters.listen,
                         gateway.clone(),
                         &mut webserver_group,
                     )
@@ -391,9 +392,7 @@ impl Gateway {
             })
             .await;
 
-        let gateway_config =
-            Gateway::get_gateway_configuration(self.gateway_db.clone(), self.cli_password.clone())
-                .await;
+        let gateway_config = self.get_gateway_configuration().await;
         if gateway_config.is_none() {
             self.set_gateway_state(GatewayState::Configuring).await;
             info!("Waiting for gateway to be configured...");
@@ -567,10 +566,15 @@ impl Gateway {
             lightning_alias,
         } = self.state.read().await.clone()
         {
+            let gateway_config = self
+                .get_gateway_configuration()
+                .await
+                .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
             let route_hints =
-                Self::fetch_lightning_route_hints(lnrpc.clone(), self.num_route_hints).await?;
+                Self::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints)
+                    .await?;
             for (federation_id, client) in federation_clients {
                 federations.push(self.make_federation_info(&client, federation_id).await);
             }
@@ -580,7 +584,7 @@ impl Gateway {
                 version_hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
                 lightning_pub_key: Some(lightning_public_key.to_hex()),
                 lightning_alias: Some(lightning_alias.clone()),
-                fees: self.fees,
+                fees: gateway_config.routing_fees,
                 route_hints,
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
@@ -592,7 +596,7 @@ impl Gateway {
             version_hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             lightning_pub_key: None,
             lightning_alias: None,
-            fees: self.fees,
+            fees: DEFAULT_FEES,
             route_hints: vec![],
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
@@ -711,6 +715,11 @@ impl Gateway {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
 
+            let gateway_config = self
+                .get_gateway_configuration()
+                .await
+                .expect("Gateway configuration should be set");
+
             // The gateway deterministically assigns a channel id (u64) to each federation
             // connected. TODO: explicitly handle the case where the channel id
             // overflows
@@ -725,7 +734,7 @@ impl Gateway {
             let gw_client_cfg = loop {
                 match self
                     .client_builder
-                    .create_config(invite_code.clone(), channel_id, self.fees)
+                    .create_config(invite_code.clone(), channel_id, gateway_config.routing_fees)
                     .await
                 {
                     Ok(gw_client_cfg) => break gw_client_cfg,
@@ -742,7 +751,8 @@ impl Gateway {
 
             let federation_id = gw_client_cfg.config.global.federation_id;
             let route_hints =
-                Self::fetch_lightning_route_hints(lnrpc.clone(), self.num_route_hints).await?;
+                Self::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints)
+                    .await?;
             let old_client = self.clients.read().await.get(&federation_id).cloned();
 
             let client = self
@@ -760,7 +770,7 @@ impl Gateway {
 
             client
                 .register_with_federation(
-                    self.api_addr.clone(),
+                    self.gateway_parameters.api_addr.clone(),
                     route_hints,
                     GW_ANNOUNCEMENT_TTL,
                     self.gateway_id,
@@ -799,7 +809,11 @@ impl Gateway {
 
     pub async fn handle_set_configuration_msg(
         &self,
-        SetConfigurationPayload { password }: SetConfigurationPayload,
+        SetConfigurationPayload {
+            password,
+            num_route_hints,
+            routing_fees,
+        }: SetConfigurationPayload,
     ) -> Result<()> {
         let gw_state = self.state.read().await.clone();
         let can_set_config = matches!(gw_state, GatewayState::Running { .. })
@@ -809,9 +823,29 @@ impl Gateway {
             return Err(GatewayError::Disconnected);
         }
 
-        let gateway_config = GatewayConfiguration { password };
-
         let mut dbtx = self.gateway_db.begin_transaction().await;
+        let gateway_config =
+            if let Some(mut prev_config) = dbtx.get_value(&GatewayConfigurationKey).await {
+                prev_config.password = password;
+
+                if let Some(num_route_hints) = num_route_hints {
+                    prev_config.num_route_hints = num_route_hints;
+                }
+
+                if let Some(fees_str) = routing_fees {
+                    let routing_fees = GatewayFee::from_str(fees_str.as_str())?.0;
+                    prev_config.routing_fees = routing_fees;
+                }
+
+                prev_config
+            } else {
+                GatewayConfiguration {
+                    password,
+                    num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
+                    routing_fees: DEFAULT_FEES,
+                }
+            };
+
         dbtx.insert_entry(&GatewayConfigurationKey, &gateway_config)
             .await;
         dbtx.commit_tx().await;
@@ -826,22 +860,31 @@ impl Gateway {
     /// - `GatewayConfiguration` is read from the database.
     /// - All cli or environment variables are set such that we can create a
     ///   `GatewayConfiguration`
-    pub async fn get_gateway_configuration(
-        gateway_db: Database,
-        cli_password: Option<String>,
-    ) -> Option<GatewayConfiguration> {
-        let mut dbtx = gateway_db.begin_transaction().await;
+    pub async fn get_gateway_configuration(&self) -> Option<GatewayConfiguration> {
+        let mut dbtx = self.gateway_db.begin_transaction().await;
         if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
             info!("Gateway using configuration from database.");
             return Some(gateway_config);
         }
 
-        if let Some(password) = cli_password.clone() {
-            info!("Gateway using configuration from environment.");
-            return Some(GatewayConfiguration { password });
+        if self.gateway_parameters.password.is_none() {
+            return None;
         }
 
-        None
+        let num_route_hints = self
+            .gateway_parameters
+            .num_route_hints
+            .unwrap_or(DEFAULT_NUM_ROUTE_HINTS) as u32;
+        let routing_fees = self
+            .gateway_parameters
+            .fees
+            .clone()
+            .unwrap_or(GatewayFee(DEFAULT_FEES));
+        Some(GatewayConfiguration {
+            password: self.gateway_parameters.password.clone().unwrap(),
+            num_route_hints,
+            routing_fees: routing_fees.0,
+        })
     }
 
     pub async fn remove_client(
@@ -923,11 +966,7 @@ impl Gateway {
     }
 
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
-        let clients = self.clients.clone();
-        let api = self.api_addr.clone();
-        let gateway_id = self.gateway_id;
-        let num_route_hints = self.num_route_hints;
-        let state = self.state.clone();
+        let gateway = self.clone();
         task_group
             .spawn("register clients", move |handle| async move {
                 let registration_loop = async {
@@ -937,35 +976,39 @@ impl Gateway {
                         let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
                         sleep(registration_delay).await;
 
-                        let gateway_state = state.read().await.clone();
-                        if let GatewayState::Running { lnrpc, .. } = &gateway_state {
-                            match Self::fetch_lightning_route_hints(lnrpc.clone(), num_route_hints).await {
-                                Ok(route_hints) => {
-                                    for (federation_id, client) in clients.read().await.iter() {
-                                        if let Err(e) = client
-                                            .register_with_federation(
-                                                api.clone(),
-                                                route_hints.clone(),
-                                                GW_ANNOUNCEMENT_TTL,
-                                                gateway_id,
-                                            )
-                                            .await
-                                        {
-                                            error!("Error registering federation {federation_id}: {e:?}");
+                        if let Some(gateway_config) = gateway.get_gateway_configuration().await {
+                            let gateway_state = gateway.state.read().await.clone();
+                            if let GatewayState::Running { lnrpc, .. } = &gateway_state {
+                                match Self::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints).await {
+                                    Ok(route_hints) => {
+                                        for (federation_id, client) in gateway.clients.read().await.iter() {
+                                            if let Err(e) = client
+                                                .register_with_federation(
+                                                    gateway.gateway_parameters.api_addr.clone(),
+                                                    route_hints.clone(),
+                                                    GW_ANNOUNCEMENT_TTL,
+                                                    gateway.gateway_id,
+                                                )
+                                                .await
+                                            {
+                                                error!("Error registering federation {federation_id}: {e:?}");
+                                            }
                                         }
                                     }
+                                    Err(e) => {
+                                        error!(
+                                            "Could not retrieve route hints, gateway will not be registered: {e:?}"
+                                        );
+                                    }
                                 }
-                                Err(e) => {
-                                    error!(
-                                        "Could not retrieve route hints, gateway will not be registered: {e:?}"
-                                    );
-                                }
+                            } else {
+                                warn!(
+                                    "GatewayState must be Running to register with federation. Current state: {:?}",
+                                    &gateway_state
+                                );
                             }
                         } else {
-                            warn!(
-                                "GatewayState must be Running to register with federation. Current state: {:?}",
-                                &gateway_state
-                            );
+                            warn!("Cannot register clients because gateway configuration is not set.");
                         }
                     }
                 };
@@ -988,10 +1031,10 @@ impl Gateway {
 
     async fn fetch_lightning_route_hints_try(
         lnrpc: &dyn ILnRpcClient,
-        num_route_hints: usize,
+        num_route_hints: u32,
     ) -> Result<Vec<RouteHint>> {
         let route_hints = lnrpc
-            .routehints(num_route_hints)
+            .routehints(num_route_hints as usize)
             .await?
             .try_into()
             .expect("Could not parse route hints");
@@ -1001,7 +1044,7 @@ impl Gateway {
 
     async fn fetch_lightning_route_hints(
         lnrpc: Arc<dyn ILnRpcClient>,
-        num_route_hints: usize,
+        num_route_hints: u32,
     ) -> Result<Vec<RouteHint>> {
         if num_route_hints == 0 {
             return Ok(vec![]);

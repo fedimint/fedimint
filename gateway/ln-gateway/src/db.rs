@@ -98,6 +98,8 @@ pub struct GatewayConfigurationKey;
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct GatewayConfiguration {
     pub password: String,
+    pub num_route_hints: u32,
+    pub routing_fees: RoutingFees,
 }
 
 impl_db_record!(
