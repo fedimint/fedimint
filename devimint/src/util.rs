@@ -1,20 +1,22 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::unreachable;
+use std::future::Future;
+use std::sync::Arc;
+use std::time::Duration;
+use std::{env, unreachable};
 
-use anyhow::{bail, format_err};
+use anyhow::{bail, format_err, Context, Result};
 use fedimint_core::task::{self, block_in_place};
 use fedimint_core::time::now;
+use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
 use tokio::process::Child;
 use tokio::sync::Mutex;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
-use super::*;
-
-pub fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
+pub fn parse_map(s: &str) -> Result<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
 
     if s.is_empty() {
@@ -100,11 +102,11 @@ impl Drop for ProcessHandleInner {
 }
 
 pub struct ProcessManager {
-    pub globals: vars::Global,
+    pub globals: super::vars::Global,
 }
 
 impl ProcessManager {
-    pub fn new(globals: vars::Global) -> Self {
+    pub fn new(globals: super::vars::Global) -> Self {
         Self { globals }
     }
 
@@ -281,6 +283,9 @@ macro_rules! cmd {
         }
     };
 }
+
+// Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
+pub(crate) use cmd;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 

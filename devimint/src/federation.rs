@@ -1,12 +1,16 @@
-use std::collections::{BTreeMap, HashSet};
-use std::fs;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
+use std::{env, fs};
 
-use anyhow::{bail, Context};
+use anyhow::{bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
-use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
+use bitcoincore_rpc::RpcApi;
+use fedimint_core::admin_client::{
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, WsAdminClient,
+};
 use fedimint_core::api::ServerStatus;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry};
+use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
@@ -19,8 +23,12 @@ use fedimintd::attach_default_module_init_params;
 use fedimintd::fedimintd::FM_EXTRA_DKG_META_VAR;
 use futures::future::join_all;
 use rand::Rng;
+use tracing::info;
 
-use super::*; // TODO: remove this
+use super::external::Bitcoind;
+use super::util::{cmd, parse_map, poll, Command, ProcessHandle, ProcessManager};
+use super::vars::utf8;
+use crate::vars;
 
 pub struct Federation {
     // client is only for internal use, use cli commands instead
@@ -189,7 +197,7 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn pegin_gateway(&self, amount: u64, gw: &Gatewayd) -> Result<()> {
+    pub async fn pegin_gateway(&self, amount: u64, gw: &super::Gatewayd) -> Result<()> {
         info!(amount, "Pegging-in gateway funds");
         let fed_id = self.federation_id().await;
         let pegin_addr = cmd!(gw, "address", "--federation-id={fed_id}")
@@ -280,7 +288,7 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn use_gateway(&self, gw: &Gatewayd) -> Result<()> {
+    pub async fn use_gateway(&self, gw: &super::Gatewayd) -> Result<()> {
         let gateway_id = gw.gateway_id().await?;
         cmd!(self, "switch-gateway", gateway_id.clone())
             .run()
@@ -346,11 +354,11 @@ const BASE_PORT: u16 = 8173 + 10000;
 pub async fn run_dkg(
     admin_clients: BTreeMap<PeerId, WsAdminClient>,
     params: HashMap<PeerId, ConfigGenParams>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
     for (peer_id, client) in &admin_clients {
         const MAX_RETRIES: usize = 20;
-        poll_max_retries("trying-to-connect-to-peers", MAX_RETRIES, || async {
+        super::poll_max_retries("trying-to-connect-to-peers", MAX_RETRIES, || async {
             Ok(client.status().await.is_ok())
         })
         .await?;
@@ -473,7 +481,7 @@ pub async fn run_dkg(
             tracing::info!("Error calling start_consensus: {e:?}, trying to continue...")
         }
         const RETRIES: usize = 20;
-        poll_max_retries("waiting-consensus-running-for-peer", RETRIES, || async {
+        super::poll_max_retries("waiting-consensus-running-for-peer", RETRIES, || async {
             Ok(client.status().await?.server == ServerStatus::ConsensusRunning)
         })
         .await?;
@@ -486,7 +494,7 @@ async fn set_config_gen_params(
     client: &WsAdminClient,
     auth: ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
         &mut server_gen_params,
@@ -514,12 +522,9 @@ async fn set_config_gen_params(
     Ok(())
 }
 
-async fn wait_server_status(
-    client: &WsAdminClient,
-    expected_status: ServerStatus,
-) -> anyhow::Result<()> {
+async fn wait_server_status(client: &WsAdminClient, expected_status: ServerStatus) -> Result<()> {
     const RETRIES: usize = 60;
-    poll_max_retries("waiting-server-status", RETRIES, || async {
+    super::poll_max_retries("waiting-server-status", RETRIES, || async {
         Ok(client.status().await?.server == expected_status)
     })
     .await?;

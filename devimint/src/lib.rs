@@ -1,21 +1,13 @@
 use std::collections::HashMap;
-use std::env;
-use std::future::Future;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
-use bitcoincore_rpc::RpcApi;
 use federation::Federation;
-use fedimint_core::admin_client::WsAdminClient;
-use fedimint_core::config::load_from_file;
 use fedimint_logging::LOG_DEVIMINT;
 use tracing::{debug, info};
 
 pub mod util;
 pub mod vars;
-use util::*;
+use util::{poll_max_retries, Command, ProcessHandle, ProcessManager};
 use vars::utf8;
 
 mod external;
