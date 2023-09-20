@@ -312,6 +312,13 @@ impl ConsensusApi {
     pub async fn download_client_config(&self, info: InviteCode) -> ApiResult<ClientConfig> {
         let token = self.cfg.local.download_token.clone();
 
+        if self.cfg.consensus.federation_id() != info.id {
+            return Err(ApiError::bad_request("Wrong Federation Id".to_string()));
+        }
+
+        if self.cfg.local.identity != info.peer_id {
+            return Err(ApiError::bad_request("Wrong Peer Id".to_string()));
+        }
         if info.download_token != token {
             return Err(ApiError::bad_request(
                 "Download token not found".to_string(),
