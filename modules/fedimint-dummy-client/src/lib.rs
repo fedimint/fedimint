@@ -35,7 +35,7 @@ use crate::db::DummyClientFundsKeyV0;
 
 pub mod api;
 mod db;
-mod states;
+pub mod states;
 
 /// Exposed API calls for client apps
 #[apply(async_trait_maybe_send!)]

@@ -1522,6 +1522,8 @@ dependencies = [
  "fedimint-server",
  "fedimint-testing",
  "fedimint-threshold-crypto",
+ "rand",
+ "secp256k1 0.24.3",
  "tokio",
 ]
 
