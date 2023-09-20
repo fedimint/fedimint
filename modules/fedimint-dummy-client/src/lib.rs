@@ -2,16 +2,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{format_err, Context as _};
-use fedimint_client::derivable_secret::DerivableSecret;
-use fedimint_client::module::init::ClientModuleInit;
+use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
-use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
-use fedimint_core::config::FederationId;
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair};
-use fedimint_core::db::{Database, ModuleDatabaseTransaction};
+use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
@@ -331,21 +329,14 @@ impl ClientModuleInit for DummyClientGen {
             .expect("no version conflicts")
     }
 
-    async fn init(
-        &self,
-        _federation_id: FederationId,
-        cfg: DummyClientConfig,
-        _db: Database,
-        _api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
-        _api: DynGlobalApi,
-        _module_api: DynModuleApi,
-    ) -> anyhow::Result<Self::Module> {
+    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(DummyClientModule {
-            cfg,
-            key: module_root_secret.to_secp_key(&Secp256k1::new()),
-            notifier,
+            cfg: args.cfg().clone(),
+            key: args
+                .module_root_secret()
+                .clone()
+                .to_secp_key(&Secp256k1::new()),
+            notifier: args.notifier().clone(),
         })
     }
 }
