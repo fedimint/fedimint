@@ -11,7 +11,7 @@ use tracing::{debug, info};
 
 pub mod util;
 pub mod vars;
-use util::*;
+use util::{poll_max_retries, Command, ProcessHandle, ProcessManager};
 use vars::utf8;
 
 mod external;
