@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,7 +54,7 @@ const TRANSACTION_BUFFER_SIZE: usize = 1000;
 #[allow(clippy::large_enum_variant)]
 pub enum EpochMessage {
     Continue(Message<PeerId>),
-    RejoinRequest(u64),
+    RejoinRequest,
 }
 
 type EpochStep = Step<Vec<SerdeConsensusItem>, PeerId>;
@@ -304,7 +304,7 @@ impl ConsensusServer {
         self.hbbft.skip_to_epoch(epoch);
         self.rejoin_at_epoch.clear();
         self.latest_contribution_by_peer.write().await.clear();
-        self.request_rejoin(1).await;
+        self.request_rejoin().await;
     }
 
     /// Returns the next epoch that we need to process, based on our saved
@@ -547,7 +547,7 @@ impl ConsensusServer {
     fn start_next_epoch(&self, msg: &PeerMessage) -> bool {
         match msg {
             (_, EpochMessage::Continue(peer_msg)) => self.hbbft.epoch() <= peer_msg.epoch(),
-            (_, EpochMessage::RejoinRequest(_)) => false,
+            (_, EpochMessage::RejoinRequest) => false,
         }
     }
 
@@ -567,15 +567,13 @@ impl ConsensusServer {
 
                 Ok(self.handle_step(step).await?)
             }
-            (_, EpochMessage::RejoinRequest(epochs)) => {
-                let requested_forced_epochs_capped = min(NUM_EPOCHS_REJOIN_AHEAD, epochs);
+            (_, EpochMessage::RejoinRequest) => {
                 self.pending_forced_epochs =
-                    max(self.pending_forced_epochs, requested_forced_epochs_capped);
+                    max(self.pending_forced_epochs, NUM_EPOCHS_REJOIN_AHEAD);
                 info!(
                     target: LOG_CONSENSUS,
-                    "Peer {} requested to run {} epochs. Set pending forced epochs to {}",
+                    "Peer {} requested to rejoin consensus. Set pending forced epochs to {}",
                     msg.0,
-                    epochs,
                     self.pending_forced_epochs
                 );
                 Ok(vec![])
@@ -632,17 +630,17 @@ impl ConsensusServer {
                 epoch + NUM_EPOCHS_REJOIN_AHEAD
             );
             self.hbbft.skip_to_epoch(epoch + NUM_EPOCHS_REJOIN_AHEAD);
-            self.request_rejoin(NUM_EPOCHS_REJOIN_AHEAD).await;
+            self.request_rejoin().await;
         }
     }
 
     /// Sends a rejoin request to all peers, indicating the number of epochs we
     /// want them to create
-    async fn request_rejoin(&mut self, epochs_to_run: u64) {
+    async fn request_rejoin(&mut self) {
         self.connections
             .send(
                 &Target::all().peers(&self.other_peers),
-                EpochMessage::RejoinRequest(epochs_to_run),
+                EpochMessage::RejoinRequest,
             )
             .await
             .expect("Failed to send rejoin requests");
