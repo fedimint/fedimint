@@ -357,10 +357,35 @@
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, format_err, Context <span class="kw">as _</span>};
+<span class="kw">use </span>common::broken_fed_key_pair;
 <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
@@ -380,8 +405,8 @@
 <span class="kw">pub use </span>fedimint_dummy_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_dummy_common::config::DummyClientConfig;
 <span class="kw">use </span>fedimint_dummy_common::{
-    fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
-    DummyOutputOutcome, KIND,
+    fed_key_pair, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
+    KIND,
 };
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>secp256k1::{Secp256k1, XOnlyPublicKey};
@@ -398,8 +423,18 @@
 <span class="doccomment">/// Exposed API calls for client apps
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>DummyClientExt {
+    <span class="kw">async fn </span>print_using_account(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        account_kp: KeyPair,
+    ) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt;;
+
     <span class="doccomment">/// Request the federation prints money for us
     </span><span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt;;
+
+    <span class="doccomment">/// Use a broken printer to print a liability instead of money
+    /// If the federation is honest, should always fail
+    </span><span class="kw">async fn </span>print_liability(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt;;
 
     <span class="doccomment">/// Send money to another user
     </span><span class="kw">async fn </span>send_money(<span class="kw-2">&amp;</span><span class="self">self</span>, account: XOnlyPublicKey, amount: Amount)
@@ -420,7 +455,11 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>DummyClientExt <span class="kw">for </span>Client {
-    <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
+    <span class="kw">async fn </span>print_using_account(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        account_kp: KeyPair,
+    ) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
         <span class="kw">let </span>(_dummy, instance) = <span class="self">self</span>.get_first_module::&lt;DummyClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>op_id = OperationId(rand::random());
 
@@ -429,9 +468,9 @@
         </span><span class="kw">let </span>input = ClientInput {
             input: DummyInput {
                 amount,
-                account: fed_public_key(),
+                account: account_kp.x_only_public_key().<span class="number">0</span>,
             },
-            keys: <span class="macro">vec!</span>[fed_key_pair()],
+            keys: <span class="macro">vec!</span>[account_kp],
             state_machines: Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
         };
 
@@ -446,10 +485,19 @@
         <span class="comment">// Wait for the output of the primary module
         </span><span class="self">self</span>.await_primary_module_output(op_id, OutPoint { txid, out_idx: <span class="number">0 </span>})
             .<span class="kw">await
-            </span>.context(<span class="string">&quot;Waiting for the output of print_money&quot;</span>)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">&quot;Waiting for the output of print_using_account&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((op_id, OutPoint { txid, out_idx: <span class="number">0 </span>}))
     }
+
+    <span class="kw">async fn </span>print_money(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
+        <span class="self">self</span>.print_using_account(amount, fed_key_pair()).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>print_liability(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; anyhow::Result&lt;(OperationId, OutPoint)&gt; {
+        <span class="self">self</span>.print_using_account(amount, broken_fed_key_pair())
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>send_money(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

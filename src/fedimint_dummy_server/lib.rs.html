@@ -472,6 +472,16 @@
 <a href="#472" id="472">472</a>
 <a href="#473" id="473">473</a>
 <a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::string::ToString;
 
@@ -498,8 +508,8 @@
     DummyGenParams,
 };
 <span class="kw">use </span>fedimint_dummy_common::{
-    fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
-    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    broken_fed_public_key, fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError,
+    DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
@@ -827,13 +837,19 @@
             </span>.unwrap_or(Amount::ZERO);
 
         <span class="comment">// verify user has enough funds or is using the fed account
-        </span><span class="kw">if </span>input.amount &gt; current_funds &amp;&amp; fed_public_key() != input.account {
+        </span><span class="kw">if </span>input.amount &gt; current_funds
+            &amp;&amp; fed_public_key() != input.account
+            &amp;&amp; broken_fed_public_key() != input.account
+        {
             <span class="kw">return </span><span class="prelude-val">Err</span>(DummyError::NotEnoughFunds).into_module_error_other();
         }
 
         <span class="comment">// Subtract funds from normal user, or print funds for the fed
         </span><span class="kw">let </span>updated_funds = <span class="kw">if </span>fed_public_key() == input.account {
             current_funds + input.amount
+        } <span class="kw">else if </span>broken_fed_public_key() == input.account {
+            <span class="comment">// The printer is broken
+            </span>current_funds
         } <span class="kw">else </span>{
             current_funds - input.amount
         };
@@ -897,7 +913,11 @@
                 |k, v| <span class="kw">match </span>k {
                     <span class="comment">// the fed&#39;s test account is considered an asset (positive)
                     // should be the bitcoin we own in a real module
-                    </span>DummyFundsKeyV1(key) <span class="kw">if </span>key == fed_public_key() =&gt; v.msats <span class="kw">as </span>i64,
+                    </span>DummyFundsKeyV1(key)
+                        <span class="kw">if </span>key == fed_public_key() || key == broken_fed_public_key() =&gt;
+                    {
+                        v.msats <span class="kw">as </span>i64
+                    }
                     <span class="comment">// a user&#39;s funds are a federation&#39;s liability (negative)
                     </span>DummyFundsKeyV1(<span class="kw">_</span>) =&gt; -(v.msats <span class="kw">as </span>i64),
                 },

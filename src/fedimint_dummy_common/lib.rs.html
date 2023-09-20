@@ -122,6 +122,18 @@
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>config::DummyClientConfig;
@@ -239,11 +251,23 @@
 <span class="doccomment">/// A special key that creates assets for a test/example
 </span><span class="kw">const </span>FED_SECRET_PHRASE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;Money printer go brrr...........&quot;</span>;
 
+<span class="kw">const </span>BROKEN_FED_SECRET_PHRASE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;Money printer go &lt;boom&gt;........!&quot;</span>;
+
 <span class="kw">pub fn </span>fed_public_key() -&gt; XOnlyPublicKey {
     fed_key_pair().x_only_public_key().<span class="number">0
 </span>}
 
 <span class="kw">pub fn </span>fed_key_pair() -&gt; KeyPair {
     KeyPair::from_seckey_slice(<span class="kw-2">&amp;</span>Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect(<span class="string">&quot;32 bytes&quot;</span>)
+}
+
+<span class="kw">pub fn </span>broken_fed_public_key() -&gt; XOnlyPublicKey {
+    broken_fed_key_pair().x_only_public_key().<span class="number">0
+</span>}
+
+<span class="comment">// Like fed, but with a broken accounting
+</span><span class="kw">pub fn </span>broken_fed_key_pair() -&gt; KeyPair {
+    KeyPair::from_seckey_slice(<span class="kw-2">&amp;</span>Secp256k1::new(), BROKEN_FED_SECRET_PHRASE.as_bytes())
+        .expect(<span class="string">&quot;32 bytes&quot;</span>)
 }
 </code></pre></div></section></main></body></html>
