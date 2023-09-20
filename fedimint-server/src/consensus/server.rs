@@ -76,7 +76,7 @@ pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
 pub struct ConsensusServer {
     /// Delegate for processing consensus information
     consensus: FedimintConsensus,
-    /// Receives event notifications from the API (triggers epochs)
+    /// Receives event notifications from the `ConsensusApi` (triggers epochs)
     api_receiver: Peekable<ReceiverStream<ApiEvent>>,
     /// P2P connections for running consensus
     connections: PeerConnections<EpochMessage>,
@@ -241,7 +241,7 @@ impl ConsensusServer {
             hbbft,
             consensus,
             api_receiver: ReceiverStream::new(api_receiver).peekable(),
-            cfg: cfg.clone(),
+            cfg,
             api: api.into(),
             other_peers,
             rejoin_at_epoch: Default::default(),
@@ -410,7 +410,7 @@ impl ConsensusServer {
     /// 1. Await a new proposal event or receiving a proposal from peers
     /// 2. Send the `ConsensusProposal` to peers
     /// 3. Run HBBFT until a `ConsensusOutcome` can be returned
-    pub async fn run_consensus_epoch(
+    async fn run_consensus_epoch(
         &mut self,
         override_proposal: Option<ConsensusProposal>,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
@@ -530,12 +530,17 @@ impl ConsensusServer {
             .expect("HBBFT propose failed"))
     }
 
+    /// Wait for any event that triggers a new epoch, and return the event that
+    /// triggered it
     async fn await_next_epoch(&mut self) -> anyhow::Result<EpochTriggerEvent> {
+        // Run a potentially empty epoch if requested by a peer (to help them
+        // join consensus faster)
         if self.pending_forced_epochs > 0 {
             self.pending_forced_epochs = self.pending_forced_epochs.saturating_sub(1);
             return Ok(EpochTriggerEvent::RunEpochRequest);
         }
 
+        // Wait for any of the following events and return the first one that occurs
         tokio::select! {
             _peek = Pin::new(&mut self.api_receiver).peek() => Ok(EpochTriggerEvent::ApiEvent),
             () = self.consensus.await_consensus_proposal() => Ok(EpochTriggerEvent::ModuleProposalEvent),
