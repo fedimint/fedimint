@@ -1,8 +1,4 @@
 use std::collections::HashMap;
-use std::env;
-use std::future::Future;
-use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use federation::Federation;
