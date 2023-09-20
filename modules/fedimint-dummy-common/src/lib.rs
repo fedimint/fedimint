@@ -115,10 +115,22 @@ impl fmt::Display for DummyConsensusItem {
 /// A special key that creates assets for a test/example
 const FED_SECRET_PHRASE: &str = "Money printer go brrr...........";
 
+const BROKEN_FED_SECRET_PHRASE: &str = "Money printer go <boom>........!";
+
 pub fn fed_public_key() -> XOnlyPublicKey {
     fed_key_pair().x_only_public_key().0
 }
 
 pub fn fed_key_pair() -> KeyPair {
     KeyPair::from_seckey_slice(&Secp256k1::new(), FED_SECRET_PHRASE.as_bytes()).expect("32 bytes")
+}
+
+pub fn broken_fed_public_key() -> XOnlyPublicKey {
+    broken_fed_key_pair().x_only_public_key().0
+}
+
+// Like fed, but with a broken accounting
+pub fn broken_fed_key_pair() -> KeyPair {
+    KeyPair::from_seckey_slice(&Secp256k1::new(), BROKEN_FED_SECRET_PHRASE.as_bytes())
+        .expect("32 bytes")
 }

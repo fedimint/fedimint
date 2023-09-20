@@ -24,8 +24,8 @@ use fedimint_dummy_common::config::{
     DummyGenParams,
 };
 use fedimint_dummy_common::{
-    fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError, DummyInput, DummyModuleTypes,
-    DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    broken_fed_public_key, fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError,
+    DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::{FutureExt, StreamExt};
@@ -353,13 +353,19 @@ impl ServerModule for Dummy {
             .unwrap_or(Amount::ZERO);
 
         // verify user has enough funds or is using the fed account
-        if input.amount > current_funds && fed_public_key() != input.account {
+        if input.amount > current_funds
+            && fed_public_key() != input.account
+            && broken_fed_public_key() != input.account
+        {
             return Err(DummyError::NotEnoughFunds).into_module_error_other();
         }
 
         // Subtract funds from normal user, or print funds for the fed
         let updated_funds = if fed_public_key() == input.account {
             current_funds + input.amount
+        } else if broken_fed_public_key() == input.account {
+            // The printer is broken
+            current_funds
         } else {
             current_funds - input.amount
         };
@@ -423,7 +429,11 @@ impl ServerModule for Dummy {
                 |k, v| match k {
                     // the fed's test account is considered an asset (positive)
                     // should be the bitcoin we own in a real module
-                    DummyFundsKeyV1(key) if key == fed_public_key() => v.msats as i64,
+                    DummyFundsKeyV1(key)
+                        if key == fed_public_key() || key == broken_fed_public_key() =>
+                    {
+                        v.msats as i64
+                    }
                     // a user's funds are a federation's liability (negative)
                     DummyFundsKeyV1(_) => -(v.msats as i64),
                 },

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, format_err, Context as _};
+use common::broken_fed_key_pair;
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -21,8 +22,8 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
-    fed_key_pair, fed_public_key, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput,
-    DummyOutputOutcome, KIND,
+    fed_key_pair, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
+    KIND,
 };
 use futures::{pin_mut, StreamExt};
 use secp256k1::{Secp256k1, XOnlyPublicKey};
@@ -39,8 +40,18 @@ mod states;
 /// Exposed API calls for client apps
 #[apply(async_trait_maybe_send!)]
 pub trait DummyClientExt {
+    async fn print_using_account(
+        &self,
+        amount: Amount,
+        account_kp: KeyPair,
+    ) -> anyhow::Result<(OperationId, OutPoint)>;
+
     /// Request the federation prints money for us
     async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)>;
+
+    /// Use a broken printer to print a liability instead of money
+    /// If the federation is honest, should always fail
+    async fn print_liability(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)>;
 
     /// Send money to another user
     async fn send_money(&self, account: XOnlyPublicKey, amount: Amount)
@@ -61,7 +72,11 @@ pub trait DummyClientExt {
 
 #[apply(async_trait_maybe_send!)]
 impl DummyClientExt for Client {
-    async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
+    async fn print_using_account(
+        &self,
+        amount: Amount,
+        account_kp: KeyPair,
+    ) -> anyhow::Result<(OperationId, OutPoint)> {
         let (_dummy, instance) = self.get_first_module::<DummyClientModule>(&KIND);
         let op_id = OperationId(rand::random());
 
@@ -70,9 +85,9 @@ impl DummyClientExt for Client {
         let input = ClientInput {
             input: DummyInput {
                 amount,
-                account: fed_public_key(),
+                account: account_kp.x_only_public_key().0,
             },
-            keys: vec![fed_key_pair()],
+            keys: vec![account_kp],
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };
 
@@ -87,9 +102,18 @@ impl DummyClientExt for Client {
         // Wait for the output of the primary module
         self.await_primary_module_output(op_id, OutPoint { txid, out_idx: 0 })
             .await
-            .context("Waiting for the output of print_money")?;
+            .context("Waiting for the output of print_using_account")?;
 
         Ok((op_id, OutPoint { txid, out_idx: 0 }))
+    }
+
+    async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
+        self.print_using_account(amount, fed_key_pair()).await
+    }
+
+    async fn print_liability(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
+        self.print_using_account(amount, broken_fed_key_pair())
+            .await
     }
 
     async fn send_money(
