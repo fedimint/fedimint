@@ -30,7 +30,7 @@ check-ulimit:
 
 # run tests
 test: build check-ulimit
-  cargo nexttest run
+  cargo nextest run
 
 # run tests against real services (like bitcoind)
 test-real: check-ulimit
