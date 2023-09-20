@@ -37,7 +37,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
@@ -88,13 +88,14 @@ impl ServerModuleInit for WalletGen {
         SupportedModuleApiVersions::from_raw(0, 0, &[(0, 0)])
     }
 
-    async fn init(
-        &self,
-        cfg: ServerModuleConfig,
-        db: Database,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<DynServerModule> {
-        Ok(Wallet::new(cfg.to_typed()?, db, task_group).await?.into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+        Ok(Wallet::new(
+            args.cfg().to_typed()?,
+            args.db().clone(),
+            &mut args.task_group().clone(),
+        )
+        .await?
+        .into())
     }
 
     fn trusted_dealer_gen(
