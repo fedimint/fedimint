@@ -750,6 +750,13 @@
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -1064,6 +1071,13 @@
     <span class="kw">pub async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: InviteCode) -&gt; ApiResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>token = <span class="self">self</span>.cfg.local.download_token.clone();
 
+        <span class="kw">if </span><span class="self">self</span>.cfg.consensus.federation_id() != info.id {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Wrong Federation Id&quot;</span>.to_string()));
+        }
+
+        <span class="kw">if </span><span class="self">self</span>.cfg.local.identity != info.peer_id {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Wrong Peer Id&quot;</span>.to_string()));
+        }
         <span class="kw">if </span>info.download_token != token {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(
                 <span class="string">&quot;Download token not found&quot;</span>.to_string(),

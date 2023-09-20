@@ -839,6 +839,11 @@
 <a href="#839" id="839">839</a>
 <a href="#840" id="840">840</a>
 <a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1027,7 +1032,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig, anyhow::Error&gt; {
         <span class="kw">let </span>client = ClientConfig {
             global: GlobalClientConfig {
-                federation_id: FederationId(<span class="self">self</span>.auth_pk_set.public_key()),
+                federation_id: <span class="self">self</span>.federation_id(),
                 epoch_pk: <span class="self">self</span>.epoch_pk_set.public_key(),
                 api_endpoints: <span class="self">self</span>.api_endpoints.clone(),
                 consensus_version: <span class="self">self</span>.version,
@@ -1045,6 +1050,10 @@
                 .collect::&lt;anyhow::Result&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
         };
         <span class="prelude-val">Ok</span>(client)
+    }
+
+    <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
+        FederationId(<span class="self">self</span>.auth_pk_set.public_key())
     }
 }
 
@@ -1124,6 +1133,7 @@
             url,
             download_token,
             id,
+            peer_id: <span class="self">self</span>.local.identity,
         }
     }
 

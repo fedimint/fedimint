@@ -1187,6 +1187,13 @@
 <a href="#1187" id="1187">1187</a>
 <a href="#1188" id="1188">1188</a>
 <a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1776,6 +1783,8 @@
     </span><span class="kw">pub </span>download_token: ClientConfigDownloadToken,
     <span class="doccomment">/// Authentication id for the federation
     </span><span class="kw">pub </span>id: FederationId,
+    <span class="doccomment">/// Peer id of the host from the Url
+    </span><span class="kw">pub </span>peer_id: PeerId,
 }
 
 <span class="doccomment">/// Size of a download token
@@ -1809,6 +1818,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
         <span class="kw">let </span><span class="kw-2">mut </span>id_bytes = [<span class="number">0</span>; PK_SIZE];
         cursor.read_exact(<span class="kw-2">&amp;mut </span>id_bytes)<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_id_bytes = [<span class="number">0</span>; <span class="number">2</span>];
+        cursor.read_exact(<span class="kw-2">&amp;mut </span>peer_id_bytes)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>url_len = [<span class="number">0</span>; <span class="number">2</span>];
         cursor.read_exact(<span class="kw-2">&amp;mut </span>url_len)<span class="question-mark">?</span>;
@@ -1824,6 +1835,7 @@
             url: url.parse()<span class="question-mark">?</span>,
             download_token: ClientConfigDownloadToken(download_token),
             id: FederationId(PublicKey::from_bytes(id_bytes)<span class="question-mark">?</span>),
+            peer_id: PeerId(u16::from_be_bytes(peer_id_bytes)),
         })
     }
 }
@@ -1833,6 +1845,7 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[];
         data.extend(<span class="self">self</span>.id.<span class="number">0</span>.to_bytes());
+        data.extend(<span class="self">self</span>.peer_id.<span class="number">0</span>.to_be_bytes());
         <span class="kw">let </span>url_bytes = <span class="self">self</span>.url.as_str().as_bytes();
         data.extend((url_bytes.len() <span class="kw">as </span>u16).to_be_bytes());
         data.extend(url_bytes);
@@ -2362,6 +2375,7 @@
         <span class="kw">let </span>connect = InviteCode {
             url: <span class="string">&quot;ws://test1&quot;</span>.parse().unwrap(),
             id: FederationId::dummy(),
+            peer_id: PeerId(<span class="number">1</span>),
             download_token: ClientConfigDownloadToken(OsRng.gen()),
         };
 
