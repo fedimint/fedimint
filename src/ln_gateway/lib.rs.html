@@ -1061,8 +1061,8 @@
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
 <span class="kw">pub mod </span>lnrpc_client;
-<span class="kw">pub mod </span>ng;
 <span class="kw">pub mod </span>rpc;
+<span class="kw">pub mod </span>state_machine;
 <span class="kw">pub mod </span>types;
 <span class="kw">pub mod </span>utils;
 
@@ -1116,25 +1116,25 @@
 <span class="kw">use </span>gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
-<span class="kw">use </span>ng::pay::OutgoingPaymentError;
-<span class="kw">use </span>ng::GatewayClientExt;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{FederationInfo, SetConfigurationPayload};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
+<span class="kw">use </span>state_machine::GatewayClientExt;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::GatewayLightningBuilder;
-<span class="kw">use </span><span class="kw">crate</span>::ng::GatewayExtPayStates;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::run_webserver;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
     InfoPayload, RestorePayload, WithdrawPayload,
 };
+<span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayExtPayStates;
 
 <span class="doccomment">/// LND HTLC interceptor can&#39;t handle SCID of 0, so start from 1
 </span><span class="kw">pub const </span>INITIAL_SCID: u64 = <span class="number">1</span>;

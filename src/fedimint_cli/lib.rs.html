@@ -870,8 +870,6 @@
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
 <a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -1191,16 +1189,14 @@
         module_inits: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     ) -&gt; CliResult&lt;fedimint_client::Client&gt; {
-        <span class="kw">let </span>client_builder = <span class="self">self
-            </span>.build_client_ng_builder(module_inits, invite_code)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client_builder = <span class="self">self</span>.build_client_builder(module_inits, invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
         client_builder
             .build::&lt;PlainRootSecretStrategy&gt;()
             .<span class="kw">await
             </span>.map_err_cli_general()
     }
 
-    <span class="kw">async fn </span>build_client_ng_builder(
+    <span class="kw">async fn </span>build_client_builder(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_inits: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
@@ -1430,7 +1426,7 @@ Examples:
             }),
             Command::Client(ClientCmd::Restore { secret }) =&gt; {
                 <span class="kw">let </span>(client, metadata) = cli
-                    .build_client_ng_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
+                    .build_client_builder(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>)
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?
                     </span>.build_restoring_from_backup(ClientSecret::&lt;PlainRootSecretStrategy&gt;::new(
@@ -1455,7 +1451,7 @@ Examples:
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
                 <span class="kw">let </span>config = client.get_config().clone();
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
-                    client::handle_ng_command(command, config, client)
+                    client::handle_command(command, config, client)
                         .<span class="kw">await
                         </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>,
                 ))
