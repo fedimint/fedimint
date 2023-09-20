@@ -2,8 +2,8 @@ pub mod client;
 pub mod db;
 pub mod lnd;
 pub mod lnrpc_client;
-pub mod ng;
 pub mod rpc;
+pub mod state_machine;
 pub mod types;
 pub mod utils;
 
@@ -57,25 +57,25 @@ use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
-use ng::pay::OutgoingPaymentError;
-use ng::GatewayClientExt;
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
+use state_machine::pay::OutgoingPaymentError;
+use state_machine::GatewayClientExt;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lnrpc_client::GatewayLightningBuilder;
-use crate::ng::GatewayExtPayStates;
 use crate::rpc::rpc_server::run_webserver;
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, GatewayInfo,
     InfoPayload, RestorePayload, WithdrawPayload,
 };
+use crate::state_machine::GatewayExtPayStates;
 
 /// LND HTLC interceptor can't handle SCID of 0, so start from 1
 pub const INITIAL_SCID: u64 = 1;

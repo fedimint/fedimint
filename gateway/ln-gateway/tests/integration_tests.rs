@@ -39,12 +39,12 @@ use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
-use ln_gateway::ng::{
+use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
+use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, SetConfigurationPayload};
+use ln_gateway::state_machine::{
     GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
-use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
-use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, SetConfigurationPayload};
 use ln_gateway::utils::retry;
 use ln_gateway::GatewayState;
 use reqwest::StatusCode;

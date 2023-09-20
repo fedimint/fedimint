@@ -145,7 +145,7 @@ fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
     hex::FromHex::from_hex(s)
 }
 
-pub async fn handle_ng_command(
+pub async fn handle_command(
     command: ClientCmd,
     _config: ClientConfig,
     client: Client,
