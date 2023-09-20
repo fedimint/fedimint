@@ -251,7 +251,7 @@
 }
 
 <span class="doccomment">/// Information about one of the feds we are connected to
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 </span><span class="kw">pub struct </span>FederationInfo {
     <span class="doccomment">/// Unique identifier of the fed
     </span><span class="kw">pub </span>federation_id: FederationId,
@@ -259,7 +259,7 @@
     <span class="kw">pub </span>config: ClientConfig,
 }
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq)]
 </span><span class="kw">pub struct </span>GatewayInfo {
     <span class="kw">pub </span>version_hash: String,
     <span class="kw">pub </span>federations: Vec&lt;FederationInfo&gt;,
