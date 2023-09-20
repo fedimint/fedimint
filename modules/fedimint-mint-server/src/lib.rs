@@ -7,15 +7,16 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
+use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::{MaybeSend, TaskGroup};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
@@ -71,13 +72,8 @@ impl ServerModuleInit for MintGen {
         SupportedModuleApiVersions::from_raw(u32::MAX, 0, &[(0, 0)])
     }
 
-    async fn init(
-        &self,
-        cfg: ServerModuleConfig,
-        _db: Database,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<DynServerModule> {
-        Ok(Mint::new(cfg.to_typed()?).into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+        Ok(Mint::new(args.cfg().to_typed()?).into())
     }
 
     fn trusted_dealer_gen(

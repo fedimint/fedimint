@@ -8,16 +8,15 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
+use fedimint_core::db::{DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::{push_db_pair_items, Amount, NumPeers, OutPoint, PeerId, ServerModule};
 use fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
@@ -68,13 +67,8 @@ impl ServerModuleInit for DummyGen {
     }
 
     /// Initialize the module
-    async fn init(
-        &self,
-        cfg: ServerModuleConfig,
-        _db: Database,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<DynServerModule> {
-        Ok(Dummy::new(cfg.to_typed()?).into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+        Ok(Dummy::new(args.cfg().to_typed()?).into())
     }
 
     /// DB migrations to move from old to newer versions
