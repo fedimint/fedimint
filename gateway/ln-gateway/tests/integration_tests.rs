@@ -798,6 +798,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let gw_info = rpc_client.get_info().await?;
     assert_eq!(gw_info.gateway_state, "Configuring".to_string());
 
+    // Verify that the gateway's fees are `None`
+    assert_eq!(gw_info.fees, None);
+
     let test_password = "test_password".to_string();
     let set_configuration_payload = SetConfigurationPayload {
         password: test_password.clone(),
@@ -853,7 +856,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
             let rpc_client = rpc_client.with_password(Some("new_password".to_string()));
             let info = rpc_client.get_info().await?;
             assert_eq!(
-                info.fees,
+                info.fees.expect("Gateway fees were None"),
                 RoutingFees {
                     base_msat: 1000,
                     proportional_millionths: 2000,
