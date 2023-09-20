@@ -59,3 +59,14 @@ async fn client_ignores_unknown_module() {
     // Test that building the client worked
     let _client = fed.new_client_with_config(cfg).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed().await;
+    let client = fed.new_client().await;
+    // TODO: try to verify that the federation panics with something like
+    // "Balance sheet of the fed has gone negative, this should never happen!"
+    assert!(client.print_liability(sats(1000)).await.is_err());
+
+    Ok(())
+}
