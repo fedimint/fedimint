@@ -890,6 +890,79 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
     Ok(())
 }
 
+async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+        faucet,
+    } = dev_fed;
+
+    // Query current gateway infos
+    let mut cln_cmd = cmd!(gw_cln, "info");
+    let mut lnd_cmd = cmd!(gw_lnd, "info");
+    let (cln_value, lnd_value) = tokio::try_join!(cln_cmd.out_json(), lnd_cmd.out_json())?;
+
+    // Drop references to cln and lnd gateways so the test can kill them
+    drop(gw_cln);
+    drop(gw_lnd);
+
+    // Reboot gateways with the same Lightning node instances
+    let (new_gw_cln, new_gw_lnd) = tokio::try_join!(
+        Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
+        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
+    )?;
+
+    let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
+    poll_max_retries(
+        "Waiting for CLN Gateway Running state after reboot",
+        10,
+        || async {
+            let mut new_cln_cmd = cmd!(new_gw_cln, "info");
+            let cln_value = new_cln_cmd.out_json().await?;
+            let reboot_info: GatewayInfo = serde_json::from_value(cln_value)?;
+
+            if reboot_info.gateway_state == "Running" {
+                info!(target: LOG_DEVIMINT, "CLN Gateway restarted, with auto-rejoin to federation");
+                // Assert that the gateway info is the same as before the reboot
+                assert_eq!(cln_info, reboot_info);
+                return Ok(true);
+            }
+            Ok(false)
+        },
+    )
+    .await?;
+
+    let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
+    poll_max_retries(
+        "Waiting for LND Gateway Running state after reboot",
+        10,
+        || async {
+            let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
+            let lnd_value = new_lnd_cmd.out_json().await?;
+            let reboot_info: GatewayInfo = serde_json::from_value(lnd_value)?;
+
+            if reboot_info.gateway_state == "Running" {
+                info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
+                // Assert that the gateway info is the same as before the reboot
+                assert_eq!(lnd_info, reboot_info);
+                return Ok(true);
+            }
+            Ok(false)
+        },
+    )
+    .await?;
+
+    info!(LOG_DEVIMINT, "gateway_reboot_test: success");
+    Ok(())
+}
+
 async fn do_try_create_and_pay_invoice(
     gw: &Gatewayd,
     fed: &Federation,
@@ -1039,6 +1112,7 @@ enum Cmd {
     CliTests,
     LoadTestToolTest,
     LightningReconnectTest,
+    GatewayRebootTest,
     #[clap(flatten)]
     Rpc(RpcCmd),
 }
@@ -1232,6 +1306,11 @@ async fn handle_command() -> Result<()> {
             let (process_mgr, _) = setup(args.common).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
+        }
+        Cmd::GatewayRebootTest => {
+            let (process_mgr, _) = setup(args.common).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            gw_reboot_test(dev_fed, &process_mgr).await?;
         }
         Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,
     }

@@ -43,6 +43,11 @@ function lightning_reconnect_test() {
 }
 export -f lightning_reconnect_test
 
+function gateway_reboot_test() {
+  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/gateway-reboot-test.sh
+}
+export -f gateway_reboot_test
+
 function latency_test() {
   fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
 }
@@ -120,6 +125,7 @@ if parallel \
   latency_test \
   reconnect_test \
   lightning_reconnect_test \
+  gateway_reboot_test \
   devimint_cli_test \
   load_test_tool_test ; then
   >&2 echo "All tests successful"
