@@ -24,7 +24,7 @@ use ln_gateway::lnrpc_client::{
 use secp256k1::PublicKey;
 use tokio::sync::Mutex;
 use tonic_lnd::lnrpc::{GetInfoRequest, Invoice as LndInvoice, ListChannelsRequest};
-use tonic_lnd::{connect, LndClient};
+use tonic_lnd::{connect, Client as LndClient};
 use tracing::{error, info, warn};
 use url::Url;
 
