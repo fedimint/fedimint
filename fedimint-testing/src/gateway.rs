@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
@@ -21,7 +22,7 @@ use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::federation::FederationTest;
 use crate::fixtures::{test_dir, Fixtures};
@@ -109,7 +110,7 @@ impl GatewayTest {
             client_builder,
             listen,
             address.clone(),
-            cli_password,
+            cli_password.clone(),
             RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
@@ -128,12 +129,18 @@ impl GatewayTest {
             })
             .await;
 
+        // Wait for the gateway web server to be available
+        GatewayTest::wait_for_webserver(address.clone(), cli_password)
+            .await
+            .expect("Gateway web server failed to start");
+
         // Wait for the gateway to be in the configuring or running state
         GatewayTest::wait_for_gateway_state(gateway.clone(), |gw_state| {
             matches!(gw_state, GatewayState::Configuring)
                 || matches!(gw_state, GatewayState::Running { .. })
         })
-        .await;
+        .await
+        .expect("Gateway failed to start");
 
         let listening_addr = lightning.listening_address();
         let info = lightning.info().await.unwrap();
@@ -147,21 +154,38 @@ impl GatewayTest {
         }
     }
 
-    pub async fn wait_for_gateway_state(gateway: Gateway, func: impl Fn(GatewayState) -> bool) {
-        let mut gateway_state_iterations = 0;
-        loop {
-            let gw_state = gateway.state.read().await.clone();
-            if func(gw_state) {
-                break;
+    pub async fn wait_for_webserver(api: SafeUrl, password: Option<String>) -> anyhow::Result<()> {
+        let rpc = GatewayRpcClient::new(api, password);
+        for _ in 0..30 {
+            let rpc_result = rpc.get_info().await;
+            if rpc_result.is_ok() {
+                return Ok(());
             }
 
-            if gateway_state_iterations >= 30 {
-                warn!("Still waiting for gateway state change");
-            }
-
-            gateway_state_iterations += 1;
             sleep(Duration::from_secs(1)).await;
         }
+
+        Err(anyhow!(
+            "Gateway web server did not come up within 30 seconds"
+        ))
+    }
+
+    pub async fn wait_for_gateway_state(
+        gateway: Gateway,
+        func: impl Fn(GatewayState) -> bool,
+    ) -> anyhow::Result<()> {
+        for _ in 0..30 {
+            let gw_state = gateway.state.read().await.clone();
+            if func(gw_state) {
+                return Ok(());
+            }
+
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        Err(anyhow!(
+            "Gateway did not reach desired state within 30 seconds"
+        ))
     }
 }
 
