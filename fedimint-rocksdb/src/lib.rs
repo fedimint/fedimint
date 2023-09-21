@@ -14,8 +14,7 @@ use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOption
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);
 
-#[derive(Debug)]
-pub struct RocksDbReadOnly(rocksdb::DB, String);
+pub struct RocksDbReadOnly(rocksdb::DB);
 
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
@@ -32,10 +31,10 @@ impl RocksDb {
 }
 
 impl RocksDbReadOnly {
-    pub fn open_read_only(db_path: String) -> Result<RocksDbReadOnly, rocksdb::Error> {
+    pub fn open_read_only(db_path: impl AsRef<Path>) -> Result<RocksDbReadOnly, rocksdb::Error> {
         let opts = rocksdb::Options::default();
-        let db = rocksdb::DB::open_for_read_only(&opts, db_path.clone(), false)?;
-        Ok(RocksDbReadOnly(db, db_path))
+        let db = rocksdb::DB::open_for_read_only(&opts, db_path, false)?;
+        Ok(RocksDbReadOnly(db))
     }
 }
 
@@ -89,16 +88,6 @@ impl IDatabase for RocksDb {
             .await
             .expect("setting tx savepoint failed");
         let single_use = SingleUseDatabaseTransaction::new(rocksdb_tx);
-        Box::new(single_use)
-    }
-}
-
-#[async_trait]
-impl IDatabase for RocksDbReadOnly {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
-        let tx = RocksDbReadOnly::open_read_only(self.1.clone())
-            .expect("Error creating read only transaction");
-        let single_use = SingleUseDatabaseTransaction::new(tx);
         Box::new(single_use)
     }
 }
@@ -565,9 +554,7 @@ mod fedimint_rocksdb_tests {
             dbtx.commit_tx().await;
         }
         // Test readonly implementation
-        let db_readonly =
-            RocksDbReadOnly::open_read_only(path.into_path().to_str().unwrap().to_string())
-                .unwrap();
+        let db_readonly = RocksDbReadOnly::open_read_only(path).unwrap();
         let single_use = SingleUseDatabaseTransaction::new(db_readonly);
         let notifications = notifications::Notifications::new();
         let mut dbtx = fedimint_core::db::DatabaseTransaction::new(

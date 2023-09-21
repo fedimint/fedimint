@@ -8,9 +8,7 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::notifications::Notifications;
-use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersionKey, IDatabase, SingleUseDatabaseTransaction,
-};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::SerdeSignatureShare;
 use fedimint_core::module::__reexports::serde_json;
@@ -83,16 +81,19 @@ impl<'a> DatabaseDump<'a> {
         } else {
             // Check if this database is a client database by reading the `ClientConfig`
             // from the database.
-            let read_only_client: Box<dyn IDatabase> =
-                match RocksDbReadOnly::open_read_only(data_dir) {
-                    Ok(db) => Box::new(db),
-                    Err(_) => {
-                        panic!("Error reading RocksDB database. Quitting...");
-                    }
-                };
+            let read_only_client = match RocksDbReadOnly::open_read_only(data_dir) {
+                Ok(db) => db,
+                Err(_) => {
+                    panic!("Error reading RocksDB database. Quitting...");
+                }
+            };
 
-            let db = Database::new_from_box(read_only_client, ModuleDecoderRegistry::default());
-            let mut dbtx = db.begin_transaction().await;
+            let single_use = SingleUseDatabaseTransaction::new(read_only_client);
+            let mut dbtx = DatabaseTransaction::new(
+                Box::new(single_use),
+                ModuleDecoderRegistry::default(),
+                notifications,
+            );
             let client_cfg = dbtx
                 .find_by_prefix(&ClientConfigKeyPrefix)
                 .await
