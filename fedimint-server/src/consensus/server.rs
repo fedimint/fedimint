@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,7 +54,7 @@ const TRANSACTION_BUFFER_SIZE: usize = 1000;
 #[allow(clippy::large_enum_variant)]
 pub enum EpochMessage {
     Continue(Message<PeerId>),
-    RejoinRequest(u64),
+    RejoinRequest,
 }
 
 type EpochStep = Step<Vec<SerdeConsensusItem>, PeerId>;
@@ -74,34 +74,33 @@ pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
 
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
-    /// `TaskGroup` that is running the server
-    pub task_group: TaskGroup,
     /// Delegate for processing consensus information
-    pub consensus: FedimintConsensus,
-    /// Receives event notifications from the API (triggers epochs)
-    pub api_receiver: Peekable<ReceiverStream<ApiEvent>>,
+    consensus: FedimintConsensus,
+    /// Receives event notifications from the `ConsensusApi` (triggers epochs)
+    api_receiver: Peekable<ReceiverStream<ApiEvent>>,
     /// P2P connections for running consensus
-    pub connections: PeerConnections<EpochMessage>,
+    connections: PeerConnections<EpochMessage>,
     /// Our configuration
-    pub cfg: ServerConfig,
+    cfg: ServerConfig,
     /// Runs the HBBFT consensus algorithm
-    pub hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
+    hbbft: HoneyBadger<Vec<SerdeConsensusItem>, PeerId>,
     /// Used to make API calls to our peers
-    pub api: DynGlobalApi,
+    api: DynGlobalApi,
     /// The list of all other peers
-    pub other_peers: BTreeSet<PeerId>,
-    /// If `Some` then we restarted and look for the epoch to rejoin at
-    pub rejoin_at_epoch: HashMap<u64, HashSet<PeerId>>,
+    other_peers: BTreeSet<PeerId>,
+    /// If non-empty then we restarted and are looking for the epoch to rejoin
+    /// at
+    rejoin_at_epoch: HashMap<u64, HashSet<PeerId>>,
     /// Under the HBBFT consensus algorithm, this will track the latest epoch
     /// message received by each peer and when it was received
-    pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
+    latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     /// Number of pending forced epochs (requested by peers to help join
     /// consensus faster)
-    pub pending_forced_epochs: u64,
+    pending_forced_epochs: u64,
     /// Tracks the last epoch outcome from consensus
-    pub last_processed_epoch: Option<SignedEpochOutcome>,
+    last_processed_epoch: Option<SignedEpochOutcome>,
     /// Used for decoding module specific-values
-    pub decoders: ModuleDecoderRegistry,
+    decoders: ModuleDecoderRegistry,
 }
 
 impl ConsensusServer {
@@ -231,7 +230,6 @@ impl ConsensusServer {
         // Build consensus processor
         let consensus = FedimintConsensus {
             cfg: cfg.clone(),
-            module_inits,
             modules: modules.clone(),
             db: db.clone(),
             api: consensus_api,
@@ -239,12 +237,11 @@ impl ConsensusServer {
         };
 
         Ok(ConsensusServer {
-            task_group: task_group.clone(),
             connections,
             hbbft,
             consensus,
             api_receiver: ReceiverStream::new(api_receiver).peekable(),
-            cfg: cfg.clone(),
+            cfg,
             api: api.into(),
             other_peers,
             rejoin_at_epoch: Default::default(),
@@ -257,26 +254,13 @@ impl ConsensusServer {
 
     /// Loop `run_consensus_epoch` until shut down
     pub async fn run_consensus(mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        let our_hash = self.cfg.consensus.consensus_hash();
-
-        // Confirm our hash matches with peers
-        loop {
-            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
-            match self.api.consensus_config_hash().await {
-                Ok(consensus_hash) if consensus_hash == our_hash => break,
-                Ok(_) => bail!("Our consensus config doesn't match peers!"),
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
-                }
-            }
-            sleep(Duration::from_millis(100)).await;
-        }
+        self.confirm_consensus_config_hash().await?;
 
         let mut rng = OsRng;
         self.start_consensus().await;
 
         while !task_handle.is_shutting_down() {
-            let outcomes = self.run_consensus_epoch(None, &mut rng).await?;
+            let outcomes = self.run_consensus_epoch(&mut rng).await?;
 
             for outcome in outcomes {
                 info!(
@@ -320,7 +304,7 @@ impl ConsensusServer {
         self.hbbft.skip_to_epoch(epoch);
         self.rejoin_at_epoch.clear();
         self.latest_contribution_by_peer.write().await.clear();
-        self.request_rejoin(1).await;
+        self.request_rejoin().await;
     }
 
     /// Returns the next epoch that we need to process, based on our saved
@@ -426,9 +410,8 @@ impl ConsensusServer {
     /// 1. Await a new proposal event or receiving a proposal from peers
     /// 2. Send the `ConsensusProposal` to peers
     /// 3. Run HBBFT until a `ConsensusOutcome` can be returned
-    pub async fn run_consensus_epoch(
+    async fn run_consensus_epoch(
         &mut self,
-        override_proposal: Option<ConsensusProposal>,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
     ) -> anyhow::Result<Vec<HbbftConsensusOutcome>> {
         // for testing federations with one peer
@@ -439,7 +422,7 @@ impl ConsensusServer {
                     () = self.consensus.await_consensus_proposal() => (),
                 }
             }
-            let proposal = self.process_events_then_propose(override_proposal).await;
+            let proposal = self.process_events_then_propose().await;
             let epoch = self.hbbft.epoch();
             self.hbbft.skip_to_epoch(epoch + 1);
             return Ok(vec![HbbftConsensusOutcome {
@@ -458,7 +441,7 @@ impl ConsensusServer {
                 _ => break vec![],
             };
         };
-        let proposal = self.process_events_then_propose(override_proposal).await;
+        let proposal = self.process_events_then_propose().await;
 
         for peer in proposal.drop_peers.iter() {
             self.connections.ban_peer(*peer).await;
@@ -473,11 +456,12 @@ impl ConsensusServer {
         Ok(outcomes)
     }
 
+    pub fn get_consensus(&self) -> &FedimintConsensus {
+        &self.consensus
+    }
+
     // Save any API events we have in the channel then create a proposal
-    async fn process_events_then_propose(
-        &mut self,
-        override_proposal: Option<ConsensusProposal>,
-    ) -> ConsensusProposal {
+    async fn process_events_then_propose(&mut self) -> ConsensusProposal {
         while let Some(Some(event)) = self.api_receiver.next().now_or_never() {
             match event {
                 ApiEvent::ForceProcessOutcome(outcome) => self.force_process_epoch(outcome).await,
@@ -488,7 +472,7 @@ impl ConsensusServer {
         }
         let consensus_proposal = self.consensus.get_consensus_proposal().await;
         self.consensus.api_event_cache.clear();
-        override_proposal.unwrap_or(consensus_proposal)
+        consensus_proposal
     }
 
     async fn force_process_epoch(&mut self, outcome: EpochOutcome) {
@@ -542,12 +526,17 @@ impl ConsensusServer {
             .expect("HBBFT propose failed"))
     }
 
+    /// Wait for any event that triggers a new epoch, and return the event that
+    /// triggered it
     async fn await_next_epoch(&mut self) -> anyhow::Result<EpochTriggerEvent> {
+        // Run a potentially empty epoch if requested by a peer (to help them
+        // join consensus faster)
         if self.pending_forced_epochs > 0 {
             self.pending_forced_epochs = self.pending_forced_epochs.saturating_sub(1);
             return Ok(EpochTriggerEvent::RunEpochRequest);
         }
 
+        // Wait for any of the following events and return the first one that occurs
         tokio::select! {
             _peek = Pin::new(&mut self.api_receiver).peek() => Ok(EpochTriggerEvent::ApiEvent),
             () = self.consensus.await_consensus_proposal() => Ok(EpochTriggerEvent::ModuleProposalEvent),
@@ -558,7 +547,7 @@ impl ConsensusServer {
     fn start_next_epoch(&self, msg: &PeerMessage) -> bool {
         match msg {
             (_, EpochMessage::Continue(peer_msg)) => self.hbbft.epoch() <= peer_msg.epoch(),
-            (_, EpochMessage::RejoinRequest(_)) => false,
+            (_, EpochMessage::RejoinRequest) => false,
         }
     }
 
@@ -578,20 +567,38 @@ impl ConsensusServer {
 
                 Ok(self.handle_step(step).await?)
             }
-            (_, EpochMessage::RejoinRequest(epochs)) => {
-                let requested_forced_epochs_capped = min(NUM_EPOCHS_REJOIN_AHEAD, epochs);
+            (_, EpochMessage::RejoinRequest) => {
                 self.pending_forced_epochs =
-                    max(self.pending_forced_epochs, requested_forced_epochs_capped);
+                    max(self.pending_forced_epochs, NUM_EPOCHS_REJOIN_AHEAD);
                 info!(
                     target: LOG_CONSENSUS,
-                    "Peer {} requested to run {} epochs. Set pending forced epochs to {}",
+                    "Peer {} requested to rejoin consensus. Set pending forced epochs to {}",
                     msg.0,
-                    epochs,
                     self.pending_forced_epochs
                 );
                 Ok(vec![])
             }
         }
+    }
+
+    /// Verify that a safe number of nodes are running the same configuration
+    /// settings as the current node
+    async fn confirm_consensus_config_hash(&mut self) -> anyhow::Result<()> {
+        let our_hash = self.cfg.consensus.consensus_hash();
+
+        loop {
+            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
+            match self.api.consensus_config_hash().await {
+                Ok(consensus_hash) if consensus_hash == our_hash => break,
+                Ok(_) => bail!("Our consensus config doesn't match peers!"),
+                Err(e) => {
+                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+
+        Ok(())
     }
 
     /// If we are rejoining and received a threshold of messages from the same
@@ -623,17 +630,17 @@ impl ConsensusServer {
                 epoch + NUM_EPOCHS_REJOIN_AHEAD
             );
             self.hbbft.skip_to_epoch(epoch + NUM_EPOCHS_REJOIN_AHEAD);
-            self.request_rejoin(NUM_EPOCHS_REJOIN_AHEAD).await;
+            self.request_rejoin().await;
         }
     }
 
     /// Sends a rejoin request to all peers, indicating the number of epochs we
     /// want them to create
-    async fn request_rejoin(&mut self, epochs_to_run: u64) {
+    async fn request_rejoin(&mut self) {
         self.connections
             .send(
                 &Target::all().peers(&self.other_peers),
-                EpochMessage::RejoinRequest(epochs_to_run),
+                EpochMessage::RejoinRequest,
             )
             .await
             .expect("Failed to send rejoin requests");
