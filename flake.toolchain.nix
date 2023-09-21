@@ -166,19 +166,19 @@ let
     "cargo"
   ];
 
-  fenixToolchainCrossAll = wrapToolchain (fenixPkgs.combine ([
+  fenixToolchainCrossAll = fenixPkgs.combine ([
     fenixStableChannel.cargo
     fenixStableChannel.rustc
   ] ++ (lib.attrsets.mapAttrsToList
-    (attr: target: fenixPkgs.${target.name}.stable.rust-std)
-    crossTargets)));
+    (attr: target: fenixPkgs.targets.${target.name}.stable.rust-std)
+    crossTargets));
 
   fenixToolchainCross = builtins.mapAttrs
-    (attr: target: wrapToolchain (fenixPkgs.combine [
+    (attr: target: fenixPkgs.combine [
       fenixStableChannel.cargo
       fenixStableChannel.rustc
       fenixPkgs.targets.${target.name}.stable.rust-std
-    ]))
+    ])
     crossTargets;
 
   fenixToolchainCrossWasm = fenixToolchainCross.wasm32-unknown-unknown;
