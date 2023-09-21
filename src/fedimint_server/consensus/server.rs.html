@@ -675,7 +675,14 @@
 <a href="#675" id="675">675</a>
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{max, min};
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -731,7 +738,7 @@
 #[allow(clippy::large_enum_variant)]
 </span><span class="kw">pub enum </span>EpochMessage {
     Continue(Message&lt;PeerId&gt;),
-    RejoinRequest(u64),
+    RejoinRequest,
 }
 
 <span class="kw">type </span>EpochStep = Step&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;;
@@ -751,34 +758,33 @@
 
 <span class="doccomment">/// Runs the main server consensus loop
 </span><span class="kw">pub struct </span>ConsensusServer {
-    <span class="doccomment">/// `TaskGroup` that is running the server
-    </span><span class="kw">pub </span>task_group: TaskGroup,
     <span class="doccomment">/// Delegate for processing consensus information
-    </span><span class="kw">pub </span>consensus: FedimintConsensus,
-    <span class="doccomment">/// Receives event notifications from the API (triggers epochs)
-    </span><span class="kw">pub </span>api_receiver: Peekable&lt;ReceiverStream&lt;ApiEvent&gt;&gt;,
+    </span>consensus: FedimintConsensus,
+    <span class="doccomment">/// Receives event notifications from the `ConsensusApi` (triggers epochs)
+    </span>api_receiver: Peekable&lt;ReceiverStream&lt;ApiEvent&gt;&gt;,
     <span class="doccomment">/// P2P connections for running consensus
-    </span><span class="kw">pub </span>connections: PeerConnections&lt;EpochMessage&gt;,
+    </span>connections: PeerConnections&lt;EpochMessage&gt;,
     <span class="doccomment">/// Our configuration
-    </span><span class="kw">pub </span>cfg: ServerConfig,
+    </span>cfg: ServerConfig,
     <span class="doccomment">/// Runs the HBBFT consensus algorithm
-    </span><span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;,
+    </span>hbbft: HoneyBadger&lt;Vec&lt;SerdeConsensusItem&gt;, PeerId&gt;,
     <span class="doccomment">/// Used to make API calls to our peers
-    </span><span class="kw">pub </span>api: DynGlobalApi,
+    </span>api: DynGlobalApi,
     <span class="doccomment">/// The list of all other peers
-    </span><span class="kw">pub </span>other_peers: BTreeSet&lt;PeerId&gt;,
-    <span class="doccomment">/// If `Some` then we restarted and look for the epoch to rejoin at
-    </span><span class="kw">pub </span>rejoin_at_epoch: HashMap&lt;u64, HashSet&lt;PeerId&gt;&gt;,
+    </span>other_peers: BTreeSet&lt;PeerId&gt;,
+    <span class="doccomment">/// If non-empty then we restarted and are looking for the epoch to rejoin
+    /// at
+    </span>rejoin_at_epoch: HashMap&lt;u64, HashSet&lt;PeerId&gt;&gt;,
     <span class="doccomment">/// Under the HBBFT consensus algorithm, this will track the latest epoch
     /// message received by each peer and when it was received
-    </span><span class="kw">pub </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
+    </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
     <span class="doccomment">/// Number of pending forced epochs (requested by peers to help join
     /// consensus faster)
-    </span><span class="kw">pub </span>pending_forced_epochs: u64,
+    </span>pending_forced_epochs: u64,
     <span class="doccomment">/// Tracks the last epoch outcome from consensus
-    </span><span class="kw">pub </span>last_processed_epoch: <span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt;,
+    </span>last_processed_epoch: <span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt;,
     <span class="doccomment">/// Used for decoding module specific-values
-    </span><span class="kw">pub </span>decoders: ModuleDecoderRegistry,
+    </span>decoders: ModuleDecoderRegistry,
 }
 
 <span class="kw">impl </span>ConsensusServer {
@@ -908,7 +914,6 @@
         <span class="comment">// Build consensus processor
         </span><span class="kw">let </span>consensus = FedimintConsensus {
             cfg: cfg.clone(),
-            module_inits,
             modules: modules.clone(),
             db: db.clone(),
             api: consensus_api,
@@ -916,12 +921,11 @@
         };
 
         <span class="prelude-val">Ok</span>(ConsensusServer {
-            task_group: task_group.clone(),
             connections,
             hbbft,
             consensus,
             api_receiver: ReceiverStream::new(api_receiver).peekable(),
-            cfg: cfg.clone(),
+            cfg,
             api: api.into(),
             other_peers,
             rejoin_at_epoch: Default::default(),
@@ -934,26 +938,13 @@
 
     <span class="doccomment">/// Loop `run_consensus_epoch` until shut down
     </span><span class="kw">pub async fn </span>run_consensus(<span class="kw-2">mut </span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
-
-        <span class="comment">// Confirm our hash matches with peers
-        </span><span class="kw">loop </span>{
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Waiting for peers config {our_hash}&quot;</span>);
-            <span class="kw">match </span><span class="self">self</span>.api.consensus_config_hash().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == our_hash =&gt; <span class="kw">break</span>,
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Could not check consensus config hash: {}&quot;</span>, OptStacktrace(e))
-                }
-            }
-            sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-        }
+        <span class="self">self</span>.confirm_consensus_config_hash().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
         <span class="self">self</span>.start_consensus().<span class="kw">await</span>;
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
-            <span class="kw">let </span>outcomes = <span class="self">self</span>.run_consensus_epoch(<span class="prelude-val">None</span>, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>outcomes = <span class="self">self</span>.run_consensus_epoch(<span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">for </span>outcome <span class="kw">in </span>outcomes {
                 <span class="macro">info!</span>(
@@ -997,7 +988,7 @@
         <span class="self">self</span>.hbbft.skip_to_epoch(epoch);
         <span class="self">self</span>.rejoin_at_epoch.clear();
         <span class="self">self</span>.latest_contribution_by_peer.write().<span class="kw">await</span>.clear();
-        <span class="self">self</span>.request_rejoin(<span class="number">1</span>).<span class="kw">await</span>;
+        <span class="self">self</span>.request_rejoin().<span class="kw">await</span>;
     }
 
     <span class="doccomment">/// Returns the next epoch that we need to process, based on our saved
@@ -1103,9 +1094,8 @@
     /// 1. Await a new proposal event or receiving a proposal from peers
     /// 2. Send the `ConsensusProposal` to peers
     /// 3. Run HBBFT until a `ConsensusOutcome` can be returned
-    </span><span class="kw">pub async fn </span>run_consensus_epoch(
+    </span><span class="kw">async fn </span>run_consensus_epoch(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        override_proposal: <span class="prelude-ty">Option</span>&lt;ConsensusProposal&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
     ) -&gt; anyhow::Result&lt;Vec&lt;HbbftConsensusOutcome&gt;&gt; {
         <span class="comment">// for testing federations with one peer
@@ -1116,7 +1106,7 @@
                     () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
                 }
             }
-            <span class="kw">let </span>proposal = <span class="self">self</span>.process_events_then_propose(override_proposal).<span class="kw">await</span>;
+            <span class="kw">let </span>proposal = <span class="self">self</span>.process_events_then_propose().<span class="kw">await</span>;
             <span class="kw">let </span>epoch = <span class="self">self</span>.hbbft.epoch();
             <span class="self">self</span>.hbbft.skip_to_epoch(epoch + <span class="number">1</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[HbbftConsensusOutcome {
@@ -1135,7 +1125,7 @@
                 <span class="kw">_ </span>=&gt; <span class="kw">break </span><span class="macro">vec!</span>[],
             };
         };
-        <span class="kw">let </span>proposal = <span class="self">self</span>.process_events_then_propose(override_proposal).<span class="kw">await</span>;
+        <span class="kw">let </span>proposal = <span class="self">self</span>.process_events_then_propose().<span class="kw">await</span>;
 
         <span class="kw">for </span>peer <span class="kw">in </span>proposal.drop_peers.iter() {
             <span class="self">self</span>.connections.ban_peer(<span class="kw-2">*</span>peer).<span class="kw">await</span>;
@@ -1150,11 +1140,12 @@
         <span class="prelude-val">Ok</span>(outcomes)
     }
 
+    <span class="kw">pub fn </span>get_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>FedimintConsensus {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.consensus
+    }
+
     <span class="comment">// Save any API events we have in the channel then create a proposal
-    </span><span class="kw">async fn </span>process_events_then_propose(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        override_proposal: <span class="prelude-ty">Option</span>&lt;ConsensusProposal&gt;,
-    ) -&gt; ConsensusProposal {
+    </span><span class="kw">async fn </span>process_events_then_propose(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; ConsensusProposal {
         <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(event)) = <span class="self">self</span>.api_receiver.next().now_or_never() {
             <span class="kw">match </span>event {
                 ApiEvent::ForceProcessOutcome(outcome) =&gt; <span class="self">self</span>.force_process_epoch(outcome).<span class="kw">await</span>,
@@ -1165,7 +1156,7 @@
         }
         <span class="kw">let </span>consensus_proposal = <span class="self">self</span>.consensus.get_consensus_proposal().<span class="kw">await</span>;
         <span class="self">self</span>.consensus.api_event_cache.clear();
-        override_proposal.unwrap_or(consensus_proposal)
+        consensus_proposal
     }
 
     <span class="kw">async fn </span>force_process_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>, outcome: EpochOutcome) {
@@ -1219,13 +1210,18 @@
             .expect(<span class="string">&quot;HBBFT propose failed&quot;</span>))
     }
 
-    <span class="kw">async fn </span>await_next_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;EpochTriggerEvent&gt; {
-        <span class="kw">if </span><span class="self">self</span>.pending_forced_epochs &gt; <span class="number">0 </span>{
+    <span class="doccomment">/// Wait for any event that triggers a new epoch, and return the event that
+    /// triggered it
+    </span><span class="kw">async fn </span>await_next_epoch(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;EpochTriggerEvent&gt; {
+        <span class="comment">// Run a potentially empty epoch if requested by a peer (to help them
+        // join consensus faster)
+        </span><span class="kw">if </span><span class="self">self</span>.pending_forced_epochs &gt; <span class="number">0 </span>{
             <span class="self">self</span>.pending_forced_epochs = <span class="self">self</span>.pending_forced_epochs.saturating_sub(<span class="number">1</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(EpochTriggerEvent::RunEpochRequest);
         }
 
-        <span class="macro">tokio::select! </span>{
+        <span class="comment">// Wait for any of the following events and return the first one that occurs
+        </span><span class="macro">tokio::select! </span>{
             _peek = Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.api_receiver).peek() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::ApiEvent),
             () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::ModuleProposalEvent),
             msg = <span class="self">self</span>.connections.receive() =&gt; <span class="prelude-val">Ok</span>(EpochTriggerEvent::NewMessage(msg<span class="question-mark">?</span>))
@@ -1235,7 +1231,7 @@
     <span class="kw">fn </span>start_next_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: <span class="kw-2">&amp;</span>PeerMessage) -&gt; bool {
         <span class="kw">match </span>msg {
             (<span class="kw">_</span>, EpochMessage::Continue(peer_msg)) =&gt; <span class="self">self</span>.hbbft.epoch() &lt;= peer_msg.epoch(),
-            (<span class="kw">_</span>, EpochMessage::RejoinRequest(<span class="kw">_</span>)) =&gt; <span class="bool-val">false</span>,
+            (<span class="kw">_</span>, EpochMessage::RejoinRequest) =&gt; <span class="bool-val">false</span>,
         }
     }
 
@@ -1255,20 +1251,38 @@
 
                 <span class="prelude-val">Ok</span>(<span class="self">self</span>.handle_step(step).<span class="kw">await</span><span class="question-mark">?</span>)
             }
-            (<span class="kw">_</span>, EpochMessage::RejoinRequest(epochs)) =&gt; {
-                <span class="kw">let </span>requested_forced_epochs_capped = min(NUM_EPOCHS_REJOIN_AHEAD, epochs);
+            (<span class="kw">_</span>, EpochMessage::RejoinRequest) =&gt; {
                 <span class="self">self</span>.pending_forced_epochs =
-                    max(<span class="self">self</span>.pending_forced_epochs, requested_forced_epochs_capped);
+                    max(<span class="self">self</span>.pending_forced_epochs, NUM_EPOCHS_REJOIN_AHEAD);
                 <span class="macro">info!</span>(
                     target: LOG_CONSENSUS,
-                    <span class="string">&quot;Peer {} requested to run {} epochs. Set pending forced epochs to {}&quot;</span>,
+                    <span class="string">&quot;Peer {} requested to rejoin consensus. Set pending forced epochs to {}&quot;</span>,
                     msg.<span class="number">0</span>,
-                    epochs,
                     <span class="self">self</span>.pending_forced_epochs
                 );
                 <span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[])
             }
         }
+    }
+
+    <span class="doccomment">/// Verify that a safe number of nodes are running the same configuration
+    /// settings as the current node
+    </span><span class="kw">async fn </span>confirm_consensus_config_hash(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
+
+        <span class="kw">loop </span>{
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Waiting for peers config {our_hash}&quot;</span>);
+            <span class="kw">match </span><span class="self">self</span>.api.consensus_config_hash().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(consensus_hash) <span class="kw">if </span>consensus_hash == our_hash =&gt; <span class="kw">break</span>,
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>),
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Could not check consensus config hash: {}&quot;</span>, OptStacktrace(e))
+                }
+            }
+            sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// If we are rejoining and received a threshold of messages from the same
@@ -1300,17 +1314,17 @@
                 epoch + NUM_EPOCHS_REJOIN_AHEAD
             );
             <span class="self">self</span>.hbbft.skip_to_epoch(epoch + NUM_EPOCHS_REJOIN_AHEAD);
-            <span class="self">self</span>.request_rejoin(NUM_EPOCHS_REJOIN_AHEAD).<span class="kw">await</span>;
+            <span class="self">self</span>.request_rejoin().<span class="kw">await</span>;
         }
     }
 
     <span class="doccomment">/// Sends a rejoin request to all peers, indicating the number of epochs we
     /// want them to create
-    </span><span class="kw">async fn </span>request_rejoin(<span class="kw-2">&amp;mut </span><span class="self">self</span>, epochs_to_run: u64) {
+    </span><span class="kw">async fn </span>request_rejoin(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.connections
             .send(
                 <span class="kw-2">&amp;</span>Target::all().peers(<span class="kw-2">&amp;</span><span class="self">self</span>.other_peers),
-                EpochMessage::RejoinRequest(epochs_to_run),
+                EpochMessage::RejoinRequest,
             )
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to send rejoin requests&quot;</span>);

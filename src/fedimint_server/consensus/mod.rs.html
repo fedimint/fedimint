@@ -580,6 +580,7 @@
 <a href="#580" id="580">580</a>
 <a href="#581" id="581">581</a>
 <a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
@@ -589,7 +590,6 @@
 <span class="kw">use </span>std::iter::FromIterator;
 
 <span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::epoch::<span class="kw-2">*</span>;
@@ -656,17 +656,15 @@
 </span><span class="attr">#[non_exhaustive]
 </span><span class="kw">pub struct </span>FedimintConsensus {
     <span class="doccomment">/// Configuration describing the federation and containing our secrets
-    </span><span class="kw">pub </span>cfg: ServerConfig,
-    <span class="doccomment">/// Modules config gen information
-    </span><span class="kw">pub </span>module_inits: ServerModuleInitRegistry,
+    </span>cfg: ServerConfig,
     <span class="doccomment">/// Modules registered with the federation
-    </span><span class="kw">pub </span>modules: ServerModuleRegistry,
+    </span>modules: ServerModuleRegistry,
     <span class="doccomment">/// Database storing the result of processing consensus outcomes
-    </span><span class="kw">pub </span>db: Database,
+    </span>db: Database,
     <span class="doccomment">/// API for accessing state
-    </span><span class="kw">pub </span>api: ConsensusApi,
+    </span>api: ConsensusApi,
     <span class="doccomment">/// Cache of `ApiEvent` to include in a proposal
-    </span><span class="kw">pub </span>api_event_cache: HashSet&lt;ApiEvent&gt;,
+    </span>api_event_cache: HashSet&lt;ApiEvent&gt;,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1092,6 +1090,10 @@
             drop_peers,
             force_new_epoch,
         }
+    }
+
+    <span class="kw">pub fn </span>get_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusApi {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.api
     }
 
     <span class="kw">fn </span>build_verification_caches(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; VerificationCaches {

@@ -454,7 +454,7 @@
         server: <span class="kw-2">&amp;</span>ConsensusServer,
         force_shutdown: bool,
     ) -&gt; FedimintApiHandler {
-        <span class="kw">let </span>api = <span class="kw-2">&amp;</span>server.consensus.api;
+        <span class="kw">let </span>api = server.get_consensus().get_api();
         <span class="kw">let </span>cfg = <span class="kw-2">&amp;</span>api.cfg.local;
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, net::api::server_endpoints(), <span class="prelude-val">None</span>);
