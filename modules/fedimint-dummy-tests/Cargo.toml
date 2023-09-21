@@ -12,14 +12,16 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.66"
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
-fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
-fedimint-server = { path = "../../fedimint-server" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-server = { path = "../../fedimint-server" }
+fedimint-testing = { path = "../../fedimint-testing" }
+rand = "0.8"
+secp256k1 = "0.24.2"
 tokio = { version = "1.26.0", features = ["sync"] }
 
 [dev-dependencies]
