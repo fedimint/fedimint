@@ -1656,6 +1656,7 @@ dependencies = [
  "fedimint-server",
  "fedimint-testing",
  "lightning-invoice 0.24.0",
+ "serde_json",
  "tokio",
  "tracing",
 ]

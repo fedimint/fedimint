@@ -197,7 +197,7 @@ pub async fn handle_command(
             client.select_active_gateway().await?;
 
             let (operation_id, invoice) = client
-                .create_bolt11_invoice(amount, description, expiry_time)
+                .create_bolt11_invoice(amount, description, expiry_time, ())
                 .await?;
             Ok(serde_json::to_value(LnInvoiceResponse {
                 operation_id,

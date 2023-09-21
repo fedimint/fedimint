@@ -95,11 +95,12 @@ pub trait LightningClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>>;
 
     /// Receive over LN with a new invoice
-    async fn create_bolt11_invoice(
+    async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
         &self,
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
+        extra_meta: M,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice)>;
 
     async fn subscribe_ln_receive(
@@ -316,11 +317,12 @@ impl LightningClientExt for Client {
         Ok((pay_type, contract_id))
     }
 
-    async fn create_bolt11_invoice(
+    async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
         &self,
         amount: Amount,
         description: String,
         expiry_time: Option<u64>,
+        extra_meta: M,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let (src_node_id, short_channel_id, route_hints) = match self.select_active_gateway().await
@@ -349,9 +351,11 @@ impl LightningClientExt for Client {
             )
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
         let operation_meta_gen = |txid, _| LightningOperationMeta::Receive {
             out_point: OutPoint { txid, out_idx: 0 },
             invoice: invoice.clone(),
+            extra_meta: extra_meta.clone(),
         };
         let txid = self
             .finalize_and_submit_transaction(
@@ -379,7 +383,11 @@ impl LightningClientExt for Client {
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = ln_operation(self, operation_id).await?;
         let (out_point, invoice) = match operation.meta::<LightningOperationMeta>() {
-            LightningOperationMeta::Receive { out_point, invoice } => (out_point, invoice),
+            LightningOperationMeta::Receive {
+                out_point,
+                invoice,
+                extra_meta: _,
+            } => (out_point, invoice),
             _ => bail!("Operation is not a lightning payment"),
         };
 
@@ -546,6 +554,7 @@ pub enum LightningOperationMeta {
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
+        extra_meta: serde_json::Value,
     },
 }
 

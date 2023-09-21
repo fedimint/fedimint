@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use anyhow::bail;
 use assert_matches::assert_matches;
 use fedimint_core::sats;
 use fedimint_core::util::NextOrPending;
@@ -7,9 +8,11 @@ use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{
-    InternalPayState, LightningClientExt, LightningClientGen, LnReceiveState, PayType,
+    InternalPayState, LightningClientExt, LightningClientGen, LightningOperationMeta,
+    LnReceiveState, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
+use fedimint_ln_common::ln_operation;
 use fedimint_ln_server::LightningGen;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
@@ -67,6 +70,56 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let (client1, client2) = fed.two_clients().await;
+
+    // Print money for client2
+    let (op, outpoint) = client2.print_money(sats(1000)).await?;
+    client2.await_primary_module_output(op, outpoint).await?;
+
+    let extra_meta = "internal payment with no gateway registered".to_string();
+    let (op, invoice) = client1
+        .create_bolt11_invoice(
+            sats(250),
+            "with-markers".to_string(),
+            None,
+            extra_meta.clone(),
+        )
+        .await?;
+    let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
+    assert_eq!(sub1.ok().await?, LnReceiveState::Created);
+    assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
+
+    // Pay the invoice from client2
+    let (pay_type, _) = client2.pay_bolt11_invoice(invoice).await?;
+    match pay_type {
+        PayType::Internal(op_id) => {
+            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            assert_eq!(sub2.ok().await?, InternalPayState::Funding);
+            assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
+            assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
+        }
+        _ => panic!("Expected internal payment!"),
+    }
+
+    // Verify that we can retrieve the extra metadata that was attached
+    let operation = ln_operation(&client1, op).await?;
+    let op_meta = match operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::Receive {
+            out_point: _,
+            invoice: _,
+            extra_meta,
+        } => extra_meta.to_string(),
+        _ => bail!("Operation is not a lightning payment"),
+    };
+    assert_eq!(serde_json::to_string(&extra_meta)?, op_meta);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -78,7 +131,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 
     // TEST internal payment when there are no gateways registered
     let (op, invoice) = client1
-        .create_bolt11_invoice(sats(250), "with-markers".to_string(), None)
+        .create_bolt11_invoice(sats(250), "with-markers".to_string(), None, ())
         .await?;
     let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
@@ -99,7 +152,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     gateway(&fixtures, &fed).await;
 
     let (op, invoice) = client1
-        .create_bolt11_invoice(sats(250), "with-gateway-hint".to_string(), None)
+        .create_bolt11_invoice(sats(250), "with-gateway-hint".to_string(), None, ())
         .await?;
     let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);

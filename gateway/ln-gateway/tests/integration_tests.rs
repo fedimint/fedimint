@@ -349,7 +349,12 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         // User client creates invoice in federation
         let invoice_amount = sats(100);
         let (_invoice_op, invoice) = user_client
-            .create_bolt11_invoice(invoice_amount, "description".into(), None)
+            .create_bolt11_invoice(
+                invoice_amount,
+                "description".into(),
+                None,
+                "test intercept valid HTLC",
+            )
             .await?;
 
         // Run gateway state machine
@@ -421,7 +426,12 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         let gateway = gateway.remove_client(&fed).await;
         // User client creates invoice in federation
         let (_invoice_op, invoice) = user_client
-            .create_bolt11_invoice(sats(100), "description".into(), None)
+            .create_bolt11_invoice(
+                sats(100),
+                "description".into(),
+                None,
+                "test intercept htlc but with no funds",
+            )
             .await?;
 
         // Run gateway state machine
@@ -489,6 +499,8 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let operation_meta_gen = |txid, _| LightningOperationMeta::Receive {
                 out_point: OutPoint { txid, out_idx: 0 },
                 invoice: invoice.clone(),
+                extra_meta: serde_json::to_value("test intercept HTLC with invalid offer")
+                    .expect("Failed to serialize string into json"),
             };
             let operation_id = OperationId(invoice.payment_hash().into_inner());
             let txid = user_client
@@ -683,7 +695,14 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
 
             let invoice_amount = sats(100);
             let (_invoice_op, invoice) = user_client
-                .create_bolt11_invoice(invoice_amount, "description".into(), None)
+                .create_bolt11_invoice(
+                    invoice_amount,
+                    "description".into(),
+                    None,
+                    format!(
+                        "gateway type: {gateway_type} number of route hints: {num_route_hints}"
+                    ),
+                )
                 .await?;
             let route_hints = invoice.route_hints();
 

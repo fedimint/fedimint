@@ -29,3 +29,4 @@ fedimint-logging = { path = "../../fedimint-logging" }
 lightning-invoice = { version = "0.24.0", features = [ "serde" ] }
 tokio = { version = "1.26.0", features = ["sync"] }
 tracing = "0.1.37"
+serde_json = "1.0.91"
