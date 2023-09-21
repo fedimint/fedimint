@@ -115,7 +115,7 @@ impl FederationTest {
             .expect("Failed to init server");
 
             let api_handle = FedimintServer::spawn_consensus_api(&server, false).await;
-            task.spawn("fedimintd", move |handle| async {
+            task.spawn("fedimintd", move |handle| async move {
                 server.run_consensus(handle).await.unwrap();
                 api_handle.stop().await;
             })

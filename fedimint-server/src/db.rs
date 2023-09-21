@@ -212,9 +212,7 @@ mod fedimint_migration_tests {
         let sig_share = SignatureShare(Standard.sample(&mut OsRng));
 
         let consensus_items = vec![
-            ConsensusItem::ConsensusUpgrade(ConsensusUpgrade),
             ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig_share.clone())),
-            ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig_share)),
             ConsensusItem::Transaction(transaction),
         ];
 

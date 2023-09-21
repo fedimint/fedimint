@@ -42,7 +42,7 @@ use crate::backup::ClientBackupSnapshot;
 use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::consensus::{ApiEvent, FundingVerifier, VerificationCaches};
+use crate::consensus::{FundingVerifier, VerificationCaches};
 use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
     ClientConfigSignatureKey, EpochHistoryKey, LastEpochKey,
@@ -261,7 +261,7 @@ impl ConsensusApi {
         self.submission_sender
             .send(
                 ConsensusItem::Transaction(transaction)
-                    .encode()
+                    .consensus_encode_to_vec()
                     .expect("Infallible"),
             )
             .await?;
@@ -359,16 +359,6 @@ impl ConsensusApi {
             .await
             .map(|ep_hist_key| ep_hist_key.0 + 1)
             .unwrap_or(0)
-    }
-
-    /// Sends an upgrade signal to the fedimint server thread
-    pub async fn signal_upgrade(&self) -> Result<(), SendError<ApiEvent>> {
-        unimplemented!()
-    }
-
-    /// Force process an outcome
-    pub async fn force_process_outcome(&self, outcome: SerdeEpochHistory) -> ApiResult<()> {
-        unimplemented!()
     }
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
@@ -572,20 +562,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "fetch_epoch_history",
-            async |fedimint: &ConsensusApi, _context, epoch: u64| -> SerdeEpochHistory {
-                let epoch = fedimint.epoch_history(epoch).await
-                  .ok_or_else(|| ApiError::not_found(format!("epoch {epoch} not found")))?;
-                Ok((&epoch).into())
-            }
-        },
-        api_endpoint! {
-            "fetch_epoch_count",
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
-                Ok(fedimint.get_epoch_count().await)
-            }
-        },
-        api_endpoint! {
             "invite_code",
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
                 Ok(fedimint.cfg.get_invite_code().to_string())
@@ -609,23 +585,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             "config_hash",
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
                 Ok(fedimint.cfg.consensus.consensus_hash())
-            }
-        },
-        api_endpoint! {
-            "upgrade",
-            async |fedimint: &ConsensusApi, context, _v: ()| -> () {
-               check_auth(context)?;
-               fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
-               Ok(())
-            }
-        },
-        api_endpoint! {
-            "process_outcome",
-            async |fedimint: &ConsensusApi, context, outcome: SerdeEpochHistory| -> () {
-                check_auth(context)?;
-                fedimint.force_process_outcome(outcome).await
-                  .map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
-                Ok(())
             }
         },
         api_endpoint! {

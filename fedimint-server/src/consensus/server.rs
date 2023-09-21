@@ -42,6 +42,7 @@ pub struct ConsensusServer {
     pub task_group: TaskGroup,
     /// Delegate for processing consensus information
     pub consensus: FedimintConsensus,
+    pub consensus_api: ConsensusApi,
     /// Aleph BFT instance
     pub atomic_broadcast: AtomicBroadcast,
     /// Our configuration
@@ -90,6 +91,8 @@ impl ConsensusServer {
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
+        assert!(cfg.consensus.api_endpoints.len() >= 4);
+
         // Apply database migrations and build `ServerModuleRegistry`
         let mut modules = BTreeMap::new();
 
@@ -221,6 +224,7 @@ impl ConsensusServer {
             task_group: task_group.clone(),
             atomic_broadcast,
             consensus,
+            consensus_api,
             cfg: cfg.clone(),
             api: api.into(),
             other_peers,
@@ -232,13 +236,16 @@ impl ConsensusServer {
     async fn confirm_consensus_config_hash(&self) -> anyhow::Result<()> {
         let our_hash = self.cfg.consensus.consensus_hash();
 
+        info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
+
         loop {
-            info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
             match self.api.consensus_config_hash().await {
                 Ok(consensus_hash) => {
-                    if consensus_hash == our_hash {
+                    if consensus_hash != our_hash {
                         bail!("Our consensus config doesn't match peers!")
                     }
+
+                    info!(target: LOG_CONSENSUS, "Confirmed peers config {our_hash}");
 
                     return Ok(());
                 }

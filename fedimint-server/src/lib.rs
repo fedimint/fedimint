@@ -29,7 +29,6 @@ use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::consensus::server::ConsensusServer;
-use crate::consensus::HbbftConsensusOutcome;
 use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 use crate::net::peers::ReconnectPeerConnections;
@@ -150,7 +149,7 @@ impl FedimintServer {
         server: &ConsensusServer,
         force_shutdown: bool,
     ) -> FedimintApiHandler {
-        let api = server.get_consensus().get_api();
+        let api = &server.consensus_api;
         let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);

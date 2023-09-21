@@ -18,6 +18,7 @@ use fedimint_core::server::DynVerificationCache;
 use fedimint_core::{timing, Amount, OutPoint, PeerId};
 use futures::StreamExt;
 use itertools::Itertools;
+use tracing::{debug, info};
 
 use crate::config::ServerConfig;
 use crate::db::{
@@ -60,12 +61,16 @@ impl FedimintConsensus {
 
     pub async fn process_consensus_item(
         &self,
-        mut item: Vec<u8>,
+        item: Vec<u8>,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
 
-        let consensus_item = ConsensusItem::consensus_decode(item.as_mut(), &self.decoders())?;
+        let mut reader = std::io::Cursor::new(item);
+        let consensus_item = ConsensusItem::consensus_decode(&mut reader, &self.decoders())?;
+
+        let item_debug = debug::item_message(&consensus_item);
+        debug!("\n  Peer {peer_id}: {item_debug}");
 
         let mut dbtx = self.db.begin_transaction().await;
 
