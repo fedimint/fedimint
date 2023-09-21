@@ -115,8 +115,44 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Scheme for deriving deterministic secret keys
-
+//!
+//! `DerivableSecret` represents a secret key that can be used to derive child
+//! secret keys. A root key secret can be used to derives child
+//! keys from it, which can have child keys derived from them, recursively.
+//!
+//! The `DerivableSecret` struct in this implementation is only used for
+//! deriving secret keys, not public keys. This allows supporting multiple
+//! crypto schemes for the different cryptographic operations used across the
+//! different modules:
+//!
+//! * secp256k1 for bitcoin deposit addresses, redeem keys and contract keys for
+//!   lightning,
+//! * bls12-381 for the guardians&#39; threshold signature scheme,
+//! * chacha20-poly1305 for symmetric encryption used for backups.
 </span><span class="kw">use </span>std::fmt::Formatter;
 
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -136,17 +172,24 @@
 </span><span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ChildId(<span class="kw">pub </span>u64);
 
-<span class="doccomment">/// Secret key that allows deriving child secret keys
+<span class="doccomment">/// A secret that can have child-subkey derived from it.
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>DerivableSecret {
     <span class="doccomment">/// Derivation level, root = 0, every `child_key` increments it
     </span>level: usize,
-    <span class="comment">// TODO: wrap in some secret protecting wrappers maybe?
+    <span class="doccomment">/// An instance of the HKDF (Hash-based Key Derivation
+    ///   Function) with SHA-512 as the underlying hash function. It is used to
+    ///   derive child keys.
+    </span><span class="comment">// TODO: wrap in some secret protecting wrappers maybe?
     </span>kdf: Hkdf&lt;Sha512&gt;,
 }
 
 <span class="kw">impl </span>DerivableSecret {
-    <span class="kw">pub fn </span>new_root(root_key: <span class="kw-2">&amp;</span>[u8], salt: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Derive root secret key from a secret material and salt.
+    ///
+    /// The `salt` is just additional data t used
+    /// as an additional input to the HKDF.
+    </span><span class="kw">pub fn </span>new_root(root_key: <span class="kw-2">&amp;</span>[u8], salt: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
         DerivableSecret {
             level: <span class="number">0</span>,
             kdf: Hkdf::new(root_key, <span class="prelude-val">Some</span>(salt)),
@@ -154,7 +197,6 @@
     }
 
     <span class="doccomment">/// Get derivation level
-    ///
     ///
     /// This is useful for ensuring a correct derivation level is used,
     /// in various places.
@@ -171,7 +213,9 @@
         }
     }
 
-    <span class="kw">pub fn </span>to_secp_key&lt;C: Signing&gt;(<span class="self">self</span>, ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;) -&gt; KeyPair {
+    <span class="doccomment">/// secp256k1 keys are used for bitcoin deposit addresses, redeem keys and
+    /// contract keys for lightning.
+    </span><span class="kw">pub fn </span>to_secp_key&lt;C: Signing&gt;(<span class="self">self</span>, ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;) -&gt; KeyPair {
         <span class="kw">for </span>key_try <span class="kw">in </span><span class="number">0u64</span>.. {
             <span class="kw">let </span>secret = <span class="self">self
                 </span>.kdf
@@ -186,7 +230,9 @@
         <span class="macro">unreachable!</span>(<span class="string">&quot;If key generation fails this often something else has to be wrong.&quot;</span>)
     }
 
-    <span class="kw">pub fn </span>to_bls12_381_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Scalar {
+    <span class="doccomment">/// bls12-381 keys are used for the guardians&#39; threshold signature scheme,
+    /// and most importantly for its use for the blinding keys for e-cash notes.
+    </span><span class="kw">pub fn </span>to_bls12_381_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Scalar {
         Scalar::from_bytes_wide(<span class="kw-2">&amp;</span><span class="self">self</span>.kdf.derive(<span class="kw-2">&amp;</span>tagged_derive(BLS12_381_TAG, ChildId(<span class="number">0</span>))))
     }
 

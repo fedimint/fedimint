@@ -114,6 +114,9 @@
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -175,7 +178,10 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt; {
+    <span class="doccomment">/// There is no consensus within Fedimint on the gateways, each guardian
+    /// might be aware of different ones, so we just return the union of all
+    /// responses and allow client selection.
+    </span><span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt; {
         <span class="self">self</span>.request_with_strategy(
             UnionResponses::new(<span class="self">self</span>.all_peers().total()),
             <span class="string">&quot;list_gateways&quot;</span>.to_string(),

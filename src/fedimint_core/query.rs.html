@@ -609,6 +609,12 @@
 <a href="#609" id="609">609</a>
 <a href="#610" id="610">610</a>
 <a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -624,7 +630,13 @@
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 
-<span class="kw">pub trait </span>QueryStrategy&lt;IR, OR = IR&gt; {
+<span class="doccomment">/// Fedimint query strategy
+///
+/// Due to federated security model each Fedimint client API call to the
+/// Federation might require a different way to process one or more required
+/// responses from the Federation members. This trait abstracts away the details
+/// of each specific strategy for the generic client Api code.
+</span><span class="kw">pub trait </span>QueryStrategy&lt;IR, OR = IR&gt; {
     <span class="doccomment">/// Should requests for this strategy have specific timeouts?
     </span><span class="kw">fn </span>request_timeout(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Duration&gt; {
         <span class="prelude-val">None
