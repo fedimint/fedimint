@@ -209,11 +209,36 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::Client;
@@ -232,7 +257,7 @@
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tempfile::TempDir;
-<span class="kw">use </span>tracing::{info, warn};
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
 <span class="kw">use </span><span class="kw">crate</span>::fixtures::{test_dir, Fixtures};
@@ -320,7 +345,7 @@
             client_builder,
             listen,
             address.clone(),
-            cli_password,
+            cli_password.clone(),
             RoutingFees {
                 base_msat: <span class="number">0</span>,
                 proportional_millionths: <span class="number">0</span>,
@@ -339,12 +364,18 @@
             })
             .<span class="kw">await</span>;
 
+        <span class="comment">// Wait for the gateway web server to be available
+        </span>GatewayTest::wait_for_webserver(address.clone(), cli_password)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Gateway web server failed to start&quot;</span>);
+
         <span class="comment">// Wait for the gateway to be in the configuring or running state
         </span>GatewayTest::wait_for_gateway_state(gateway.clone(), |gw_state| {
             <span class="macro">matches!</span>(gw_state, GatewayState::Configuring)
                 || <span class="macro">matches!</span>(gw_state, GatewayState::Running { .. })
         })
-        .<span class="kw">await</span>;
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;Gateway failed to start&quot;</span>);
 
         <span class="kw">let </span>listening_addr = lightning.listening_address();
         <span class="kw">let </span>info = lightning.info().<span class="kw">await</span>.unwrap();
@@ -358,21 +389,38 @@
         }
     }
 
-    <span class="kw">pub async fn </span>wait_for_gateway_state(gateway: Gateway, func: <span class="kw">impl </span>Fn(GatewayState) -&gt; bool) {
-        <span class="kw">let </span><span class="kw-2">mut </span>gateway_state_iterations = <span class="number">0</span>;
-        <span class="kw">loop </span>{
-            <span class="kw">let </span>gw_state = gateway.state.read().<span class="kw">await</span>.clone();
-            <span class="kw">if </span>func(gw_state) {
-                <span class="kw">break</span>;
+    <span class="kw">pub async fn </span>wait_for_webserver(api: SafeUrl, password: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>rpc = GatewayRpcClient::new(api, password);
+        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">30 </span>{
+            <span class="kw">let </span>rpc_result = rpc.get_info().<span class="kw">await</span>;
+            <span class="kw">if </span>rpc_result.is_ok() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            <span class="kw">if </span>gateway_state_iterations &gt;= <span class="number">30 </span>{
-                <span class="macro">warn!</span>(<span class="string">&quot;Still waiting for gateway state change&quot;</span>);
-            }
-
-            gateway_state_iterations += <span class="number">1</span>;
             sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
+
+        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+            <span class="string">&quot;Gateway web server did not come up within 30 seconds&quot;
+        </span>))
+    }
+
+    <span class="kw">pub async fn </span>wait_for_gateway_state(
+        gateway: Gateway,
+        func: <span class="kw">impl </span>Fn(GatewayState) -&gt; bool,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">30 </span>{
+            <span class="kw">let </span>gw_state = gateway.state.read().<span class="kw">await</span>.clone();
+            <span class="kw">if </span>func(gw_state) {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+
+            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+        }
+
+        <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+            <span class="string">&quot;Gateway did not reach desired state within 30 seconds&quot;
+        </span>))
     }
 }
 
