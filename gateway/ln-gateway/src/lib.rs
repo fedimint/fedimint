@@ -824,32 +824,38 @@ impl Gateway {
         }
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
-        let gateway_config =
-            if let Some(mut prev_config) = dbtx.get_value(&GatewayConfigurationKey).await {
+
+        let gateway_config = if let Some(mut prev_config) = self.get_gateway_configuration().await {
+            if let Some(password) = password {
                 prev_config.password = password;
+            }
 
-                if let Some(num_route_hints) = num_route_hints {
-                    prev_config.num_route_hints = num_route_hints;
-                }
+            if let Some(num_route_hints) = num_route_hints {
+                prev_config.num_route_hints = num_route_hints;
+            }
 
-                if let Some(fees_str) = routing_fees {
-                    let routing_fees = GatewayFee::from_str(fees_str.as_str())?.0;
-                    prev_config.routing_fees = routing_fees;
-                }
+            if let Some(fees_str) = routing_fees {
+                let routing_fees = GatewayFee::from_str(fees_str.as_str())?.0;
+                prev_config.routing_fees = routing_fees;
+            }
 
-                prev_config
-            } else {
-                GatewayConfiguration {
-                    password,
-                    num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
-                    routing_fees: DEFAULT_FEES,
-                }
-            };
+            prev_config
+        } else {
+            if password.is_none() {
+                return Err(GatewayError::GatewayConfigurationError);
+            }
+
+            GatewayConfiguration {
+                password: password.unwrap(),
+                num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
+                routing_fees: DEFAULT_FEES,
+            }
+        };
 
         dbtx.insert_entry(&GatewayConfigurationKey, &gateway_config)
             .await;
         dbtx.commit_tx().await;
-        info!("Set GatewayConfiguration successfully");
+        info!("Set GatewayConfiguration successfully.");
 
         Ok(())
     }
@@ -862,15 +868,19 @@ impl Gateway {
     ///   `GatewayConfiguration`
     pub async fn get_gateway_configuration(&self) -> Option<GatewayConfiguration> {
         let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        // Always use the gateway configuration from the database if it exists.
         if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
-            info!("Gateway using configuration from database.");
             return Some(gateway_config);
         }
 
+        // If the DB does not have the gateway configuration, we can construct one from
+        // the provided password (required) and the defaults.
         if self.gateway_parameters.password.is_none() {
             return None;
         }
 
+        // Use gateway parameters provided by the environment or CLI
         let num_route_hints = self
             .gateway_parameters
             .num_route_hints
@@ -880,11 +890,13 @@ impl Gateway {
             .fees
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
-        Some(GatewayConfiguration {
+        let gateway_config = GatewayConfiguration {
             password: self.gateway_parameters.password.clone().unwrap(),
             num_route_hints,
             routing_fees: routing_fees.0,
-        })
+        };
+
+        Some(gateway_config)
     }
 
     pub async fn remove_client(
@@ -1157,6 +1169,8 @@ pub enum GatewayError {
     UnexpectedState(String),
     #[error("The gateway is disconnected")]
     Disconnected,
+    #[error("The password field is required when initially configuring the gateway")]
+    GatewayConfigurationError,
 }
 
 impl IntoResponse for GatewayError {

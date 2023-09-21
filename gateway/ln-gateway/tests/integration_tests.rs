@@ -803,7 +803,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     let test_password = "test_password".to_string();
     let set_configuration_payload = SetConfigurationPayload {
-        password: test_password.clone(),
+        password: Some(test_password.clone()),
         num_route_hints: None,
         routing_fees: None,
     };
@@ -840,7 +840,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     // Verify that we can change the configuration after it is set
     let set_configuration_payload = SetConfigurationPayload {
-        password: "new_password".to_string(),
+        password: Some("new_password".to_string()),
         num_route_hints: Some(1),
         routing_fees: Some("1000,2000".to_string()),
     };

@@ -79,7 +79,7 @@ pub struct GatewayInfo {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetConfigurationPayload {
-    pub password: String,
+    pub password: Option<String>,
     pub num_route_hints: Option<u32>,
     pub routing_fees: Option<String>,
 }
