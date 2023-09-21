@@ -13,6 +13,12 @@ use crate::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 
+/// Fedimint query strategy
+///
+/// Due to federated security model each Fedimint client API call to the
+/// Federation might require a different way to process one or more required
+/// responses from the Federation members. This trait abstracts away the details
+/// of each specific strategy for the generic client Api code.
 pub trait QueryStrategy<IR, OR = IR> {
     /// Should requests for this strategy have specific timeouts?
     fn request_timeout(&self) -> Option<Duration> {
