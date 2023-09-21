@@ -78,7 +78,7 @@ mod tests {
 
         client.set_active_gateway(&lnd_gw.gateway_id).await?;
         let (opid, invoice) = client
-            .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None)
+            .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
@@ -119,7 +119,7 @@ mod tests {
 
         client.set_active_gateway(&lnd_gw.gateway_id).await?;
         let (opid, invoice) = client
-            .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None)
+            .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
