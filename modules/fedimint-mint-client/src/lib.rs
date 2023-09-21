@@ -590,15 +590,6 @@ impl ClientModuleInit for MintClientGen {
 /// spend the e-cash note. Only the client that possesses the `DerivableSecret`
 /// can derive the correct spend key to spend the e-cash note. This ensures that
 /// only the owner of the e-cash note can spend it.
-///
-/// # E-Cash Note Creation
-///
-/// When creating an e-cash note, the `MintClientModule` first derives the
-/// blinding and spend keys from the `DerivableSecret`. It then creates a
-/// `NoteIssuanceRequest` containing the blinded spend key and sends it to the
-/// mint server. The mint server signs the blinded spend key and returns it to
-/// the client. The client can then unblind the signed spend key to obtain the
-/// e-cash note, which can be spent using the spend key.
 #[derive(Debug)]
 pub struct MintClientModule {
     federation_id: FederationId,
@@ -1197,6 +1188,16 @@ impl MintClientModule {
     ///
     /// Static to help re-use in other places, that don't have a whole [`Self`]
     /// available
+    ///
+    /// # E-Cash Note Creation
+    ///
+    /// When creating an e-cash note, the `MintClientModule` first derives the
+    /// blinding and spend keys from the `DerivableSecret`. It then creates a
+    /// `NoteIssuanceRequest` containing the blinded spend key and sends it to
+    /// the mint server. The mint server signs the blinded spend key and
+    /// returns it to the client. The client can then unblind the signed
+    /// spend key to obtain the e-cash note, which can be spent using the
+    /// spend key.
     pub fn new_note_secret_static(
         secret: &DerivableSecret,
         amount: Amount,

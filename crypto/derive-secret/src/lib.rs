@@ -1,5 +1,18 @@
 //! Scheme for deriving deterministic secret keys
-
+//!
+//! `DerivableSecret` represents a secret key that can be used to derive child
+//! secret keys. A root key secret can be used to derives child
+//! keys from it, which can have child keys derived from them, recursively.
+//!
+//! The `DerivableSecret` struct in this implementation is only used for
+//! deriving secret keys, not public keys. This allows supporting multiple
+//! crypto schemes for the different cryptographic operations used across the
+//! different modules:
+//!
+//! * secp256k1 for bitcoin deposit addresses, redeem keys and contract keys for
+//!   lightning,
+//! * bls12-381 for the guardians' threshold signature scheme,
+//! * chacha20-poly1305 for symmetric encryption used for backups.
 use std::fmt::Formatter;
 
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -19,60 +32,23 @@ const RAW_BYTES: &[u8; 8] = b"rawbytes";
 #[derive(Debug, Copy, Clone, Encodable, Decodable)]
 pub struct ChildId(pub u64);
 
-/// `DerivableSecret` represents a secret key that can be used to derive child
-/// secret keys. Fedimint on init generates a root key, and then derives child
-/// keys from it for each of the modules. Each module's child key can then be
-/// used to derive child keys for its specific use cases. This derivable secret
-/// pattern is especially useful for creating backups for both client and server
-/// side operations.
-///
-/// The `DerivableSecret` struct in this implementation is only used for
-/// deriving secret keys, not public keys. This allows us to support multiple
-/// crypto schemes for the different cryptographic operations used across the
-/// different modules:
-/// - secp256k1 for bitcoin deposit addresses, redeem keys and contract keys for
-///   lightning,
-/// - bls12-381 for the guardians' threshold signature scheme,
-/// - chacha20-poly1305 for symmetric encryption used for backups.
-///
-/// The `DerivableSecret` struct contains two fields:
-/// - `level`: This represents the derivation level of the secret key and acts
-///   as an index. The root key starts at level 0, and each derived child key
-///   increments this level.
-/// - `kdf`: This is an instance of the HKDF (Hash-based Key Derivation
-///   Function) with SHA-512 as the underlying hash function. It is used to
-///   derive child keys.
-///
-/// The `salt` used in the `new_root` function is just random data that is used
-/// as an additional input to the HKDF.
-///
-/// # Example
-/// In the context of e-cash, the `DerivableSecret` can be used to derive
-/// blinding and spend keys for e-cash notes. Here's an example from
-/// modules/fedimint-mint-client/src/output.rs
-///
-/// ```rust
-/// let spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
-/// let nonce = Nonce(spend_key.x_only_public_key().0);
-/// let blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
-/// let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
-///
-/// let cr = NoteIssuanceRequest {
-///     spend_key,
-///     blinding_key,
-/// };
-///
-/// (cr, BlindNonce(blinded_nonce))
-/// ```
+/// A secret that can have child-subkey derived from it.
 #[derive(Clone)]
 pub struct DerivableSecret {
     /// Derivation level, root = 0, every `child_key` increments it
     level: usize,
+    /// An instance of the HKDF (Hash-based Key Derivation
+    ///   Function) with SHA-512 as the underlying hash function. It is used to
+    ///   derive child keys.
     // TODO: wrap in some secret protecting wrappers maybe?
     kdf: Hkdf<Sha512>,
 }
 
 impl DerivableSecret {
+    /// Derive root secret key from a secret material and salt.
+    ///
+    /// The `salt` is just additional data t used
+    /// as an additional input to the HKDF.
     pub fn new_root(root_key: &[u8], salt: &[u8]) -> Self {
         DerivableSecret {
             level: 0,
