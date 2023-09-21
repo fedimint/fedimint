@@ -67,6 +67,7 @@ in
   commonEnvsShell = {
     LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
     ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
+    LD_LIBRARY_PATH = "${pkgs.rocksdb}/lib/";
     PROTOC = "${pkgs.protobuf}/bin/protoc";
     PROTOC_INCLUDE = "${pkgs.protobuf}/include";
     CARGO_PROFILE = self.commonProfile;
