@@ -714,7 +714,7 @@
             client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>(operation_id, invoice) = client
-                .create_bolt11_invoice(amount, description, expiry_time)
+                .create_bolt11_invoice(amount, description, expiry_time, ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(serde_json::to_value(LnInvoiceResponse {
                 operation_id,

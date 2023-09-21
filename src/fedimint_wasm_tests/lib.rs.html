@@ -240,7 +240,7 @@
 
         client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(opid, invoice) = client
-            .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>)
+            .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         faucet::pay_invoice(<span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -281,7 +281,7 @@
 
         client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(opid, invoice) = client
-            .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>)
+            .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         faucet::pay_invoice(<span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
 

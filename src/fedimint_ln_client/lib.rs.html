@@ -1061,6 +1061,15 @@
 <a href="#1061" id="1061">1061</a>
 <a href="#1062" id="1062">1062</a>
 <a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
@@ -1158,11 +1167,12 @@
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt;;
 
     <span class="doccomment">/// Receive over LN with a new invoice
-    </span><span class="kw">async fn </span>create_bolt11_invoice(
+    </span><span class="kw">async fn </span>create_bolt11_invoice&lt;M: Serialize + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice)&gt;;
 
     <span class="kw">async fn </span>subscribe_ln_receive(
@@ -1379,11 +1389,12 @@
         <span class="prelude-val">Ok</span>((pay_type, contract_id))
     }
 
-    <span class="kw">async fn </span>create_bolt11_invoice(
+    <span class="kw">async fn </span>create_bolt11_invoice&lt;M: Serialize + Send + Sync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         description: String,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+        extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice)&gt; {
         <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span><span class="self">self</span>.select_active_gateway().<span class="kw">await
@@ -1412,9 +1423,11 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">&quot;extra_meta is serializable&quot;</span>);
         <span class="kw">let </span>operation_meta_gen = |txid, <span class="kw">_</span>| LightningOperationMeta::Receive {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
             invoice: invoice.clone(),
+            extra_meta: extra_meta.clone(),
         };
         <span class="kw">let </span>txid = <span class="self">self
             </span>.finalize_and_submit_transaction(
@@ -1442,7 +1455,11 @@
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;() {
-            LightningOperationMeta::Receive { out_point, invoice } =&gt; (out_point, invoice),
+            LightningOperationMeta::Receive {
+                out_point,
+                invoice,
+                extra_meta: <span class="kw">_</span>,
+            } =&gt; (out_point, invoice),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
 
@@ -1609,6 +1626,7 @@
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
+        extra_meta: serde_json::Value,
     },
 }
 
