@@ -663,6 +663,14 @@
 <a href="#663" id="663">663</a>
 <a href="#664" id="664">664</a>
 <a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, allow(dead_code))]
 
 </span><span class="kw">use </span>std::collections::VecDeque;
@@ -842,6 +850,8 @@
         </span>Fut: Future&lt;Output = R&gt; + Send + <span class="lifetime">&#39;static</span>,
         R: Send + <span class="lifetime">&#39;static</span>,
     {
+        <span class="kw">use </span>tracing::debug;
+
         <span class="kw">let </span>name = name.into();
         <span class="kw">let </span><span class="kw-2">mut </span>guard = TaskPanicGuard {
             name: name.clone(),
@@ -851,9 +861,15 @@
         <span class="kw">let </span>handle = <span class="self">self</span>.make_handle();
 
         <span class="kw">let </span>(tx, rx) = oneshot::channel();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn(name.as_str(), <span class="kw">async move </span>{
-            <span class="comment">// if receiver is not interested, just drop the message
-            </span><span class="kw">let _ </span>= tx.send(f(handle).<span class="kw">await</span>);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(handle) = <span class="self">self</span>::imp::spawn(name.as_str(), {
+            <span class="kw">let </span>name = name.clone();
+            <span class="kw">async move </span>{
+                <span class="comment">// if receiver is not interested, just drop the message
+                </span><span class="macro">debug!</span>(<span class="string">&quot;Starting task {name}&quot;</span>);
+                <span class="kw">let </span>r = f(handle).<span class="kw">await</span>;
+                <span class="macro">debug!</span>(<span class="string">&quot;Finished task {name}&quot;</span>);
+                <span class="kw">let _ </span>= tx.send(r);
+            }
         }) {
             <span class="self">self</span>.inner.join.lock().<span class="kw">await</span>.push_back((name, handle));
         }

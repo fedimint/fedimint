@@ -540,6 +540,15 @@
 <a href="#540" id="540">540</a>
 <a href="#541" id="541">541</a>
 <a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -654,21 +663,30 @@
 
         task_group
             .spawn(<span class="string">&quot;LND HTLC Subscription&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>htlc_stream = <span class="kw">match </span>client
+                <span class="kw">let </span>future_stream = client
                     .router()
-                    .htlc_interceptor(ReceiverStream::new(lnd_rx))
-                    .<span class="kw">await
-                    </span>.map_err(|e| LightningRpcError::FailedToGetRouteHints {
-                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to subscribe to LND htlc stream {e:?}&quot;</span>),
-                    }) {
-                    <span class="prelude-val">Ok</span>(stream) =&gt; stream.into_inner(),
-                    <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">&quot;Failed to establish htlc stream&quot;</span>);
-                        <span class="macro">debug!</span>(<span class="string">&quot;Error: {:?}&quot;</span>, e);
+                    .htlc_interceptor(ReceiverStream::new(lnd_rx));
+                <span class="kw">let </span><span class="kw-2">mut </span>htlc_stream = <span class="macro">tokio::select! </span>{
+                    stream = future_stream =&gt; {
+                        <span class="kw">match </span>stream {
+                            <span class="prelude-val">Ok</span>(stream) =&gt; stream.into_inner(),
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="macro">error!</span>(<span class="string">&quot;Failed to establish htlc stream&quot;</span>);
+                                <span class="kw">let </span>e = LightningRpcError::FailedToGetRouteHints {
+                                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to subscribe to LND htlc stream {e:?}&quot;</span>),
+                                };
+                                <span class="macro">debug!</span>(<span class="string">&quot;Error: {e}&quot;</span>);
+                                <span class="kw">return</span>;
+                            }
+                        }
+                    },
+                    <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;LND HTLC Subscription received shutdown signal while trying to intercept HTLC stream, exiting...&quot;</span>);
                         <span class="kw">return</span>;
                     }
                 };
 
+                <span class="macro">debug!</span>(<span class="string">&quot;LND HTLC Subscription: starting to process stream&quot;</span>);
                 <span class="comment">// To gracefully handle shutdown signals, we need to be able to receive signals
                 // while waiting for the next message from the HTLC stream.
                 //
@@ -691,7 +709,7 @@
                             </span>}
                     }}
                 } {
-                    <span class="macro">trace!</span>(<span class="string">&quot;handling htlc {:?}&quot;</span>, htlc);
+                    <span class="macro">trace!</span>(<span class="string">&quot;LND HTLC Subscription: handling htlc {htlc:?}&quot;</span>);
 
                     <span class="kw">if </span>htlc.incoming_circuit_key.is_none() {
                         <span class="macro">error!</span>(<span class="string">&quot;Cannot route htlc with None incoming_circuit_key&quot;</span>);

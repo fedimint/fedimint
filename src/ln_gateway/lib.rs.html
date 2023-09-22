@@ -1103,6 +1103,44 @@
 <a href="#1103" id="1103">1103</a>
 <a href="#1104" id="1104">1104</a>
 <a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1446,11 +1484,9 @@
         Box::new(gateway_items.into_iter())
     }
 
-    <span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-
-        <span class="self">self</span>.start_webserver(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span>;
-        <span class="self">self</span>.start_gateway(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
+        <span class="self">self</span>.start_webserver(tg).<span class="kw">await</span>;
+        <span class="self">self</span>.start_gateway(tg).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>handle = tg.make_handle();
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(shutdown_receiver)
@@ -1482,22 +1518,17 @@
                     .<span class="kw">await
                     </span>.expect(<span class="string">&quot;Failed to start webserver&quot;</span>);
                     <span class="macro">info!</span>(<span class="string">&quot;Successfully started webserver&quot;</span>);
-
-                    gateway_db
-                        .wait_key_check(<span class="kw-2">&amp;</span>GatewayConfigurationKey, |v| {
-                            v.filter(|cfg| {
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(old_config) = gateway_config.clone() {
-                                    old_config.password != cfg.clone().password
-                                } <span class="kw">else </span>{
-                                    <span class="bool-val">true
-                                </span>}
-                            })
-                        })
-                        .<span class="kw">await</span>;
-
-                    <span class="macro">info!</span>(<span class="string">&quot;GatewayConfiguration has been updated, restarting webserver...&quot;</span>);
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = webserver_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
-                        <span class="macro">panic!</span>(<span class="string">&quot;Error shutting down server: {e:?}&quot;</span>);
+                    <span class="macro">tokio::select! </span>{
+                        <span class="kw">_ </span>= wait_for_new_password(<span class="kw-2">&amp;</span>gateway_db, gateway_config) =&gt; {
+                            <span class="macro">info!</span>(<span class="string">&quot;GatewayConfiguration has been updated, restarting webserver...&quot;</span>);
+                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = webserver_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
+                                <span class="macro">panic!</span>(<span class="string">&quot;Error shutting down server: {e:?}&quot;</span>);
+                            }
+                        },
+                        <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+                            <span class="macro">info!</span>(<span class="string">&quot;Received shutdown signal, exiting....&quot;</span>);
+                            <span class="kw">break</span>;
+                        }
                     }
                 }
             })
@@ -1523,6 +1554,7 @@
                 <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                     <span class="kw">loop </span>{
                         <span class="kw">if </span>handle.is_shutting_down() {
+                            <span class="macro">info!</span>(<span class="string">&quot;Gateway HTLC handler loop is shutting down&quot;</span>);
                             <span class="kw">break</span>;
                         }
 
@@ -1557,9 +1589,17 @@
                                             lightning_alias,
                                         }).<span class="kw">await</span>;
 
-                                        <span class="comment">// Blocks until the connection to the lightning node breaks
-                                        </span><span class="self">self</span>.handle_htlc_stream(stream, handle.clone()).<span class="kw">await</span>;
-                                        <span class="macro">warn!</span>(<span class="string">&quot;HTLC Stream Lightning connection broken. Gateway is disconnected&quot;</span>);
+                                        <span class="comment">// Blocks until the connection to the lightning node breaks or we receive the shutdown signal
+                                        </span><span class="macro">tokio::select! </span>{
+                                            <span class="kw">_ </span>= <span class="self">self</span>.handle_htlc_stream(stream, handle.clone()) =&gt; {
+                                                <span class="macro">warn!</span>(<span class="string">&quot;HTLC Stream Lightning connection broken. Gateway is disconnected&quot;</span>);
+                                            },
+                                            <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+                                                <span class="macro">info!</span>(<span class="string">&quot;Received shutdown signal&quot;</span>);
+                                                <span class="self">self</span>.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                                                <span class="kw">break</span>;
+                                            }
+                                        }
                                     }
                                     <span class="prelude-val">Err</span>(e) =&gt; {
                                         <span class="macro">error!</span>(<span class="string">&quot;Failed to retrieve Lightning info: {e:?}&quot;</span>);
@@ -1571,10 +1611,7 @@
                             }
                         }
 
-                        <span class="self">self</span>.set_gateway_state(GatewayState::Disconnected).<span class="kw">await</span>;
-                        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = htlc_task_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
-                            <span class="macro">error!</span>(<span class="string">&quot;HTLC task group shutdown errors: {}&quot;</span>, e);
-                        }
+                        <span class="self">self</span>.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
 
                         <span class="macro">error!</span>(<span class="string">&quot;Disconnected from Lightning Node. Waiting 5 seconds and trying again&quot;</span>);
                         sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
@@ -1586,45 +1623,67 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="kw">async fn </span>handle_disconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, htlc_task_group: TaskGroup) {
+        <span class="self">self</span>.set_gateway_state(GatewayState::Disconnected).<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = htlc_task_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
+            <span class="macro">error!</span>(<span class="string">&quot;HTLC task group shutdown errors: {}&quot;</span>, e);
+        }
+    }
+
     <span class="kw">pub async fn </span>handle_htlc_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>stream: RouteHtlcStream&lt;<span class="lifetime">&#39;_</span>&gt;, handle: TaskHandle) {
-        <span class="kw">if let </span>GatewayState::Running {
+        <span class="kw">let </span>GatewayState::Running {
             lnrpc,
             lightning_public_key: <span class="kw">_</span>,
             lightning_alias: <span class="kw">_</span>,
         } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone()
-        {
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) = stream.next().<span class="kw">await </span>{
-                <span class="kw">if </span>handle.is_shutting_down() {
-                    <span class="kw">break</span>;
-                }
-
-                <span class="kw">let </span>scid_to_feds = <span class="self">self</span>.scid_to_federation.read().<span class="kw">await</span>;
-                <span class="kw">let </span>federation_id = scid_to_feds.get(<span class="kw-2">&amp;</span>htlc_request.short_channel_id);
-                <span class="comment">// Just forward the HTLC if we do not have a federation that
-                // corresponds to the short channel id
-                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
-                    <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
-                    <span class="kw">let </span>client = clients.get(federation_id);
-                    <span class="comment">// Just forward the HTLC if we do not have a client that
-                    // corresponds to the federation id
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
-                        <span class="kw">let </span>htlc = htlc_request.clone().try_into();
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
-                            <span class="kw">if </span>client.gateway_handle_intercepted_htlc(htlc).<span class="kw">await</span>.is_ok() {
-                                <span class="kw">continue</span>;
+        <span class="kw">else </span>{
+            <span class="macro">panic!</span>(<span class="string">&quot;Gateway isn&#39;t in a running state&quot;</span>)
+        };
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>stream.next().<span class="kw">await </span>{
+                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) =&gt; {
+                    <span class="kw">if </span>handle.is_shutting_down() {
+                        <span class="kw">break</span>;
+                    }
+                    <span class="kw">let </span>scid_to_feds = <span class="self">self</span>.scid_to_federation.read().<span class="kw">await</span>;
+                    <span class="kw">let </span>federation_id = scid_to_feds.get(<span class="kw-2">&amp;</span>htlc_request.short_channel_id);
+                    <span class="comment">// Just forward the HTLC if we do not have a federation that
+                    // corresponds to the short channel id
+                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
+                        <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
+                        <span class="kw">let </span>client = clients.get(federation_id);
+                        <span class="comment">// Just forward the HTLC if we do not have a client that
+                        // corresponds to the federation id
+                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
+                            <span class="kw">let </span>htlc = htlc_request.clone().try_into();
+                            <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
+                                <span class="kw">match </span>client.gateway_handle_intercepted_htlc(htlc).<span class="kw">await </span>{
+                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">continue</span>,
+                                    <span class="prelude-val">Err</span>(e) =&gt; {
+                                        <span class="macro">info!</span>(<span class="string">&quot;Got error intercepting HTLC: {e:?}, will retry...&quot;</span>)
+                                    }
+                                }
+                            } <span class="kw">else </span>{
+                                <span class="macro">info!</span>(<span class="string">&quot;Got no HTLC result&quot;</span>)
                             }
+                        } <span class="kw">else </span>{
+                            <span class="macro">info!</span>(<span class="string">&quot;Got no client result&quot;</span>)
                         }
                     }
+
+                    <span class="kw">let </span>outcome = InterceptHtlcResponse {
+                        action: <span class="prelude-val">Some</span>(Action::Forward(Forward {})),
+                        incoming_chan_id: htlc_request.incoming_chan_id,
+                        htlc_id: htlc_request.htlc_id,
+                    };
+
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = lnrpc.complete_htlc(outcome).<span class="kw">await </span>{
+                        <span class="macro">error!</span>(<span class="string">&quot;Error sending HTLC response to lightning node: {error:?}&quot;</span>);
+                    }
                 }
-
-                <span class="kw">let </span>outcome = InterceptHtlcResponse {
-                    action: <span class="prelude-val">Some</span>(Action::Forward(Forward {})),
-                    incoming_chan_id: htlc_request.incoming_chan_id,
-                    htlc_id: htlc_request.htlc_id,
-                };
-
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = lnrpc.complete_htlc(outcome).<span class="kw">await </span>{
-                    <span class="macro">error!</span>(<span class="string">&quot;Error sending HTLC response to lightning node: {error:?}&quot;</span>);
+                other =&gt; {
+                    <span class="macro">info!</span>(<span class="string">&quot;Got {other:?} while handling HTLC stream, exiting from loop...&quot;</span>);
+                    <span class="kw">break</span>;
                 }
             }
         }
@@ -2138,6 +2197,23 @@
             config,
         }
     }
+}
+
+<span class="kw">async fn </span>wait_for_new_password(
+    gateway_db: <span class="kw-2">&amp;</span>Database,
+    gateway_config: <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;,
+) {
+    gateway_db
+        .wait_key_check(<span class="kw-2">&amp;</span>GatewayConfigurationKey, |v| {
+            v.filter(|cfg| {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(old_config) = gateway_config.clone() {
+                    old_config.password != cfg.clone().password
+                } <span class="kw">else </span>{
+                    <span class="bool-val">true
+                </span>}
+            })
+        })
+        .<span class="kw">await</span>;
 }
 
 <span class="attr">#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
