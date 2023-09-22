@@ -1,10 +1,10 @@
-use fedimint_core::sats;
 use fedimint_core::util::NextOrPending;
+use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_mint_client::{
-    MintClientExt, MintClientGen, ReissueExternalNotesState, SpendOOBState,
+    MintClientExt, MintClientGen, OOBNotes, ReissueExternalNotesState, SpendOOBState,
 };
 use fedimint_mint_common::config::MintGenParams;
 use fedimint_mint_server::MintGen;
@@ -38,5 +38,49 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 
     assert_eq!(client1.get_balance().await, sats(250));
     assert_eq!(client2.get_balance().await, sats(750));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_fed().await;
+    let (client1, _client2) = fed.two_clients().await;
+    let (op, outpoint) = client1.print_money(sats(1000)).await?;
+    client1.await_primary_module_output(op, outpoint).await?;
+
+    // Spend from client1 to client2
+    let err_msg = client1
+        .spend_notes(Amount::ZERO, TIMEOUT, ())
+        .await
+        .expect_err("Zero-amount spends should be forbidden")
+        .to_string();
+    assert!(err_msg.contains("zero-amount"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_fed().await;
+    let (client1, _client2) = fed.two_clients().await;
+    let (op, outpoint) = client1.print_money(sats(1000)).await?;
+    client1.await_primary_module_output(op, outpoint).await?;
+
+    // Spend from client1 to client2
+    let err_msg = client1
+        .reissue_external_notes(
+            OOBNotes {
+                federation_id: client1.federation_id(),
+                notes: Default::default(),
+            },
+            (),
+        )
+        .await
+        .expect_err("Zero-amount receives should be forbidden")
+        .to_string();
+    assert!(err_msg.contains("zero-amount"));
+
     Ok(())
 }

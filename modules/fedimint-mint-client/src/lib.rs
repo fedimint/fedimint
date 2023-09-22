@@ -17,7 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context as AnyhowContext};
+use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
@@ -248,6 +248,11 @@ impl MintClientExt for Client {
             federation_id,
             notes,
         } = oob_notes;
+        ensure!(
+            notes.total_amount() > Amount::ZERO,
+            "Reissuing zero-amount e-cash isn't supported"
+        );
+
         if federation_id != mint.federation_id {
             bail!("Federation ID does not match");
         }
@@ -1088,6 +1093,11 @@ impl MintClientModule {
         Vec<MintClientStateMachines>,
         TieredMulti<SpendableNote>,
     )> {
+        ensure!(
+            min_amount > Amount::ZERO,
+            "zero-amount out-of-band spends are not supported"
+        );
+
         let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
 
         let operation_id = OperationId(
