@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["DummyClientFundsKeyV0"]};
+window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"struct":["DbKeyPrefixIter","DummyClientFundsKeyV0"]};

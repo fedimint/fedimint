@@ -164,6 +164,22 @@
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::PathBuf;
 
@@ -171,12 +187,16 @@
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>bytes::Bytes;
 <span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::IDatabase;
 <span class="kw">use </span>fedimint_core::module::DynServerModuleInit;
+<span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
+<span class="kw">use </span>fedimint_mint_client::MintClientGen;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
+<span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>fedimint_wallet_server::WalletGen;
 <span class="kw">use </span>futures::StreamExt;
 
@@ -316,14 +336,26 @@
                 ]
             });
 
+            <span class="kw">let </span>client_module_inits = ClientModuleInitRegistry::from(<span class="kw">if </span>options.no_modules {
+                <span class="macro">vec!</span>[]
+            } <span class="kw">else </span>{
+                <span class="macro">vec!</span>[
+                    DynClientModuleInit::from(WalletClientGen::default()),
+                    DynClientModuleInit::from(MintClientGen),
+                    DynClientModuleInit::from(LightningClientGen),
+                ]
+            });
+
             <span class="kw">let </span><span class="kw-2">mut </span>dbdump = DatabaseDump::new(
                 cfg_dir,
                 options.database,
                 password,
                 module_inits,
+                client_module_inits,
                 modules,
                 prefix_names,
-            )<span class="question-mark">?</span>;
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
             dbdump.dump_database().<span class="kw">await</span><span class="question-mark">?</span>;
         }
     }

@@ -990,6 +990,11 @@
 <a href="#990" id="990">990</a>
 <a href="#991" id="991">991</a>
 <a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
@@ -1407,19 +1412,34 @@
 /// `ClientModuleInit`, we can&#39;t really have a `ICommonModuleInit`, so to unify
 /// them in `ModuleInitRegistry` we move the common functionality to be an
 /// interface over their dyn newtype wrappers. A bit weird, but works.
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IDynCommonModuleInit: Debug {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
 
     <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
 
     <span class="kw">fn </span>to_dyn_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynCommonModuleInit;
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
 
-<span class="kw">pub trait </span>ExtendsCommonModuleInit: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static </span>{
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>ExtendsCommonModuleInit: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static </span>{
     <span class="kw">type </span>Common: CommonModuleInit;
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
 
-<span class="kw">impl</span>&lt;T&gt; IDynCommonModuleInit <span class="kw">for </span>T
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl</span>&lt;T&gt; IDynCommonModuleInit <span class="kw">for </span>T
 <span class="kw">where
     </span>T: ExtendsCommonModuleInit,
 {
@@ -1434,6 +1454,14 @@
     <span class="kw">fn </span>to_dyn_common(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynCommonModuleInit {
         DynCommonModuleInit::from_inner(Arc::new(<span class="self">self</span>.clone()))
     }
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleInit&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
+    </span>}
 }
 
 <span class="doccomment">/// Interface for Module Generation
@@ -1487,12 +1515,6 @@
         module_instance_id: ModuleInstanceId,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;ClientModuleConfig&gt;;
-
-    <span class="kw">async fn </span>dump_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
 
 <span class="macro">dyn_newtype_define!</span>(
@@ -1524,7 +1546,9 @@
         <span class="self">self</span>.inner.as_common()
     }
 }
-<span class="kw">pub trait </span>CommonModuleInit: Debug + Sized {
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>CommonModuleInit: Debug + Sized {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion;
     <span class="kw">const </span>KIND: ModuleKind;
 
@@ -1609,12 +1633,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
     ) -&gt; anyhow::Result&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig&gt;;
-
-    <span class="kw">async fn </span>dump_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1684,14 +1702,6 @@
             &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleInit&gt;::get_client_config(<span class="self">self</span>, config)<span class="question-mark">?</span>,
         )
     }
-
-    <span class="kw">async fn </span>dump_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleInit&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
-    </span>}
 }
 
 <span class="kw">pub enum </span>ConsensusProposal&lt;CI&gt; {

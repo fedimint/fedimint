@@ -1158,6 +1158,7 @@
 <a href="#1158" id="1158">1158</a>
 <a href="#1159" id="1159">1159</a>
 <a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1214,8 +1215,79 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintGen;
 
-<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>MintGen {
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>MintGen {
     <span class="kw">type </span>Common = MintCommonGen;
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>mint: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; = BTreeMap::new();
+        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+        });
+        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
+            <span class="kw">match </span>table {
+                DbKeyPrefix::NoteNonce =&gt; {
+                    <span class="macro">push_db_key_items!</span>(dbtx, NonceKeyPrefix, NonceKey, mint, <span class="string">&quot;Used Coins&quot;</span>);
+                }
+                DbKeyPrefix::MintAuditItem =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        MintAuditItemKeyPrefix,
+                        MintAuditItemKey,
+                        fedimint_core::Amount,
+                        mint,
+                        <span class="string">&quot;Mint Audit Items&quot;
+                    </span>);
+                }
+                DbKeyPrefix::OutputOutcome =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        OutputOutcomeKeyPrefix,
+                        OutputOutcomeKey,
+                        MintOutputBlindSignatures,
+                        mint,
+                        <span class="string">&quot;Output Outcomes&quot;
+                    </span>);
+                }
+                DbKeyPrefix::ProposedPartialSig =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        ProposedPartialSignaturesKeyPrefix,
+                        ProposedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        <span class="string">&quot;Proposed Signature Shares&quot;
+                    </span>);
+                }
+                DbKeyPrefix::ReceivedPartialSig =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        ReceivedPartialSignaturesKeyPrefix,
+                        ReceivedPartialSignatureKey,
+                        MintOutputSignatureShare,
+                        mint,
+                        <span class="string">&quot;Received Signature Shares&quot;
+                    </span>);
+                }
+                DbKeyPrefix::EcashBackup =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        EcashBackupKeyPrefix,
+                        EcashBackupKey,
+                        ECashUserBackupSnapshot,
+                        mint,
+                        <span class="string">&quot;User Ecash Backup&quot;
+                    </span>);
+                }
+            }
+        }
+
+        Box::new(mint.into_iter())
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1402,76 +1474,6 @@
             peer_tbs_pks: config.peer_tbs_pks.clone(),
             max_notes_per_denomination: config.max_notes_per_denomination,
         })
-    }
-
-    <span class="kw">async fn </span>dump_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>mint: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; = BTreeMap::new();
-        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
-        });
-        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
-            <span class="kw">match </span>table {
-                DbKeyPrefix::NoteNonce =&gt; {
-                    <span class="macro">push_db_key_items!</span>(dbtx, NonceKeyPrefix, NonceKey, mint, <span class="string">&quot;Used Coins&quot;</span>);
-                }
-                DbKeyPrefix::MintAuditItem =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        MintAuditItemKeyPrefix,
-                        MintAuditItemKey,
-                        fedimint_core::Amount,
-                        mint,
-                        <span class="string">&quot;Mint Audit Items&quot;
-                    </span>);
-                }
-                DbKeyPrefix::OutputOutcome =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        OutputOutcomeKeyPrefix,
-                        OutputOutcomeKey,
-                        MintOutputBlindSignatures,
-                        mint,
-                        <span class="string">&quot;Output Outcomes&quot;
-                    </span>);
-                }
-                DbKeyPrefix::ProposedPartialSig =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        ProposedPartialSignaturesKeyPrefix,
-                        ProposedPartialSignatureKey,
-                        MintOutputSignatureShare,
-                        mint,
-                        <span class="string">&quot;Proposed Signature Shares&quot;
-                    </span>);
-                }
-                DbKeyPrefix::ReceivedPartialSig =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        ReceivedPartialSignaturesKeyPrefix,
-                        ReceivedPartialSignatureKey,
-                        MintOutputSignatureShare,
-                        mint,
-                        <span class="string">&quot;Received Signature Shares&quot;
-                    </span>);
-                }
-                DbKeyPrefix::EcashBackup =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        EcashBackupKeyPrefix,
-                        EcashBackupKey,
-                        ECashUserBackupSnapshot,
-                        mint,
-                        <span class="string">&quot;User Ecash Backup&quot;
-                    </span>);
-                }
-            }
-        }
-
-        Box::new(mint.into_iter())
     }
 }
 <span class="doccomment">/// Federated mint member mint

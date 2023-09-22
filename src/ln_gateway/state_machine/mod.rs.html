@@ -633,6 +633,17 @@
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -652,7 +663,9 @@
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion, TransactionItemAmount,
@@ -967,8 +980,17 @@
     <span class="kw">pub </span>fees: RoutingFees,
 }
 
-<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>GatewayClientGen {
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>GatewayClientGen {
     <span class="kw">type </span>Common = LightningCommonGen;
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+        Box::new(<span class="macro">vec!</span>[].into_iter())
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]

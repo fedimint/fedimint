@@ -1070,10 +1070,46 @@
 <a href="#1070" id="1070">1070</a>
 <a href="#1071" id="1071">1071</a>
 <a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">pub mod </span>receive;
 
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -1082,7 +1118,7 @@
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
 <span class="kw">use </span>bitcoin_hashes::Hash;
-<span class="kw">use </span>db::LightningGatewayKey;
+<span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey};
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
@@ -1094,13 +1130,15 @@
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::db::{Database, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
+};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -1123,9 +1161,11 @@
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error};
 
+<span class="kw">use </span><span class="kw">crate</span>::db::LightningGatewayKeyPrefix;
 <span class="kw">use </span><span class="kw">crate</span>::pay::{
     GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
     LightningPayStateMachine, LightningPayStates,
@@ -1633,8 +1673,38 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>LightningClientGen;
 
-<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>LightningClientGen {
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>LightningClientGen {
     <span class="kw">type </span>Common = LightningCommonGen;
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>ln_client_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
+            BTreeMap::new();
+        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+        });
+
+        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
+            <span class="kw">match </span>table {
+                DbKeyPrefix::LightningGateway =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        LightningGatewayKeyPrefix,
+                        LightningGatewayKey,
+                        LightningGateway,
+                        ln_client_items,
+                        <span class="string">&quot;Lightning Gateways&quot;
+                    </span>);
+                }
+            }
+        }
+
+        Box::new(ln_client_items.into_iter())
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]

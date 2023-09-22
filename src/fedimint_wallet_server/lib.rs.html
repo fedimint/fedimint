@@ -1972,6 +1972,7 @@
 <a href="#1972" id="1972">1972</a>
 <a href="#1973" id="1973">1973</a>
 <a href="#1974" id="1974">1974</a>
+<a href="#1975" id="1975">1975</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2046,8 +2047,106 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>WalletGen;
 
-<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>WalletGen {
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>WalletGen {
     <span class="kw">type </span>Common = WalletCommonGen;
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>wallet: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; = BTreeMap::new();
+        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+        });
+        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
+            <span class="kw">match </span>table {
+                DbKeyPrefix::BlockHash =&gt; {
+                    <span class="macro">push_db_key_items!</span>(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, <span class="string">&quot;Blocks&quot;</span>);
+                }
+                DbKeyPrefix::PegOutBitcoinOutPoint =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        PegOutBitcoinTransactionPrefix,
+                        PegOutBitcoinTransaction,
+                        WalletOutputOutcome,
+                        wallet,
+                        <span class="string">&quot;Peg Out Bitcoin Transaction&quot;
+                    </span>);
+                }
+                DbKeyPrefix::PegOutTxSigCi =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        PegOutTxSignatureCIPrefix,
+                        PegOutTxSignatureCI,
+                        Vec&lt;secp256k1::ecdsa::Signature&gt;,
+                        wallet,
+                        <span class="string">&quot;Peg Out Transaction Signatures&quot;
+                    </span>);
+                }
+                DbKeyPrefix::PendingTransaction =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        PendingTransactionPrefixKey,
+                        PendingTransactionKey,
+                        PendingTransaction,
+                        wallet,
+                        <span class="string">&quot;Pending Transactions&quot;
+                    </span>);
+                }
+                DbKeyPrefix::PegOutNonce =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(nonce) = dbtx.get_value(<span class="kw-2">&amp;</span>PegOutNonceKey).<span class="kw">await </span>{
+                        wallet.insert(<span class="string">&quot;Peg Out Nonce&quot;</span>.to_string(), Box::new(nonce));
+                    }
+                }
+                DbKeyPrefix::UnsignedTransaction =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        UnsignedTransactionPrefixKey,
+                        UnsignedTransactionKey,
+                        UnsignedTransaction,
+                        wallet,
+                        <span class="string">&quot;Unsigned Transactions&quot;
+                    </span>);
+                }
+                DbKeyPrefix::Utxo =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        UTXOPrefixKey,
+                        UTXOKey,
+                        SpendableUTXO,
+                        wallet,
+                        <span class="string">&quot;UTXOs&quot;
+                    </span>);
+                }
+
+                DbKeyPrefix::BlockCountVote =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        BlockCountVotePrefix,
+                        BlockCountVoteKey,
+                        u32,
+                        wallet,
+                        <span class="string">&quot;Block Count Votes&quot;
+                    </span>);
+                }
+
+                DbKeyPrefix::FeeRateVote =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        FeeRateVotePrefix,
+                        FeeRateVoteKey,
+                        Feerate,
+                        wallet,
+                        <span class="string">&quot;Fee Rate Votes&quot;
+                    </span>);
+                }
+            }
+        }
+
+        Box::new(wallet.into_iter())
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -2170,103 +2269,6 @@
             finality_delay: config.finality_delay,
             default_bitcoin_rpc: config.client_default_bitcoin_rpc,
         })
-    }
-
-    <span class="kw">async fn </span>dump_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>wallet: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; = BTreeMap::new();
-        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
-        });
-        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
-            <span class="kw">match </span>table {
-                DbKeyPrefix::BlockHash =&gt; {
-                    <span class="macro">push_db_key_items!</span>(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, <span class="string">&quot;Blocks&quot;</span>);
-                }
-                DbKeyPrefix::PegOutBitcoinOutPoint =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        PegOutBitcoinTransactionPrefix,
-                        PegOutBitcoinTransaction,
-                        WalletOutputOutcome,
-                        wallet,
-                        <span class="string">&quot;Peg Out Bitcoin Transaction&quot;
-                    </span>);
-                }
-                DbKeyPrefix::PegOutTxSigCi =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        PegOutTxSignatureCIPrefix,
-                        PegOutTxSignatureCI,
-                        Vec&lt;secp256k1::ecdsa::Signature&gt;,
-                        wallet,
-                        <span class="string">&quot;Peg Out Transaction Signatures&quot;
-                    </span>);
-                }
-                DbKeyPrefix::PendingTransaction =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        PendingTransactionPrefixKey,
-                        PendingTransactionKey,
-                        PendingTransaction,
-                        wallet,
-                        <span class="string">&quot;Pending Transactions&quot;
-                    </span>);
-                }
-                DbKeyPrefix::PegOutNonce =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(nonce) = dbtx.get_value(<span class="kw-2">&amp;</span>PegOutNonceKey).<span class="kw">await </span>{
-                        wallet.insert(<span class="string">&quot;Peg Out Nonce&quot;</span>.to_string(), Box::new(nonce));
-                    }
-                }
-                DbKeyPrefix::UnsignedTransaction =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        UnsignedTransactionPrefixKey,
-                        UnsignedTransactionKey,
-                        UnsignedTransaction,
-                        wallet,
-                        <span class="string">&quot;Unsigned Transactions&quot;
-                    </span>);
-                }
-                DbKeyPrefix::Utxo =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        UTXOPrefixKey,
-                        UTXOKey,
-                        SpendableUTXO,
-                        wallet,
-                        <span class="string">&quot;UTXOs&quot;
-                    </span>);
-                }
-
-                DbKeyPrefix::BlockCountVote =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        BlockCountVotePrefix,
-                        BlockCountVoteKey,
-                        u32,
-                        wallet,
-                        <span class="string">&quot;Block Count Votes&quot;
-                    </span>);
-                }
-
-                DbKeyPrefix::FeeRateVote =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        FeeRateVotePrefix,
-                        FeeRateVoteKey,
-                        Feerate,
-                        wallet,
-                        <span class="string">&quot;Fee Rate Votes&quot;
-                    </span>);
-                }
-            }
-        }
-
-        Box::new(wallet.into_iter())
     }
 }
 

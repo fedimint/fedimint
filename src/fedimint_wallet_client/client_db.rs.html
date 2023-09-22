@@ -14,12 +14,28 @@
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::impl_db_record;
 <span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>strum_macros::EnumIter;
 
-<span class="kw">enum </span>DbKeyPrefix {
+<span class="attr">#[derive(Clone, EnumIter, Debug)]
+</span><span class="kw">pub enum </span>DbKeyPrefix {
     NextPegInTweakIndex = <span class="number">0x2c</span>,
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{self:?}&quot;</span>)
+    }
 }
 
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize)]

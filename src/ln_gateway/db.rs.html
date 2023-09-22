@@ -71,19 +71,63 @@
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
 <span class="kw">use </span>fedimint_ln_common::LightningGateway;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
+<span class="kw">use </span>serde::ser::SerializeStruct;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="attr">#[repr(u8)]
-#[derive(Clone, Debug)]
+#[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     FederationConfig = <span class="number">0x04</span>,
     FederationRegistration = <span class="number">0x05</span>,
     GatewayPublicKey = <span class="number">0x06</span>,
     GatewayConfiguration = <span class="number">0x07</span>,
+}
+
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;{self:?}&quot;</span>)
+    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -100,6 +144,24 @@
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>fees: RoutingFees,
     <span class="kw">pub </span>config: ClientConfig,
+}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>FederationConfig {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: serde::Serializer,
+    {
+        <span class="kw">let </span><span class="kw-2">mut </span>state = serializer.serialize_struct(<span class="string">&quot;FederationConfig&quot;</span>, <span class="number">5</span>)<span class="question-mark">?</span>;
+        state.serialize_field(<span class="string">&quot;mint_channel_id&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.mint_channel_id)<span class="question-mark">?</span>;
+        state.serialize_field(<span class="string">&quot;timelock_delta&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.timelock_delta)<span class="question-mark">?</span>;
+        state.serialize_field(<span class="string">&quot;config&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.config)<span class="question-mark">?</span>;
+        state.serialize_field(<span class="string">&quot;base_msat&quot;</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.fees.base_msat)<span class="question-mark">?</span>;
+        state.serialize_field(
+            <span class="string">&quot;proportional_millionths&quot;</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.fees.proportional_millionths,
+        )<span class="question-mark">?</span>;
+        state.end()
+    }
 }
 
 <span class="macro">impl_db_record!</span>(
@@ -121,6 +183,14 @@
     db_prefix = DbKeyPrefix::FederationRegistration,
 );
 
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>FederationRegistrationKeyPrefix;
+
+<span class="macro">impl_db_lookup!</span>(
+    key = FederationRegistrationKey,
+    query_prefix = FederationRegistrationKeyPrefix
+);
+
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>GatewayPublicKey;
 
@@ -133,7 +203,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>GatewayConfigurationKey;
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayConfiguration {
     <span class="kw">pub </span>password: String,
 }

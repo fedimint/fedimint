@@ -1570,6 +1570,51 @@
 <a href="#1570" id="1570">1570</a>
 <a href="#1571" id="1571">1571</a>
 <a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
+<a href="#1578" id="1578">1578</a>
+<a href="#1579" id="1579">1579</a>
+<a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
+<a href="#1605" id="1605">1605</a>
+<a href="#1606" id="1606">1606</a>
+<a href="#1607" id="1607">1607</a>
+<a href="#1608" id="1608">1608</a>
+<a href="#1609" id="1609">1609</a>
+<a href="#1610" id="1610">1610</a>
+<a href="#1611" id="1611">1611</a>
+<a href="#1612" id="1612">1612</a>
+<a href="#1613" id="1613">1613</a>
+<a href="#1614" id="1614">1614</a>
+<a href="#1615" id="1615">1615</a>
+<a href="#1616" id="1616">1616</a>
+<a href="#1617" id="1617">1617</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1582,6 +1627,7 @@
 </span><span class="kw">mod </span>output;
 
 <span class="kw">use </span>std::cmp::Ordering;
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::str::FromStr;
@@ -1592,6 +1638,7 @@
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
+<span class="kw">use </span>client_db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
@@ -1615,8 +1662,8 @@
 };
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
-    TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, Tiered, TieredMulti,
+    TieredSummary, TransactionId,
 };
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
@@ -1625,13 +1672,16 @@
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>secp256k1::{All, KeyPair, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::AggregatePublicKey;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRestoreInProgressState;
 <span class="kw">use </span><span class="kw">crate</span>::backup::EcashBackup;
-<span class="kw">use </span><span class="kw">crate</span>::client_db::{NextECashNoteIndexKey, NoteKey, NoteKeyPrefix};
+<span class="kw">use </span><span class="kw">crate</span>::client_db::{
+    NextECashNoteIndexKey, NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+};
 <span class="kw">use </span><span class="kw">crate</span>::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
@@ -2101,8 +2151,48 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintClientGen;
 
-<span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>MintClientGen {
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>MintClientGen {
     <span class="kw">type </span>Common = MintCommonGen;
+
+    <span class="kw">async fn </span>dump_database(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        prefix_names: Vec&lt;String&gt;,
+    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>mint_client_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
+            BTreeMap::new();
+        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+        });
+
+        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
+            <span class="kw">match </span>table {
+                DbKeyPrefix::Note =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        NoteKeyPrefix,
+                        NoteKey,
+                        SpendableNote,
+                        mint_client_items,
+                        <span class="string">&quot;Notes&quot;
+                    </span>);
+                }
+                DbKeyPrefix::NextECashNoteIndex =&gt; {
+                    <span class="macro">push_db_pair_items!</span>(
+                        dbtx,
+                        NextECashNoteIndexKeyPrefix,
+                        NextECashNoteIndexKey,
+                        u64,
+                        mint_client_items,
+                        <span class="string">&quot;NextECashNoteIndex&quot;
+                    </span>);
+                }
+            }
+        }
+
+        Box::new(mint_client_items.into_iter())
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]

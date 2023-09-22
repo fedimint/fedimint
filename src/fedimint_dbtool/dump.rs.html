@@ -292,12 +292,56 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>erased_serde::Serialize;
-<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
+<span class="kw">use </span>fedimint_client::db::ClientConfigKeyPrefix;
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
+<span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::notifications::Notifications;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -310,6 +354,7 @@
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
 <span class="kw">use </span>fedimint_server::db <span class="kw">as </span>ConsensusRange;
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>strum::IntoEnumIterator;
 
 <span class="attr">#[derive(Debug, serde::Serialize)]
@@ -333,18 +378,21 @@
     prefixes: Vec&lt;String&gt;,
     cfg: <span class="prelude-ty">Option</span>&lt;ServerConfig&gt;,
     module_inits: ServerModuleInitRegistry,
+    client_cfg: <span class="prelude-ty">Option</span>&lt;ClientConfig&gt;,
+    client_module_inits: ClientModuleInitRegistry,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="kw">pub fn </span>new(
+    <span class="kw">pub async fn </span>new(
         cfg_dir: PathBuf,
         data_dir: String,
         password: String,
         module_inits: ServerModuleInitRegistry,
+        client_module_inits: ClientModuleInitRegistry,
         modules: Vec&lt;String&gt;,
         prefixes: Vec&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
-        <span class="kw">let </span>read_only = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir) {
+        <span class="kw">let </span>read_only = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir.clone()) {
             <span class="prelude-val">Ok</span>(db) =&gt; db,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                 <span class="macro">panic!</span>(<span class="string">&quot;Error reading RocksDB database. Quitting...&quot;</span>);
@@ -354,27 +402,53 @@
 
         <span class="comment">// leak here is OK, it only happens once.
         </span><span class="kw">let </span>notifications = Box::leak(Box::new(Notifications::new()));
-        <span class="kw">if </span>modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;client&quot;</span>.to_string()) {
-            <span class="kw">let </span>dbtx = DatabaseTransaction::new(
+
+        <span class="kw">let </span>(server_cfg, client_cfg, decoders) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfg) =
+            read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).context(<span class="string">&quot;Failed to read server config&quot;</span>)
+        {
+            <span class="comment">// Successfully read the server&#39;s config, that means this database is a server
+            // db
+            </span><span class="kw">let </span>decoders = module_inits
+                .available_decoders(cfg.iter_module_instances())
+                .unwrap()
+                .with_fallback();
+            (<span class="prelude-val">Some</span>(cfg), <span class="prelude-val">None</span>, decoders)
+        } <span class="kw">else </span>{
+            <span class="comment">// Check if this database is a client database by reading the `ClientConfig`
+            // from the database.
+            </span><span class="kw">let </span>read_only_client = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir) {
+                <span class="prelude-val">Ok</span>(db) =&gt; db,
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="macro">panic!</span>(<span class="string">&quot;Error reading RocksDB database. Quitting...&quot;</span>);
+                }
+            };
+
+            <span class="kw">let </span>single_use = SingleUseDatabaseTransaction::new(read_only_client);
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = DatabaseTransaction::new(
                 Box::new(single_use),
                 ModuleDecoderRegistry::default(),
                 notifications,
             );
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(DatabaseDump {
-                serialized: BTreeMap::new(),
-                read_only: dbtx,
-                modules,
-                prefixes,
-                cfg: <span class="prelude-val">None</span>,
-                module_inits: Default::default(),
-            });
-        }
+            <span class="kw">let </span>client_cfg = dbtx
+                .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefix)
+                .<span class="kw">await
+                </span>.next()
+                .<span class="kw">await
+                </span>.map(|(<span class="kw">_</span>, client_cfg)| client_cfg);
 
-        <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).context(<span class="string">&quot;Failed to read server config&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>decoders = module_inits
-            .available_decoders(cfg.iter_module_instances())
-            .unwrap()
-            .with_fallback();
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(client_cfg) = client_cfg {
+                <span class="comment">// Successfully read the client config, that means this database is a client db
+                </span><span class="kw">let </span>kinds = client_cfg.modules.iter().map(|(k, v)| (<span class="kw-2">*</span>k, <span class="kw-2">&amp;</span>v.kind));
+                <span class="kw">let </span>decoders = client_module_inits
+                    .available_decoders(kinds)
+                    .unwrap()
+                    .with_fallback();
+                (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(client_cfg), decoders)
+            } <span class="kw">else </span>{
+                (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, ModuleDecoderRegistry::default())
+            }
+        };
+
         <span class="kw">let </span>dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
 
         <span class="prelude-val">Ok</span>(DatabaseDump {
@@ -382,8 +456,10 @@
             read_only: dbtx,
             modules,
             prefixes,
-            cfg: <span class="prelude-val">Some</span>(cfg),
+            cfg: server_cfg,
             module_inits,
+            client_module_inits,
+            client_cfg,
         })
     }
 }
@@ -395,85 +471,115 @@
         <span class="macro">println!</span>(<span class="string">&quot;{json}&quot;</span>);
     }
 
-    <span class="doccomment">/// Iterates through all the specified ranges in the database and retrieves
-    /// the data for each range. Prints serialized contents at the end.
-    </span><span class="kw">pub async fn </span>dump_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if </span><span class="self">self</span>.modules.is_empty() || <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;consensus&quot;</span>.to_string()) {
-            <span class="self">self</span>.retrieve_consensus_data().<span class="kw">await</span>;
+    <span class="kw">async fn </span>serialize_module(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        module_id: <span class="kw-2">&amp;</span>u16,
+        kind: <span class="kw-2">&amp;</span>ModuleKind,
+        inits: CommonModuleInitRegistry,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; !<span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span>kind.to_string()) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = <span class="self">self</span>.read_only.with_module_prefix(<span class="kw-2">*</span>module_id);
 
-        <span class="kw">let </span>cfg = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(cfg) = cfg {
-            <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
-                <span class="kw">let </span>kind = <span class="kw-2">&amp;</span>module_cfg.kind;
+        <span class="kw">match </span>inits.get(kind) {
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="macro">tracing::warn!</span>(module_id, %kind, <span class="string">&quot;Detected configuration for unsupported module&quot;</span>);
 
-                <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; !<span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span>kind.to_string()) {
-                    <span class="kw">continue</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = BTreeMap::new();
+                <span class="kw">let </span>filtered_prefixes = (<span class="number">0u8</span>..=<span class="number">255</span>).filter(|f| {
+                    <span class="self">self</span>.prefixes.is_empty()
+                        || <span class="self">self</span>.prefixes.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+                });
+
+                <span class="kw">let </span>isolated_dbtx = <span class="kw-2">&amp;mut </span>isolated_dbtx;
+
+                <span class="kw">for </span>prefix <span class="kw">in </span>filtered_prefixes {
+                    <span class="kw">let </span>db_items = isolated_dbtx
+                        .raw_find_by_prefix(<span class="kw-2">&amp;</span>[prefix])
+                        .<span class="kw">await</span><span class="question-mark">?
+                        </span>.map(|(k, v)| {
+                            (
+                                k.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>),
+                                Box::new(v.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>)),
+                            )
+                        })
+                        .collect::&lt;BTreeMap&lt;String, Box&lt;<span class="kw">_</span>&gt;&gt;&gt;()
+                        .<span class="kw">await</span>;
+
+                    module_serialized.extend(db_items);
                 }
-                <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = <span class="self">self</span>.read_only.with_module_prefix(<span class="kw-2">*</span>module_id);
+                <span class="self">self</span>.serialized
+                    .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
+            }
+            <span class="prelude-val">Some</span>(init) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = init
+                    .dump_database(<span class="kw-2">&amp;mut </span>isolated_dbtx, <span class="self">self</span>.prefixes.clone())
+                    .<span class="kw">await
+                    </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
 
-                <span class="kw">match </span><span class="self">self</span>.module_inits.get(kind) {
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">tracing::warn!</span>(module_id, %kind, <span class="string">&quot;Detected configuration for unsupported module&quot;</span>);
-
-                        <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = BTreeMap::new();
-                        <span class="kw">let </span>filtered_prefixes = (<span class="number">0u8</span>..=<span class="number">255</span>).filter(|f| {
-                            <span class="self">self</span>.prefixes.is_empty()
-                                || <span class="self">self</span>.prefixes.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
-                        });
-
-                        <span class="kw">let </span>isolated_dbtx = <span class="kw-2">&amp;mut </span>isolated_dbtx;
-
-                        <span class="kw">for </span>prefix <span class="kw">in </span>filtered_prefixes {
-                            <span class="kw">let </span>db_items = isolated_dbtx
-                                .raw_find_by_prefix(<span class="kw-2">&amp;</span>[prefix])
-                                .<span class="kw">await</span><span class="question-mark">?
-                                </span>.map(|(k, v)| {
-                                    (
-                                        k.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>),
-                                        Box::new(v.consensus_encode_to_hex().expect(<span class="string">&quot;can&#39;t fail&quot;</span>)),
-                                    )
-                                })
-                                .collect::&lt;BTreeMap&lt;String, Box&lt;<span class="kw">_</span>&gt;&gt;&gt;()
-                                .<span class="kw">await</span>;
-
-                            module_serialized.extend(db_items);
-                        }
-                        <span class="self">self</span>.serialized
-                            .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
-                    }
-                    <span class="prelude-val">Some</span>(init) =&gt; {
-                        <span class="kw">let </span><span class="kw-2">mut </span>module_serialized = init
-                            .dump_database(<span class="kw-2">&amp;mut </span>isolated_dbtx, <span class="self">self</span>.prefixes.clone())
-                            .<span class="kw">await
-                            </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
-
-                        <span class="kw">let </span>db_version = isolated_dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span>;
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(db_version) = db_version {
-                            module_serialized.insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(db_version));
-                        } <span class="kw">else </span>{
-                            module_serialized.insert(
-                                <span class="string">&quot;Version&quot;</span>.to_string(),
-                                Box::new(<span class="string">&quot;Not Specified&quot;</span>.to_string()),
-                            );
-                        }
-
-                        <span class="self">self</span>.serialized
-                            .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
-                    }
+                <span class="kw">let </span>db_version = isolated_dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey).<span class="kw">await</span>;
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(db_version) = db_version {
+                    module_serialized.insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(db_version));
+                } <span class="kw">else </span>{
+                    module_serialized
+                        .insert(<span class="string">&quot;Version&quot;</span>.to_string(), Box::new(<span class="string">&quot;Not Specified&quot;</span>.to_string()));
                 }
+
+                <span class="self">self</span>.serialized
+                    .insert(<span class="macro">format!</span>(<span class="string">&quot;{kind}-{module_id}&quot;</span>), Box::new(module_serialized));
             }
         }
 
-        <span class="comment">// TODO: When the client is modularized, these don&#39;t need to be hardcoded
-        // anymore
-        </span><span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;client&quot;</span>.to_string()) {
-            <span class="self">self</span>.retrieve_client_data().<span class="kw">await</span>;
-            <span class="self">self</span>.retrieve_ln_client_data().<span class="kw">await</span>;
-            <span class="self">self</span>.retrieve_mint_client_data().<span class="kw">await</span>;
-            <span class="self">self</span>.retrieve_wallet_client_data().<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>serialize_gateway(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.get_isolated();
+        <span class="kw">let </span>gateway_serialized = Gateway::dump_database(<span class="kw-2">&amp;mut </span>dbtx, <span class="self">self</span>.prefixes.clone())
+            .<span class="kw">await
+            </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
+        <span class="self">self</span>.serialized
+            .insert(<span class="string">&quot;gateway&quot;</span>.to_string(), Box::new(gateway_serialized));
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Iterates through all the specified ranges in the database and retrieves
+    /// the data for each range. Prints serialized contents at the end.
+    </span><span class="kw">pub async fn </span>dump_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>cfg = <span class="self">self</span>.cfg.clone();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(cfg) = cfg {
+            <span class="kw">if </span><span class="self">self</span>.modules.is_empty() || <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">&quot;consensus&quot;</span>.to_string()) {
+                <span class="self">self</span>.retrieve_consensus_data().<span class="kw">await</span>;
+            }
+
+            <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
+                <span class="kw">let </span>kind = <span class="kw-2">&amp;</span>module_cfg.kind;
+                <span class="self">self</span>.serialize_module(module_id, kind, <span class="self">self</span>.module_inits.to_common())
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+
+            <span class="self">self</span>.print_database();
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(cfg) = <span class="self">self</span>.client_cfg.clone() {
+            <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.modules {
+                <span class="kw">let </span>kind = <span class="kw-2">&amp;</span>module_cfg.kind;
+                <span class="kw">let </span><span class="kw-2">mut </span>modules = Vec::new();
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(module) = <span class="self">self</span>.client_module_inits.get(kind) {
+                    modules.push(module.to_dyn_common());
+                }
+
+                <span class="kw">let </span>registry = CommonModuleInitRegistry::from(modules);
+                <span class="self">self</span>.serialize_module(module_id, kind, registry).<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+
+            <span class="self">self</span>.print_database();
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
+        <span class="self">self</span>.serialize_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.print_database();
 
         <span class="prelude-val">Ok</span>(())
@@ -560,30 +666,6 @@
 
         <span class="self">self</span>.serialized
             .insert(<span class="string">&quot;Consensus&quot;</span>.to_string(), Box::new(consensus));
-    }
-
-    <span class="doccomment">/// Iterates through each of the prefixes within the lightning client range
-    /// and retrieves the corresponding data.
-    </span><span class="kw">async fn </span>retrieve_ln_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="macro">unimplemented!</span>()
-    }
-
-    <span class="doccomment">/// Iterates through each of the prefixes within the mint client range and
-    /// retrieves the corresponding data.
-    </span><span class="kw">async fn </span>retrieve_mint_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="macro">unimplemented!</span>()
-    }
-
-    <span class="doccomment">/// Iterates through each of the prefixes within the wallet client range and
-    /// retrieves the corresponding data.
-    </span><span class="kw">async fn </span>retrieve_wallet_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="macro">unimplemented!</span>()
-    }
-
-    <span class="doccomment">/// Iterates through each of the prefixes within the client range and
-    /// retrieves the corresponding data.
-    </span><span class="kw">async fn </span>retrieve_client_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="macro">unimplemented!</span>()
     }
 }
 </code></pre></div></section></main></body></html>
