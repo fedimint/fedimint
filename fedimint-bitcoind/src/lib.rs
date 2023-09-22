@@ -133,7 +133,7 @@ pub trait IBitcoindRpc: Debug {
     /// may not occur
     async fn watch_script_history(&self, script: &Script) -> Result<Vec<Transaction>>;
 
-    /// Returns a prooft that a tx is included in the bitcoin blockchain
+    /// Returns a proof that a tx is included in the bitcoin blockchain
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof>;
 }
 
