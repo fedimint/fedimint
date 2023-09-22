@@ -9,13 +9,14 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
+use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -232,17 +233,12 @@ impl ServerModuleInit for LightningGen {
         SupportedModuleApiVersions::from_raw(u32::MAX, 0, &[(0, 0)])
     }
 
-    async fn init(
-        &self,
-        cfg: ServerModuleConfig,
-        _db: Database,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<DynServerModule> {
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
         // Ensure all metrics are initialized
         for metric in ALL_METRICS.iter() {
             metric.collect();
         }
-        Ok(Lightning::new(cfg.to_typed()?, task_group)?.into())
+        Ok(Lightning::new(args.cfg().to_typed()?, &mut args.task_group().clone())?.into())
     }
 
     fn trusted_dealer_gen(
