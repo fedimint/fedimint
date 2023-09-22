@@ -341,11 +341,9 @@ impl Gateway {
         Box::new(gateway_items.into_iter())
     }
 
-    pub async fn run(mut self) -> anyhow::Result<TaskShutdownToken> {
-        let mut tg = TaskGroup::new();
-
-        self.start_webserver(&mut tg).await;
-        self.start_gateway(&mut tg).await?;
+    pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
+        self.start_webserver(tg).await;
+        self.start_gateway(tg).await?;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx().await;
         Ok(shutdown_receiver)
@@ -377,22 +375,17 @@ impl Gateway {
                     .await
                     .expect("Failed to start webserver");
                     info!("Successfully started webserver");
-
-                    gateway_db
-                        .wait_key_check(&GatewayConfigurationKey, |v| {
-                            v.filter(|cfg| {
-                                if let Some(old_config) = gateway_config.clone() {
-                                    old_config.password != cfg.clone().password
-                                } else {
-                                    true
-                                }
-                            })
-                        })
-                        .await;
-
-                    info!("GatewayConfiguration has been updated, restarting webserver...");
-                    if let Err(e) = webserver_group.shutdown_join_all(None).await {
-                        panic!("Error shutting down server: {e:?}");
+                    tokio::select! {
+                        _ = wait_for_new_password(&gateway_db, gateway_config) => {
+                            info!("GatewayConfiguration has been updated, restarting webserver...");
+                            if let Err(e) = webserver_group.shutdown_join_all(None).await {
+                                panic!("Error shutting down server: {e:?}");
+                            }
+                        },
+                        _ = handle.make_shutdown_rx().await => {
+                            info!("Received shutdown signal, exiting....");
+                            break;
+                        }
                     }
                 }
             })
@@ -418,6 +411,7 @@ impl Gateway {
                 move |handle| async move {
                     loop {
                         if handle.is_shutting_down() {
+                            info!("Gateway HTLC handler loop is shutting down");
                             break;
                         }
 
@@ -452,9 +446,17 @@ impl Gateway {
                                             lightning_alias,
                                         }).await;
 
-                                        // Blocks until the connection to the lightning node breaks
-                                        self.handle_htlc_stream(stream, handle.clone()).await;
-                                        warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+                                        // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
+                                        tokio::select! {
+                                            _ = self.handle_htlc_stream(stream, handle.clone()) => {
+                                                warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+                                            },
+                                            _ = handle.make_shutdown_rx().await => {
+                                                info!("Received shutdown signal");
+                                                self.handle_disconnect(htlc_task_group).await;
+                                                break;
+                                            }
+                                        }
                                     }
                                     Err(e) => {
                                         error!("Failed to retrieve Lightning info: {e:?}");
@@ -466,10 +468,7 @@ impl Gateway {
                             }
                         }
 
-                        self.set_gateway_state(GatewayState::Disconnected).await;
-                        if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
-                            error!("HTLC task group shutdown errors: {}", e);
-                        }
+                        self.handle_disconnect(htlc_task_group).await;
 
                         error!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
                         sleep(Duration::from_secs(5)).await;
@@ -481,45 +480,67 @@ impl Gateway {
         Ok(())
     }
 
+    async fn handle_disconnect(&mut self, htlc_task_group: TaskGroup) {
+        self.set_gateway_state(GatewayState::Disconnected).await;
+        if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
+            error!("HTLC task group shutdown errors: {}", e);
+        }
+    }
+
     pub async fn handle_htlc_stream(&self, mut stream: RouteHtlcStream<'_>, handle: TaskHandle) {
-        if let GatewayState::Running {
+        let GatewayState::Running {
             lnrpc,
             lightning_public_key: _,
             lightning_alias: _,
         } = self.state.read().await.clone()
-        {
-            while let Some(Ok(htlc_request)) = stream.next().await {
-                if handle.is_shutting_down() {
-                    break;
-                }
-
-                let scid_to_feds = self.scid_to_federation.read().await;
-                let federation_id = scid_to_feds.get(&htlc_request.short_channel_id);
-                // Just forward the HTLC if we do not have a federation that
-                // corresponds to the short channel id
-                if let Some(federation_id) = federation_id {
-                    let clients = self.clients.read().await;
-                    let client = clients.get(federation_id);
-                    // Just forward the HTLC if we do not have a client that
-                    // corresponds to the federation id
-                    if let Some(client) = client {
-                        let htlc = htlc_request.clone().try_into();
-                        if let Ok(htlc) = htlc {
-                            if client.gateway_handle_intercepted_htlc(htlc).await.is_ok() {
-                                continue;
+        else {
+            panic!("Gateway isn't in a running state")
+        };
+        loop {
+            match stream.next().await {
+                Some(Ok(htlc_request)) => {
+                    if handle.is_shutting_down() {
+                        break;
+                    }
+                    let scid_to_feds = self.scid_to_federation.read().await;
+                    let federation_id = scid_to_feds.get(&htlc_request.short_channel_id);
+                    // Just forward the HTLC if we do not have a federation that
+                    // corresponds to the short channel id
+                    if let Some(federation_id) = federation_id {
+                        let clients = self.clients.read().await;
+                        let client = clients.get(federation_id);
+                        // Just forward the HTLC if we do not have a client that
+                        // corresponds to the federation id
+                        if let Some(client) = client {
+                            let htlc = htlc_request.clone().try_into();
+                            if let Ok(htlc) = htlc {
+                                match client.gateway_handle_intercepted_htlc(htlc).await {
+                                    Ok(_) => continue,
+                                    Err(e) => {
+                                        info!("Got error intercepting HTLC: {e:?}, will retry...")
+                                    }
+                                }
+                            } else {
+                                info!("Got no HTLC result")
                             }
+                        } else {
+                            info!("Got no client result")
                         }
                     }
+
+                    let outcome = InterceptHtlcResponse {
+                        action: Some(Action::Forward(Forward {})),
+                        incoming_chan_id: htlc_request.incoming_chan_id,
+                        htlc_id: htlc_request.htlc_id,
+                    };
+
+                    if let Err(error) = lnrpc.complete_htlc(outcome).await {
+                        error!("Error sending HTLC response to lightning node: {error:?}");
+                    }
                 }
-
-                let outcome = InterceptHtlcResponse {
-                    action: Some(Action::Forward(Forward {})),
-                    incoming_chan_id: htlc_request.incoming_chan_id,
-                    htlc_id: htlc_request.htlc_id,
-                };
-
-                if let Err(error) = lnrpc.complete_htlc(outcome).await {
-                    error!("Error sending HTLC response to lightning node: {error:?}");
+                other => {
+                    info!("Got {other:?} while handling HTLC stream, exiting from loop...");
+                    break;
                 }
             }
         }
@@ -1033,6 +1054,23 @@ impl Gateway {
             config,
         }
     }
+}
+
+async fn wait_for_new_password(
+    gateway_db: &Database,
+    gateway_config: Option<GatewayConfiguration>,
+) {
+    gateway_db
+        .wait_key_check(&GatewayConfigurationKey, |v| {
+            v.filter(|cfg| {
+                if let Some(old_config) = gateway_config.clone() {
+                    old_config.password != cfg.clone().password
+                } else {
+                    true
+                }
+            })
+        })
+        .await;
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]

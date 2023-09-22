@@ -11,9 +11,10 @@ use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::{block_in_place, sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_TEST;
+use futures::executor::block_on;
 use lightning::routing::gossip::RoutingFees;
 use ln_gateway::client::StandardGatewayClientBuilder;
 use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
@@ -22,7 +23,7 @@ use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
 use ln_gateway::{Gateway, GatewayState};
 use secp256k1::PublicKey;
 use tempfile::TempDir;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::federation::FederationTest;
 use crate::fixtures::{test_dir, Fixtures};
@@ -44,6 +45,8 @@ pub struct GatewayTest {
     pub node_pub_key: PublicKey,
     // Listening address of the lightning node
     pub listening_addr: String,
+    /// `TaskGroup` that is running the test
+    task_group: TaskGroup,
 }
 
 impl GatewayTest {
@@ -121,11 +124,15 @@ impl GatewayTest {
         .await
         .expect("Failed to create gateway");
 
-        let mut task_group = TaskGroup::new();
         let gateway_run = gateway.clone();
-        task_group
+        let mut root_group = TaskGroup::new();
+        let mut tg = root_group.clone();
+        root_group
             .spawn("Gateway Run", |_handle| async move {
-                gateway_run.run().await.expect("Failed to start gateway");
+                gateway_run
+                    .run(&mut tg)
+                    .await
+                    .expect("Failed to start gateway");
             })
             .await;
 
@@ -151,6 +158,7 @@ impl GatewayTest {
             gateway,
             node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
             listening_addr,
+            task_group: root_group,
         }
     }
 
@@ -189,6 +197,17 @@ impl GatewayTest {
     }
 }
 
+impl Drop for GatewayTest {
+    fn drop(&mut self) {
+        block_in_place(move || {
+            block_on(async move {
+                if let Err(e) = self.task_group.clone().shutdown_join_all(None).await {
+                    warn!("Got error shutting down GatewayTest: {e:?}")
+                }
+            })
+        });
+    }
+}
 #[derive(Debug, Clone)]
 pub enum LightningNodeType {
     Cln,

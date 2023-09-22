@@ -1,3 +1,4 @@
+use fedimint_core::task::TaskGroup;
 use fedimint_logging::TracingSetup;
 use ln_gateway::Gateway;
 use tracing::info;
@@ -11,7 +12,12 @@ use tracing::info;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     TracingSetup::default().init()?;
-    let shutdown_receiver = Gateway::new_with_default_modules().await?.run().await?;
+    let mut tg = TaskGroup::new();
+    tg.install_kill_handler();
+    let shutdown_receiver = Gateway::new_with_default_modules()
+        .await?
+        .run(&mut tg)
+        .await?;
     shutdown_receiver.await;
     info!("Gatewayd exiting...");
     Ok(())
