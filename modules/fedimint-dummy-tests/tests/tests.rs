@@ -74,7 +74,12 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
     let client = fed.new_client().await;
     // TODO: try to verify that the federation panics with something like
     // "Balance sheet of the fed has gone negative, this should never happen!"
-    assert!(client.print_liability(sats(1000)).await.is_err());
+    if let Ok(result @ (_, outpoint)) = client.print_liability(sats(1000)).await {
+        match client.receive_money(outpoint).await {
+            Ok(()) => bail!("Should have failed but was able to receive money, result was {result:?}"),
+            Err(e) => bail!("Should have failed but at least we didn't receive money, result was {result:?} and receive_money failed with {e:?}"),
+        }
+    };
 
     Ok(())
 }
