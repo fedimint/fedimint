@@ -112,21 +112,30 @@ impl GatewayLndClient {
 
         task_group
             .spawn("LND HTLC Subscription", move |handle| async move {
-                let mut htlc_stream = match client
+                let future_stream = client
                     .router()
-                    .htlc_interceptor(ReceiverStream::new(lnd_rx))
-                    .await
-                    .map_err(|e| LightningRpcError::FailedToGetRouteHints {
-                        failure_reason: format!("Failed to subscribe to LND htlc stream {e:?}"),
-                    }) {
-                    Ok(stream) => stream.into_inner(),
-                    Err(e) => {
-                        error!("Failed to establish htlc stream");
-                        debug!("Error: {:?}", e);
+                    .htlc_interceptor(ReceiverStream::new(lnd_rx));
+                let mut htlc_stream = tokio::select! {
+                    stream = future_stream => {
+                        match stream {
+                            Ok(stream) => stream.into_inner(),
+                            Err(e) => {
+                                error!("Failed to establish htlc stream");
+                                let e = LightningRpcError::FailedToGetRouteHints {
+                                    failure_reason: format!("Failed to subscribe to LND htlc stream {e:?}"),
+                                };
+                                debug!("Error: {e}");
+                                return;
+                            }
+                        }
+                    },
+                    _ = handle.make_shutdown_rx().await => {
+                        info!("LND HTLC Subscription received shutdown signal while trying to intercept HTLC stream, exiting...");
                         return;
                     }
                 };
 
+                debug!("LND HTLC Subscription: starting to process stream");
                 // To gracefully handle shutdown signals, we need to be able to receive signals
                 // while waiting for the next message from the HTLC stream.
                 //
@@ -149,7 +158,7 @@ impl GatewayLndClient {
                             }
                     }}
                 } {
-                    trace!("handling htlc {:?}", htlc);
+                    trace!("LND HTLC Subscription: handling htlc {htlc:?}");
 
                     if htlc.incoming_circuit_key.is_none() {
                         error!("Cannot route htlc with None incoming_circuit_key");

@@ -177,6 +177,8 @@ impl TaskGroup {
         Fut: Future<Output = R> + Send + 'static,
         R: Send + 'static,
     {
+        use tracing::debug;
+
         let name = name.into();
         let mut guard = TaskPanicGuard {
             name: name.clone(),
@@ -186,9 +188,15 @@ impl TaskGroup {
         let handle = self.make_handle();
 
         let (tx, rx) = oneshot::channel();
-        if let Some(handle) = self::imp::spawn(name.as_str(), async move {
-            // if receiver is not interested, just drop the message
-            let _ = tx.send(f(handle).await);
+        if let Some(handle) = self::imp::spawn(name.as_str(), {
+            let name = name.clone();
+            async move {
+                // if receiver is not interested, just drop the message
+                debug!("Starting task {name}");
+                let r = f(handle).await;
+                debug!("Finished task {name}");
+                let _ = tx.send(r);
+            }
         }) {
             self.inner.join.lock().await.push_back((name, handle));
         }

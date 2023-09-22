@@ -859,55 +859,64 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_supports_connecting_multiple_federations() -> anyhow::Result<()> {
-    multi_federation_test(LightningNodeType::Lnd, |_, rpc, fed1, fed2, _| async move {
-        assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+    multi_federation_test(
+        LightningNodeType::Lnd,
+        |gateway, rpc, fed1, fed2, _| async move {
+            info!("Starting test_gateway_supports_connecting_multiple_federations");
+            assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 
-        let invite1 = fed1.invite_code();
-        let info = rpc
-            .connect_federation(ConnectFedPayload {
-                invite_code: invite1.to_string(),
-            })
-            .await
-            .unwrap();
+            let invite1 = fed1.invite_code();
+            let info = rpc
+                .connect_federation(ConnectFedPayload {
+                    invite_code: invite1.to_string(),
+                })
+                .await
+                .unwrap();
 
-        assert_eq!(info.federation_id, invite1.id);
+            assert_eq!(info.federation_id, invite1.id);
 
-        let invite2 = fed2.invite_code();
-        let info = rpc
-            .connect_federation(ConnectFedPayload {
-                invite_code: invite2.to_string(),
-            })
-            .await
-            .unwrap();
-        assert_eq!(info.federation_id, invite2.id);
-        Ok(())
-    })
+            let invite2 = fed2.invite_code();
+            let info = rpc
+                .connect_federation(ConnectFedPayload {
+                    invite_code: invite2.to_string(),
+                })
+                .await
+                .unwrap();
+            assert_eq!(info.federation_id, invite2.id);
+            drop(gateway); // keep until the end to avoid the gateway shutting down too early
+            Ok(())
+        },
+    )
     .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_shows_info_about_all_connected_federations() -> anyhow::Result<()> {
-    multi_federation_test(LightningNodeType::Lnd, |_, rpc, fed1, fed2, _| async move {
-        assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
+    multi_federation_test(
+        LightningNodeType::Lnd,
+        |gateway, rpc, fed1, fed2, _| async move {
+            assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 
-        let id1 = fed1.invite_code().id;
-        let id2 = fed2.invite_code().id;
+            let id1 = fed1.invite_code().id;
+            let id2 = fed2.invite_code().id;
 
-        connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+            connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
 
-        let info = rpc.get_info().await.unwrap();
+            let info = rpc.get_info().await.unwrap();
 
-        assert_eq!(info.federations.len(), 2);
-        assert!(info
-            .federations
-            .iter()
-            .any(|info| info.federation_id == id1 && info.balance_msat == Amount::ZERO));
-        assert!(info
-            .federations
-            .iter()
-            .any(|info| info.federation_id == id2 && info.balance_msat == Amount::ZERO));
-        Ok(())
-    })
+            assert_eq!(info.federations.len(), 2);
+            assert!(info
+                .federations
+                .iter()
+                .any(|info| info.federation_id == id1 && info.balance_msat == Amount::ZERO));
+            assert!(info
+                .federations
+                .iter()
+                .any(|info| info.federation_id == id2 && info.balance_msat == Amount::ZERO));
+            drop(gateway); // keep until the end to avoid the gateway shutting down too early
+            Ok(())
+        },
+    )
     .await
 }
 
