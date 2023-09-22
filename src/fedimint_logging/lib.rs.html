@@ -132,10 +132,9 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::io;
-<span class="kw">use </span>std::net::SocketAddr;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>tracing_subscriber::layer::SubscriberExt;
 <span class="kw">use </span>tracing_subscriber::util::SubscriberInitExt;
@@ -165,16 +164,19 @@
 <span class="doccomment">/// Consolidates the setup of server tracing into a helper
 </span><span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>TracingSetup {
-    tokio_console_bind: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
-    with_jaeger: bool,
-    with_chrome: bool,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    </span>tokio_console_bind: <span class="prelude-ty">Option</span>&lt;std::net::SocketAddr&gt;,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    </span>with_jaeger: bool,
+    <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    </span>with_chrome: bool,
     with_file: <span class="prelude-ty">Option</span>&lt;File&gt;,
 }
 
 <span class="kw">impl </span>TracingSetup {
     <span class="doccomment">/// Setup a console server for tokio logging &lt;https://docs.rs/console-subscriber&gt;
     </span><span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
-    </span><span class="kw">pub fn </span>tokio_console_bind(<span class="kw-2">&amp;mut </span><span class="self">self</span>, address: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>tokio_console_bind(<span class="kw-2">&amp;mut </span><span class="self">self</span>, address: <span class="prelude-ty">Option</span>&lt;std::net::SocketAddr&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
         <span class="self">self</span>.tokio_console_bind = address;
         <span class="self">self
     </span>}
@@ -219,7 +221,7 @@
             <span class="attr">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(l) = <span class="self">self</span>.tokio_console_bind {
                 <span class="kw">let </span>tracer = console_subscriber::ConsoleLayer::builder()
-                    .retention(Duration::from_secs(<span class="number">60</span>))
+                    .retention(std::time::Duration::from_secs(<span class="number">60</span>))
                     .server_addr(l)
                     .spawn()
                     <span class="comment">// tokio-console cares only about these layers, so we filter separately for it
