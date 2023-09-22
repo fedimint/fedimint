@@ -216,7 +216,7 @@ impl LightningClientExt for Client {
                 .fetch_registered_gateways()
                 .await?
                 .into_iter()
-                .filter(|gw| gw.valid_until > fedimint_core::time::now())
+                .filter(|gw| !gw.is_expired())
                 .choose(&mut rand::thread_rng())
                 .ok_or(anyhow::anyhow!("Could not find any gateways")),
         }

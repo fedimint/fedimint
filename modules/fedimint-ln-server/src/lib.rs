@@ -1021,7 +1021,7 @@ impl Lightning {
         stream
             .filter_map(|(_, gw)| async {
                 // FIXME: actually remove from DB
-                if gw.valid_until > fedimint_core::time::now() {
+                if !gw.is_expired() {
                     Some(gw)
                 } else {
                     None

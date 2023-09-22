@@ -202,6 +202,12 @@ pub struct LightningGateway {
     pub gateway_id: secp256k1::PublicKey,
 }
 
+impl LightningGateway {
+    pub fn is_expired(&self) -> bool {
+        self.valid_until < fedimint_core::time::now()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub enum LightningConsensusItem {
     DecryptPreimage(ContractId, PreimageDecryptionShare),
