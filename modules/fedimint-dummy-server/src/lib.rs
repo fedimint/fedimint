@@ -12,8 +12,8 @@ use fedimint_core::db::{Database, DatabaseVersion, MigrationMap, ModuleDatabaseT
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;

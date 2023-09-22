@@ -14,7 +14,6 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::PeerId;
-use itertools::Itertools;
 use tokio::select;
 use tracing::{debug, info, warn};
 
@@ -25,14 +24,11 @@ use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
 use crate::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::{DelayCalculator, PeerConnector, PeerSlice, ReconnectPeerConnections};
+use crate::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
 use crate::{LOG_CONSENSUS, LOG_CORE};
 
-/// How many epochs ahead of consensus to rejoin
-const NUM_EPOCHS_REJOIN_AHEAD: u64 = 10;
-
 /// How many txs can be stored in memory before blocking the API
-const TRANSACTION_BUFFER_SIZE: usize = 1000;
+const TRANSACTION_BUFFER: usize = 1000;
 
 pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
 
@@ -146,10 +142,10 @@ impl ConsensusServer {
         let keychain = Keychain::new(
             cfg.local.identity,
             cfg.consensus.broadcast_public_keys.clone(),
-            cfg.private.broadcast_secret_key.clone(),
+            cfg.private.broadcast_secret_key,
         );
 
-        let (submission_sender, submission_receiver) = async_channel::bounded(256);
+        let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
         let (incoming_sender, incoming_receiver) = async_channel::bounded(256);
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(256);
 
@@ -331,10 +327,10 @@ async fn relay_messages(
                                             connections.send(
                                                 other_peers.as_slice(),
                                                 message
-                                            ).await;
+                                            ).await.ok();
                                         }
                                         Recipient::Peer(peer_id) => {
-                                            connections.send(&[peer_id], message).await;
+                                            connections.send(&[peer_id], message).await.ok();
                                         }
                                     }
                                 },
@@ -348,7 +344,7 @@ async fn relay_messages(
                                     let mut reader = std::io::Cursor::new(message);
                                     match Message::consensus_decode(&mut reader, &decoders){
                                         Ok(message) => {
-                                            incoming_sender.send((message, peer_id)).await;
+                                            incoming_sender.send((message, peer_id)).await.ok();
                                         }
                                         Err(e) => {
                                             warn!(target: LOG_CONSENSUS, "Failed to decode message from peer {}: {}", peer_id, e);

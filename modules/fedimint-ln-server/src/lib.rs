@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use anyhow::{bail, Context};
 use bitcoin_hashes::Hash as BitcoinHash;
@@ -13,12 +12,12 @@ use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, CoreConsensusVersion, ExtendsCommonModuleInit,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,

@@ -16,7 +16,7 @@ use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{ConsensusItem, SerdeEpochHistory, SignedEpochOutcome};
+use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
@@ -32,8 +32,6 @@ use futures::StreamExt;
 use itertools::Itertools;
 use jsonrpsee::RpcModule;
 use secp256k1_zkp::SECP256K1;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 

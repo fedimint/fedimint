@@ -217,7 +217,7 @@ mod tests {
     use threshold_crypto::{SecretKey, SecretKeySet};
 
     use crate::epoch::{
-        ConsensusItem, EpochOutcome, EpochVerifyError, SerdeSignature, SerdeSignatureShare, Sha256,
+        EpochOutcome, EpochVerifyError, SerdeSignature, SerdeSignatureShare, Sha256,
         SignedEpochOutcome,
     };
 

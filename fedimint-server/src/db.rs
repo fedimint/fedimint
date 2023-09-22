@@ -137,8 +137,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::DynInput;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::epoch::{
-        ConsensusItem, ConsensusUpgrade, EpochOutcome, SerdeSignature, SerdeSignatureShare,
-        SignedEpochOutcome,
+        ConsensusItem, EpochOutcome, SerdeSignature, SerdeSignatureShare, SignedEpochOutcome,
     };
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;

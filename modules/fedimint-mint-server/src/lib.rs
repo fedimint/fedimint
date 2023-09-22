@@ -10,9 +10,9 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{MaybeSend, TaskGroup};

@@ -18,7 +18,7 @@ use fedimint_core::server::DynVerificationCache;
 use fedimint_core::{timing, Amount, OutPoint, PeerId};
 use futures::StreamExt;
 use itertools::Itertools;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::config::ServerConfig;
 use crate::db::{
