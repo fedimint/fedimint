@@ -1633,10 +1633,6 @@
 <a href="#1633" id="1633">1633</a>
 <a href="#1634" id="1634">1634</a>
 <a href="#1635" id="1635">1635</a>
-<a href="#1636" id="1636">1636</a>
-<a href="#1637" id="1637">1637</a>
-<a href="#1638" id="1638">1638</a>
-<a href="#1639" id="1639">1639</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1648,13 +1644,14 @@
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
@@ -1871,17 +1868,12 @@
         SupportedModuleApiVersions::from_raw(u32::MAX, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
     }
 
-    <span class="kw">async fn </span>init(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        cfg: ServerModuleConfig,
-        _db: Database,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
+    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         <span class="comment">// Ensure all metrics are initialized
         </span><span class="kw">for </span>metric <span class="kw">in </span>ALL_METRICS.iter() {
             metric.collect();
         }
-        <span class="prelude-val">Ok</span>(Lightning::new(cfg.to_typed()<span class="question-mark">?</span>, task_group)<span class="question-mark">?</span>.into())
+        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>, <span class="kw-2">&amp;mut </span>args.task_group().clone())<span class="question-mark">?</span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(

@@ -1973,6 +1973,7 @@
 <a href="#1973" id="1973">1973</a>
 <a href="#1974" id="1974">1974</a>
 <a href="#1975" id="1975">1975</a>
+<a href="#1976" id="1976">1976</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2013,7 +2014,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
     InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2162,13 +2163,14 @@
         SupportedModuleApiVersions::from_raw(u32::MAX, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
     }
 
-    <span class="kw">async fn </span>init(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        cfg: ServerModuleConfig,
-        db: Database,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="prelude-val">Ok</span>(Wallet::new(cfg.to_typed()<span class="question-mark">?</span>, db, task_group).<span class="kw">await</span><span class="question-mark">?</span>.into())
+    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
+        <span class="prelude-val">Ok</span>(Wallet::new(
+            args.cfg().to_typed()<span class="question-mark">?</span>,
+            args.db().clone(),
+            <span class="kw-2">&amp;mut </span>args.task_group().clone(),
+        )
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(

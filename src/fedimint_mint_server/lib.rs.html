@@ -1155,10 +1155,6 @@
 <a href="#1155" id="1155">1155</a>
 <a href="#1156" id="1156">1156</a>
 <a href="#1157" id="1157">1157</a>
-<a href="#1158" id="1158">1158</a>
-<a href="#1159" id="1159">1159</a>
-<a href="#1160" id="1160">1160</a>
-<a href="#1161" id="1161">1161</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1168,15 +1164,16 @@
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
     ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::task::{MaybeSend, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::MaybeSend;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
@@ -1303,13 +1300,8 @@
         SupportedModuleApiVersions::from_raw(u32::MAX, <span class="number">0</span>, <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
     }
 
-    <span class="kw">async fn </span>init(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        cfg: ServerModuleConfig,
-        _db: Database,
-        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="prelude-val">Ok</span>(Mint::new(cfg.to_typed()<span class="question-mark">?</span>).into())
+    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
+        <span class="prelude-val">Ok</span>(Mint::new(args.cfg().to_typed()<span class="question-mark">?</span>).into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
