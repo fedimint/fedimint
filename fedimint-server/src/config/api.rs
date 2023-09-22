@@ -1014,9 +1014,7 @@ mod tests {
         );
 
         let test2 = async {
-            // Confirm we are stuck in upgrading after an upgrade
             for peer in followers.iter() {
-                assert_eq!(peer.status().await.server, ServerStatus::Upgrading);
                 peer.client.start_consensus(peer.auth.clone()).await.ok();
                 assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
             }

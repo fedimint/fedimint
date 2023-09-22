@@ -125,13 +125,12 @@ mod fedimint_migration_tests {
 
     use super::{
         AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
-        ConsensusUpgradeKey, EpochHistoryKey, LastEpochKey,
     };
     use crate::core::DynOutput;
     use crate::db::{
         get_global_database_migrations, AcceptedTransactionKeyPrefix, ClientConfigDownloadKey,
         ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix,
-        EpochHistoryKeyPrefix, GLOBAL_DATABASE_VERSION,
+        GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -173,33 +172,12 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(&accepted_tx_id, &module_ids).await;
 
-        let epoch_history_key = EpochHistoryKey(6);
-
         let sig_share = SignatureShare(Standard.sample(&mut OsRng));
 
         let consensus_items = vec![
             ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig_share.clone())),
             ConsensusItem::Transaction(transaction),
         ];
-
-        let epoch_outcome = EpochOutcome {
-            epoch: 6,
-            last_hash: Some(secp256k1::hashes::sha256::Hash::hash(&BYTE_8)),
-            items: vec![(0.into(), consensus_items)],
-            rejected_txs: BTreeSet::new(),
-        };
-
-        let signed_epoch_outcome = SignedEpochOutcome {
-            outcome: epoch_outcome,
-            hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
-            signature: Some(SerdeSignature(Standard.sample(&mut OsRng))),
-        };
-
-        dbtx.insert_new_entry(&epoch_history_key, &signed_epoch_outcome)
-            .await;
-
-        dbtx.insert_new_entry(&LastEpochKey, &epoch_history_key)
-            .await;
 
         let serde_sig = SerdeSignature(Standard.sample(&mut OsRng));
         dbtx.insert_new_entry(&ClientConfigSignatureKey, &serde_sig)
@@ -218,11 +196,6 @@ mod fedimint_migration_tests {
         )
         .await;
 
-        let mut peers: BTreeSet<PeerId> = BTreeSet::new();
-        peers.insert(0.into());
-        peers.insert(1.into());
-        peers.insert(2.into());
-        dbtx.insert_new_entry(&ConsensusUpgradeKey, &peers).await;
         dbtx.commit_tx().await;
     }
 
@@ -277,21 +250,6 @@ mod fedimint_migration_tests {
                                     "validate_migrations was not able to read any AcceptedTransactions"
                                 );
                             }
-                            DbKeyPrefix::EpochHistory => {
-                                let epoch_history = dbtx
-                                    .find_by_prefix(&EpochHistoryKeyPrefix)
-                                    .await
-                                    .collect::<Vec<_>>()
-                                    .await;
-                                let num_epochs = epoch_history.len();
-                                ensure!(
-                                    num_epochs > 0,
-                                    "validate_migrations was not able to read any EpochHistory"
-                                );
-                            }
-                            DbKeyPrefix::LastEpoch => {
-                                ensure!(dbtx.get_value(&LastEpochKey).await.is_some());
-                            }
                             DbKeyPrefix::ClientConfigSignature => {
                                 dbtx
                                     .get_value(&ClientConfigSignatureKey)
@@ -309,9 +267,6 @@ mod fedimint_migration_tests {
                                     num_signature_shares > 0,
                                     "validate_migrations was not able to read any ClientConfigSignatureShares"
                                 );
-                            }
-                            DbKeyPrefix::ConsensusUpgrade => {
-                                ensure!(dbtx.get_value(&ConsensusUpgradeKey).await.is_some());
                             }
                             DbKeyPrefix::ClientConfigDownload => {
                                 let downloads = dbtx
