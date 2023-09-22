@@ -1231,6 +1231,7 @@ dependencies = [
  "futures",
  "parity-scale-codec",
  "secp256k1-zkp",
+ "serde",
  "tokio",
  "tracing",
  "tracing-subscriber",

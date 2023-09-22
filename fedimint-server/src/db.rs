@@ -15,6 +15,8 @@ pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
+    // SignedBlock = 0x04, this prefix is used in the atomic broadcast crate
+    // AlephBackup = 0x05, this prefix is used in the atomic broadcast crate
     ClientConfigSignature = 0x07,
     ClientConfigSignatureShare = 0x3,
     ClientConfigDownload = 0x09,

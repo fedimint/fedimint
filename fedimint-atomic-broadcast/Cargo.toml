@@ -8,6 +8,7 @@ aleph-bft = { version = "0.20.5", default-features = false }
 anyhow = "1.0.71"
 async-channel = "1.8.0"
 async-trait = "0.1.73"
+serde = { version = "1.0.149", features = [ "derive" ] }
 bitcoin = "0.30.0"
 bitcoin_hashes = "0.12.0"
 fedimint-core = { path = "../fedimint-core" }

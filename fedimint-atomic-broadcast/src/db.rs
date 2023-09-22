@@ -2,19 +2,23 @@ use std::io::Cursor;
 
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_record;
+use fedimint_core::{impl_db_lookup, impl_db_record};
 
 use crate::SignedBlock;
 
 #[derive(Debug, Encodable, Decodable)]
-struct SignedBlockKey(u64);
+pub struct SignedBlockKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct SignedBlockPrefix;
 
 impl_db_record!(
     key = SignedBlockKey,
     value = SignedBlock,
-    db_prefix = 0x00,
+    db_prefix = 0x04,
     notify_on_modify = false,
 );
+impl_db_lookup!(key = SignedBlockKey, query_prefix = SignedBlockPrefix);
 
 #[derive(Debug, Encodable, Decodable)]
 struct UnitsKey(u64, u64);
@@ -22,7 +26,7 @@ struct UnitsKey(u64, u64);
 impl_db_record!(
     key = UnitsKey,
     value = Vec<u8>,
-    db_prefix = 0x01,
+    db_prefix = 0x05,
     notify_on_modify = false,
 );
 

@@ -92,12 +92,14 @@ use bitcoin::merkle_tree;
 use bitcoin_hashes::{sha256, Hash};
 /// The atomic broadcast instance run once by every peer.
 pub use broadcast::AtomicBroadcast;
+pub use db::{SignedBlockKey, SignedBlockPrefix};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 /// This keychain implements naive threshold schnorr signatures over secp256k1.
 /// The broadcasts uses this keychain to sign messages for peers and create
 /// the threshold signatures for the signed blocks.
 pub use keychain::Keychain;
+use serde::{Deserialize, Serialize};
 
 /// The majority of these messages need to be delivered to the intended
 /// [Recipient] in order for the broadcast to make progress. However, the
@@ -130,7 +132,7 @@ pub enum Decision {
 /// are guaranteed to be in the same order. However, an ordered items is
 /// only guaranteed to be seen by all correct nodes if a correct node decides to
 /// accept it.
-#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
+#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
 pub struct OrderedItem {
     pub item: Vec<u8>,
     pub index: u64,
@@ -142,7 +144,7 @@ pub struct OrderedItem {
 /// [Block] roughly every five minutes.  Therefore, just like in Bitcoin, a
 /// [Block] might be empty if no items are ordered in that time or all ordered
 /// items are discarded by Fedimint Consensus.
-#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
+#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
 pub struct Block {
     pub index: u64,
     pub items: Vec<OrderedItem>,

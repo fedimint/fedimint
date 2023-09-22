@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
+use fedimint_atomic_broadcast::{Block, SignedBlock, SignedBlockKey, SignedBlockPrefix};
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus,
     ServerStatus, StatusResponse,
@@ -311,6 +312,24 @@ impl ConsensusApi {
         Ok((&outcome).into())
     }
 
+    pub async fn get_block_count(&self) -> u64 {
+        self.db
+            .begin_transaction()
+            .await
+            .find_by_prefix(&SignedBlockPrefix)
+            .await
+            .count()
+            .await as u64
+    }
+
+    pub async fn get_block(&self, index: u64) -> Option<SignedBlock> {
+        self.db
+            .begin_transaction()
+            .await
+            .get_value(&SignedBlockKey(index))
+            .await
+    }
+
     pub async fn download_client_config(&self, info: InviteCode) -> ApiResult<ClientConfig> {
         let token = self.cfg.local.download_token.clone();
 
@@ -578,6 +597,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     server: ServerStatus::ConsensusRunning,
                     federation: Some(consensus_status)
                 })
+            }
+        },
+        api_endpoint! {
+            "get_block_count",
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
+                Ok(fedimint.get_block_count().await)
+            }
+        },
+        api_endpoint! {
+            "get_block",
+            async |fedimint: &ConsensusApi, _context, index: u64| -> Option<Block> {
+                Ok(fedimint.get_block(index).await.map(|sb| sb.block))
             }
         },
         api_endpoint! {
