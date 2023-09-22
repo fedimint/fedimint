@@ -27,7 +27,6 @@ use fedimint_mint_server::common::MintCommonGen;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
-use fedimint_server::db::EpochHistoryKeyPrefix;
 use fedimint_server::epoch::{IterUnzipConsensusItem, SignedEpochOutcome, UnzipConsensusItem};
 use fedimint_server::transaction::Transaction;
 use fedimint_wallet_server::common::config::WalletConfig;
@@ -190,6 +189,10 @@ async fn main() -> anyhow::Result<()> {
             let mut dbtx = db.begin_transaction().await;
 
             let mut change_tweak_idx: u64 = 0;
+
+            unimplemented!();
+
+            /*
             let tweaks = dbtx.find_by_prefix(&EpochHistoryKeyPrefix).await.flat_map(
                 |(_, SignedEpochOutcome { outcome, .. })| {
                     let UnzipConsensusItem {
@@ -229,6 +232,7 @@ async fn main() -> anyhow::Result<()> {
 
             serde_json::to_writer(std::io::stdout().lock(), &wallets)
                 .expect("Could not encode to stdout")
+             */
         }
     }
 

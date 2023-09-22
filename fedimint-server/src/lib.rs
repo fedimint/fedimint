@@ -125,9 +125,7 @@ impl FedimintServer {
                 .map_err(|_| format_err!("Unable to use local password"))?;
             info!(target: LOG_CONSENSUS, "Setting password from local file");
 
-            if config_gen.has_upgrade_flag().await {
-                info!(target: LOG_CONSENSUS, "Restarted from an upgrade");
-            } else if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
+            if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
                 info!(target: LOG_CONSENSUS, "Configs found locally");
                 return Ok(config_generated_rx.recv().await.expect("should not close"));
             }

@@ -16,7 +16,7 @@ use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
-use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
+use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
@@ -43,7 +43,7 @@ use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::{FundingVerifier, VerificationCaches};
 use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
-    ClientConfigSignatureKey, EpochHistoryKey, LastEpochKey,
+    ClientConfigSignatureKey,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
@@ -341,28 +341,10 @@ impl ConsensusApi {
         Ok(self.client_cfg.clone())
     }
 
-    pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
-        self.db
-            .begin_transaction()
-            .await
-            .get_value(&EpochHistoryKey(epoch))
-            .await
-    }
-
-    pub async fn get_epoch_count(&self) -> u64 {
-        self.db
-            .begin_transaction()
-            .await
-            .get_value(&LastEpochKey)
-            .await
-            .map(|ep_hist_key| ep_hist_key.0 + 1)
-            .unwrap_or(0)
-    }
-
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
         let peers_connection_status = self.peer_status_channels.get_all_status().await;
         let latest_contribution_by_peer = self.latest_contribution_by_peer.read().await.clone();
-        let epoch_count = self.get_epoch_count().await;
+        let epoch_count = 0;
 
         let status_by_peer = peers_connection_status
             .into_iter()

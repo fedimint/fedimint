@@ -32,7 +32,6 @@ use tracing::error;
 
 use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
-use crate::db::ConsensusUpgradeKey;
 use crate::net::peers::DelayCalculator;
 use crate::{check_auth, ApiResult, HasApiContext};
 
@@ -322,10 +321,6 @@ impl ConfigGenApi {
         let cfg = read_server_config(&auth.0, self.data_dir.clone())
             .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
 
-        let mut tx = self.db.begin_transaction().await;
-        tx.remove_entry(&ConsensusUpgradeKey).await;
-        tx.commit_tx().await;
-
         self.config_generated_tx.send(cfg).await.expect("Can send");
 
         Ok(())
@@ -333,21 +328,7 @@ impl ConfigGenApi {
 
     /// Returns the server status
     pub async fn server_status(&self) -> ServerStatus {
-        let has_upgrade_flag = { self.has_upgrade_flag().await };
-
-        let state = self.state.lock().expect("lock poisoned");
-        if has_upgrade_flag {
-            ServerStatus::Upgrading
-        } else {
-            state.status.clone()
-        }
-    }
-
-    /// Returns true if the upgrade flag is set indicating that the server was
-    /// shutdown due to a planned upgrade
-    pub async fn has_upgrade_flag(&self) -> bool {
-        let mut tx = self.db.begin_transaction().await;
-        tx.get_value(&ConsensusUpgradeKey).await.is_some()
+        self.state.lock().expect("lock poisoned").status.clone()
     }
 
     fn bad_request<T>(msg: &str) -> ApiResult<T> {

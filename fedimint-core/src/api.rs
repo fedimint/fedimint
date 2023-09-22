@@ -933,8 +933,6 @@ pub enum ServerStatus {
     VerifyingConfigs,
     /// We have verified all our peer configs
     VerifiedConfigs,
-    /// Restarted from a planned upgrade (requires action to start)
-    Upgrading,
     /// Consensus is running
     ConsensusRunning,
 }

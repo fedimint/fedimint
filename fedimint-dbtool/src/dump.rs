@@ -207,22 +207,6 @@ impl<'a> DatabaseDump<'a> {
                         "Accepted Transactions"
                     );
                 }
-                ConsensusRange::DbKeyPrefix::EpochHistory => {
-                    push_db_pair_items_no_serde!(
-                        dbtx,
-                        ConsensusRange::EpochHistoryKeyPrefix,
-                        ConsensusRange::EpochHistoryKey,
-                        fedimint_core::epoch::EpochHistory,
-                        consensus,
-                        "Epoch History"
-                    );
-                }
-                ConsensusRange::DbKeyPrefix::LastEpoch => {
-                    let last_epoch = dbtx.get_value(&ConsensusRange::LastEpochKey).await;
-                    if let Some(last_epoch) = last_epoch {
-                        consensus.insert("LastEpoch".to_string(), Box::new(last_epoch));
-                    }
-                }
                 ConsensusRange::DbKeyPrefix::ClientConfigSignature => {
                     let signature = dbtx
                         .get_value(&ConsensusRange::ClientConfigSignatureKey)
@@ -242,12 +226,6 @@ impl<'a> DatabaseDump<'a> {
                         consensus,
                         "Client Config Signature Share"
                     );
-                }
-                ConsensusRange::DbKeyPrefix::ConsensusUpgrade => {
-                    let upgrade = dbtx.get_value(&ConsensusRange::ConsensusUpgradeKey).await;
-                    if let Some(upgrade) = upgrade {
-                        consensus.insert("ConsensusUpgrade".to_string(), Box::new(upgrade));
-                    }
                 }
                 ConsensusRange::DbKeyPrefix::ClientConfigDownload => {
                     push_db_pair_items!(

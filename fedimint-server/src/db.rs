@@ -1,11 +1,10 @@
-use std::collections::BTreeSet;
 use std::fmt::Debug;
 
 use fedimint_core::api::ClientConfigDownloadToken;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare, SignedEpochOutcome};
+use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -16,11 +15,8 @@ pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
-    EpochHistory = 0x05,
-    LastEpoch = 0x06,
     ClientConfigSignature = 0x07,
     ClientConfigSignatureShare = 0x3,
-    ConsensusUpgrade = 0x08,
     ClientConfigDownload = 0x09,
     Module = MODULE_GLOBAL_PREFIX,
 }
@@ -48,28 +44,6 @@ impl_db_lookup!(
     query_prefix = AcceptedTransactionKeyPrefix
 );
 
-#[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
-pub struct EpochHistoryKey(pub u64);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct EpochHistoryKeyPrefix;
-
-impl_db_record!(
-    key = EpochHistoryKey,
-    value = SignedEpochOutcome,
-    db_prefix = DbKeyPrefix::EpochHistory,
-);
-impl_db_lookup!(key = EpochHistoryKey, query_prefix = EpochHistoryKeyPrefix);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct LastEpochKey;
-
-impl_db_record!(
-    key = LastEpochKey,
-    value = EpochHistoryKey,
-    db_prefix = DbKeyPrefix::LastEpoch
-);
-
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientConfigSignatureKey;
 
@@ -95,15 +69,6 @@ impl_db_record!(
 impl_db_lookup!(
     key = ClientConfigSignatureShareKey,
     query_prefix = ClientConfigSignatureSharePrefix
-);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ConsensusUpgradeKey;
-
-impl_db_record!(
-    key = ConsensusUpgradeKey,
-    value = BTreeSet<PeerId>,
-    db_prefix = DbKeyPrefix::ConsensusUpgrade,
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
