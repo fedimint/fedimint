@@ -1,7 +1,5 @@
 use std::fs::File;
 use std::io;
-use std::net::SocketAddr;
-use std::time::Duration;
 
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -31,8 +29,11 @@ pub const LOG_CLIENT_RECOVERY_MINT: &str = "client::recovery::mint";
 /// Consolidates the setup of server tracing into a helper
 #[derive(Default)]
 pub struct TracingSetup {
-    tokio_console_bind: Option<SocketAddr>,
+    #[cfg(feature = "telemetry")]
+    tokio_console_bind: Option<std::net::SocketAddr>,
+    #[cfg(feature = "telemetry")]
     with_jaeger: bool,
+    #[cfg(feature = "telemetry")]
     with_chrome: bool,
     with_file: Option<File>,
 }
@@ -40,7 +41,7 @@ pub struct TracingSetup {
 impl TracingSetup {
     /// Setup a console server for tokio logging <https://docs.rs/console-subscriber>
     #[cfg(feature = "telemetry")]
-    pub fn tokio_console_bind(&mut self, address: Option<SocketAddr>) -> &mut Self {
+    pub fn tokio_console_bind(&mut self, address: Option<std::net::SocketAddr>) -> &mut Self {
         self.tokio_console_bind = address;
         self
     }
@@ -85,7 +86,7 @@ impl TracingSetup {
             #[cfg(feature = "telemetry")]
             if let Some(l) = self.tokio_console_bind {
                 let tracer = console_subscriber::ConsoleLayer::builder()
-                    .retention(Duration::from_secs(60))
+                    .retention(std::time::Duration::from_secs(60))
                     .server_addr(l)
                     .spawn()
                     // tokio-console cares only about these layers, so we filter separately for it
