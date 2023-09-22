@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
+use db::DbKeyPrefix;
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -28,6 +30,7 @@ use fedimint_dummy_common::{
 use futures::{pin_mut, StreamExt};
 use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
+use strum::IntoEnumIterator;
 use threshold_crypto::{PublicKey, Signature};
 
 use crate::api::DummyFederationApi;
@@ -349,8 +352,32 @@ async fn get_funds(dbtx: &mut ModuleDatabaseTransaction<'_>) -> Amount {
 pub struct DummyClientGen;
 
 // TODO: Boilerplate-code
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for DummyClientGen {
     type Common = DummyCommonGen;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::ClientFunds => {
+                    if let Some(funds) = dbtx.get_value(&DummyClientFundsKeyV0).await {
+                        items.insert("Dummy Funds".to_string(), Box::new(funds));
+                    }
+                }
+            }
+        }
+
+        Box::new(items.into_iter())
+    }
 }
 
 /// Generates the client module

@@ -17,7 +17,9 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion, TransactionItemAmount,
@@ -332,8 +334,17 @@ pub struct GatewayClientGen {
     pub fees: RoutingFees,
 }
 
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for GatewayClientGen {
     type Common = LightningCommonGen;
+
+    async fn dump_database(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        Box::new(vec![].into_iter())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

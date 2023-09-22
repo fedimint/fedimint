@@ -10,6 +10,7 @@ mod oob;
 mod output;
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::ffi;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -20,6 +21,7 @@ use anyhow::{anyhow, bail, Context as AnyhowContext};
 use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
+use client_db::DbKeyPrefix;
 use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
@@ -43,8 +45,8 @@ use fedimint_core::module::{
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti, TieredSummary,
-    TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, Tiered, TieredMulti,
+    TieredSummary, TransactionId,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_mint_common as common;
@@ -53,13 +55,16 @@ pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
 use crate::backup::recovery::MintRestoreInProgressState;
 use crate::backup::EcashBackup;
-use crate::client_db::{NextECashNoteIndexKey, NoteKey, NoteKeyPrefix};
+use crate::client_db::{
+    NextECashNoteIndexKey, NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+};
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
 };
@@ -529,8 +534,48 @@ pub enum MintOperationMetaVariants {
 #[derive(Debug, Clone)]
 pub struct MintClientGen;
 
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for MintClientGen {
     type Common = MintCommonGen;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut mint_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::Note => {
+                    push_db_pair_items!(
+                        dbtx,
+                        NoteKeyPrefix,
+                        NoteKey,
+                        SpendableNote,
+                        mint_client_items,
+                        "Notes"
+                    );
+                }
+                DbKeyPrefix::NextECashNoteIndex => {
+                    push_db_pair_items!(
+                        dbtx,
+                        NextECashNoteIndexKeyPrefix,
+                        NextECashNoteIndexKey,
+                        u64,
+                        mint_client_items,
+                        "NextECashNoteIndex"
+                    );
+                }
+            }
+        }
+
+        Box::new(mint_client_items.into_iter())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

@@ -3,7 +3,10 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use erased_serde::Serialize;
-use fedimint_core::config::ServerModuleInitRegistry;
+use fedimint_client::db::ClientConfigKeyPrefix;
+use fedimint_client::module::init::ClientModuleInitRegistry;
+use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
+use fedimint_core::core::ModuleKind;
 use fedimint_core::db::notifications::Notifications;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
@@ -16,6 +19,7 @@ use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::db as ConsensusRange;
 use futures::StreamExt;
+use ln_gateway::Gateway;
 use strum::IntoEnumIterator;
 
 #[derive(Debug, serde::Serialize)]
@@ -39,18 +43,21 @@ pub struct DatabaseDump<'a> {
     prefixes: Vec<String>,
     cfg: Option<ServerConfig>,
     module_inits: ServerModuleInitRegistry,
+    client_cfg: Option<ClientConfig>,
+    client_module_inits: ClientModuleInitRegistry,
 }
 
 impl<'a> DatabaseDump<'a> {
-    pub fn new(
+    pub async fn new(
         cfg_dir: PathBuf,
         data_dir: String,
         password: String,
         module_inits: ServerModuleInitRegistry,
+        client_module_inits: ClientModuleInitRegistry,
         modules: Vec<String>,
         prefixes: Vec<String>,
     ) -> anyhow::Result<DatabaseDump<'a>> {
-        let read_only = match RocksDbReadOnly::open_read_only(data_dir) {
+        let read_only = match RocksDbReadOnly::open_read_only(data_dir.clone()) {
             Ok(db) => db,
             Err(_) => {
                 panic!("Error reading RocksDB database. Quitting...");
@@ -60,27 +67,53 @@ impl<'a> DatabaseDump<'a> {
 
         // leak here is OK, it only happens once.
         let notifications = Box::leak(Box::new(Notifications::new()));
-        if modules.contains(&"client".to_string()) {
-            let dbtx = DatabaseTransaction::new(
+
+        let (server_cfg, client_cfg, decoders) = if let Ok(cfg) =
+            read_server_config(&password, cfg_dir).context("Failed to read server config")
+        {
+            // Successfully read the server's config, that means this database is a server
+            // db
+            let decoders = module_inits
+                .available_decoders(cfg.iter_module_instances())
+                .unwrap()
+                .with_fallback();
+            (Some(cfg), None, decoders)
+        } else {
+            // Check if this database is a client database by reading the `ClientConfig`
+            // from the database.
+            let read_only_client = match RocksDbReadOnly::open_read_only(data_dir) {
+                Ok(db) => db,
+                Err(_) => {
+                    panic!("Error reading RocksDB database. Quitting...");
+                }
+            };
+
+            let single_use = SingleUseDatabaseTransaction::new(read_only_client);
+            let mut dbtx = DatabaseTransaction::new(
                 Box::new(single_use),
                 ModuleDecoderRegistry::default(),
                 notifications,
             );
-            return Ok(DatabaseDump {
-                serialized: BTreeMap::new(),
-                read_only: dbtx,
-                modules,
-                prefixes,
-                cfg: None,
-                module_inits: Default::default(),
-            });
-        }
+            let client_cfg = dbtx
+                .find_by_prefix(&ClientConfigKeyPrefix)
+                .await
+                .next()
+                .await
+                .map(|(_, client_cfg)| client_cfg);
 
-        let cfg = read_server_config(&password, cfg_dir).context("Failed to read server config")?;
-        let decoders = module_inits
-            .available_decoders(cfg.iter_module_instances())
-            .unwrap()
-            .with_fallback();
+            if let Some(client_cfg) = client_cfg {
+                // Successfully read the client config, that means this database is a client db
+                let kinds = client_cfg.modules.iter().map(|(k, v)| (*k, &v.kind));
+                let decoders = client_module_inits
+                    .available_decoders(kinds)
+                    .unwrap()
+                    .with_fallback();
+                (None, Some(client_cfg), decoders)
+            } else {
+                (None, None, ModuleDecoderRegistry::default())
+            }
+        };
+
         let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
 
         Ok(DatabaseDump {
@@ -88,8 +121,10 @@ impl<'a> DatabaseDump<'a> {
             read_only: dbtx,
             modules,
             prefixes,
-            cfg: Some(cfg),
+            cfg: server_cfg,
             module_inits,
+            client_module_inits,
+            client_cfg,
         })
     }
 }
@@ -101,85 +136,115 @@ impl<'a> DatabaseDump<'a> {
         println!("{json}");
     }
 
-    /// Iterates through all the specified ranges in the database and retrieves
-    /// the data for each range. Prints serialized contents at the end.
-    pub async fn dump_database(&mut self) -> anyhow::Result<()> {
-        if self.modules.is_empty() || self.modules.contains(&"consensus".to_string()) {
-            self.retrieve_consensus_data().await;
+    async fn serialize_module(
+        &mut self,
+        module_id: &u16,
+        kind: &ModuleKind,
+        inits: CommonModuleInitRegistry,
+    ) -> anyhow::Result<()> {
+        if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
+            return Ok(());
         }
+        let mut isolated_dbtx = self.read_only.with_module_prefix(*module_id);
 
-        let cfg = &self.cfg;
-        if let Some(cfg) = cfg {
-            for (module_id, module_cfg) in &cfg.consensus.modules {
-                let kind = &module_cfg.kind;
+        match inits.get(kind) {
+            None => {
+                tracing::warn!(module_id, %kind, "Detected configuration for unsupported module");
 
-                if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
-                    continue;
+                let mut module_serialized = BTreeMap::new();
+                let filtered_prefixes = (0u8..=255).filter(|f| {
+                    self.prefixes.is_empty()
+                        || self.prefixes.contains(&f.to_string().to_lowercase())
+                });
+
+                let isolated_dbtx = &mut isolated_dbtx;
+
+                for prefix in filtered_prefixes {
+                    let db_items = isolated_dbtx
+                        .raw_find_by_prefix(&[prefix])
+                        .await?
+                        .map(|(k, v)| {
+                            (
+                                k.consensus_encode_to_hex().expect("can't fail"),
+                                Box::new(v.consensus_encode_to_hex().expect("can't fail")),
+                            )
+                        })
+                        .collect::<BTreeMap<String, Box<_>>>()
+                        .await;
+
+                    module_serialized.extend(db_items);
                 }
-                let mut isolated_dbtx = self.read_only.with_module_prefix(*module_id);
+                self.serialized
+                    .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
+            }
+            Some(init) => {
+                let mut module_serialized = init
+                    .dump_database(&mut isolated_dbtx, self.prefixes.clone())
+                    .await
+                    .collect::<BTreeMap<String, _>>();
 
-                match self.module_inits.get(kind) {
-                    None => {
-                        tracing::warn!(module_id, %kind, "Detected configuration for unsupported module");
-
-                        let mut module_serialized = BTreeMap::new();
-                        let filtered_prefixes = (0u8..=255).filter(|f| {
-                            self.prefixes.is_empty()
-                                || self.prefixes.contains(&f.to_string().to_lowercase())
-                        });
-
-                        let isolated_dbtx = &mut isolated_dbtx;
-
-                        for prefix in filtered_prefixes {
-                            let db_items = isolated_dbtx
-                                .raw_find_by_prefix(&[prefix])
-                                .await?
-                                .map(|(k, v)| {
-                                    (
-                                        k.consensus_encode_to_hex().expect("can't fail"),
-                                        Box::new(v.consensus_encode_to_hex().expect("can't fail")),
-                                    )
-                                })
-                                .collect::<BTreeMap<String, Box<_>>>()
-                                .await;
-
-                            module_serialized.extend(db_items);
-                        }
-                        self.serialized
-                            .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
-                    }
-                    Some(init) => {
-                        let mut module_serialized = init
-                            .dump_database(&mut isolated_dbtx, self.prefixes.clone())
-                            .await
-                            .collect::<BTreeMap<String, _>>();
-
-                        let db_version = isolated_dbtx.get_value(&DatabaseVersionKey).await;
-                        if let Some(db_version) = db_version {
-                            module_serialized.insert("Version".to_string(), Box::new(db_version));
-                        } else {
-                            module_serialized.insert(
-                                "Version".to_string(),
-                                Box::new("Not Specified".to_string()),
-                            );
-                        }
-
-                        self.serialized
-                            .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
-                    }
+                let db_version = isolated_dbtx.get_value(&DatabaseVersionKey).await;
+                if let Some(db_version) = db_version {
+                    module_serialized.insert("Version".to_string(), Box::new(db_version));
+                } else {
+                    module_serialized
+                        .insert("Version".to_string(), Box::new("Not Specified".to_string()));
                 }
+
+                self.serialized
+                    .insert(format!("{kind}-{module_id}"), Box::new(module_serialized));
             }
         }
 
-        // TODO: When the client is modularized, these don't need to be hardcoded
-        // anymore
-        if !self.modules.is_empty() && self.modules.contains(&"client".to_string()) {
-            self.retrieve_client_data().await;
-            self.retrieve_ln_client_data().await;
-            self.retrieve_mint_client_data().await;
-            self.retrieve_wallet_client_data().await;
+        Ok(())
+    }
+
+    async fn serialize_gateway(&mut self) -> anyhow::Result<()> {
+        let mut dbtx = self.read_only.get_isolated();
+        let gateway_serialized = Gateway::dump_database(&mut dbtx, self.prefixes.clone())
+            .await
+            .collect::<BTreeMap<String, _>>();
+        self.serialized
+            .insert("gateway".to_string(), Box::new(gateway_serialized));
+        Ok(())
+    }
+
+    /// Iterates through all the specified ranges in the database and retrieves
+    /// the data for each range. Prints serialized contents at the end.
+    pub async fn dump_database(&mut self) -> anyhow::Result<()> {
+        let cfg = self.cfg.clone();
+        if let Some(cfg) = cfg {
+            if self.modules.is_empty() || self.modules.contains(&"consensus".to_string()) {
+                self.retrieve_consensus_data().await;
+            }
+
+            for (module_id, module_cfg) in &cfg.consensus.modules {
+                let kind = &module_cfg.kind;
+                self.serialize_module(module_id, kind, self.module_inits.to_common())
+                    .await?;
+            }
+
+            self.print_database();
+            return Ok(());
         }
 
+        if let Some(cfg) = self.client_cfg.clone() {
+            for (module_id, module_cfg) in &cfg.modules {
+                let kind = &module_cfg.kind;
+                let mut modules = Vec::new();
+                if let Some(module) = self.client_module_inits.get(kind) {
+                    modules.push(module.to_dyn_common());
+                }
+
+                let registry = CommonModuleInitRegistry::from(modules);
+                self.serialize_module(module_id, kind, registry).await?;
+            }
+
+            self.print_database();
+            return Ok(());
+        }
+
+        self.serialize_gateway().await?;
         self.print_database();
 
         Ok(())
@@ -266,29 +331,5 @@ impl<'a> DatabaseDump<'a> {
 
         self.serialized
             .insert("Consensus".to_string(), Box::new(consensus));
-    }
-
-    /// Iterates through each of the prefixes within the lightning client range
-    /// and retrieves the corresponding data.
-    async fn retrieve_ln_client_data(&mut self) {
-        unimplemented!()
-    }
-
-    /// Iterates through each of the prefixes within the mint client range and
-    /// retrieves the corresponding data.
-    async fn retrieve_mint_client_data(&mut self) {
-        unimplemented!()
-    }
-
-    /// Iterates through each of the prefixes within the wallet client range and
-    /// retrieves the corresponding data.
-    async fn retrieve_wallet_client_data(&mut self) {
-        unimplemented!()
-    }
-
-    /// Iterates through each of the prefixes within the client range and
-    /// retrieves the corresponding data.
-    async fn retrieve_client_data(&mut self) {
-        unimplemented!()
     }
 }

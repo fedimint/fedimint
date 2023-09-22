@@ -415,18 +415,33 @@ where
 /// `ClientModuleInit`, we can't really have a `ICommonModuleInit`, so to unify
 /// them in `ModuleInitRegistry` we move the common functionality to be an
 /// interface over their dyn newtype wrappers. A bit weird, but works.
+#[apply(async_trait_maybe_send!)]
 pub trait IDynCommonModuleInit: Debug {
     fn decoder(&self) -> Decoder;
 
     fn module_kind(&self) -> ModuleKind;
 
     fn to_dyn_common(&self) -> DynCommonModuleInit;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
+#[apply(async_trait_maybe_send!)]
 pub trait ExtendsCommonModuleInit: Debug + Clone + Send + Sync + 'static {
     type Common: CommonModuleInit;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
+#[apply(async_trait_maybe_send!)]
 impl<T> IDynCommonModuleInit for T
 where
     T: ExtendsCommonModuleInit,
@@ -441,6 +456,14 @@ where
 
     fn to_dyn_common(&self) -> DynCommonModuleInit {
         DynCommonModuleInit::from_inner(Arc::new(self.clone()))
+    }
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        <Self as ExtendsCommonModuleInit>::dump_database(self, dbtx, prefix_names).await
     }
 }
 
@@ -495,12 +518,6 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         module_instance_id: ModuleInstanceId,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<ClientModuleConfig>;
-
-    async fn dump_database(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
 dyn_newtype_define!(
@@ -532,6 +549,8 @@ impl AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static> for DynServerModule
         self.inner.as_common()
     }
 }
+
+#[apply(async_trait_maybe_send!)]
 pub trait CommonModuleInit: Debug + Sized {
     const CONSENSUS_VERSION: ModuleConsensusVersion;
     const KIND: ModuleKind;
@@ -617,12 +636,6 @@ pub trait ServerModuleInit: ExtendsCommonModuleInit + Sized {
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<<<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig>;
-
-    async fn dump_database(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -691,14 +704,6 @@ where
             config.version,
             <Self as ServerModuleInit>::get_client_config(self, config)?,
         )
-    }
-
-    async fn dump_database(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-        prefix_names: Vec<String>,
-    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        <Self as ServerModuleInit>::dump_database(self, dbtx, prefix_names).await
     }
 }
 

@@ -5,12 +5,16 @@ use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
+use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::IDatabase;
 use fedimint_core::module::DynServerModuleInit;
+use fedimint_ln_client::LightningClientGen;
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
+use fedimint_mint_client::MintClientGen;
 use fedimint_mint_server::MintGen;
+use fedimint_wallet_client::WalletClientGen;
 use fedimint_wallet_server::WalletGen;
 use futures::StreamExt;
 
@@ -150,14 +154,26 @@ async fn main() -> Result<()> {
                 ]
             });
 
+            let client_module_inits = ClientModuleInitRegistry::from(if options.no_modules {
+                vec![]
+            } else {
+                vec![
+                    DynClientModuleInit::from(WalletClientGen::default()),
+                    DynClientModuleInit::from(MintClientGen),
+                    DynClientModuleInit::from(LightningClientGen),
+                ]
+            });
+
             let mut dbdump = DatabaseDump::new(
                 cfg_dir,
                 options.database,
                 password,
                 module_inits,
+                client_module_inits,
                 modules,
                 prefix_names,
-            )?;
+            )
+            .await?;
             dbdump.dump_database().await?;
         }
     }

@@ -29,7 +29,8 @@ use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
 use db::{
-    FederationRegistrationKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
+    DbKeyPrefix, FederationRegistrationKey, GatewayConfiguration, GatewayConfigurationKey,
+    GatewayPublicKey,
 };
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
@@ -39,13 +40,13 @@ use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::Amount;
+use fedimint_core::{push_db_pair_items, Amount};
 use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::GatewayFee;
@@ -64,10 +65,12 @@ use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientExt;
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
+use crate::db::{FederationConfig, FederationIdKeyPrefix};
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::lnrpc_client::GatewayLightningBuilder;
 use crate::rpc::rpc_server::run_webserver;
@@ -293,6 +296,49 @@ impl Gateway {
             dbtx.commit_tx().await;
             public
         }
+    }
+
+    pub async fn dump_database<'a>(
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + 'a> {
+        let mut gateway_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::FederationConfig => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FederationIdKeyPrefix,
+                        FederationIdKey,
+                        FederationConfig,
+                        gateway_items,
+                        "Federation Config"
+                    );
+                }
+                DbKeyPrefix::GatewayConfiguration => {
+                    if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
+                        gateway_items.insert(
+                            "Gateway Configuration".to_string(),
+                            Box::new(gateway_config),
+                        );
+                    }
+                }
+                DbKeyPrefix::GatewayPublicKey => {
+                    if let Some(public_key) = dbtx.get_value(&GatewayPublicKey).await {
+                        gateway_items
+                            .insert("Gateway Public Key".to_string(), Box::new(public_key));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Box::new(gateway_items.into_iter())
     }
 
     pub async fn run(mut self) -> anyhow::Result<TaskShutdownToken> {

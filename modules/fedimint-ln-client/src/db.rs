@@ -10,6 +10,12 @@ pub enum DbKeyPrefix {
     LightningGateway = 0x28,
 }
 
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct LightningGatewayKey;
 

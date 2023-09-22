@@ -2,6 +2,7 @@ pub mod db;
 pub mod pay;
 pub mod receive;
 
+use std::collections::BTreeMap;
 use std::iter::once;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -10,7 +11,7 @@ use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::Hash;
-use db::LightningGatewayKey;
+use db::{DbKeyPrefix, LightningGatewayKey};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::ClientModuleInit;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -22,13 +23,15 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+use fedimint_core::{
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
+};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -51,9 +54,11 @@ use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error};
 
+use crate::db::LightningGatewayKeyPrefix;
 use crate::pay::{
     GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
     LightningPayStateMachine, LightningPayStates,
@@ -561,8 +566,38 @@ pub enum LightningOperationMeta {
 #[derive(Debug, Clone)]
 pub struct LightningClientGen;
 
+#[apply(async_trait_maybe_send!)]
 impl ExtendsCommonModuleInit for LightningClientGen {
     type Common = LightningCommonGen;
+
+    async fn dump_database(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut ln_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::LightningGateway => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LightningGatewayKeyPrefix,
+                        LightningGatewayKey,
+                        LightningGateway,
+                        ln_client_items,
+                        "Lightning Gateways"
+                    );
+                }
+            }
+        }
+
+        Box::new(ln_client_items.into_iter())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

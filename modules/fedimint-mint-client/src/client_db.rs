@@ -2,14 +2,21 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, Amount};
 use fedimint_mint_common::Nonce;
 use serde::Serialize;
+use strum_macros::EnumIter;
 
 use crate::SpendableNote;
 
 #[repr(u8)]
-#[derive(Clone, Debug)]
+#[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     Note = 0x20,
     NextECashNoteIndex = 0x2a,
+}
+
+impl std::fmt::Display for DbKeyPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
