@@ -139,17 +139,23 @@ pub struct GatewayOpts {
 }
 
 impl GatewayOpts {
-    fn to_gateway_parameters(self) -> GatewayParameters {
+    fn to_gateway_parameters(&self) -> GatewayParameters {
         GatewayParameters {
             listen: self.listen,
-            api_addr: self.api_addr,
-            password: self.password,
+            api_addr: self.api_addr.clone(),
+            password: self.password.clone(),
             num_route_hints: self.num_route_hints,
-            fees: self.fees,
+            fees: self.fees.clone(),
         }
     }
 }
 
+/// `GatewayParameters` is a helper struct that can be derived from
+/// `GatewayOpts` that holds the CLI or environment variables that are specified
+/// by the user.
+///
+/// If `GatewayConfiguration is set in the database, that takes precedence and
+/// the optional parameters will have no affect.
 #[derive(Clone, Debug)]
 struct GatewayParameters {
     listen: SocketAddr,
@@ -198,14 +204,36 @@ impl Display for GatewayState {
 
 #[derive(Clone)]
 pub struct Gateway {
+    // Builder struct that allows the gateway to build a `ILnRpcClient`, which represents a
+    // connection to a lightning node.
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
+
+    // CLI or environment parameters that the operator has set.
     gateway_parameters: GatewayParameters,
+
+    // The current state of the Gateway.
     pub state: Arc<RwLock<GatewayState>>,
+
+    // Builder struct that allows the gateway to build a Fedimint client, which handles the
+    // communication with a federation.
     client_builder: StandardGatewayClientBuilder,
+
+    // Database for Gateway metadata.
     gateway_db: Database,
+
+    // Map of `FederationId` -> `Client`. Used for efficient retrieval of the client while handling
+    // incoming HTLCs.
     clients: Arc<RwLock<BTreeMap<FederationId, fedimint_client::Client>>>,
+
+    // Map of short channel ids to `FederationId`. Use for efficient retrieval of the client while
+    // handling incoming HTLCs.
     scid_to_federation: Arc<RwLock<BTreeMap<u64, FederationId>>>,
+
+    // A public key representing the identity of the gateway. Private key is not used.
     pub gateway_id: secp256k1::PublicKey,
+
+    // ID generator that atomically increments. Used for creation of new short channel ids that
+    // represent federations.
     channel_id_generator: Arc<Mutex<AtomicU64>>,
 }
 
@@ -566,6 +594,8 @@ impl Gateway {
             lightning_alias,
         } = self.state.read().await.clone()
         {
+            // `GatewayConfiguration` should always exist in the database when we are in the
+            // `Running` state.
             let gateway_config = self
                 .get_gateway_configuration()
                 .await
@@ -715,6 +745,8 @@ impl Gateway {
                 GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
             })?;
 
+            // `GatewayConfiguration` should always exist in the database when we are in the
+            // `Running` state.
             let gateway_config = self
                 .get_gateway_configuration()
                 .await
@@ -876,15 +908,13 @@ impl Gateway {
 
         // If the DB does not have the gateway configuration, we can construct one from
         // the provided password (required) and the defaults.
-        if self.gateway_parameters.password.is_none() {
-            return None;
-        }
+        self.gateway_parameters.password.as_ref()?;
 
         // Use gateway parameters provided by the environment or CLI
         let num_route_hints = self
             .gateway_parameters
             .num_route_hints
-            .unwrap_or(DEFAULT_NUM_ROUTE_HINTS) as u32;
+            .unwrap_or(DEFAULT_NUM_ROUTE_HINTS);
         let routing_fees = self
             .gateway_parameters
             .fees

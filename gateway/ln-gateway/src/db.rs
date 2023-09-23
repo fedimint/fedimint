@@ -1,7 +1,7 @@
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
-use fedimint_ln_common::LightningGateway;
+use fedimint_ln_common::{serde_routing_fees, LightningGateway};
 use lightning::routing::gossip::RoutingFees;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,7 @@ pub struct GatewayConfigurationKey;
 pub struct GatewayConfiguration {
     pub password: String,
     pub num_route_hints: u32,
+    #[serde(with = "serde_routing_fees")]
     pub routing_fees: RoutingFees,
 }
 
