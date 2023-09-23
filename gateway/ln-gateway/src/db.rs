@@ -4,7 +4,6 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::{serde_routing_fees, LightningGateway};
 use lightning::routing::gossip::RoutingFees;
-use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -31,30 +30,13 @@ pub struct FederationIdKey {
 #[derive(Debug, Encodable, Decodable)]
 pub struct FederationIdKeyPrefix;
 
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct FederationConfig {
     pub invite_code: InviteCode,
     pub mint_channel_id: u64,
     pub timelock_delta: u64,
+    #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
-}
-
-impl Serialize for FederationConfig {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut state = serializer.serialize_struct("FederationConfig", 5)?;
-        state.serialize_field("invite_code", &self.invite_code)?;
-        state.serialize_field("mint_channel_id", &self.mint_channel_id)?;
-        state.serialize_field("timelock_delta", &self.timelock_delta)?;
-        state.serialize_field("base_msat", &self.fees.base_msat)?;
-        state.serialize_field(
-            "proportional_millionths",
-            &self.fees.proportional_millionths,
-        )?;
-        state.end()
-    }
 }
 
 impl_db_record!(
