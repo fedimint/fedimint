@@ -63,3 +63,18 @@ rules:
   message: "`url::Url` may expose confidential username + passwords to logs etc. Use `fedimint_core::SafeUrl` instead."
   pattern: url::Url
   severity: WARNING
+
+- id: use-log-targets
+  languages:
+    - rust
+  message: Log statements should have static target defined to aid filtering
+  patterns:
+    # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
+    # so matching this one with raw regexes instead
+    - pattern-regex: (error|warn|info)!\([^;]*?\);
+    - pattern-not-regex: '(error|warn|info)!\(\s*target: [^;]*?\);'
+  severity: WARNING
+  paths:
+    include:
+      - fedimint-server/
+      - fedimint-core/

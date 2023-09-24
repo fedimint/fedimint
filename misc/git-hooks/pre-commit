@@ -111,7 +111,8 @@ function check_dbg() {
 }
 export -f check_dbg
 
-function check_semgrep_log() {
+
+function check_semgrep() {
   set -eo pipefail
 
   if ! command -v semgrep > /dev/null ; then
@@ -120,22 +121,9 @@ function check_semgrep_log() {
   fi
 
   env SEMGREP_ENABLE_VERSION_CHECK=0 \
-    semgrep -q --error --config .semgrep.log.yaml fedimint-server/ fedimint-core/
+    semgrep -q --error --no-rewrite-rule-ids --config .config/semgrep.yaml
 }
-export -f check_semgrep_log
-
-function check_semgrep_all() {
-  set -eo pipefail
-
-  if ! command -v semgrep > /dev/null ; then
-    >&2 echo "Skipping semgrep check"
-    return 0
-  fi
-
-  env SEMGREP_ENABLE_VERSION_CHECK=0 \
-    semgrep -q --error --config .semgrep.all.yaml
-}
-export -f check_semgrep_all
+export -f check_semgrep
 
 function check_shellcheck() {
   set -eo pipefail
@@ -207,8 +195,7 @@ export -f check_typos
 parallel \
   --jobs 16 \
   ::: \
-  check_semgrep_all \
-  check_semgrep_log \
+  check_semgrep \
   check_typos \
   check_nix \
   check_cargo_fmt \
