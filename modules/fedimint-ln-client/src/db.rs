@@ -1,6 +1,6 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
-use fedimint_ln_common::LightningGateway;
+use fedimint_ln_common::LightningGatewayRegistration;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -24,7 +24,7 @@ pub struct LightningGatewayKeyPrefix;
 
 impl_db_record!(
     key = LightningGatewayKey,
-    value = LightningGateway,
+    value = LightningGatewayRegistration,
     db_prefix = DbKeyPrefix::LightningGateway,
 );
 impl_db_lookup!(

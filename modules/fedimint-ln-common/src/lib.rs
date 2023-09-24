@@ -14,7 +14,7 @@ pub mod config;
 pub mod contracts;
 pub mod db;
 
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use config::LightningClientConfig;
@@ -167,7 +167,61 @@ impl std::fmt::Display for LightningOutputOutcome {
     }
 }
 
-/// Information a gateway registers with a fed
+/// Information about a gateway that is stored locally and expires based on
+/// local system time
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+pub struct LightningGatewayRegistration {
+    pub info: LightningGateway,
+    /// Limits the validity of the announcement to allow updates, anchored to
+    /// local system time
+    pub valid_until: SystemTime,
+}
+
+impl LightningGatewayRegistration {
+    /// Create an announcement from this registration that is ttl-limited by
+    /// a floating duration. This is useful for sharing the announcement with
+    /// other nodes with unsynchronized clocks which can then anchor the
+    /// announcement to their local system time.
+    pub fn unanchor(self) -> LightningGatewayAnnouncement {
+        LightningGatewayAnnouncement {
+            info: self.info,
+            ttl: self
+                .valid_until
+                .duration_since(fedimint_core::time::now())
+                .unwrap_or_default(),
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        self.valid_until < fedimint_core::time::now()
+    }
+}
+
+/// Information about a gateway that is shared with other federations and
+/// expires based on a TTL to allow for sharing between nodes with
+/// unsynchronized clocks which can each anchor the announcement to their local
+/// system time.
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
+pub struct LightningGatewayAnnouncement {
+    pub info: LightningGateway,
+    /// Limits the validity of the announcement to allow updates, unanchored to
+    /// local system time to allow sharing between nodes with unsynchronized
+    /// clocks
+    pub ttl: Duration,
+}
+
+impl LightningGatewayAnnouncement {
+    /// Create a registration from this announcement that is anchored to the
+    /// local system time.
+    pub fn anchor(self) -> LightningGatewayRegistration {
+        LightningGatewayRegistration {
+            info: self.info,
+            valid_until: fedimint_core::time::now() + self.ttl,
+        }
+    }
+}
+
+/// Information a gateway registers with a federation
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
     /// Channel identifier assigned to the mint by the gateway.
@@ -185,18 +239,10 @@ pub struct LightningGateway {
     /// These will be appended with the route hint of the recipient's virtual
     /// channel. To keeps invoices small these should be used sparingly.
     pub route_hints: Vec<route_hints::RouteHint>,
-    /// Limits the validity of the announcement to allow updates
-    pub valid_until: SystemTime,
     /// Gateway configured routing fees
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
     pub gateway_id: secp256k1::PublicKey,
-}
-
-impl LightningGateway {
-    pub fn is_expired(&self) -> bool {
-        self.valid_until < fedimint_core::time::now()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

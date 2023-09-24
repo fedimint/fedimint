@@ -13,7 +13,7 @@ use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use crate::contracts::outgoing::OutgoingContractAccount;
 use crate::contracts::{ContractId, FundedContract, Preimage};
-use crate::{ContractAccount, LightningGateway};
+use crate::{ContractAccount, LightningGatewayAnnouncement};
 
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
@@ -33,8 +33,11 @@ pub trait LnFederationApi {
         &self,
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer>;
-    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>>;
-    async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()>;
+    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
+    async fn register_gateway(
+        &self,
+        gateway: &LightningGatewayAnnouncement,
+    ) -> FederationResult<()>;
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
 
     async fn get_incoming_contract(
@@ -121,7 +124,7 @@ where
     /// There is no consensus within Fedimint on the gateways, each guardian
     /// might be aware of different ones, so we just return the union of all
     /// responses and allow client selection.
-    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
+    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>> {
         self.request_with_strategy(
             UnionResponses::new(self.all_peers().total()),
             LIST_GATEWAYS_ENDPOINT.to_string(),
@@ -130,7 +133,10 @@ where
         .await
     }
 
-    async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
+    async fn register_gateway(
+        &self,
+        gateway: &LightningGatewayAnnouncement,
+    ) -> FederationResult<()> {
         self.request_current_consensus(
             REGISTER_GATEWAY_ENDPOINT.to_string(),
             ApiRequestErased::new(gateway),
