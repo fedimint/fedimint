@@ -3,7 +3,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-kitman.url = "github:jkitman/nixpkgs/add-esplora-pkg";
-    crane.url = "github:dpc/crane?rev=60dcbcab46446bb852473a995fb0008d74c8b78d";
+    crane.url = "github:ipetkov/crane?rev=a7c7c8f456a04975ff1eb5818e6bec89b417623b";
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
