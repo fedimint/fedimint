@@ -481,7 +481,6 @@
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -490,10 +489,9 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_ln_client::contracts::IdentifiableContract;
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, FundedContract, Preimage};
+<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 <span class="kw">use </span>fedimint_ln_common::{LightningInput, LightningOutput};
 <span class="kw">use </span>futures::future;
 <span class="kw">use </span>serde::{Deserialize, Serialize};

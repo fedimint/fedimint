@@ -491,6 +491,8 @@
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -503,15 +505,17 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 <span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
-<span class="kw">use </span>fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_ln_common::{
+    LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome,
+};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
-<span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines};
+<span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that requests the lightning gateway to pay an invoice on

@@ -338,15 +338,15 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::DecryptedPreimage;
-<span class="kw">use </span>fedimint_ln_common::LightningInput;
+<span class="kw">use </span>fedimint_ln_common::{LightningClientContext, LightningInput};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
-<span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines};
+<span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that waits on the receipt of a Lightning payment.

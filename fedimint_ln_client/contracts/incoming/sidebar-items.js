@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["FundedIncomingContract","IncomingContract","IncomingContractAccount","IncomingContractOffer","OfferId"]};

@@ -643,7 +643,6 @@
 <a href="#643" id="643">643</a>
 <a href="#644" id="644">644</a>
 <a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -672,10 +671,9 @@
 };
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_ln_client::contracts::ContractId;
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
+<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_ln_common::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };

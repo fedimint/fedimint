@@ -1105,9 +1105,12 @@
 <a href="#1105" id="1105">1105</a>
 <a href="#1106" id="1106">1106</a>
 <a href="#1107" id="1107">1107</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+</pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
-<span class="kw">pub mod </span>receive;
+<span class="kw">mod </span>receive;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::once;
@@ -1151,7 +1154,10 @@
 <span class="kw">use </span>fedimint_ln_common::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
-<span class="kw">pub use </span>fedimint_ln_common::<span class="kw-2">*</span>;
+<span class="kw">use </span>fedimint_ln_common::{
+    create_incoming_contract_output, ln_operation, ContractOutput, LightningClientContext,
+    LightningCommonGen, LightningGateway, LightningModuleTypes, LightningOutput, KIND,
+};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
@@ -1790,7 +1796,7 @@
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>PayError {
+</span><span class="kw">enum </span>PayError {
     <span class="attr">#[error(<span class="string">&quot;Lightning payment was canceled&quot;</span>)]
     </span>Canceled,
     <span class="attr">#[error(<span class="string">&quot;Lightning payment was refunded&quot;</span>)]
@@ -1805,7 +1811,7 @@
     <span class="doccomment">/// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
-    </span><span class="kw">pub async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    </span><span class="kw">async fn </span>create_outgoing_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         operation_id: OperationId,
         api: DynModuleApi,
@@ -1905,7 +1911,7 @@
     <span class="doccomment">/// Create an output that funds an incoming contract within the federation
     /// This directly completes a transaction between users, without involving a
     /// gateway
-    </span><span class="kw">pub async fn </span>create_incoming_output(
+    </span><span class="kw">async fn </span>create_incoming_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         invoice: Bolt11Invoice,
@@ -2032,7 +2038,7 @@
     }
 
     <span class="attr">#[allow(clippy::too_many_arguments)]
-    </span><span class="kw">pub async fn </span>create_lightning_receive_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>create_lightning_receive_output&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         amount: Amount,
         description: String,
@@ -2204,7 +2210,7 @@
     }
 }
 
-<span class="kw">pub fn </span>network_to_currency(network: Network) -&gt; Currency {
+<span class="kw">fn </span>network_to_currency(network: Network) -&gt; Currency {
     <span class="kw">match </span>network {
         Network::Bitcoin =&gt; Currency::Bitcoin,
         Network::Regtest =&gt; Currency::Regtest,

@@ -1621,18 +1621,6 @@
 <a href="#1621" id="1621">1621</a>
 <a href="#1622" id="1622">1622</a>
 <a href="#1623" id="1623">1623</a>
-<a href="#1624" id="1624">1624</a>
-<a href="#1625" id="1625">1625</a>
-<a href="#1626" id="1626">1626</a>
-<a href="#1627" id="1627">1627</a>
-<a href="#1628" id="1628">1628</a>
-<a href="#1629" id="1629">1629</a>
-<a href="#1630" id="1630">1630</a>
-<a href="#1631" id="1631">1631</a>
-<a href="#1632" id="1632">1632</a>
-<a href="#1633" id="1633">1633</a>
-<a href="#1634" id="1634">1634</a>
-<a href="#1635" id="1635">1635</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1659,7 +1647,6 @@
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
 };
-<span class="kw">pub use </span>fedimint_ln_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
@@ -1693,43 +1680,43 @@
 <span class="kw">use </span>tracing::{debug, error, info_span, trace};
 
 <span class="macro">lazy_static! </span>{
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_INCOMING_OFFER: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_INCOMING_OFFER: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
         <span class="string">&quot;ln_incoming_offer&quot;</span>,
         <span class="string">&quot;contracts::IncomingContractOffer&quot;
     </span>))
     .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT: IntCounter =
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT: IntCounter =
         <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
             <span class="string">&quot;ln_output_outcome_cancel_outgoing_contract&quot;</span>,
             <span class="string">&quot;LightningOutputOutcome::CancelOutgoingContract&quot;
         </span>))
         .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
         <span class="string">&quot;ln_funded_contract_incoming&quot;</span>,
         <span class="string">&quot;contracts::FundedContract::Incoming&quot;
     </span>))
     .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING: IntCounter = <span class="macro">register_int_counter!</span>(<span class="macro">opts!</span>(
         <span class="string">&quot;ln_funded_contract_outgoing&quot;</span>,
         <span class="string">&quot;contracts::FundedContract::Outgoing&quot;
     </span>))
     .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>AMOUNTS_BUCKETS_SATS: Vec&lt;f64&gt; = <span class="macro">vec!</span>[<span class="number">0.0</span>, <span class="number">0.5</span>, <span class="number">1.0</span>, <span class="number">1000.0</span>];
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
+    <span class="kw">static </span><span class="kw-2">ref </span>AMOUNTS_BUCKETS_SATS: Vec&lt;f64&gt; = <span class="macro">vec!</span>[<span class="number">0.0</span>, <span class="number">0.5</span>, <span class="number">1.0</span>, <span class="number">1000.0</span>];
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
         <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
             <span class="string">&quot;ln_funded_contract_incoming_account_amounts_sats&quot;</span>,
             <span class="string">&quot;contracts::FundedContract::Incoming account amount in sats&quot;</span>,
             AMOUNTS_BUCKETS_SATS.clone()
         ))
         .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS: Histogram =
+    <span class="kw">static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS: Histogram =
         <span class="macro">register_histogram!</span>(<span class="macro">histogram_opts!</span>(
             <span class="string">&quot;ln_funded_contract_outgoing_account_amounts_sats&quot;</span>,
             <span class="string">&quot;contracts::FundedContract::Outgoing account amounts in sats&quot;</span>,
             AMOUNTS_BUCKETS_SATS.clone()
         ))
         .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>ALL_METRICS: [Box&lt;<span class="kw">dyn </span>prometheus::core::Collector&gt;; <span class="number">6</span>] = [
+    <span class="kw">static </span><span class="kw-2">ref </span>ALL_METRICS: [Box&lt;<span class="kw">dyn </span>prometheus::core::Collector&gt;; <span class="number">6</span>] = [
         Box::new(LN_INCOMING_OFFER.clone()),
         Box::new(LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.clone()),
         Box::new(LN_FUNDED_CONTRACT_INCOMING.clone()),
@@ -2556,19 +2543,19 @@
 }
 
 <span class="kw">impl </span>Lightning {
-    <span class="kw">pub fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })
     }
 
-    <span class="kw">pub async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+    <span class="kw">async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
         <span class="self">self</span>.btc_rpc
             .get_block_count()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>)
     }
 
-    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
+    <span class="kw">async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
         <span class="kw">let </span>peer_count = <span class="number">3 </span>* (<span class="self">self</span>.cfg.consensus.threshold() / <span class="number">2</span>) + <span class="number">1</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
@@ -2602,7 +2589,7 @@
             .verify_decryption_share(<span class="kw-2">&amp;</span>share.<span class="number">0</span>, <span class="kw-2">&amp;</span>message.<span class="number">0</span>)
     }
 
-    <span class="kw">pub async fn </span>get_offer(
+    <span class="kw">async fn </span>get_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         payment_hash: bitcoin_hashes::sha256::Hash,
@@ -2610,7 +2597,7 @@
         dbtx.get_value(<span class="kw-2">&amp;</span>OfferKey(payment_hash)).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>wait_offer(
+    <span class="kw">async fn </span>wait_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
         payment_hash: bitcoin_hashes::sha256::Hash,
@@ -2619,18 +2606,7 @@
         future.<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>get_offers(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Vec&lt;IncomingContractOffer&gt; {
-        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>OfferKeyPrefix)
-            .<span class="kw">await
-            </span>.map(|(<span class="kw">_</span>, value)| value)
-            .collect::&lt;Vec&lt;IncomingContractOffer&gt;&gt;()
-            .<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>get_contract_account(
+    <span class="kw">async fn </span>get_contract_account(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         contract_id: ContractId,
@@ -2638,7 +2614,7 @@
         dbtx.get_value(<span class="kw-2">&amp;</span>ContractKey(contract_id)).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>wait_contract_account(
+    <span class="kw">async fn </span>wait_contract_account(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
         contract_id: ContractId,
@@ -2648,7 +2624,7 @@
         future.<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>list_gateways(
+    <span class="kw">async fn </span>list_gateways(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;LightningGateway&gt; {
@@ -2666,7 +2642,7 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>register_gateway(
+    <span class="kw">async fn </span>register_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         gateway: LightningGateway,

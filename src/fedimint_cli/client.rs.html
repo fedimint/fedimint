@@ -533,10 +533,10 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredSummary};
-<span class="kw">use </span>fedimint_ln_client::contracts::ContractId;
 <span class="kw">use </span>fedimint_ln_client::{
     InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
 };
+<span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
 <span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
