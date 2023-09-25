@@ -246,7 +246,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 
             // Try to directly claim the outgoing contract with an invalid preimage
             let (gateway_module, instance) =
-                gateway.get_first_module::<GatewayClientModule>(&fedimint_ln_client::KIND);
+                gateway.get_first_module::<GatewayClientModule>(&fedimint_ln_common::KIND);
 
             let account = instance.api.fetch_contract(contract_id).await?;
             let outgoing_contract = match account.contract {
@@ -274,7 +274,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let txid = gateway
                 .finalize_and_submit_transaction(
                     operation_id,
-                    fedimint_ln_client::KIND.as_str(),
+                    fedimint_ln_common::KIND.as_str(),
                     operation_meta_gen,
                     tx,
                 )
@@ -474,7 +474,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             // Create offer with a preimage that doesn't correspond to the payment hash of
             // the invoice
             let (lightning, instance) =
-                user_client.get_first_module::<LightningClientModule>(&fedimint_ln_client::KIND);
+                user_client.get_first_module::<LightningClientModule>(&fedimint_ln_common::KIND);
 
             let amount = sats(100);
             let preimage = sha256(&[0]);
@@ -507,7 +507,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let txid = user_client
                 .finalize_and_submit_transaction(
                     operation_id,
-                    fedimint_ln_client::KIND.as_str(),
+                    fedimint_ln_common::KIND.as_str(),
                     operation_meta_gen,
                     tx,
                 )

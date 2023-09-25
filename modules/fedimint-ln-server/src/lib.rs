@@ -24,7 +24,6 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
 };
-pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
@@ -58,43 +57,43 @@ use strum::IntoEnumIterator;
 use tracing::{debug, error, info_span, trace};
 
 lazy_static! {
-    pub static ref LN_INCOMING_OFFER: IntCounter = register_int_counter!(opts!(
+    static ref LN_INCOMING_OFFER: IntCounter = register_int_counter!(opts!(
         "ln_incoming_offer",
         "contracts::IncomingContractOffer"
     ))
     .unwrap();
-    pub static ref LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT: IntCounter =
+    static ref LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT: IntCounter =
         register_int_counter!(opts!(
             "ln_output_outcome_cancel_outgoing_contract",
             "LightningOutputOutcome::CancelOutgoingContract"
         ))
         .unwrap();
-    pub static ref LN_FUNDED_CONTRACT_INCOMING: IntCounter = register_int_counter!(opts!(
+    static ref LN_FUNDED_CONTRACT_INCOMING: IntCounter = register_int_counter!(opts!(
         "ln_funded_contract_incoming",
         "contracts::FundedContract::Incoming"
     ))
     .unwrap();
-    pub static ref LN_FUNDED_CONTRACT_OUTGOING: IntCounter = register_int_counter!(opts!(
+    static ref LN_FUNDED_CONTRACT_OUTGOING: IntCounter = register_int_counter!(opts!(
         "ln_funded_contract_outgoing",
         "contracts::FundedContract::Outgoing"
     ))
     .unwrap();
-    pub static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![0.0, 0.5, 1.0, 1000.0];
-    pub static ref LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
+    static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![0.0, 0.5, 1.0, 1000.0];
+    static ref LN_FUNDED_CONTRACT_INCOMING_ACCOUNT_AMOUNTS_SATS: Histogram =
         register_histogram!(histogram_opts!(
             "ln_funded_contract_incoming_account_amounts_sats",
             "contracts::FundedContract::Incoming account amount in sats",
             AMOUNTS_BUCKETS_SATS.clone()
         ))
         .unwrap();
-    pub static ref LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS: Histogram =
+    static ref LN_FUNDED_CONTRACT_OUTGOING_ACCOUNT_AMOUNTS_SATS: Histogram =
         register_histogram!(histogram_opts!(
             "ln_funded_contract_outgoing_account_amounts_sats",
             "contracts::FundedContract::Outgoing account amounts in sats",
             AMOUNTS_BUCKETS_SATS.clone()
         ))
         .unwrap();
-    pub static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 6] = [
+    static ref ALL_METRICS: [Box<dyn prometheus::core::Collector>; 6] = [
         Box::new(LN_INCOMING_OFFER.clone()),
         Box::new(LN_OUTPUT_OUTCOME_CANCEL_OUTGOING_CONTRACT.clone()),
         Box::new(LN_FUNDED_CONTRACT_INCOMING.clone()),
@@ -921,19 +920,19 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    pub fn new(cfg: LightningConfig, task_group: &mut TaskGroup) -> anyhow::Result<Self> {
+    fn new(cfg: LightningConfig, task_group: &mut TaskGroup) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
         Ok(Lightning { cfg, btc_rpc })
     }
 
-    pub async fn block_count(&self) -> u64 {
+    async fn block_count(&self) -> u64 {
         self.btc_rpc
             .get_block_count()
             .await
             .expect("bitcoind rpc failed")
     }
 
-    pub async fn consensus_block_count(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u64 {
+    async fn consensus_block_count(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> u64 {
         let peer_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
 
         let mut counts = dbtx
@@ -967,7 +966,7 @@ impl Lightning {
             .verify_decryption_share(&share.0, &message.0)
     }
 
-    pub async fn get_offer(
+    async fn get_offer(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         payment_hash: bitcoin_hashes::sha256::Hash,
@@ -975,7 +974,7 @@ impl Lightning {
         dbtx.get_value(&OfferKey(payment_hash)).await
     }
 
-    pub async fn wait_offer(
+    async fn wait_offer(
         &self,
         context: &mut ApiEndpointContext<'_>,
         payment_hash: bitcoin_hashes::sha256::Hash,
@@ -984,18 +983,7 @@ impl Lightning {
         future.await
     }
 
-    pub async fn get_offers(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> Vec<IncomingContractOffer> {
-        dbtx.find_by_prefix(&OfferKeyPrefix)
-            .await
-            .map(|(_, value)| value)
-            .collect::<Vec<IncomingContractOffer>>()
-            .await
-    }
-
-    pub async fn get_contract_account(
+    async fn get_contract_account(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         contract_id: ContractId,
@@ -1003,7 +991,7 @@ impl Lightning {
         dbtx.get_value(&ContractKey(contract_id)).await
     }
 
-    pub async fn wait_contract_account(
+    async fn wait_contract_account(
         &self,
         context: &mut ApiEndpointContext<'_>,
         contract_id: ContractId,
@@ -1013,7 +1001,7 @@ impl Lightning {
         future.await
     }
 
-    pub async fn list_gateways(
+    async fn list_gateways(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> Vec<LightningGateway> {
@@ -1031,7 +1019,7 @@ impl Lightning {
             .await
     }
 
-    pub async fn register_gateway(
+    async fn register_gateway(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         gateway: LightningGateway,

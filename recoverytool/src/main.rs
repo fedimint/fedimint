@@ -20,7 +20,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{BitcoinHash, ServerModule};
-use fedimint_ln_server::common::LightningCommonGen;
+use fedimint_ln_common::LightningCommonGen;
 use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::common::MintCommonGen;

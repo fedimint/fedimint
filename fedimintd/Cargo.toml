@@ -33,6 +33,7 @@ itertools = "0.10.5"
 jsonrpsee = { version = "0.16.2", features = ["server"] }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-core ={ path = "../fedimint-core" }
+fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
 fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 fedimint-logging = { path = "../fedimint-logging", features = ["telemetry"] }
 fedimint-metrics = { path = "../fedimint-metrics" }

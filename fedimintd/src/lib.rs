@@ -8,7 +8,7 @@ use fedimint_core::core::{
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, Tiered};
-use fedimint_ln_server::common::config::{
+use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningGen;

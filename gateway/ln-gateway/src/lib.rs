@@ -47,9 +47,9 @@ use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToke
 use fedimint_core::time::now;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{push_db_pair_items, Amount};
-use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::GatewayFee;
+use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_mint_client::{MintClientGen, MintCommonGen};
 use fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
