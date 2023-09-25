@@ -1329,7 +1329,7 @@
                 </span>.fetch_registered_gateways()
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_iter()
-                .filter(|gw| gw.valid_until &gt; fedimint_core::time::now())
+                .filter(|gw| !gw.is_expired())
                 .choose(<span class="kw-2">&amp;mut </span>rand::thread_rng())
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Could not find any gateways&quot;</span>)),
         }

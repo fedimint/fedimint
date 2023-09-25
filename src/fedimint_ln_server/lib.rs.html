@@ -1621,6 +1621,31 @@
 <a href="#1621" id="1621">1621</a>
 <a href="#1622" id="1622">1622</a>
 <a href="#1623" id="1623">1623</a>
+<a href="#1624" id="1624">1624</a>
+<a href="#1625" id="1625">1625</a>
+<a href="#1626" id="1626">1626</a>
+<a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a>
+<a href="#1631" id="1631">1631</a>
+<a href="#1632" id="1632">1632</a>
+<a href="#1633" id="1633">1633</a>
+<a href="#1634" id="1634">1634</a>
+<a href="#1635" id="1635">1635</a>
+<a href="#1636" id="1636">1636</a>
+<a href="#1637" id="1637">1637</a>
+<a href="#1638" id="1638">1638</a>
+<a href="#1639" id="1639">1639</a>
+<a href="#1640" id="1640">1640</a>
+<a href="#1641" id="1641">1641</a>
+<a href="#1642" id="1642">1642</a>
+<a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -2631,8 +2656,7 @@
         <span class="kw">let </span>stream = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
         stream
             .filter_map(|(<span class="kw">_</span>, gw)| <span class="kw">async </span>{
-                <span class="comment">// FIXME: actually remove from DB
-                </span><span class="kw">if </span>gw.valid_until &gt; fedimint_core::time::now() {
+                <span class="kw">if </span>!gw.is_expired() {
                     <span class="prelude-val">Some</span>(gw)
                 } <span class="kw">else </span>{
                     <span class="prelude-val">None
@@ -2647,8 +2671,34 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         gateway: LightningGateway,
     ) {
+        <span class="comment">// Garbage collect expired gateways (since we&#39;re already writing to the DB)
+        // Note: A &quot;gotcha&quot; of doing this here is that if two gateways are registered
+        // at the same time, they will both attempt to delete the same expired gateways
+        // and one of them will fail. This should be fine, since the other one will
+        // succeed and the failed one will just try again.
+        </span><span class="self">self</span>.delete_expired_gateways(dbtx).<span class="kw">await</span>;
+
         dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(gateway.node_pub_key), <span class="kw-2">&amp;</span>gateway)
             .<span class="kw">await</span>;
+    }
+
+    <span class="kw">async fn </span>delete_expired_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        <span class="kw">let </span>expired_gateway_keys = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
+            .<span class="kw">await
+            </span>.filter_map(|(key, gw)| <span class="kw">async move </span>{
+                <span class="kw">if </span>gw.is_expired() {
+                    <span class="prelude-val">Some</span>(key)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>}
+            })
+            .collect::&lt;Vec&lt;LightningGatewayKey&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="kw">for </span>key <span class="kw">in </span>expired_gateway_keys {
+            dbtx.remove_entry(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>;
+        }
     }
 }
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
