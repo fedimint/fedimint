@@ -136,7 +136,7 @@ impl Fixtures {
     pub async fn new_gateway(
         &self,
         ln: Box<dyn LightningTest>,
-        num_route_hints: usize,
+        num_route_hints: u32,
         cli_password: Option<String>,
     ) -> GatewayTest {
         // TODO: Make construction easier

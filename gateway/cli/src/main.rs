@@ -6,7 +6,7 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
-    WithdrawPayload,
+    SetConfigurationPayload, WithdrawPayload,
 };
 use serde::Serialize;
 
@@ -67,6 +67,16 @@ pub enum Commands {
     },
     Completion {
         shell: clap_complete::Shell,
+    },
+    SetConfiguration {
+        #[clap(long)]
+        password: Option<String>,
+
+        #[clap(long)]
+        num_route_hints: Option<u32>,
+
+        #[clap(long)]
+        routing_fees: Option<String>,
     },
 }
 
@@ -135,6 +145,19 @@ async fn main() -> anyhow::Result<()> {
                 "gateway-cli",
                 &mut std::io::stdout(),
             );
+        }
+        Commands::SetConfiguration {
+            password,
+            num_route_hints,
+            routing_fees,
+        } => {
+            client()
+                .set_configuration(SetConfigurationPayload {
+                    password,
+                    num_route_hints,
+                    routing_fees,
+                })
+                .await?;
         }
     }
 

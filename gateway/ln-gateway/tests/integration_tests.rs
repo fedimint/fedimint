@@ -37,6 +37,7 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, LightningNodeType, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
+use lightning::routing::gossip::RoutingFees;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
@@ -735,7 +736,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                     // `num_route_hints` + 1. There should be one single-hop route hint and the rest
                     // two-hop route hints.
                     assert_eq!(
-                        route_hints.len(),
+                        route_hints.len() as u32,
                         num_route_hints + 1,
                         "Found {} route hints when {} was expected for {gateway_type} gateway",
                         route_hints.len(),
@@ -797,9 +798,14 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let gw_info = rpc_client.get_info().await?;
     assert_eq!(gw_info.gateway_state, "Configuring".to_string());
 
+    // Verify that the gateway's fees are `None`
+    assert_eq!(gw_info.fees, None);
+
     let test_password = "test_password".to_string();
     let set_configuration_payload = SetConfigurationPayload {
-        password: test_password.clone(),
+        password: Some(test_password.clone()),
+        num_route_hints: None,
+        routing_fees: None,
     };
     verify_rpc(
         || rpc_client.set_configuration(set_configuration_payload.clone()),
@@ -834,7 +840,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     // Verify that we can change the configuration after it is set
     let set_configuration_payload = SetConfigurationPayload {
-        password: "new_password".to_string(),
+        password: Some("new_password".to_string()),
+        num_route_hints: Some(1),
+        routing_fees: Some("1000,2000".to_string()),
     };
     rpc_client
         .set_configuration(set_configuration_payload.clone())
@@ -846,7 +854,14 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         "Get info after restart".to_string(),
         || async {
             let rpc_client = rpc_client.with_password(Some("new_password".to_string()));
-            rpc_client.get_info().await?;
+            let info = rpc_client.get_info().await?;
+            assert_eq!(
+                info.fees.expect("Gateway fees were None"),
+                RoutingFees {
+                    base_msat: 1000,
+                    proportional_millionths: 2000,
+                }
+            );
             Ok(())
         },
         Duration::from_secs(1),

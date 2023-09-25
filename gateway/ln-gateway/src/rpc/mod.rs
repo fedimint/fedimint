@@ -11,7 +11,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::Amount;
 use fedimint_ln_client::contracts::Preimage;
 use fedimint_ln_client::pay::PayInvoicePayload;
-use fedimint_ln_common::{route_hints, serde_routing_fees};
+use fedimint_ln_common::{route_hints, serde_option_routing_fees};
 use futures::Future;
 use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -70,8 +70,8 @@ pub struct GatewayInfo {
     pub federations: Vec<FederationInfo>,
     pub lightning_pub_key: Option<String>,
     pub lightning_alias: Option<String>,
-    #[serde(with = "serde_routing_fees")]
-    pub fees: RoutingFees,
+    #[serde(with = "serde_option_routing_fees")]
+    pub fees: Option<RoutingFees>,
     pub route_hints: Vec<route_hints::RouteHint>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
@@ -79,7 +79,9 @@ pub struct GatewayInfo {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SetConfigurationPayload {
-    pub password: String,
+    pub password: Option<String>,
+    pub num_route_hints: Option<u32>,
+    pub routing_fees: Option<String>,
 }
 
 #[derive(Debug)]

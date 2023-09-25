@@ -87,7 +87,7 @@ impl GatewayTest {
         lightning: Box<dyn LightningTest>,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleInitRegistry,
-        num_route_hints: usize,
+        num_route_hints: u32,
     ) -> Self {
         let listen: SocketAddr = format!("127.0.0.1:{base_port}").parse().unwrap();
         let address: SafeUrl = format!("http://{listen}").parse().unwrap();
