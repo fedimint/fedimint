@@ -367,7 +367,7 @@
     </span><span class="kw">pub async fn </span>new_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         ln: Box&lt;<span class="kw">dyn </span>LightningTest&gt;,
-        num_route_hints: usize,
+        num_route_hints: u32,
         cli_password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; GatewayTest {
         <span class="comment">// TODO: Make construction easier

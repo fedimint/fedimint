@@ -341,7 +341,7 @@
         lightning: Box&lt;<span class="kw">dyn </span>LightningTest&gt;,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleInitRegistry,
-        num_route_hints: usize,
+        num_route_hints: u32,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{base_port}&quot;</span>).parse().unwrap();
         <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">&quot;http://{listen}&quot;</span>).parse().unwrap();

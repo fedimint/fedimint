@@ -193,6 +193,8 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -206,7 +208,7 @@
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
-<span class="kw">use </span>fedimint_ln_common::{route_hints, serde_routing_fees};
+<span class="kw">use </span>fedimint_ln_common::{route_hints, serde_option_routing_fees};
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -265,8 +267,8 @@
     <span class="kw">pub </span>federations: Vec&lt;FederationInfo&gt;,
     <span class="kw">pub </span>lightning_pub_key: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>lightning_alias: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="attr">#[serde(with = <span class="string">&quot;serde_routing_fees&quot;</span>)]
-    </span><span class="kw">pub </span>fees: RoutingFees,
+    <span class="attr">#[serde(with = <span class="string">&quot;serde_option_routing_fees&quot;</span>)]
+    </span><span class="kw">pub </span>fees: <span class="prelude-ty">Option</span>&lt;RoutingFees&gt;,
     <span class="kw">pub </span>route_hints: Vec&lt;route_hints::RouteHint&gt;,
     <span class="kw">pub </span>gateway_id: secp256k1::PublicKey,
     <span class="kw">pub </span>gateway_state: String,
@@ -274,7 +276,9 @@
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>SetConfigurationPayload {
-    <span class="kw">pub </span>password: String,
+    <span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>num_route_hints: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+    <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Debug)]
