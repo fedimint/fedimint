@@ -88,7 +88,6 @@ pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
     fn supported_api_versions(&self) -> MultiApiVersion;
 
     /// Initialize a [`ClientModule`] instance from its config
-    #[allow(clippy::too_many_arguments)]
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
 }
 
