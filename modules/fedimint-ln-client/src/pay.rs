@@ -10,15 +10,17 @@ use fedimint_core::core::Decoder;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
+use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::ContractId;
-use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome};
+use fedimint_ln_common::{
+    LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::api::LnFederationApi;
-use crate::{LightningClientContext, LightningClientStateMachines};
+use crate::LightningClientStateMachines;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that requests the lightning gateway to pay an invoice on

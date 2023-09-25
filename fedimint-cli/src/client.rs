@@ -16,10 +16,10 @@ use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredSummary};
-use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_client::{
     InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
 };
+use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;

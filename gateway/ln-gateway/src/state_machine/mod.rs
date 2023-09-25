@@ -26,10 +26,9 @@ use fedimint_core::module::{
 };
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
-use fedimint_ln_client::contracts::ContractId;
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
-use fedimint_ln_common::contracts::Preimage;
+use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };

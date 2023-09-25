@@ -31,6 +31,7 @@ fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
+fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-server = { path = "../fedimint-server" }

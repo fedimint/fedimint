@@ -1285,6 +1285,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
+ "fedimint-ln-common",
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-mint-common",
