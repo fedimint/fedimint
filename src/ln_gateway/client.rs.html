@@ -129,12 +129,11 @@
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
-<span class="kw">use </span>fedimint_client::ClientBuilder;
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi, InviteCode, WsFederationApi};
+<span class="kw">use </span>fedimint_client::{get_config_from_db, ClientBuilder};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
@@ -171,30 +170,47 @@
         lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
         old_client: <span class="prelude-ty">Option</span>&lt;fedimint_client::Client&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::Client&gt; {
-        <span class="kw">let </span>federation_id = config.config.global.federation_id;
+        <span class="kw">let </span>FederationConfig {
+            invite_code,
+            mint_channel_id,
+            timelock_delta,
+            fees,
+        } = config;
+        <span class="kw">let </span>federation_id = invite_code.id;
 
         <span class="kw">let </span><span class="kw-2">mut </span>registry = <span class="self">self</span>.registry.clone();
         registry.attach(GatewayClientGen {
             lnrpc,
             node_pub_key,
             lightning_alias,
-            fees: config.fees,
-            timelock_delta: config.timelock_delta,
-            mint_channel_id: config.mint_channel_id,
+            fees,
+            timelock_delta,
+            mint_channel_id,
         });
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(<span class="self">self</span>.primary_module);
-        client_builder.with_config(config.config);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(old_client) = old_client {
             client_builder.with_old_client_database(old_client);
         } <span class="kw">else </span>{
             <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">&quot;{federation_id}.db&quot;</span>));
-            <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path).map_err(|e| {
+            {
+                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
+                    GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
+                })<span class="question-mark">?</span>;
+
+                <span class="comment">// Initialize a client database to check if a config was previously saved in it
+                </span><span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
+                <span class="kw">if </span>(get_config_from_db(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>).is_none() {
+                    client_builder.with_invite_code(invite_code);
+                }
+            }
+
+            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
                 GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
             })<span class="question-mark">?</span>;
-            client_builder.with_database(db);
+            client_builder.with_database(rocksdb);
         }
 
         client_builder
@@ -204,28 +220,12 @@
             </span>.map_err(GatewayError::ClientStateMachineError)
     }
 
-    <span class="kw">pub async fn </span>create_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connect: InviteCode,
-        mint_channel_id: u64,
-        fees: RoutingFees,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationConfig&gt; {
-        <span class="kw">let </span>api: DynGlobalApi = WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[connect.clone()]).into();
-        <span class="kw">let </span>client_config = api.download_client_config(<span class="kw-2">&amp;</span>connect).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(FederationConfig {
-            mint_channel_id,
-            timelock_delta: <span class="number">10</span>,
-            fees,
-            config: client_config,
-        })
-    }
-
     <span class="kw">pub async fn </span>save_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,
         <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>id = config.config.global.federation_id;
+        <span class="kw">let </span>id = config.invite_code.id;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
         dbtx.commit_tx_result()
             .<span class="kw">await

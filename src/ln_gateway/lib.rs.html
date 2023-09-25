@@ -1214,20 +1214,6 @@
 <a href="#1214" id="1214">1214</a>
 <a href="#1215" id="1215">1215</a>
 <a href="#1216" id="1216">1216</a>
-<a href="#1217" id="1217">1217</a>
-<a href="#1218" id="1218">1218</a>
-<a href="#1219" id="1219">1219</a>
-<a href="#1220" id="1220">1220</a>
-<a href="#1221" id="1221">1221</a>
-<a href="#1222" id="1222">1222</a>
-<a href="#1223" id="1223">1223</a>
-<a href="#1224" id="1224">1224</a>
-<a href="#1225" id="1225">1225</a>
-<a href="#1226" id="1226">1226</a>
-<a href="#1227" id="1227">1227</a>
-<a href="#1228" id="1228">1228</a>
-<a href="#1229" id="1229">1229</a>
-<a href="#1230" id="1230">1230</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1289,7 +1275,6 @@
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{FederationInfo, SetConfigurationPayload};
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1985,33 +1970,20 @@
             <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
             // connected. TODO: explicitly handle the case where the channel id
             // overflows
-            </span><span class="kw">let </span>channel_id = <span class="self">self
+            </span><span class="kw">let </span>mint_channel_id = <span class="self">self
                 </span>.channel_id_generator
                 .lock()
                 .<span class="kw">await
                 </span>.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
 
-            <span class="comment">// Downloading the config can fail if another user tries to download at the same
-            // time. Just retry after a small delay
-            </span><span class="kw">let </span>gw_client_cfg = <span class="kw">loop </span>{
-                <span class="kw">match </span><span class="self">self
-                    </span>.client_builder
-                    .create_config(invite_code.clone(), channel_id, gateway_config.routing_fees)
-                    .<span class="kw">await
-                </span>{
-                    <span class="prelude-val">Ok</span>(gw_client_cfg) =&gt; <span class="kw">break </span>gw_client_cfg,
-                    <span class="prelude-val">Err</span>(error) =&gt; {
-                        <span class="kw">let </span>random_delay: f64 = rand::thread_rng().gen();
-                        <span class="macro">tracing::warn!</span>(
-                            %error,
-                            <span class="string">&quot;Error downloading client config, trying again in {random_delay}&quot;
-                        </span>);
-                        sleep(Duration::from_secs_f64(random_delay)).<span class="kw">await</span>;
-                    }
-                }
+            <span class="kw">let </span>federation_id = invite_code.id;
+            <span class="kw">let </span>gw_client_cfg = FederationConfig {
+                invite_code,
+                mint_channel_id,
+                timelock_delta: <span class="number">10</span>,
+                fees: gateway_config.routing_fees,
             };
 
-            <span class="kw">let </span>federation_id = gw_client_cfg.config.global.federation_id;
             <span class="kw">let </span>route_hints =
                 <span class="self">Self</span>::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2042,7 +2014,7 @@
             <span class="self">self</span>.scid_to_federation
                 .write()
                 .<span class="kw">await
-                </span>.insert(channel_id, federation_id);
+                </span>.insert(mint_channel_id, federation_id);
 
             <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
             <span class="self">self</span>.client_builder
@@ -2200,7 +2172,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
             <span class="kw">for </span>config <span class="kw">in </span>configs {
-                <span class="kw">let </span>federation_id = config.config.global.federation_id;
+                <span class="kw">let </span>federation_id = config.invite_code.id;
                 <span class="kw">let </span>old_client = <span class="self">self</span>.clients.read().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>federation_id).cloned();
                 <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = <span class="self">self
                     </span>.client_builder

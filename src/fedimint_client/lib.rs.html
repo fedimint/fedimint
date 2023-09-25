@@ -1729,6 +1729,23 @@
 <a href="#1729" id="1729">1729</a>
 <a href="#1730" id="1730">1730</a>
 <a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
+<a href="#1737" id="1737">1737</a>
+<a href="#1738" id="1738">1738</a>
+<a href="#1739" id="1739">1739</a>
+<a href="#1740" id="1740">1740</a>
+<a href="#1741" id="1741">1741</a>
+<a href="#1742" id="1742">1742</a>
+<a href="#1743" id="1743">1743</a>
+<a href="#1744" id="1744">1744</a>
+<a href="#1745" id="1745">1745</a>
+<a href="#1746" id="1746">1746</a>
+<a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1805,7 +1822,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>anyhow::{anyhow, bail, ensure};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>db::{CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix};
 <span class="kw">use </span>fedimint_core::api::{
@@ -2987,10 +3004,17 @@
         <span class="self">self</span>.module_inits.attach(module_init);
     }
 
-    <span class="doccomment">/// Uses this invite code to connect to the federation
+    <span class="doccomment">/// Instructs the client builder to use this `InviteCode` in building a
+    /// client. Use this configuration method as an alternative to
+    /// `with_config` builder option.
     ///
-    /// ## Panics
-    /// If there was a config or invite code added previously
+    /// ## Failure Conditions
+    ///
+    /// If a `ConfigSource` already exists in the builder, calling this method
+    /// fails. If a `ClientConfig` already exists in the database, calling
+    /// `ClientBuilder::build` fails.
+    /// - You can use `get_config_from_db` to check if a config exists in the
+    ///   database.
     </span><span class="kw">pub fn </span>with_invite_code(<span class="kw-2">&amp;mut </span><span class="self">self</span>, invite_code: InviteCode) {
         <span class="kw">let </span>was_replaced = <span class="self">self
             </span>.config_source
@@ -3002,12 +3026,17 @@
         </span>)
     }
 
-    <span class="doccomment">/// FIXME: &lt;https://github.com/fedimint/fedimint/issues/2769&gt;
+    <span class="doccomment">/// Instructs the client builder to use this `ClientConfig` in building a
+    /// client. Use this configuration method as an alternative to
+    /// `with_invite_code` builder option.
     ///
-    /// Uses this config to initialize the client
+    /// ## Failure Conditions
     ///
-    /// ## Panics
-    /// If there is a invite code or config added previously
+    /// If a `ConfigSource` already exists in the builder, calling this method
+    /// fails. If a `ClientConfig` already exists in the database, calling
+    /// `ClientBuilder::build` fails.
+    /// - You can use `get_config_from_db` to check if a config exists in the
+    ///   database.
     </span><span class="kw">pub fn </span>with_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config: ClientConfig) {
         <span class="kw">let </span>was_replaced = <span class="self">self
             </span>.config_source
@@ -3256,20 +3285,13 @@
     db: <span class="kw-2">&amp;</span>Database,
     config_source: <span class="prelude-ty">Option</span>&lt;ConfigSource&gt;,
 ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-    <span class="kw">let </span>config_res = <span class="kw">match </span>dbtx
-        .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefix)
-        .<span class="kw">await
-        </span>.next()
-        .<span class="kw">await
-    </span>{
-        <span class="prelude-val">Some</span>((<span class="kw">_</span>, config)) =&gt; {
-            <span class="comment">// TODO: Enable after &lt;https://github.com/fedimint/fedimint/pull/2855&gt;
-            // assert!(
-            //     config_source.is_none(),
-            //     &quot;Alternative config source provided but config was found in DB&quot;
-            // );
-            </span><span class="prelude-val">Ok</span>(config)
+    <span class="kw">let </span>config_res = <span class="kw">match </span>get_config_from_db(db).<span class="kw">await </span>{
+        <span class="prelude-val">Some</span>(config) =&gt; {
+            <span class="macro">ensure!</span>(
+                config_source.is_none(),
+                <span class="string">&quot;Alternative config source provided but config was found in DB&quot;
+            </span>);
+            <span class="prelude-val">Ok</span>(config)
         }
         <span class="prelude-val">None </span>=&gt; {
             <span class="kw">let </span>config = <span class="kw">match </span>config_source
@@ -3300,6 +3322,18 @@
     <span class="comment">// some borrowck lifetime limitation thing
     </span><span class="attr">#[allow(clippy::let_and_return)]
     </span>config_res
+}
+
+<span class="kw">pub async fn </span>get_config_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;ClientConfig&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+    <span class="attr">#[allow(clippy::let_and_return)]
+    </span><span class="kw">let </span>config = dbtx
+        .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefix)
+        .<span class="kw">await
+        </span>.next()
+        .<span class="kw">await
+        </span>.map(|(<span class="kw">_</span>, config)| config);
+    config
 }
 
 <span class="doccomment">/// Tries to download the client config from the federation,

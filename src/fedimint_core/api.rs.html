@@ -1775,7 +1775,7 @@
 <span class="doccomment">/// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client
-</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
+</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>InviteCode {
     <span class="doccomment">/// URL to reach an API that we can download configs from
     </span><span class="kw">pub </span>url: SafeUrl,
