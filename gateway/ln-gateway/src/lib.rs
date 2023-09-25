@@ -59,7 +59,6 @@ use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning::routing::gossip::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
-use rand::Rng;
 use rpc::{FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -755,33 +754,20 @@ impl Gateway {
             // The gateway deterministically assigns a channel id (u64) to each federation
             // connected. TODO: explicitly handle the case where the channel id
             // overflows
-            let channel_id = self
+            let mint_channel_id = self
                 .channel_id_generator
                 .lock()
                 .await
                 .fetch_add(1, Ordering::SeqCst);
 
-            // Downloading the config can fail if another user tries to download at the same
-            // time. Just retry after a small delay
-            let gw_client_cfg = loop {
-                match self
-                    .client_builder
-                    .create_config(invite_code.clone(), channel_id, gateway_config.routing_fees)
-                    .await
-                {
-                    Ok(gw_client_cfg) => break gw_client_cfg,
-                    Err(error) => {
-                        let random_delay: f64 = rand::thread_rng().gen();
-                        tracing::warn!(
-                            %error,
-                            "Error downloading client config, trying again in {random_delay}"
-                        );
-                        sleep(Duration::from_secs_f64(random_delay)).await;
-                    }
-                }
+            let federation_id = invite_code.id;
+            let gw_client_cfg = FederationConfig {
+                invite_code,
+                mint_channel_id,
+                timelock_delta: 10,
+                fees: gateway_config.routing_fees,
             };
 
-            let federation_id = gw_client_cfg.config.global.federation_id;
             let route_hints =
                 Self::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints)
                     .await?;
@@ -812,7 +798,7 @@ impl Gateway {
             self.scid_to_federation
                 .write()
                 .await
-                .insert(channel_id, federation_id);
+                .insert(mint_channel_id, federation_id);
 
             let dbtx = self.gateway_db.begin_transaction().await;
             self.client_builder
@@ -970,7 +956,7 @@ impl Gateway {
             let mut next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
             for config in configs {
-                let federation_id = config.config.global.federation_id;
+                let federation_id = config.invite_code.id;
                 let old_client = self.clients.read().await.get(&federation_id).cloned();
                 if let Ok(client) = self
                     .client_builder

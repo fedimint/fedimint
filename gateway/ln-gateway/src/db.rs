@@ -1,4 +1,5 @@
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::api::InviteCode;
+use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::{serde_routing_fees, LightningGateway};
@@ -32,10 +33,10 @@ pub struct FederationIdKeyPrefix;
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 pub struct FederationConfig {
+    pub invite_code: InviteCode,
     pub mint_channel_id: u64,
     pub timelock_delta: u64,
     pub fees: RoutingFees,
-    pub config: ClientConfig,
 }
 
 impl Serialize for FederationConfig {
@@ -44,9 +45,9 @@ impl Serialize for FederationConfig {
         S: serde::Serializer,
     {
         let mut state = serializer.serialize_struct("FederationConfig", 5)?;
+        state.serialize_field("invite_code", &self.invite_code)?;
         state.serialize_field("mint_channel_id", &self.mint_channel_id)?;
         state.serialize_field("timelock_delta", &self.timelock_delta)?;
-        state.serialize_field("config", &self.config)?;
         state.serialize_field("base_msat", &self.fees.base_msat)?;
         state.serialize_field(
             "proportional_millionths",

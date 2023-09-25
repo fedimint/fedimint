@@ -579,7 +579,7 @@ struct FederationPeer<C> {
 /// Information required for client to construct [`WsFederationApi`] instance
 ///
 /// Can be used to download the configs and bootstrap a client
-#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
 pub struct InviteCode {
     /// URL to reach an API that we can download configs from
     pub url: SafeUrl,
