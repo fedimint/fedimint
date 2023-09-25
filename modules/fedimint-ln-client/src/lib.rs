@@ -1,6 +1,6 @@
-pub mod db;
+mod db;
 pub mod pay;
-pub mod receive;
+mod receive;
 
 use std::collections::BTreeMap;
 use std::iter::once;
@@ -683,7 +683,7 @@ impl ClientModule for LightningClientModule {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum PayError {
+enum PayError {
     #[error("Lightning payment was canceled")]
     Canceled,
     #[error("Lightning payment was refunded")]
@@ -698,7 +698,7 @@ impl LightningClientModule {
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
-    pub async fn create_outgoing_output<'a, 'b>(
+    async fn create_outgoing_output<'a, 'b>(
         &'a self,
         operation_id: OperationId,
         api: DynModuleApi,
@@ -798,7 +798,7 @@ impl LightningClientModule {
     /// Create an output that funds an incoming contract within the federation
     /// This directly completes a transaction between users, without involving a
     /// gateway
-    pub async fn create_incoming_output(
+    async fn create_incoming_output(
         &self,
         operation_id: OperationId,
         invoice: Bolt11Invoice,
@@ -925,7 +925,7 @@ impl LightningClientModule {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_lightning_receive_output<'a>(
+    async fn create_lightning_receive_output<'a>(
         &'a self,
         amount: Amount,
         description: String,
@@ -1097,7 +1097,7 @@ impl State for LightningClientStateMachines {
     }
 }
 
-pub fn network_to_currency(network: Network) -> Currency {
+fn network_to_currency(network: Network) -> Currency {
     match network {
         Network::Bitcoin => Currency::Bitcoin,
         Network::Regtest => Currency::Regtest,
