@@ -1008,8 +1008,7 @@ impl Lightning {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
             .filter_map(|(_, gw)| async {
-                // FIXME: actually remove from DB
-                if gw.valid_until > fedimint_core::time::now() {
+                if !gw.is_expired() {
                     Some(gw)
                 } else {
                     None
@@ -1024,8 +1023,34 @@ impl Lightning {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         gateway: LightningGateway,
     ) {
+        // Garbage collect expired gateways (since we're already writing to the DB)
+        // Note: A "gotcha" of doing this here is that if two gateways are registered
+        // at the same time, they will both attempt to delete the same expired gateways
+        // and one of them will fail. This should be fine, since the other one will
+        // succeed and the failed one will just try again.
+        self.delete_expired_gateways(dbtx).await;
+
         dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
             .await;
+    }
+
+    async fn delete_expired_gateways(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
+        let expired_gateway_keys = dbtx
+            .find_by_prefix(&LightningGatewayKeyPrefix)
+            .await
+            .filter_map(|(key, gw)| async move {
+                if gw.is_expired() {
+                    Some(key)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<LightningGatewayKey>>()
+            .await;
+
+        for key in expired_gateway_keys {
+            dbtx.remove_entry(&key).await;
+        }
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
