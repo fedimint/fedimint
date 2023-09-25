@@ -41,7 +41,7 @@ impl WsAdminClient {
     ///
     /// Must be called first before any other calls to the API
     pub async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth("set_password", ApiRequestErased::default().with_auth(auth))
+        self.request("set_password", ApiRequestErased::default().with_auth(auth))
             .await
     }
 
@@ -54,7 +54,7 @@ impl WsAdminClient {
         info: ConfigGenConnectionsRequest,
         auth: ApiAuth,
     ) -> FederationResult<()> {
-        self.request_auth(
+        self.request(
             "set_config_gen_connections",
             ApiRequestErased::new(info).with_auth(auth),
         )
@@ -85,7 +85,7 @@ impl WsAdminClient {
     /// Sends a signal to consensus that we are ready to shutdown the federation
     /// and upgrade
     pub async fn signal_upgrade(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth("upgrade", ApiRequestErased::default().with_auth(auth))
+        self.request("upgrade", ApiRequestErased::default().with_auth(auth))
             .await
     }
 
@@ -96,7 +96,7 @@ impl WsAdminClient {
         outcome: SerdeEpochHistory,
         auth: ApiAuth,
     ) -> FederationResult<()> {
-        self.request_auth(
+        self.request(
             "process_outcome",
             ApiRequestErased::new(outcome).with_auth(auth),
         )
@@ -121,7 +121,7 @@ impl WsAdminClient {
         &self,
         auth: ApiAuth,
     ) -> FederationResult<ConfigGenParamsRequest> {
-        self.request_auth(
+        self.request(
             "get_default_config_gen_params",
             ApiRequestErased::default().with_auth(auth),
         )
@@ -136,7 +136,7 @@ impl WsAdminClient {
         requested: ConfigGenParamsRequest,
         auth: ApiAuth,
     ) -> FederationResult<()> {
-        self.request_auth(
+        self.request(
             "set_config_gen_params",
             ApiRequestErased::new(requested).with_auth(auth),
         )
@@ -160,7 +160,7 @@ impl WsAdminClient {
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
     pub async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth("run_dkg", ApiRequestErased::default().with_auth(auth))
+        self.request("run_dkg", ApiRequestErased::default().with_auth(auth))
             .await
     }
 
@@ -170,7 +170,7 @@ impl WsAdminClient {
         &self,
         auth: ApiAuth,
     ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
-        self.request_auth(
+        self.request(
             "get_verify_config_hash",
             ApiRequestErased::default().with_auth(auth),
         )
@@ -183,7 +183,7 @@ impl WsAdminClient {
     /// Clients may receive an error due to forced shutdown, should call the
     /// `server_status` to see if consensus has started.
     pub async fn start_consensus(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth(
+        self.request(
             "start_consensus",
             ApiRequestErased::default().with_auth(auth),
         )
@@ -203,20 +203,7 @@ impl WsAdminClient {
 
     /// Check auth credentials
     pub async fn auth(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth("auth", ApiRequestErased::default().with_auth(auth))
-            .await
-    }
-
-    async fn request_auth<Ret>(
-        &self,
-        method: &str,
-        params: ApiRequestErased,
-    ) -> FederationResult<Ret>
-    where
-        Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
-    {
-        self.inner
-            .request_current_consensus(method.to_owned(), params)
+        self.request("auth", ApiRequestErased::default().with_auth(auth))
             .await
     }
 
