@@ -477,6 +477,7 @@
 <a href="#477" id="477">477</a>
 <a href="#478" id="478">478</a>
 <a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::string::ToString;
 
@@ -488,6 +489,7 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::endpoint_constants::{SIGN_MESSAGE_ENDPOINT, WAIT_SIGNED_ENDPOINT};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
@@ -919,7 +921,7 @@
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
                 <span class="comment">// API allows users ask the fed to threshold-sign a message
-                </span><span class="string">&quot;sign_message&quot;</span>,
+                </span>SIGN_MESSAGE_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Dummy, context, message: String| -&gt; () {
                     <span class="comment">// TODO: Should not write to DB in module APIs
                     </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.dbtx();
@@ -930,7 +932,7 @@
             },
             <span class="macro">api_endpoint! </span>{
                 <span class="comment">// API waits for the signature to exist
-                </span><span class="string">&quot;wait_signed&quot;</span>,
+                </span>WAIT_SIGNED_ENDPOINT,
                 <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Dummy, context, message: String| -&gt; SerdeSignature {
                     <span class="kw">let </span>future = context.wait_value_matches(DummySignatureKey(message), |sig| sig.is_some());
                     <span class="kw">let </span>sig = future.<span class="kw">await</span>;

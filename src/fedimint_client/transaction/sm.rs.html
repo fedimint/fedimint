@@ -460,6 +460,7 @@
 <a href="#460" id="460">460</a>
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -677,6 +678,7 @@
     <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::endpoint_constants::{TRANSACTION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
     <span class="kw">use </span>fedimint_core::task::sleep;
@@ -733,7 +735,7 @@
             params: <span class="kw-2">&amp;</span>[Value],
         ) -&gt; JsonRpcResult&lt;Value&gt; {
             <span class="kw">match </span>method {
-                <span class="string">&quot;transaction&quot; </span>=&gt; {
+                TRANSACTION_ENDPOINT =&gt; {
                     <span class="kw">let </span>api_req: ApiRequestErased =
                         serde_json::from_value(params[<span class="number">0</span>].clone()).unwrap();
                     <span class="kw">let </span>serde_tx: SerdeTransaction =
@@ -744,7 +746,7 @@
 
                     <span class="prelude-val">Ok</span>(serde_json::to_value(tx.tx_hash()).unwrap())
                 }
-                <span class="string">&quot;wait_transaction&quot; </span>=&gt; {
+                WAIT_TRANSACTION_ENDPOINT =&gt; {
                     <span class="kw">let </span>api_req: ApiRequestErased =
                         serde_json::from_value(params[<span class="number">0</span>].clone()).unwrap();
                     <span class="kw">let </span>txid: TransactionId = serde_json::from_value(api_req.params).unwrap();

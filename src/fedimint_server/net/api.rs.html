@@ -757,6 +757,13 @@
 <a href="#757" id="757">757</a>
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -775,6 +782,13 @@
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::endpoint_constants::{
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT,
+    CONFIG_HASH_ENDPOINT, FETCH_EPOCH_COUNT_ENDPOINT, FETCH_EPOCH_HISTORY_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
+    PROCESS_OUTCOME_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
+    UPGRADE_ENDPOINT, VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+};
 <span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
@@ -1288,13 +1302,13 @@
 <span class="kw">pub fn </span>server_endpoints() -&gt; Vec&lt;ApiEndpoint&lt;ConsensusApi&gt;&gt; {
     <span class="macro">vec!</span>[
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;version&quot;</span>,
+            VERSION_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; SupportedApiVersionsSummary {
                 <span class="prelude-val">Ok</span>(fedimint.api_versions_summary().to_owned())
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;transaction&quot;</span>,
+            TRANSACTION_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, serde_transaction: SerdeTransaction| -&gt; TransactionId {
                 <span class="kw">let </span>transaction = serde_transaction
                     .try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry())
@@ -1310,7 +1324,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;wait_transaction&quot;</span>,
+            WAIT_TRANSACTION_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionId {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
 
@@ -1322,7 +1336,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;await_output_outcome&quot;</span>,
+            AWAIT_OUTPUT_OUTCOME_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, outpoint: OutPoint| -&gt; SerdeOutputOutcome {
                 <span class="kw">let </span>outcome = fedimint
                     .await_output_outcome(outpoint)
@@ -1333,7 +1347,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;fetch_epoch_history&quot;</span>,
+            FETCH_EPOCH_HISTORY_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, epoch: u64| -&gt; SerdeEpochHistory {
                 <span class="kw">let </span>epoch = fedimint.epoch_history(epoch).<span class="kw">await
                   </span>.ok_or_else(|| ApiError::not_found(<span class="macro">format!</span>(<span class="string">&quot;epoch {epoch} not found&quot;</span>)))<span class="question-mark">?</span>;
@@ -1341,19 +1355,19 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;fetch_epoch_count&quot;</span>,
+            FETCH_EPOCH_COUNT_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; u64 {
                 <span class="prelude-val">Ok</span>(fedimint.get_epoch_count().<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;invite_code&quot;</span>,
+            INVITE_CODE_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context,  _v: ()| -&gt; String {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code().to_string())
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;config&quot;</span>,
+            CONFIG_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, invite_code: String| -&gt; ClientConfigResponse {
                 <span class="kw">let </span>info = invite_code.parse()
                     .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;Could not parse invite code&quot;</span>.to_string()))<span class="question-mark">?</span>;
@@ -1367,13 +1381,13 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;config_hash&quot;</span>,
+            CONFIG_HASH_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; sha256::Hash {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.consensus_hash())
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;upgrade&quot;</span>,
+            UPGRADE_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; () {
                check_auth(context)<span class="question-mark">?</span>;
                fedimint.signal_upgrade().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to send signal to server&quot;</span>.to_string()))<span class="question-mark">?</span>;
@@ -1381,7 +1395,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;process_outcome&quot;</span>,
+            PROCESS_OUTCOME_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, outcome: SerdeEpochHistory| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 fedimint.force_process_outcome(outcome).<span class="kw">await
@@ -1390,7 +1404,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;status&quot;</span>,
+            STATUS_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; StatusResponse {
                 <span class="kw">let </span>consensus_status = fedimint
                     .consensus_status_cache
@@ -1403,21 +1417,21 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;audit&quot;</span>,
+            AUDIT_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; AuditSummary {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(fedimint.get_federation_audit().<span class="kw">await</span><span class="question-mark">?</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;get_verify_config_hash&quot;</span>,
+            GET_VERIFY_CONFIG_HASH_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(get_verification_hashes(<span class="kw-2">&amp;</span>fedimint.cfg))
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;backup&quot;</span>,
+            BACKUP_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, request: SignedBackupRequest| -&gt; () {
                 fedimint
                     .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx(), request).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1426,21 +1440,21 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;recover&quot;</span>,
+            RECOVER_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
                 <span class="prelude-val">Ok</span>(fedimint
                     .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx(), id).<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;auth&quot;</span>,
+            AUTH_ENDPOINT,
             <span class="kw">async </span>|_fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;modules_config_json&quot;</span>,
+            MODULES_CONFIG_JSON_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt; {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.modules_json.clone())
             }

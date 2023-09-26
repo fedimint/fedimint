@@ -1194,6 +1194,17 @@
 <a href="#1194" id="1194">1194</a>
 <a href="#1195" id="1195">1195</a>
 <a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1240,6 +1251,11 @@
 <span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
 <span class="kw">use </span><span class="kw">crate</span>::core::backup::SignedBackupRequest;
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
+<span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
+    FETCH_EPOCH_COUNT_ENDPOINT, FETCH_EPOCH_HISTORY_ENDPOINT, RECOVER_ENDPOINT,
+    TRANSACTION_ENDPOINT, VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+};
 <span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 <span class="kw">use </span><span class="kw">crate</span>::query::{
@@ -1598,7 +1614,7 @@
     <span class="doccomment">/// Submit a transaction for inclusion
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt; {
         <span class="self">self</span>.request_current_consensus(
-            <span class="string">&quot;transaction&quot;</span>.to_owned(),
+            TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
         )
         .<span class="kw">await
@@ -1648,20 +1664,26 @@
 
         <span class="self">self</span>.request_with_strategy::&lt;SerdeEpochHistory, <span class="kw">_</span>&gt;(
             qs,
-            <span class="string">&quot;fetch_epoch_history&quot;</span>.to_owned(),
+            FETCH_EPOCH_HISTORY_ENDPOINT.to_owned(),
             ApiRequestErased::new(epoch),
         )
         .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;fetch_epoch_count&quot;</span>.to_owned(), ApiRequestErased::default())
-            .<span class="kw">await
+        <span class="self">self</span>.request_current_consensus(
+            FETCH_EPOCH_COUNT_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;wait_transaction&quot;</span>.to_owned(), ApiRequestErased::new(txid))
-            .<span class="kw">await
+        <span class="self">self</span>.request_current_consensus(
+            WAIT_TRANSACTION_ENDPOINT.to_owned(),
+            ApiRequestErased::new(txid),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="comment">// TODO should become part of the API
@@ -1677,7 +1699,7 @@
         fedimint_core::task::timeout(timeout, <span class="kw">async move </span>{
             <span class="kw">let </span>outcome: SerdeOutputOutcome = <span class="self">self
                 </span>.request_current_consensus(
-                    <span class="string">&quot;await_output_outcome&quot;</span>.to_owned(),
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(outpoint),
                 )
                 .<span class="kw">await
@@ -1704,7 +1726,7 @@
 
         <span class="self">self</span>.request_with_strategy(
             qs,
-            <span class="string">&quot;config&quot;</span>.to_owned(),
+            CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::new(info.to_string()),
         )
         .<span class="kw">await
@@ -1712,12 +1734,12 @@
     }
 
     <span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;config_hash&quot;</span>.to_owned(), ApiRequestErased::default())
+        <span class="self">self</span>.request_current_consensus(CONFIG_HASH_ENDPOINT.to_owned(), ApiRequestErased::default())
             .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_current_consensus(<span class="string">&quot;backup&quot;</span>.to_owned(), ApiRequestErased::new(request))
+        <span class="self">self</span>.request_current_consensus(BACKUP_ENDPOINT.to_owned(), ApiRequestErased::new(request))
             .<span class="kw">await
     </span>}
 
@@ -1728,7 +1750,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.request_with_strategy(
                 UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;::new(<span class="self">self</span>.all_peers().total()),
-                <span class="string">&quot;recover&quot;</span>.to_owned(),
+                RECOVER_ENDPOINT.to_owned(),
                 ApiRequestErased::new(id),
             )
             .<span class="kw">await</span><span class="question-mark">?
@@ -1748,7 +1770,7 @@
                 now().add(timeout),
                 client_versions.clone(),
             ),
-            <span class="string">&quot;version&quot;</span>.to_owned(),
+            VERSION_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
         )
         .<span class="kw">await

@@ -1603,18 +1603,6 @@
 <a href="#1603" id="1603">1603</a>
 <a href="#1604" id="1604">1604</a>
 <a href="#1605" id="1605">1605</a>
-<a href="#1606" id="1606">1606</a>
-<a href="#1607" id="1607">1607</a>
-<a href="#1608" id="1608">1608</a>
-<a href="#1609" id="1609">1609</a>
-<a href="#1610" id="1610">1610</a>
-<a href="#1611" id="1611">1611</a>
-<a href="#1612" id="1612">1612</a>
-<a href="#1613" id="1613">1613</a>
-<a href="#1614" id="1614">1614</a>
-<a href="#1615" id="1615">1615</a>
-<a href="#1616" id="1616">1616</a>
-<a href="#1617" id="1617">1617</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1639,7 +1627,7 @@
 <span class="kw">use </span>backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
 <span class="kw">use </span>client_db::DbKeyPrefix;
-<span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
+<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
@@ -1648,12 +1636,10 @@
 };
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
-};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
@@ -2204,24 +2190,14 @@
             .expect(<span class="string">&quot;no version conflicts&quot;</span>)
     }
 
-    <span class="kw">async fn </span>init(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        federation_id: FederationId,
-        cfg: MintClientConfig,
-        _db: Database,
-        _api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
-        _api: DynGlobalApi,
-        _module_api: DynModuleApi,
-    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
+    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="kw">let </span>(cancel_oob_payment_bc, <span class="kw">_</span>) = tokio::sync::broadcast::channel(<span class="number">16</span>);
         <span class="prelude-val">Ok</span>(MintClientModule {
-            federation_id,
-            cfg,
-            secret: module_root_secret,
+            federation_id: <span class="kw-2">*</span>args.federation_id(),
+            cfg: args.cfg().clone(),
+            secret: args.module_root_secret().clone(),
             secp: Secp256k1::new(),
-            notifier,
+            notifier: args.notifier().clone(),
             cancel_oob_payment_bc,
         })
     }

@@ -1155,6 +1155,7 @@
 <a href="#1155" id="1155">1155</a>
 <a href="#1156" id="1156">1156</a>
 <a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1165,6 +1166,7 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
@@ -1779,7 +1781,7 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;backup&quot;</span>,
+                BACKUP_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, request: SignedBackupRequest| -&gt; () {
                     module
                         .handle_backup_request(<span class="kw-2">&amp;mut </span>context.dbtx(), request).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1787,7 +1789,7 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;recover&quot;</span>,
+                RECOVER_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -&gt; <span class="prelude-ty">Option</span>&lt;ECashUserBackupSnapshot&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .handle_recover_request(<span class="kw-2">&amp;mut </span>context.dbtx(), id).<span class="kw">await</span>)

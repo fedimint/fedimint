@@ -1053,6 +1053,13 @@
 <a href="#1053" id="1053">1053</a>
 <a href="#1054" id="1054">1054</a>
 <a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1074,6 +1081,13 @@
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::endpoint_constants::{
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
+    GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+};
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
 };
@@ -1644,7 +1658,7 @@
 <span class="kw">pub fn </span>server_endpoints() -&gt; Vec&lt;ApiEndpoint&lt;ConfigGenApi&gt;&gt; {
     <span class="macro">vec!</span>[
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;set_password&quot;</span>,
+            SET_PASSWORD_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 <span class="kw">match </span>context.request_auth() {
                     <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::bad_request(<span class="string">&quot;Missing password&quot;</span>.to_string())),
@@ -1653,69 +1667,69 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;set_config_gen_connections&quot;</span>,
+            SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, server: ConfigGenConnectionsRequest| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 config.set_config_gen_connections(server).<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;add_config_gen_peer&quot;</span>,
+            ADD_CONFIG_GEN_PEER_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, _context, peer: PeerServerParams| -&gt; () {
                 <span class="comment">// No auth required since this is an API-to-API call and the peer connections will be manually accepted or not in the UI
                 </span>config.add_config_gen_peer(peer)
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;get_config_gen_peers&quot;</span>,
+            GET_CONFIG_GEN_PEERS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, _context, _v: ()| -&gt; Vec&lt;PeerServerParams&gt; {
                 config.get_config_gen_peers().<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;get_default_config_gen_params&quot;</span>,
+            GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context,  _v: ()| -&gt; ConfigGenParamsRequest {
                 check_auth(context)<span class="question-mark">?</span>;
                 config.get_default_config_gen_params()
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;set_config_gen_params&quot;</span>,
+            SET_CONFIG_GEN_PARAMS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, params: ConfigGenParamsRequest| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 config.set_config_gen_params(params).<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;get_consensus_config_gen_params&quot;</span>,
+            GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, _context, _v: ()| -&gt; ConfigGenParamsResponse {
                 <span class="kw">let </span>request = config.get_requested_params()<span class="question-mark">?</span>;
                 config.get_consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;run_dkg&quot;</span>,
+            RUN_DKG_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 config.run_dkg().<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;get_verify_config_hash&quot;</span>,
+            GET_VERIFY_CONFIG_HASH_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
                 check_auth(context)<span class="question-mark">?</span>;
                 config.get_verify_config_hash()
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;verified_configs&quot;</span>,
+            VERIFIED_CONFIGS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 config.verified_configs().<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;start_consensus&quot;</span>,
+            START_CONSENSUS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="kw">let </span>request_auth = context.request_auth();
@@ -1726,7 +1740,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;status&quot;</span>,
+            STATUS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, _context, _v: ()| -&gt; StatusResponse {
                 <span class="kw">let </span>server = config.server_status().<span class="kw">await</span>;
                 <span class="prelude-val">Ok</span>(StatusResponse {
@@ -1736,7 +1750,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            <span class="string">&quot;auth&quot;</span>,
+            AUTH_ENDPOINT,
             <span class="kw">async </span>|_config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())

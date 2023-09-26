@@ -1974,6 +1974,9 @@
 <a href="#1974" id="1974">1974</a>
 <a href="#1975" id="1975">1975</a>
 <a href="#1976" id="1976">1976</a>
+<a href="#1977" id="1977">1977</a>
+<a href="#1978" id="1978">1978</a>
+<a href="#1979" id="1979">1979</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2010,6 +2013,9 @@
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::endpoint_constants::{
+    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
@@ -2605,20 +2611,20 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;block_count&quot;</span>,
+                BLOCK_COUNT_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; u32 {
                     <span class="comment">// TODO: perhaps change this to an Option
                     </span><span class="prelude-val">Ok</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>.unwrap_or_default())
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;block_count_local&quot;</span>,
+                BLOCK_COUNT_LOCAL_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, _context, _params: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
                     <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>module.block_count_local.lock().expect(<span class="string">&quot;Locking failed&quot;</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;peg_out_fees&quot;</span>,
+                PEG_OUT_FEES_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (Address, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
                     <span class="kw">let </span>(address, sats) = params;
                     <span class="kw">let </span>feerate = module.consensus_fee_rate(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>;

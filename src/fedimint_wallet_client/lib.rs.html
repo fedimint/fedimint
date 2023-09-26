@@ -722,14 +722,6 @@
 <a href="#722" id="722">722</a>
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>client_db;
@@ -746,18 +738,17 @@
 <span class="kw">use </span>client_db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
+<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
+<span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-<span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
@@ -1197,23 +1188,16 @@
             .expect(<span class="string">&quot;no version conflicts&quot;</span>)
     }
 
-    <span class="kw">async fn </span>init(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _federation_id: FederationId,
-        cfg: WalletClientConfig,
-        _db: Database,
-        _api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
-        _api: DynGlobalApi,
-        module_api: DynModuleApi,
-    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
-        <span class="kw">let </span>rpc_config = <span class="self">self</span>.<span class="number">0</span>.clone().unwrap_or(cfg.default_bitcoin_rpc.clone());
+    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
+        <span class="kw">let </span>rpc_config = <span class="self">self
+            </span>.<span class="number">0
+            </span>.clone()
+            .unwrap_or(args.cfg().default_bitcoin_rpc.clone());
         <span class="prelude-val">Ok</span>(WalletClientModule {
-            cfg,
-            module_root_secret,
-            module_api,
-            notifier,
+            cfg: args.cfg().clone(),
+            module_root_secret: args.module_root_secret().clone(),
+            module_api: args.module_api().clone(),
+            notifier: args.notifier().clone(),
             rpc: create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>,
             secp: Default::default(),
         })

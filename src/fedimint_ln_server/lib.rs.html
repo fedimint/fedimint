@@ -1646,6 +1646,10 @@
 <a href="#1646" id="1646">1646</a>
 <a href="#1647" id="1647">1647</a>
 <a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1659,6 +1663,10 @@
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::endpoint_constants::{
+    ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
+};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
@@ -2513,13 +2521,13 @@
     <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ApiEndpoint&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="macro">vec!</span>[
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;block_count&quot;</span>,
+                BLOCK_COUNT_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
                     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>))
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;account&quot;</span>,
+                ACCOUNT_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .get_contract_account(<span class="kw-2">&amp;mut </span>context.dbtx(), contract_id)
@@ -2527,7 +2535,7 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;wait_account&quot;</span>,
+                WAIT_ACCOUNT_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
                     <span class="prelude-val">Ok</span>(module
                         .wait_contract_account(context, contract_id)
@@ -2535,7 +2543,7 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;offer&quot;</span>,
+                OFFER_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
                     <span class="prelude-val">Ok</span>(module
                         .get_offer(<span class="kw-2">&amp;mut </span>context.dbtx(), payment_hash)
@@ -2543,7 +2551,7 @@
                }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;wait_offer&quot;</span>,
+                WAIT_OFFER_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
                     <span class="prelude-val">Ok</span>(module
                         .wait_offer(context, payment_hash)
@@ -2551,13 +2559,13 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;list_gateways&quot;</span>,
+                LIST_GATEWAYS_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
                     <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
-                <span class="string">&quot;register_gateway&quot;</span>,
+                REGISTER_GATEWAY_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, gateway: LightningGateway| -&gt; () {
                     module.register_gateway(<span class="kw-2">&amp;mut </span>context.dbtx(), gateway).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())

@@ -760,6 +760,10 @@
 <a href="#760" id="760">760</a>
 <a href="#761" id="761">761</a>
 <a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -777,6 +781,7 @@
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
+<span class="kw">use </span>fedimint_core::endpoint_constants::FETCH_EPOCH_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, SafeUrl};
@@ -1318,10 +1323,13 @@
                 <span class="kw">while </span>initial_time.elapsed()<span class="question-mark">? </span>&lt; duration {
                     <span class="kw">let </span>m = fedimint_core::time::now();
                     <span class="kw">let </span>_epoch: u64 = client
-                        .request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(<span class="string">&quot;fetch_epoch_count&quot;</span>, <span class="macro">vec!</span>[ApiRequestErased::default()])
+                        .request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(
+                            FETCH_EPOCH_COUNT_ENDPOINT,
+                            <span class="macro">vec!</span>[ApiRequestErased::default()],
+                        )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
                     event_sender.send(MetricEvent {
-                        name: <span class="string">&quot;fetch_epoch_count&quot;</span>.into(),
+                        name: FETCH_EPOCH_COUNT_ENDPOINT.into(),
                         duration: m.elapsed()<span class="question-mark">?</span>,
                     })<span class="question-mark">?</span>;
                     fedimint_core::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;

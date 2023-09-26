@@ -1,0 +1,79 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/endpoint_constants.rs`."><title>endpoint_constants.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (030e4d382 2023-09-10)" data-channel="nightly" data-search-js="search-5d3eaacf19ebf04f.js" data-settings-js="settings-74424d7eec62a23e.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-f194925aa375ae96.css" data-theme-dark-css="dark-1dd4d1ce031e15de.css" data-theme-ayu-css="ayu-49e58d069f567085.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-8d035c8cea6edbc4.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-f194925aa375ae96.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1dd4d1ce031e15de.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_core/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+</pre></div><pre class="rust"><code><span class="kw">pub const </span>ACCOUNT_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;account&quot;</span>;
+<span class="kw">pub const </span>ADD_CONFIG_GEN_PEER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;add_config_gen_peer&quot;</span>;
+<span class="kw">pub const </span>AUDIT_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;audit&quot;</span>;
+<span class="kw">pub const </span>AUTH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;auth&quot;</span>;
+<span class="kw">pub const </span>AWAIT_OUTPUT_OUTCOME_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;await_output_outcome&quot;</span>;
+<span class="kw">pub const </span>BACKUP_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;backup&quot;</span>;
+<span class="kw">pub const </span>BLOCK_COUNT_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;block_count&quot;</span>;
+<span class="kw">pub const </span>BLOCK_COUNT_LOCAL_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;block_count_local&quot;</span>;
+<span class="kw">pub const </span>CONFIG_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;config&quot;</span>;
+<span class="kw">pub const </span>CONFIG_HASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;config_hash&quot;</span>;
+<span class="kw">pub const </span>FETCH_EPOCH_COUNT_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;fetch_epoch_count&quot;</span>;
+<span class="kw">pub const </span>FETCH_EPOCH_HISTORY_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;fetch_epoch_history&quot;</span>;
+<span class="kw">pub const </span>GET_CONFIG_GEN_PEERS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;get_config_gen_peers&quot;</span>;
+<span class="kw">pub const </span>GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;get_consensus_config_gen_params&quot;</span>;
+<span class="kw">pub const </span>GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;get_default_config_gen_params&quot;</span>;
+<span class="kw">pub const </span>GET_VERIFY_CONFIG_HASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;get_verify_config_hash&quot;</span>;
+<span class="kw">pub const </span>INVITE_CODE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;invite_code&quot;</span>;
+<span class="kw">pub const </span>LIST_GATEWAYS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;list_gateways&quot;</span>;
+<span class="kw">pub const </span>MODULES_CONFIG_JSON_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;modules_config_json&quot;</span>;
+<span class="kw">pub const </span>OFFER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;offer&quot;</span>;
+<span class="kw">pub const </span>PEG_OUT_FEES_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;peg_out_fees&quot;</span>;
+<span class="kw">pub const </span>PROCESS_OUTCOME_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;process_outcome&quot;</span>;
+<span class="kw">pub const </span>RECOVER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;recover&quot;</span>;
+<span class="kw">pub const </span>REGISTER_GATEWAY_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;register_gateway&quot;</span>;
+<span class="kw">pub const </span>RUN_DKG_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;run_dkg&quot;</span>;
+<span class="kw">pub const </span>SET_CONFIG_GEN_CONNECTIONS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;set_config_gen_connections&quot;</span>;
+<span class="kw">pub const </span>SET_CONFIG_GEN_PARAMS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;set_config_gen_params&quot;</span>;
+<span class="kw">pub const </span>SET_PASSWORD_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;set_password&quot;</span>;
+<span class="kw">pub const </span>SIGN_MESSAGE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;sign_message&quot;</span>;
+<span class="kw">pub const </span>START_CONSENSUS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;start_consensus&quot;</span>;
+<span class="kw">pub const </span>STATUS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;status&quot;</span>;
+<span class="kw">pub const </span>TRANSACTION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;transaction&quot;</span>;
+<span class="kw">pub const </span>UPGRADE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;upgrade&quot;</span>;
+<span class="kw">pub const </span>VERIFIED_CONFIGS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;verified_configs&quot;</span>;
+<span class="kw">pub const </span>VERSION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;version&quot;</span>;
+<span class="kw">pub const </span>WAIT_ACCOUNT_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wait_account&quot;</span>;
+<span class="kw">pub const </span>WAIT_OFFER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wait_offer&quot;</span>;
+<span class="kw">pub const </span>WAIT_SIGNED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wait_signed&quot;</span>;
+<span class="kw">pub const </span>WAIT_TRANSACTION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;wait_transaction&quot;</span>;
+</code></pre></div></section></main></body></html>
