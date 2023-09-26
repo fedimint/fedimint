@@ -31,7 +31,7 @@ nix = { version = "0.26.2", features = ["signal"] }
 rand = "0.8.5"
 serde_json = "1.0.94"
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
-tonic_lnd = { git = "https://github.com/fedimint/tonic_lnd", branch="master", features = ["lightningrpc", "routerrpc"] }
+tonic_lnd = { workspace = true }
 tower-http = { version = "0.4.3", features = ["cors", "auth"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
