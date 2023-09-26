@@ -422,12 +422,12 @@ impl DkgKeys<G1Projective> {
 mod tests {
     use std::collections::{HashMap, VecDeque};
 
+    use fedimint_core::PeerId;
     use hbbft::crypto::group::Curve;
     use hbbft::crypto::{G1Projective, G2Projective};
     use rand::rngs::OsRng;
 
     use crate::config::distributedgen::{scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys};
-    use crate::PeerId;
 
     #[test_log::test]
     fn test_dkg() {

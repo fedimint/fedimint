@@ -17,6 +17,7 @@ use fedimint_core::core::{
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::transaction::Transaction;
 use fedimint_core::ServerModule;
 use fedimint_ln_common::LightningCommonGen;
 use fedimint_ln_server::Lightning;
@@ -25,7 +26,6 @@ use fedimint_mint_server::common::MintCommonGen;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
-use fedimint_server::transaction::Transaction;
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::common::keys::CompressedPublicKey;

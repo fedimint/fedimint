@@ -6,10 +6,8 @@ pub mod server;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::TransactionItemAmount;
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{Transaction, TransactionError};
 use fedimint_core::{Amount, OutPoint};
-
-use crate::transaction::TransactionError;
 
 pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,

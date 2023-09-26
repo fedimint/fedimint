@@ -11,7 +11,7 @@ use fedimint_core::api::{
     ClientConfigDownloadToken, FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus,
     ServerStatus, StatusResponse,
 };
-use fedimint_core::backup::ClientBackupKey;
+use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 use fedimint_core::block::{Block, SignedBlock};
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
@@ -33,7 +33,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{SerdeTransaction, Transaction};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
@@ -43,7 +43,6 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
-use crate::backup::ClientBackupSnapshot;
 use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
@@ -53,7 +52,6 @@ use crate::db::{
     ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
 };
 use crate::fedimint_core::encoding::Encodable;
-use crate::transaction::SerdeTransaction;
 use crate::{check_auth, ApiResult, HasApiContext};
 
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
