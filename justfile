@@ -46,9 +46,7 @@ test-count:
 
 semgrep:
   env SEMGREP_ENABLE_VERSION_CHECK=0 \
-    semgrep --error --config .semgrep.all.yaml
-  env SEMGREP_ENABLE_VERSION_CHECK=0 \
-    semgrep --error --config .semgrep.log.yaml fedimint-server/ fedimint-core/
+    semgrep --error --no-rewrite-rule-ids --config .config/semgrep.yaml
 
 # run lints (quick)
 lint:
