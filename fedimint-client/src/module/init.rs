@@ -18,6 +18,67 @@ use crate::DynGlobalClientContext;
 
 pub type ClientModuleInitRegistry = ModuleInitRegistry<DynClientModuleInit>;
 
+pub struct ClientModuleInitArgs<C>
+where
+    C: ClientModuleInit,
+{
+    federation_id: FederationId,
+    cfg: <<C as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
+    db: Database,
+    api_version: ApiVersion,
+    module_root_secret: DerivableSecret,
+    notifier: ModuleNotifier<
+        DynGlobalClientContext,
+        <<C as ClientModuleInit>::Module as ClientModule>::States,
+    >,
+    api: DynGlobalApi,
+    module_api: DynModuleApi,
+}
+
+impl<C> ClientModuleInitArgs<C>
+where
+    C: ClientModuleInit,
+{
+    pub fn federation_id(&self) -> &FederationId {
+        &self.federation_id
+    }
+
+    pub fn cfg(
+        &self,
+    ) -> &<<C as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig {
+        &self.cfg
+    }
+
+    pub fn db(&self) -> &Database {
+        &self.db
+    }
+
+    pub fn api_version(&self) -> &ApiVersion {
+        &self.api_version
+    }
+
+    pub fn module_root_secret(&self) -> &DerivableSecret {
+        &self.module_root_secret
+    }
+
+    pub fn notifier(
+        &self,
+    ) -> &ModuleNotifier<
+        DynGlobalClientContext,
+        <<C as ClientModuleInit>::Module as ClientModule>::States,
+    > {
+        &self.notifier
+    }
+
+    pub fn api(&self) -> &DynGlobalApi {
+        &self.api
+    }
+
+    pub fn module_api(&self) -> &DynModuleApi {
+        &self.module_api
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
     type Module: ClientModule;
@@ -27,18 +88,7 @@ pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
     fn supported_api_versions(&self) -> MultiApiVersion;
 
     /// Initialize a [`ClientModule`] instance from its config
-    #[allow(clippy::too_many_arguments)]
-    async fn init(
-        &self,
-        federation_id: FederationId,
-        cfg: <<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
-        db: Database,
-        api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
-        api: DynGlobalApi,
-        module_api: DynModuleApi,
-    ) -> anyhow::Result<Self::Module>;
+    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -102,16 +152,16 @@ where
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
-            .init(
+            .init(&ClientModuleInitArgs {
                 federation_id,
-                typed_cfg.clone(),
+                cfg: typed_cfg.clone(),
                 db,
                 api_version,
                 module_root_secret,
-                notifier.module_notifier(instance_id),
-                api.clone(),
-                api.with_module(instance_id),
-            )
+                notifier: notifier.module_notifier(instance_id),
+                api: api.clone(),
+                module_api: api.with_module(instance_id),
+            })
             .await?
             .into())
     }

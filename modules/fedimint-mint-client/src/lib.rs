@@ -22,7 +22,7 @@ use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
-use fedimint_client::module::init::ClientModuleInit;
+use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
@@ -31,12 +31,10 @@ use fedimint_client::sm::{
 };
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-use fedimint_core::api::{DynGlobalApi, DynModuleApi, GlobalFederationApi};
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
-};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -587,24 +585,14 @@ impl ClientModuleInit for MintClientGen {
             .expect("no version conflicts")
     }
 
-    async fn init(
-        &self,
-        federation_id: FederationId,
-        cfg: MintClientConfig,
-        _db: Database,
-        _api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
-        _api: DynGlobalApi,
-        _module_api: DynModuleApi,
-    ) -> anyhow::Result<Self::Module> {
+    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         let (cancel_oob_payment_bc, _) = tokio::sync::broadcast::channel(16);
         Ok(MintClientModule {
-            federation_id,
-            cfg,
-            secret: module_root_secret,
+            federation_id: *args.federation_id(),
+            cfg: args.cfg().clone(),
+            secret: args.module_root_secret().clone(),
             secp: Secp256k1::new(),
-            notifier,
+            notifier: args.notifier().clone(),
             cancel_oob_payment_bc,
         })
     }
