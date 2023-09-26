@@ -44,6 +44,11 @@ use tracing::{debug, error, instrument, trace, warn};
 use crate::backup::ClientBackupSnapshot;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
+use crate::endpoint_constants::{
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
+    FETCH_EPOCH_COUNT_ENDPOINT, FETCH_EPOCH_HISTORY_ENDPOINT, RECOVER_ENDPOINT,
+    TRANSACTION_ENDPOINT, VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
@@ -402,7 +407,7 @@ where
     /// Submit a transaction for inclusion
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
         self.request_current_consensus(
-            "transaction".to_owned(),
+            TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
         )
         .await
@@ -452,20 +457,26 @@ where
 
         self.request_with_strategy::<SerdeEpochHistory, _>(
             qs,
-            "fetch_epoch_history".to_owned(),
+            FETCH_EPOCH_HISTORY_ENDPOINT.to_owned(),
             ApiRequestErased::new(epoch),
         )
         .await
     }
 
     async fn fetch_epoch_count(&self) -> FederationResult<u64> {
-        self.request_current_consensus("fetch_epoch_count".to_owned(), ApiRequestErased::default())
-            .await
+        self.request_current_consensus(
+            FETCH_EPOCH_COUNT_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+        )
+        .await
     }
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {
-        self.request_current_consensus("wait_transaction".to_owned(), ApiRequestErased::new(txid))
-            .await
+        self.request_current_consensus(
+            WAIT_TRANSACTION_ENDPOINT.to_owned(),
+            ApiRequestErased::new(txid),
+        )
+        .await
     }
 
     // TODO should become part of the API
@@ -481,7 +492,7 @@ where
         fedimint_core::task::timeout(timeout, async move {
             let outcome: SerdeOutputOutcome = self
                 .request_current_consensus(
-                    "await_output_outcome".to_owned(),
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(outpoint),
                 )
                 .await
@@ -508,7 +519,7 @@ where
 
         self.request_with_strategy(
             qs,
-            "config".to_owned(),
+            CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::new(info.to_string()),
         )
         .await
@@ -516,12 +527,12 @@ where
     }
 
     async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
-        self.request_current_consensus("config_hash".to_owned(), ApiRequestErased::default())
+        self.request_current_consensus(CONFIG_HASH_ENDPOINT.to_owned(), ApiRequestErased::default())
             .await
     }
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
-        self.request_current_consensus("backup".to_owned(), ApiRequestErased::new(request))
+        self.request_current_consensus(BACKUP_ENDPOINT.to_owned(), ApiRequestErased::new(request))
             .await
     }
 
@@ -532,7 +543,7 @@ where
         Ok(self
             .request_with_strategy(
                 UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(self.all_peers().total()),
-                "recover".to_owned(),
+                RECOVER_ENDPOINT.to_owned(),
                 ApiRequestErased::new(id),
             )
             .await?
@@ -552,7 +563,7 @@ where
                 now().add(timeout),
                 client_versions.clone(),
             ),
-            "version".to_owned(),
+            VERSION_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
         )
         .await

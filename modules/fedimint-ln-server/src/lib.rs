@@ -11,6 +11,10 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::{
+    ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
@@ -865,13 +869,13 @@ impl ServerModule for Lightning {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "block_count",
+                BLOCK_COUNT_ENDPOINT,
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
                     Ok(Some(module.consensus_block_count(&mut context.dbtx()).await))
                 }
             },
             api_endpoint! {
-                "account",
+                ACCOUNT_ENDPOINT,
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
                     Ok(module
                         .get_contract_account(&mut context.dbtx(), contract_id)
@@ -879,7 +883,7 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                "wait_account",
+                WAIT_ACCOUNT_ENDPOINT,
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     Ok(module
                         .wait_contract_account(context, contract_id)
@@ -887,7 +891,7 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                "offer",
+                OFFER_ENDPOINT,
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     Ok(module
                         .get_offer(&mut context.dbtx(), payment_hash)
@@ -895,7 +899,7 @@ impl ServerModule for Lightning {
                }
             },
             api_endpoint! {
-                "wait_offer",
+                WAIT_OFFER_ENDPOINT,
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     Ok(module
                         .wait_offer(context, payment_hash)
@@ -903,13 +907,13 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                "list_gateways",
+                LIST_GATEWAYS_ENDPOINT,
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGateway> {
                     Ok(module.list_gateways(&mut context.dbtx()).await)
                 }
             },
             api_endpoint! {
-                "register_gateway",
+                REGISTER_GATEWAY_ENDPOINT,
                 async |module: &Lightning, context, gateway: LightningGateway| -> () {
                     module.register_gateway(&mut context.dbtx(), gateway).await;
                     Ok(())

@@ -14,6 +14,13 @@ use crate::api::{
     StatusResponse, WsFederationApi,
 };
 use crate::config::ServerModuleConfigGenParamsRegistry;
+use crate::endpoint_constants::{
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
+    GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, PROCESS_OUTCOME_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, UPGRADE_ENDPOINT,
+};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::module::{ApiAuth, ApiRequestErased};
@@ -41,8 +48,11 @@ impl WsAdminClient {
     ///
     /// Must be called first before any other calls to the API
     pub async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request("set_password", ApiRequestErased::default().with_auth(auth))
-            .await
+        self.request(
+            SET_PASSWORD_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     /// During config gen, sets the server connection containing our endpoints
@@ -55,7 +65,7 @@ impl WsAdminClient {
         auth: ApiAuth,
     ) -> FederationResult<()> {
         self.request(
-            "set_config_gen_connections",
+            SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
             ApiRequestErased::new(info).with_auth(auth),
         )
         .await
@@ -69,7 +79,7 @@ impl WsAdminClient {
     ///
     /// This call is not authenticated because it's guardian-to-guardian
     pub async fn add_config_gen_peer(&self, peer: PeerServerParams) -> FederationResult<()> {
-        self.request("add_config_gen_peer", ApiRequestErased::new(peer))
+        self.request(ADD_CONFIG_GEN_PEER_ENDPOINT, ApiRequestErased::new(peer))
             .await
     }
 
@@ -78,15 +88,18 @@ impl WsAdminClient {
     ///
     /// Could be called on the leader, so it's not authenticated
     pub async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>> {
-        self.request("get_config_gen_peers", ApiRequestErased::default())
+        self.request(GET_CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
             .await
     }
 
     /// Sends a signal to consensus that we are ready to shutdown the federation
     /// and upgrade
     pub async fn signal_upgrade(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request("upgrade", ApiRequestErased::default().with_auth(auth))
-            .await
+        self.request(
+            UPGRADE_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     /// Sends a signal to consensus that we want to force running an epoch
@@ -97,7 +110,7 @@ impl WsAdminClient {
         auth: ApiAuth,
     ) -> FederationResult<()> {
         self.request(
-            "process_outcome",
+            PROCESS_OUTCOME_ENDPOINT,
             ApiRequestErased::new(outcome).with_auth(auth),
         )
         .await
@@ -122,7 +135,7 @@ impl WsAdminClient {
         auth: ApiAuth,
     ) -> FederationResult<ConfigGenParamsRequest> {
         self.request(
-            "get_default_config_gen_params",
+            GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .await
@@ -137,7 +150,7 @@ impl WsAdminClient {
         auth: ApiAuth,
     ) -> FederationResult<()> {
         self.request(
-            "set_config_gen_params",
+            SET_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::new(requested).with_auth(auth),
         )
         .await
@@ -150,7 +163,7 @@ impl WsAdminClient {
         &self,
     ) -> FederationResult<ConfigGenParamsResponse> {
         self.request(
-            "get_consensus_config_gen_params",
+            GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::default(),
         )
         .await
@@ -160,8 +173,11 @@ impl WsAdminClient {
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
     pub async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request("run_dkg", ApiRequestErased::default().with_auth(auth))
-            .await
+        self.request(
+            RUN_DKG_ENDPOINT,
+            ApiRequestErased::default().with_auth(auth),
+        )
+        .await
     }
 
     /// After DKG, returns the hash of the consensus config tweaked with our id.
@@ -171,7 +187,7 @@ impl WsAdminClient {
         auth: ApiAuth,
     ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
         self.request(
-            "get_verify_config_hash",
+            GET_VERIFY_CONFIG_HASH_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .await
@@ -184,7 +200,7 @@ impl WsAdminClient {
     /// `server_status` to see if consensus has started.
     pub async fn start_consensus(&self, auth: ApiAuth) -> FederationResult<()> {
         self.request(
-            "start_consensus",
+            START_CONSENSUS_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .await
@@ -192,18 +208,19 @@ impl WsAdminClient {
 
     /// Returns the status of the server
     pub async fn status(&self) -> FederationResult<StatusResponse> {
-        self.request("status", ApiRequestErased::default()).await
+        self.request(STATUS_ENDPOINT, ApiRequestErased::default())
+            .await
     }
 
     /// Show an audit across all modules
     pub async fn audit(&self, auth: ApiAuth) -> FederationResult<AuditSummary> {
-        self.request("audit", ApiRequestErased::default().with_auth(auth))
+        self.request(AUDIT_ENDPOINT, ApiRequestErased::default().with_auth(auth))
             .await
     }
 
     /// Check auth credentials
     pub async fn auth(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request("auth", ApiRequestErased::default().with_auth(auth))
+        self.request(AUTH_ENDPOINT, ApiRequestErased::default().with_auth(auth))
             .await
     }
 

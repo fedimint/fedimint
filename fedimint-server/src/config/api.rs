@@ -19,6 +19,13 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::Encodable;
+use fedimint_core::endpoint_constants::{
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
+    GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+};
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
 };
@@ -589,7 +596,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
     vec![
         api_endpoint! {
-            "set_password",
+            SET_PASSWORD_ENDPOINT,
             async |config: &ConfigGenApi, context, _v: ()| -> () {
                 match context.request_auth() {
                     None => return Err(ApiError::bad_request("Missing password".to_string())),
@@ -598,69 +605,69 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            "set_config_gen_connections",
+            SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
             async |config: &ConfigGenApi, context, server: ConfigGenConnectionsRequest| -> () {
                 check_auth(context)?;
                 config.set_config_gen_connections(server).await
             }
         },
         api_endpoint! {
-            "add_config_gen_peer",
+            ADD_CONFIG_GEN_PEER_ENDPOINT,
             async |config: &ConfigGenApi, _context, peer: PeerServerParams| -> () {
                 // No auth required since this is an API-to-API call and the peer connections will be manually accepted or not in the UI
                 config.add_config_gen_peer(peer)
             }
         },
         api_endpoint! {
-            "get_config_gen_peers",
+            GET_CONFIG_GEN_PEERS_ENDPOINT,
             async |config: &ConfigGenApi, _context, _v: ()| -> Vec<PeerServerParams> {
                 config.get_config_gen_peers().await
             }
         },
         api_endpoint! {
-            "get_default_config_gen_params",
+            GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
             async |config: &ConfigGenApi, context,  _v: ()| -> ConfigGenParamsRequest {
                 check_auth(context)?;
                 config.get_default_config_gen_params()
             }
         },
         api_endpoint! {
-            "set_config_gen_params",
+            SET_CONFIG_GEN_PARAMS_ENDPOINT,
             async |config: &ConfigGenApi, context, params: ConfigGenParamsRequest| -> () {
                 check_auth(context)?;
                 config.set_config_gen_params(params).await
             }
         },
         api_endpoint! {
-            "get_consensus_config_gen_params",
+            GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsResponse {
                 let request = config.get_requested_params()?;
                 config.get_consensus_config_gen_params(&request).await
             }
         },
         api_endpoint! {
-            "run_dkg",
+            RUN_DKG_ENDPOINT,
             async |config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 config.run_dkg().await
             }
         },
         api_endpoint! {
-            "get_verify_config_hash",
+            GET_VERIFY_CONFIG_HASH_ENDPOINT,
             async |config: &ConfigGenApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 check_auth(context)?;
                 config.get_verify_config_hash()
             }
         },
         api_endpoint! {
-            "verified_configs",
+            VERIFIED_CONFIGS_ENDPOINT,
             async |config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 config.verified_configs().await
             }
         },
         api_endpoint! {
-            "start_consensus",
+            START_CONSENSUS_ENDPOINT,
             async |config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 let request_auth = context.request_auth();
@@ -671,7 +678,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            "status",
+            STATUS_ENDPOINT,
             async |config: &ConfigGenApi, _context, _v: ()| -> StatusResponse {
                 let server = config.server_status().await;
                 Ok(StatusResponse {
@@ -681,7 +688,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            "auth",
+            AUTH_ENDPOINT,
             async |_config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 Ok(())

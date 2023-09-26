@@ -9,6 +9,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
+use fedimint_core::endpoint_constants::{SIGN_MESSAGE_ENDPOINT, WAIT_SIGNED_ENDPOINT};
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -440,7 +441,7 @@ impl ServerModule for Dummy {
         vec![
             api_endpoint! {
                 // API allows users ask the fed to threshold-sign a message
-                "sign_message",
+                SIGN_MESSAGE_ENDPOINT,
                 async |module: &Dummy, context, message: String| -> () {
                     // TODO: Should not write to DB in module APIs
                     let mut dbtx = context.dbtx();
@@ -451,7 +452,7 @@ impl ServerModule for Dummy {
             },
             api_endpoint! {
                 // API waits for the signature to exist
-                "wait_signed",
+                WAIT_SIGNED_ENDPOINT,
                 async |_module: &Dummy, context, message: String| -> SerdeSignature {
                     let future = context.wait_value_matches(DummySignatureKey(message), |sig| sig.is_some());
                     let sig = future.await;

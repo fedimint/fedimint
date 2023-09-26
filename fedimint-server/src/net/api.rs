@@ -16,6 +16,13 @@ use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
+use fedimint_core::endpoint_constants::{
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT,
+    CONFIG_HASH_ENDPOINT, FETCH_EPOCH_COUNT_ENDPOINT, FETCH_EPOCH_HISTORY_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
+    PROCESS_OUTCOME_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
+    UPGRADE_ENDPOINT, VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+};
 use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
@@ -529,13 +536,13 @@ impl HasApiContext<DynServerModule> for ConsensusApi {
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
     vec![
         api_endpoint! {
-            "version",
+            VERSION_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> SupportedApiVersionsSummary {
                 Ok(fedimint.api_versions_summary().to_owned())
             }
         },
         api_endpoint! {
-            "transaction",
+            TRANSACTION_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, serde_transaction: SerdeTransaction| -> TransactionId {
                 let transaction = serde_transaction
                     .try_into_inner(&fedimint.modules.decoder_registry())
@@ -551,7 +558,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "wait_transaction",
+            WAIT_TRANSACTION_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
                 debug!(transaction = %tx_hash, "Received request");
 
@@ -563,7 +570,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "await_output_outcome",
+            AWAIT_OUTPUT_OUTCOME_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, outpoint: OutPoint| -> SerdeOutputOutcome {
                 let outcome = fedimint
                     .await_output_outcome(outpoint)
@@ -574,7 +581,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "fetch_epoch_history",
+            FETCH_EPOCH_HISTORY_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, epoch: u64| -> SerdeEpochHistory {
                 let epoch = fedimint.epoch_history(epoch).await
                   .ok_or_else(|| ApiError::not_found(format!("epoch {epoch} not found")))?;
@@ -582,19 +589,19 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "fetch_epoch_count",
+            FETCH_EPOCH_COUNT_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
                 Ok(fedimint.get_epoch_count().await)
             }
         },
         api_endpoint! {
-            "invite_code",
+            INVITE_CODE_ENDPOINT,
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
                 Ok(fedimint.cfg.get_invite_code().to_string())
             }
         },
         api_endpoint! {
-            "config",
+            CONFIG_ENDPOINT,
             async |fedimint: &ConsensusApi, context, invite_code: String| -> ClientConfigResponse {
                 let info = invite_code.parse()
                     .map_err(|_| ApiError::bad_request("Could not parse invite code".to_string()))?;
@@ -608,13 +615,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "config_hash",
+            CONFIG_HASH_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
                 Ok(fedimint.cfg.consensus.consensus_hash())
             }
         },
         api_endpoint! {
-            "upgrade",
+            UPGRADE_ENDPOINT,
             async |fedimint: &ConsensusApi, context, _v: ()| -> () {
                check_auth(context)?;
                fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
@@ -622,7 +629,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "process_outcome",
+            PROCESS_OUTCOME_ENDPOINT,
             async |fedimint: &ConsensusApi, context, outcome: SerdeEpochHistory| -> () {
                 check_auth(context)?;
                 fedimint.force_process_outcome(outcome).await
@@ -631,7 +638,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "status",
+            STATUS_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 let consensus_status = fedimint
                     .consensus_status_cache
@@ -644,21 +651,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "audit",
+            AUDIT_ENDPOINT,
             async |fedimint: &ConsensusApi, context, _v: ()| -> AuditSummary {
                 check_auth(context)?;
                 Ok(fedimint.get_federation_audit().await?)
             }
         },
         api_endpoint! {
-            "get_verify_config_hash",
+            GET_VERIFY_CONFIG_HASH_ENDPOINT,
             async |fedimint: &ConsensusApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 check_auth(context)?;
                 Ok(get_verification_hashes(&fedimint.cfg))
             }
         },
         api_endpoint! {
-            "backup",
+            BACKUP_ENDPOINT,
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
                 fedimint
                     .handle_backup_request(&mut context.dbtx(), request).await?;
@@ -667,21 +674,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "recover",
+            RECOVER_ENDPOINT,
             async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
                     .handle_recover_request(&mut context.dbtx(), id).await)
             }
         },
         api_endpoint! {
-            "auth",
+            AUTH_ENDPOINT,
             async |_fedimint: &ConsensusApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 Ok(())
             }
         },
         api_endpoint! {
-            "modules_config_json",
+            MODULES_CONFIG_JSON_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<ModuleInstanceId, JsonWithKind> {
                 Ok(fedimint.cfg.consensus.modules_json.clone())
             }
