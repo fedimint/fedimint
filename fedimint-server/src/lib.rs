@@ -23,7 +23,6 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
-use rand::rngs::OsRng;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
 

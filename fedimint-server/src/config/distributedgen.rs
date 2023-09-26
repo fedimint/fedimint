@@ -12,17 +12,16 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::PeerHandle;
 use fedimint_core::net::peers::MuxPeerConnections;
 use fedimint_core::task::spawn;
-use fedimint_core::{BitcoinHash, PeerId};
+use fedimint_core::{BitcoinHash, NumPeers, PeerId};
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
+use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tbs::hash::hash_bytes_to_curve;
 use tbs::poly::Poly;
 use tbs::Scalar;
 use threshold_crypto::serde_impl::SerdeSecret;
-
-use crate::*;
 
 struct Dkg<G> {
     gen_g: G,
