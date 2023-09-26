@@ -632,6 +632,17 @@
 <a href="#632" id="632">632</a>
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -640,18 +651,20 @@
 
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
+<span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::DynModuleApi;
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, ModuleDatabaseTransaction,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion, TransactionItemAmount,
@@ -987,21 +1000,30 @@
             .expect(<span class="string">&quot;no version conflicts&quot;</span>)
     }
 
-    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
+    <span class="kw">async fn </span>init(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _federation_id: FederationId,
+        cfg: LightningClientConfig,
+        _db: Database,
+        _api_version: ApiVersion,
+        module_root_secret: DerivableSecret,
+        notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
+        _api: DynGlobalApi,
+        module_api: DynModuleApi,
+    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="prelude-val">Ok</span>(GatewayClientModule {
             lnrpc: <span class="self">self</span>.lnrpc.clone(),
-            cfg: args.cfg().clone(),
-            notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
+            cfg,
+            notifier,
+            redeem_key: module_root_secret
                 .child_key(ChildId(<span class="number">0</span>))
                 .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
-            module_api: args.module_api().clone(),
             node_pub_key: <span class="self">self</span>.node_pub_key,
             lightning_alias: <span class="self">self</span>.lightning_alias.clone(),
             timelock_delta: <span class="self">self</span>.timelock_delta,
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
             fees: <span class="self">self</span>.fees,
+            module_api,
         })
     }
 }
