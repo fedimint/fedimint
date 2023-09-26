@@ -459,7 +459,7 @@ pub async fn run_dkg(
     info!("Running DKG...");
     let (dkg_results, leader_wait_result) = tokio::join!(
         join_all(dkg_results),
-        wait_server_status(leader, ServerStatus::ReadyForConfigGen)
+        wait_server_status(leader, ServerStatus::VerifyingConfigs)
     );
     for result in dkg_results {
         result?;
