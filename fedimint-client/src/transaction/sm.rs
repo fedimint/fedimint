@@ -215,6 +215,7 @@ mod tests {
     use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
+    use fedimint_core::endpoint_constants::{TRANSACTION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiRequestErased;
     use fedimint_core::task::sleep;
@@ -271,7 +272,7 @@ mod tests {
             params: &[Value],
         ) -> JsonRpcResult<Value> {
             match method {
-                "transaction" => {
+                TRANSACTION_ENDPOINT => {
                     let api_req: ApiRequestErased =
                         serde_json::from_value(params[0].clone()).unwrap();
                     let serde_tx: SerdeTransaction =
@@ -282,7 +283,7 @@ mod tests {
 
                     Ok(serde_json::to_value(tx.tx_hash()).unwrap())
                 }
-                "wait_transaction" => {
+                WAIT_TRANSACTION_ENDPOINT => {
                     let api_req: ApiRequestErased =
                         serde_json::from_value(params[0].clone()).unwrap();
                     let txid: TransactionId = serde_json::from_value(api_req.params).unwrap();

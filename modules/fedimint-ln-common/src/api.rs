@@ -1,5 +1,9 @@
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_core::endpoint_constants::{
+    BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
+    WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
+};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::UnionResponses;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -39,13 +43,19 @@ where
     T: IModuleFederationApi + MaybeSend + MaybeSync + 'static,
 {
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>> {
-        self.request_current_consensus("block_count".to_string(), ApiRequestErased::default())
-            .await
+        self.request_current_consensus(
+            BLOCK_COUNT_ENDPOINT.to_string(),
+            ApiRequestErased::default(),
+        )
+        .await
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
-        self.request_current_consensus("wait_account".to_string(), ApiRequestErased::new(contract))
-            .await
+        self.request_current_consensus(
+            WAIT_ACCOUNT_ENDPOINT.to_string(),
+            ApiRequestErased::new(contract),
+        )
+        .await
     }
 
     async fn fetch_offer(
@@ -53,7 +63,7 @@ where
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer> {
         self.request_current_consensus(
-            "wait_offer".to_string(),
+            WAIT_OFFER_ENDPOINT.to_string(),
             ApiRequestErased::new(payment_hash),
         )
         .await
@@ -65,7 +75,7 @@ where
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
         self.request_with_strategy(
             UnionResponses::new(self.all_peers().total()),
-            "list_gateways".to_string(),
+            LIST_GATEWAYS_ENDPOINT.to_string(),
             ApiRequestErased::default(),
         )
         .await
@@ -73,7 +83,7 @@ where
 
     async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
         self.request_current_consensus(
-            "register_gateway".to_string(),
+            REGISTER_GATEWAY_ENDPOINT.to_string(),
             ApiRequestErased::new(gateway),
         )
         .await
@@ -82,7 +92,7 @@ where
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool> {
         Ok(self
             .request_current_consensus::<Option<IncomingContractOffer>>(
-                "offer".to_string(),
+                OFFER_ENDPOINT.to_string(),
                 ApiRequestErased::new(payment_hash),
             )
             .await?

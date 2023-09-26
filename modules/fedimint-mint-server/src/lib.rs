@@ -8,6 +8,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
+use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
@@ -622,7 +623,7 @@ impl ServerModule for Mint {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "backup",
+                BACKUP_ENDPOINT,
                 async |module: &Mint, context, request: SignedBackupRequest| -> () {
                     module
                         .handle_backup_request(&mut context.dbtx(), request).await?;
@@ -630,7 +631,7 @@ impl ServerModule for Mint {
                 }
             },
             api_endpoint! {
-                "recover",
+                RECOVER_ENDPOINT,
                 async |module: &Mint, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
                         .handle_recover_request(&mut context.dbtx(), id).await)

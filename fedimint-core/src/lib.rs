@@ -32,6 +32,7 @@ pub mod config;
 pub mod core;
 pub mod db;
 pub mod encoding;
+pub mod endpoint_constants;
 pub mod epoch;
 pub mod fmt_utils;
 pub mod hex;

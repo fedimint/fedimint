@@ -34,6 +34,9 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::{
+    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
@@ -629,20 +632,20 @@ impl ServerModule for Wallet {
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
             api_endpoint! {
-                "block_count",
+                BLOCK_COUNT_ENDPOINT,
                 async |module: &Wallet, context, _params: ()| -> u32 {
                     // TODO: perhaps change this to an Option
                     Ok(module.consensus_block_count(&mut context.dbtx()).await.unwrap_or_default())
                 }
             },
             api_endpoint! {
-                "block_count_local",
+                BLOCK_COUNT_LOCAL_ENDPOINT,
                 async |module: &Wallet, _context, _params: ()| -> Option<u32> {
                     Ok(*module.block_count_local.lock().expect("Locking failed"))
                 }
             },
             api_endpoint! {
-                "peg_out_fees",
+                PEG_OUT_FEES_ENDPOINT,
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
                     let feerate = module.consensus_fee_rate(&mut context.dbtx()).await;
