@@ -2,7 +2,7 @@ use fedimint_core::api::InviteCode;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
-use fedimint_ln_common::{serde_routing_fees, LightningGateway};
+use fedimint_ln_common::serde_routing_fees;
 use lightning::routing::gossip::RoutingFees;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -46,25 +46,6 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = FederationIdKey, query_prefix = FederationIdKeyPrefix);
-
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
-pub struct FederationRegistrationKey {
-    pub id: FederationId,
-}
-
-impl_db_record!(
-    key = FederationRegistrationKey,
-    value = LightningGateway,
-    db_prefix = DbKeyPrefix::FederationRegistration,
-);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct FederationRegistrationKeyPrefix;
-
-impl_db_lookup!(
-    key = FederationRegistrationKey,
-    query_prefix = FederationRegistrationKeyPrefix
-);
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
 pub struct GatewayPublicKey;
