@@ -1101,13 +1101,6 @@
 <a href="#1101" id="1101">1101</a>
 <a href="#1102" id="1102">1102</a>
 <a href="#1103" id="1103">1103</a>
-<a href="#1104" id="1104">1104</a>
-<a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>pay;
 <span class="kw">mod </span>receive;
@@ -1122,18 +1115,18 @@
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
 <span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey};
-<span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_client::module::init::ClientModuleInit;
+<span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
+<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
+<span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-<span class="kw">use </span>fedimint_core::db::{Database, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::ModuleDatabaseTransaction;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
@@ -1722,24 +1715,17 @@
             .expect(<span class="string">&quot;no version conflicts&quot;</span>)
     }
 
-    <span class="kw">async fn </span>init(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _federation_id: FederationId,
-        cfg: LightningClientConfig,
-        _db: Database,
-        _api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier&lt;DynGlobalClientContext, &lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::States&gt;,
-        _api: DynGlobalApi,
-        module_api: DynModuleApi,
-    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
+    <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;<span class="self">Self</span>::Module&gt; {
         <span class="kw">let </span>secp = Secp256k1::new();
         <span class="prelude-val">Ok</span>(LightningClientModule {
-            cfg,
-            notifier,
-            redeem_key: module_root_secret.child_key(ChildId(<span class="number">0</span>)).to_secp_key(<span class="kw-2">&amp;</span>secp),
+            cfg: args.cfg().clone(),
+            notifier: args.notifier().clone(),
+            redeem_key: args
+                .module_root_secret()
+                .child_key(ChildId(<span class="number">0</span>))
+                .to_secp_key(<span class="kw-2">&amp;</span>secp),
             secp,
-            module_api,
+            module_api: args.module_api().clone(),
         })
     }
 }
