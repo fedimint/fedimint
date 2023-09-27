@@ -1521,6 +1521,7 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
