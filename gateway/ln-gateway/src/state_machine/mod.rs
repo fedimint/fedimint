@@ -17,7 +17,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
+use fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion, TransactionItemAmount,
@@ -47,7 +47,6 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingPaymentError,
 };
-use crate::db::FederationRegistrationKey;
 use crate::gateway_lnrpc::InterceptHtlcRequest;
 use crate::lnrpc_client::ILnRpcClient;
 use crate::state_machine::complete::{
@@ -261,11 +260,9 @@ impl GatewayClientExt for Client {
         );
 
         let federation_id = self.get_config().global.federation_id;
-        let mut dbtx = self.db().begin_transaction().await;
         gateway
-            .register_with_federation(&mut dbtx, federation_id, registration_info)
+            .register_with_federation(federation_id, registration_info)
             .await?;
-        dbtx.commit_tx().await;
         Ok(())
     }
 
@@ -479,13 +476,10 @@ impl GatewayClientModule {
 
     async fn register_with_federation(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
         id: FederationId,
         registration: LightningGateway,
     ) -> anyhow::Result<()> {
         self.module_api.register_gateway(&registration).await?;
-        dbtx.insert_entry(&FederationRegistrationKey { id }, &registration)
-            .await;
         info!(
             "Successfully registered gateway {} with federation {}",
             registration.gateway_id, id

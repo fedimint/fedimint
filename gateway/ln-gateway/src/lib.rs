@@ -28,10 +28,7 @@ use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
-use db::{
-    DbKeyPrefix, FederationRegistrationKey, GatewayConfiguration, GatewayConfigurationKey,
-    GatewayPublicKey,
-};
+use db::{DbKeyPrefix, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
 use fedimint_core::api::{FederationError, InviteCode};
@@ -922,10 +919,6 @@ impl Gateway {
         let client = self.clients.write().await.remove(&federation_id).ok_or(
             GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
         )?;
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-        dbtx.remove_entry(&FederationRegistrationKey { id: federation_id })
-            .await;
-        dbtx.commit_tx().await;
         Ok(client)
     }
 
