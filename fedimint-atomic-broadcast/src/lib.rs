@@ -88,8 +88,6 @@ mod network;
 mod session;
 mod spawner;
 
-use bitcoin::merkle_tree;
-use bitcoin_hashes::{sha256, Hash};
 /// The atomic broadcast instance run once by every peer.
 pub use broadcast::AtomicBroadcast;
 pub use db::{SignedBlockKey, SignedBlockPrefix};
@@ -100,7 +98,6 @@ use fedimint_core::PeerId;
 /// The broadcasts uses this keychain to sign messages for peers and create
 /// the threshold signatures for the signed blocks.
 pub use keychain::Keychain;
-use serde::{Deserialize, Serialize};
 
 /// The majority of these messages need to be delivered to the intended
 /// [Recipient] in order for the broadcast to make progress. However, the

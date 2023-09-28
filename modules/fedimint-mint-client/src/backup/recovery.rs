@@ -1,14 +1,13 @@
 use std::cmp::{self, max};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::io::Cursor;
 use std::ops::Range;
 
 use fedimint_client::sm::{OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::block::Block;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
+use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, NumPeers, PeerId, TransactionId};
 use fedimint_derive_secret::DerivableSecret;

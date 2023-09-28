@@ -18,7 +18,6 @@ use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::AbbreviateDebug;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::time::now;
@@ -45,7 +44,6 @@ use crate::backup::ClientBackupSnapshot;
 use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
-use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
     DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,

@@ -14,9 +14,7 @@ use std::{fs, result};
 
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-use fedimint_client::module::init::{
-    ClientModuleInit, ClientModuleInitRegistry, IClientModuleInit,
-};
+use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::sm::OperationId;
 use fedimint_client::{ClientBuilder, ClientSecret};
@@ -27,9 +25,7 @@ use fedimint_core::api::{
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::db::DatabaseValue;
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::ThresholdConsensus;
 use fedimint_core::util::SafeUrl;
@@ -88,12 +84,6 @@ enum CliOutput {
     EpochCount {
         count: u64,
     },
-
-    LastEpoch {
-        hex_outcome: String,
-    },
-
-    ForceEpoch,
 
     ConfigDecrypt,
 
@@ -288,28 +278,6 @@ impl Opts {
         let db_path = self.workdir()?.join("client.db");
         fedimint_rocksdb::RocksDb::open(db_path)
             .map_err_cli_msg(CliErrorKind::IOError, "could not open transaction db")
-    }
-
-    fn load_decoders(
-        &self,
-        cfg: &ClientConfig,
-        module_inits: &ClientModuleInitRegistry,
-    ) -> ModuleDecoderRegistry {
-        ModuleDecoderRegistry::new(cfg.clone().modules.into_iter().filter_map(
-            |(id, module_cfg)| {
-                let kind = module_cfg.kind().clone();
-                module_inits.get(&kind).map(|module_init| {
-                    (
-                        id,
-                        kind,
-                        IClientModuleInit::decoder(
-                            AsRef::<dyn IClientModuleInit + 'static>::as_ref(module_init),
-                        ),
-                    )
-                })
-            },
-        ))
-        .with_fallback()
     }
 
     async fn build_client_ng(

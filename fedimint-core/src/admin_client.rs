@@ -6,16 +6,13 @@ use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::task::MaybeSend;
 use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
-use threshold_crypto::PublicKey;
 use tokio_rustls::rustls;
 
 use crate::api::{
-    DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
-    StatusResponse, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationResult, ServerStatus, StatusResponse, WsFederationApi,
 };
 use crate::config::ServerModuleConfigGenParamsRegistry;
-use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use crate::module::registry::ModuleDecoderRegistry;
+use crate::epoch::SerdeEpochHistory;
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
 

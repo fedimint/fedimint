@@ -95,7 +95,6 @@ pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
 
 #[cfg(test)]
 mod fedimint_migration_tests {
-    use std::collections::BTreeSet;
 
     use anyhow::{ensure, Context};
     use bitcoin::{secp256k1, KeyPair};
@@ -103,18 +102,14 @@ mod fedimint_migration_tests {
     use fedimint_core::api::ClientConfigDownloadToken;
     use fedimint_core::core::DynInput;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
-    use fedimint_core::epoch::{
-        ConsensusItem, EpochOutcome, SerdeSignature, SerdeSignatureShare, SignedEpochOutcome,
-    };
+    use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::transaction::Transaction;
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     use fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
-    use fedimint_testing::db::{
-        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
-    };
+    use fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     use futures::StreamExt;
     use rand::distributions::{Distribution, Standard};
     use rand::rngs::OsRng;
@@ -174,7 +169,7 @@ mod fedimint_migration_tests {
 
         let sig_share = SignatureShare(Standard.sample(&mut OsRng));
 
-        let consensus_items = vec![
+        let _consensus_items = vec![
             ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig_share.clone())),
             ConsensusItem::Transaction(transaction),
         ];
