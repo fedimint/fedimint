@@ -93,10 +93,14 @@ impl FromStr for OOBNotes {
     /// Decode a set of out-of-band e-cash notes from a base64 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = base64::decode(s)?;
-        Ok(Decodable::consensus_decode(
+        let oob_notes: OOBNotes = Decodable::consensus_decode(
             &mut std::io::Cursor::new(bytes),
             &ModuleDecoderRegistry::default(),
-        )?)
+        )?;
+
+        ensure!(!oob_notes.notes.is_empty(), "OOBNotes cannot be empty");
+
+        Ok(oob_notes)
     }
 }
 
@@ -1509,10 +1513,11 @@ impl sha256t::Tag for OOBReissueTag {
 
 #[cfg(test)]
 mod tests {
+    use fedimint_core::config::FederationId;
     use fedimint_core::{Amount, Tiered, TieredMulti, TieredSummary};
     use itertools::Itertools;
 
-    use crate::select_notes_from_stream;
+    use crate::{select_notes_from_stream, OOBNotes};
 
     #[test_log::test(tokio::test)]
     async fn select_notes_avg_test() {
@@ -1611,5 +1616,18 @@ mod tests {
             .into_iter()
             .flat_map(|(amount, number)| vec![(amount, "dummy note".into()); number])
             .collect()
+    }
+
+    #[test]
+    fn decoding_empty_oob_notes_fails() {
+        let empty_oob_notes = OOBNotes {
+            federation_id: FederationId(threshold_crypto::SecretKey::random().public_key()),
+            notes: Default::default(),
+        };
+        let oob_notes_string = empty_oob_notes.to_string();
+
+        let res = oob_notes_string.parse::<OOBNotes>();
+
+        assert!(res.is_err(), "An empty OOB notes string should not parse");
     }
 }
