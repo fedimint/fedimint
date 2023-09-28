@@ -456,6 +456,7 @@ fn states_add_instance(
     })
 }
 
+#[derive(Debug)]
 pub struct Client {
     inner: Arc<ClientInner>,
 }

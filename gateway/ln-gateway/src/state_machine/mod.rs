@@ -53,6 +53,7 @@ use crate::lnrpc_client::ILnRpcClient;
 use crate::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
+use crate::{FederationToClientMap, ScidToFederationMap};
 
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
@@ -322,6 +323,8 @@ impl GatewayClientExt for Client {
 #[derive(Debug, Clone)]
 pub struct GatewayClientGen {
     pub lnrpc: Arc<dyn ILnRpcClient>,
+    pub all_clients: FederationToClientMap,
+    pub all_scids: ScidToFederationMap,
     pub node_pub_key: secp256k1::PublicKey,
     pub lightning_alias: String,
     pub timelock_delta: u64,
@@ -354,6 +357,8 @@ impl ClientModuleInit for GatewayClientGen {
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(GatewayClientModule {
             lnrpc: self.lnrpc.clone(),
+            all_clients: self.all_clients.clone(),
+            all_scids: self.all_scids.clone(),
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             redeem_key: args
@@ -373,6 +378,8 @@ impl ClientModuleInit for GatewayClientGen {
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
     lnrpc: Arc<dyn ILnRpcClient>,
+    all_clients: FederationToClientMap,
+    all_scids: ScidToFederationMap,
     redeem_key: bitcoin::KeyPair,
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
@@ -395,6 +402,8 @@ impl From<&GatewayClientContext> for LightningClientContext {
 pub struct GatewayClientModule {
     lnrpc: Arc<dyn ILnRpcClient>,
     cfg: LightningClientConfig,
+    all_clients: FederationToClientMap,
+    all_scids: ScidToFederationMap,
     pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
     node_pub_key: PublicKey,
@@ -413,6 +422,8 @@ impl ClientModule for GatewayClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
             lnrpc: self.lnrpc.clone(),
+            all_clients: self.all_clients.clone(),
+            all_scids: self.all_scids.clone(),
             redeem_key: self.redeem_key,
             timelock_delta: self.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),

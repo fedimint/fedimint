@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
@@ -11,10 +11,12 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use futures::future;
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{GatewayClientContext, GatewayClientStateMachines};
+use crate::fetch_lightning_node_info;
 use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 use crate::lnrpc_client::LightningRpcError;
 
@@ -242,6 +244,21 @@ impl GatewayPayInvoice {
         }
     }
 
+    async fn buy_preimage_via_direct_swap(
+        client: Client,
+        _buy_preimage: PaymentParameters,
+        _contract: OutgoingContractAccount,
+    ) -> Result<Preimage, OutgoingPaymentError> {
+        tracing::warn!("DIRECT SWAP SCENARIO to: {:?}", client);
+
+        Err(OutgoingPaymentError::LightningPayError {
+            contract: _contract,
+            lightning_error: LightningRpcError::FailedPayment {
+                failure_reason: "Direct swap not implemented".to_string(),
+            },
+        })
+    }
+
     async fn transition_buy_preimage(
         context: GatewayClientContext,
         result: Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError>,
@@ -249,12 +266,30 @@ impl GatewayPayInvoice {
     ) -> GatewayPayStateMachine {
         match result {
             Ok((contract, payment_parameters)) => {
-                let preimage_result = Self::buy_preimage_over_lightning(
-                    context,
-                    payment_parameters,
-                    contract.clone(),
+                let swap_receiver = Self::check_swap_to_federation(
+                    context.clone(),
+                    payment_parameters.invoice.clone(),
                 )
                 .await;
+
+                let preimage_result = match swap_receiver {
+                    Some(client) => {
+                        Self::buy_preimage_via_direct_swap(
+                            client,
+                            payment_parameters,
+                            contract.clone(),
+                        )
+                        .await
+                    }
+                    None => {
+                        Self::buy_preimage_over_lightning(
+                            context,
+                            payment_parameters,
+                            contract.clone(),
+                        )
+                        .await
+                    }
+                };
 
                 match preimage_result {
                     Ok(preimage) => GatewayPayStateMachine {
@@ -346,6 +381,39 @@ impl GatewayPayInvoice {
             max_send_amount: account.amount,
             invoice,
         })
+    }
+
+    // Checks if the invoice route hint last hop has source node id matching this
+    // gateways node pubkey and if the short channel id matches one assigned by
+    // this gateway to a connected federation. In this case, the gateway can
+    // avoid paying the invoice over the lightning network and instead perform a
+    // direct swap between the two federations.
+    async fn check_swap_to_federation(
+        context: GatewayClientContext,
+        invoice: Bolt11Invoice,
+    ) -> Option<Client> {
+        let rhints = invoice.route_hints();
+        match rhints.first().and_then(|rh| rh.0.last()) {
+            None => None,
+            Some(hop) => {
+                let node_info = fetch_lightning_node_info(context.lnrpc.clone())
+                    .await
+                    .ok()?;
+
+                if hop.src_node_id != node_info.0 {
+                    return None;
+                }
+
+                let scid_to_feds = context.all_scids.read().await;
+                match scid_to_feds.get(&hop.short_channel_id).cloned() {
+                    None => None,
+                    Some(federation_id) => {
+                        let clients = context.all_clients.read().await;
+                        clients.get(&federation_id).cloned()
+                    }
+                }
+            }
+        }
     }
 }
 

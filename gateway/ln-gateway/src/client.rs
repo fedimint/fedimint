@@ -14,7 +14,7 @@ use futures::StreamExt;
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::lnrpc_client::ILnRpcClient;
 use crate::state_machine::GatewayClientGen;
-use crate::{GatewayError, Result};
+use crate::{FederationToClientMap, GatewayError, Result, ScidToFederationMap};
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientBuilder {
@@ -38,12 +38,15 @@ impl GatewayClientBuilder {
 }
 
 impl GatewayClientBuilder {
+    #[allow(clippy::too_many_arguments)]
     pub async fn build(
         &self,
         config: FederationConfig,
         node_pub_key: secp256k1::PublicKey,
         lightning_alias: String,
         lnrpc: Arc<dyn ILnRpcClient>,
+        all_clients: FederationToClientMap,
+        all_scids: ScidToFederationMap,
         old_client: Option<fedimint_client::Client>,
     ) -> Result<fedimint_client::Client> {
         let FederationConfig {
@@ -57,6 +60,8 @@ impl GatewayClientBuilder {
         let mut registry = self.registry.clone();
         registry.attach(GatewayClientGen {
             lnrpc,
+            all_clients,
+            all_scids,
             node_pub_key,
             lightning_alias,
             fees,

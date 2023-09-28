@@ -198,6 +198,9 @@ impl Display for GatewayState {
     }
 }
 
+pub type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
+pub type FederationToClientMap = Arc<RwLock<BTreeMap<FederationId, fedimint_client::Client>>>;
+
 #[derive(Clone)]
 pub struct Gateway {
     // Builder struct that allows the gateway to build a `ILnRpcClient`, which represents a
@@ -219,11 +222,11 @@ pub struct Gateway {
 
     // Map of `FederationId` -> `Client`. Used for efficient retrieval of the client while handling
     // incoming HTLCs.
-    clients: Arc<RwLock<BTreeMap<FederationId, fedimint_client::Client>>>,
+    clients: FederationToClientMap,
 
     // Map of short channel ids to `FederationId`. Use for efficient retrieval of the client while
     // handling incoming HTLCs.
-    scid_to_federation: Arc<RwLock<BTreeMap<u64, FederationId>>>,
+    scid_to_federation: ScidToFederationMap,
 
     // A public key representing the identity of the gateway. Private key is not used.
     pub gateway_id: secp256k1::PublicKey,
@@ -451,7 +454,7 @@ impl Gateway {
                                 self.set_gateway_state(GatewayState::Connected).await;
                                 info!("Established HTLC stream");
 
-                                match Self::fetch_lightning_node_info(ln_client.clone()).await {
+                                match fetch_lightning_node_info(ln_client.clone()).await {
                                     Ok((lightning_public_key, lightning_alias)) => {
                                         self.register_clients_timer(&mut htlc_task_group).await;
                                         self.load_clients(
@@ -567,15 +570,6 @@ impl Gateway {
                 }
             }
         }
-    }
-
-    async fn fetch_lightning_node_info(
-        lnrpc: Arc<dyn ILnRpcClient>,
-    ) -> Result<(PublicKey, String)> {
-        let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
-        let node_pub_key = PublicKey::from_slice(&pub_key)
-            .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-        Ok((node_pub_key, alias))
     }
 
     async fn set_gateway_state(&mut self, state: GatewayState) {
@@ -769,6 +763,8 @@ impl Gateway {
                 Self::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints)
                     .await?;
             let old_client = self.clients.read().await.get(&federation_id).cloned();
+            let all_clients = self.clients.clone();
+            let all_scids = self.scid_to_federation.clone();
 
             let client = self
                 .client_builder
@@ -777,6 +773,8 @@ impl Gateway {
                     lightning_public_key,
                     lightning_alias,
                     lnrpc.clone(),
+                    all_clients,
+                    all_scids,
                     old_client,
                 )
                 .await?;
@@ -951,6 +949,9 @@ impl Gateway {
             for config in configs {
                 let federation_id = config.invite_code.id;
                 let old_client = self.clients.read().await.get(&federation_id).cloned();
+                let all_clients = self.clients.clone();
+                let all_scids = self.scid_to_federation.clone();
+
                 if let Ok(client) = self
                     .client_builder
                     .build(
@@ -958,6 +959,8 @@ impl Gateway {
                         lightning_public_key,
                         lightning_alias.clone(),
                         lnrpc.clone(),
+                        all_clients,
+                        all_scids,
                         old_client,
                     )
                     .await
@@ -1118,6 +1121,15 @@ impl Gateway {
             config,
         }
     }
+}
+
+pub(crate) async fn fetch_lightning_node_info(
+    lnrpc: Arc<dyn ILnRpcClient>,
+) -> Result<(PublicKey, String)> {
+    let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
+    let node_pub_key = PublicKey::from_slice(&pub_key)
+        .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
+    Ok((node_pub_key, alias))
 }
 
 async fn wait_for_new_password(
