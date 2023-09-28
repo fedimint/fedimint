@@ -15,13 +15,13 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::task::sleep;
 use fedimint_core::util::{NextOrPending, SafeUrl};
-use fedimint_core::{sats, Amount, OutPoint, TransactionId};
+use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{
     LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
-    LightningOperationMeta, LnPayState, OutgoingLightningPayment, PayType,
+    LightningOperationMeta, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningGenParams;
@@ -976,6 +976,89 @@ async fn test_gateway_shows_balance_for_any_connected_federation() -> anyhow::Re
             assert_eq!(pre_balances[1], 0);
             assert_eq!(post_balances[0], 5_000);
             assert_eq!(post_balances[1], 1_000);
+            Ok(())
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
+    multi_federation_test(
+        LightningNodeType::Lnd,
+        |gateway, rpc, fed1, fed2, _| async move {
+            let id1 = fed1.invite_code().id;
+            let id2 = fed2.invite_code().id;
+
+            let client1 = fed1.new_client().await;
+            let client2 = fed2.new_client().await;
+
+            connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
+            send_msats_to_gateway(&gateway, id1, 10_000).await;
+            send_msats_to_gateway(&gateway, id2, 10_000).await;
+
+            // Check gateway balances before facilitating direct swap between federations
+            let pre_balances = get_balances(&rpc, &[id1, id2]).await;
+            assert_eq!(pre_balances[0], 10_000);
+            assert_eq!(pre_balances[1], 10_000);
+
+            let deposit_amt = msats(5_000);
+            let (_, outpoint) = client1.print_money(deposit_amt).await?;
+            client1.receive_money(outpoint).await?;
+            assert_eq!(client1.get_balance().await, deposit_amt);
+
+            // User creates invoice in federation 2
+            let invoice_amt = msats(2_500);
+            let (receive_op, invoice) = client2
+                .create_bolt11_invoice(
+                    invoice_amt,
+                    "description".into(),
+                    None,
+                    "test gw swap between federations",
+                )
+                .await?;
+            let mut receive_sub = client2
+                .subscribe_ln_receive(receive_op)
+                .await?
+                .into_stream();
+
+            // A client pays invoice in federation 1
+            let OutgoingLightningPayment {
+                payment_type,
+                contract_id: _,
+                fee,
+            } = client1.pay_bolt11_invoice(invoice.clone()).await?;
+            match payment_type {
+                PayType::Lightning(pay_op) => {
+                    let mut pay_sub = client1.subscribe_ln_pay(pay_op).await?.into_stream();
+                    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+                    let funded = pay_sub.ok().await?;
+                    assert_matches!(funded, LnPayState::Funded);
+                    assert_eq!(client1.get_balance().await, deposit_amt - invoice_amt - fee);
+                }
+                _ => panic!("Expected Lightning payment!"),
+            }
+
+            // A client receives cash via swap in federation 2
+            assert_eq!(receive_sub.ok().await?, LnReceiveState::Created);
+            let waiting_payment = receive_sub.ok().await?;
+            assert_matches!(waiting_payment, LnReceiveState::WaitingForPayment { .. });
+            let funded = receive_sub.ok().await?;
+            assert_matches!(funded, LnReceiveState::Funded);
+            let waiting_funds = receive_sub.ok().await?;
+            assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds { .. });
+            let claimed = receive_sub.ok().await?;
+            assert_matches!(claimed, LnReceiveState::Claimed);
+            assert_eq!(client2.get_balance().await, invoice_amt);
+
+            // Check gateway balances after facilitating direct swap between federations
+            let post_balances = get_balances(&rpc, &[id1, id2]).await;
+            assert_eq!(
+                post_balances[0],
+                pre_balances[0] + (invoice_amt + fee).msats
+            );
+            assert_eq!(post_balances[1], pre_balances[1] - invoice_amt.msats);
+
             Ok(())
         },
     )
