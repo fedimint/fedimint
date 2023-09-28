@@ -14,6 +14,7 @@ use fedimint_dummy_common::DummyOutput;
 use fedimint_dummy_server::DummyGen;
 use fedimint_testing::fixtures::Fixtures;
 use secp256k1::Secp256k1;
+use tracing::debug;
 
 fn fixtures() -> Fixtures {
     Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default())
@@ -76,10 +77,19 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
     // "Balance sheet of the fed has gone negative, this should never happen!"
     if let Ok(result @ (_, outpoint)) = client.print_liability(sats(1000)).await {
         match client.receive_money(outpoint).await {
-            Ok(()) => bail!("Should have failed but was able to receive money, result was {result:?}"),
-            Err(e) => bail!("Should have failed but at least we didn't receive money, result was {result:?} and receive_money failed with {e:?}"),
+            Ok(()) => {
+                bail!("Should have failed but was able to receive money, result was {result:?}")
+            }
+            Err(e) => {
+                // The federation panics processing the consensus outcome, not on accepting
+                // the transaction, so although print_liability may succeed the receive_money
+                // should always fail
+                debug!("Failed to receive money, this is expected: {e}");
+            }
         }
-    };
+    } else {
+        debug!("Failed to print liability, this is good")
+    }
 
     Ok(())
 }
