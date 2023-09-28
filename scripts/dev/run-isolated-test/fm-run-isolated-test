@@ -15,13 +15,6 @@ echo "## START: $test_name"
 
 export FM_TEST_NAME="$test_name"
 
-# We rely on `unshare` to run all tests in separate network namespaces,
-# Not possible on MacOS though
-if [ "$(uname -s)" == "Darwin" ]; then
-    >&2 echo "MacOS hack: no-op run-in-namespace isolation"
-    "$@" 2>&1 | ts -s
-else
-    unshare -rn bash -c "ip link set lo up && exec unshare --user $*" 2>&1 | ts -s
-fi
+"$@" 2>&1 | ts -s
 
 echo "## COMPLETE: $test_name"
