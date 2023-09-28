@@ -1104,15 +1104,35 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Spins up bitcoind, cln, lnd, electrs, esplora, and opens a channel
+    /// between the two lightning nodes
     ExternalDaemons,
+    /// Spins up bitcoind, cln w/ gateway, lnd w/ gateway, a faucet, electrs,
+    /// esplora, and a federation sized from FM_FED_SIZE it opens LN channel
+    /// between the two nodes. it connects the gateways to the federation.
+    /// it finally switches to use the CLN gateway using the fedimint-cli
     DevFed,
+    /// Runs bitcoind, spins up FM_FED_SIZE worth of fedimints
     RunUi,
+    /// `devfed` then checks the average latency of reissuing ecash, LN receive,
+    /// and LN send
     LatencyTests,
+    /// `devfed` then kills and restarts most of the Guardian nodes in a 4 node
+    /// fedimint
     ReconnectTest,
+    /// `devfed` then tests a bunch of the fedimint-cli commands
     CliTests,
+    /// `devfed` then calls binary `fedimint-load-test-tool`. See
+    /// `LoadTestArgs`.
     LoadTestToolTest,
+    /// `devfed` then pegin CLN & LND nodes and gateways. Kill the LN nodes,
+    /// restart them, rejjoin fedimint and test payments still work
     LightningReconnectTest,
+    /// `devfed` then reboot gateway daemon for both CLN and LND. Test
+    /// afterward.
     GatewayRebootTest,
+    /// Rpc commands to the long running devimint instance. Could be entry point
+    /// for devimint as a cli
     #[clap(flatten)]
     Rpc(RpcCmd),
 }
@@ -1173,7 +1193,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
             let server_addr = &vars.FM_BIND_API;
 
-            poll("waiting for ui/api startup", || async {
+            poll("waiting for api startup", || async {
                 Ok(TcpStream::connect(server_addr).await.is_ok())
             })
             .await?;
