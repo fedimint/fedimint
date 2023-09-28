@@ -722,6 +722,20 @@
 <a href="#722" id="722">722</a>
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>client_db;
@@ -1192,7 +1206,7 @@
         <span class="kw">let </span>rpc_config = <span class="self">self
             </span>.<span class="number">0
             </span>.clone()
-            .unwrap_or(args.cfg().default_bitcoin_rpc.clone());
+            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
         <span class="prelude-val">Ok</span>(WalletClientModule {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -1281,6 +1295,20 @@
 <span class="kw">impl </span>Context <span class="kw">for </span>WalletClientContext {}
 
 <span class="kw">impl </span>WalletClientModule {
+    <span class="kw">fn </span>get_rpc_config(cfg: <span class="kw-2">&amp;</span>WalletClientConfig) -&gt; BitcoinRpcConfig {
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(rpc_config) = BitcoinRpcConfig::from_env_vars() {
+            <span class="comment">// TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
+            // updated to 0.30
+            </span><span class="kw">if </span>rpc_config.kind != <span class="string">&quot;bitcoind&quot; </span>{
+                rpc_config
+            } <span class="kw">else </span>{
+                cfg.default_bitcoin_rpc.clone()
+            }
+        } <span class="kw">else </span>{
+            cfg.default_bitcoin_rpc.clone()
+        }
+    }
+
     <span class="kw">pub fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
         <span class="self">self</span>.cfg.network
     }
