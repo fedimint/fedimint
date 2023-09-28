@@ -42,6 +42,7 @@ use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::backup::ClientBackupSnapshot;
+use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
@@ -333,14 +334,9 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
 
-    async fn fetch_epoch_history(
-        &self,
-        epoch: u64,
-        epoch_pk: PublicKey,
-        decoders: &ModuleDecoderRegistry,
-    ) -> FederationResult<SignedEpochOutcome>;
+    async fn get_block(&self, block_index: u64) -> FederationResult<Option<Block>>;
 
-    async fn fetch_epoch_count(&self) -> FederationResult<u64>;
+    async fn get_block_count(&self) -> FederationResult<u64>;
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
 
@@ -408,58 +404,13 @@ where
         .await
     }
 
-    async fn fetch_epoch_history(
-        &self,
-        epoch: u64,
-        epoch_pk: PublicKey,
-        decoders: &ModuleDecoderRegistry,
-    ) -> FederationResult<SignedEpochOutcome> {
-        // TODO: make this function avoid clone
-        let decoders = decoders.clone();
-
-        struct ValidHistoryWrapper {
-            decoders: ModuleDecoderRegistry,
-            strategy: VerifiableResponse<SignedEpochOutcome>,
-        }
-
-        impl QueryStrategy<SerdeEpochHistory, SignedEpochOutcome> for ValidHistoryWrapper {
-            fn process(
-                &mut self,
-                peer: PeerId,
-                result: PeerResult<SerdeEpochHistory>,
-            ) -> QueryStep<SignedEpochOutcome> {
-                let response = result.and_then(|hist| {
-                    hist.try_into_inner(&self.decoders)
-                        .map_err(|e| PeerError::Rpc(jsonrpsee_core::Error::Custom(e.to_string())))
-                });
-                match self.strategy.process(peer, response) {
-                    QueryStep::Retry(r) => QueryStep::Retry(r),
-                    QueryStep::Continue => QueryStep::Continue,
-                    QueryStep::Success(res) => QueryStep::Success(res),
-                    QueryStep::Failure { general, peers } => QueryStep::Failure { general, peers },
-                }
-            }
-        }
-
-        let qs = ValidHistoryWrapper {
-            decoders,
-            strategy: VerifiableResponse::new(
-                move |epoch: &SignedEpochOutcome| epoch.verify_sig(&epoch_pk).is_ok(),
-                true,
-                self.all_peers().total(),
-            ),
-        };
-
-        self.request_with_strategy::<SerdeEpochHistory, _>(
-            qs,
-            "fetch_epoch_history".to_owned(),
-            ApiRequestErased::new(epoch),
-        )
-        .await
+    async fn get_block(&self, block_index: u64) -> FederationResult<Option<Block>> {
+        self.request_current_consensus("get_block".to_string(), ApiRequestErased::new(block_index))
+            .await
     }
 
-    async fn fetch_epoch_count(&self) -> FederationResult<u64> {
-        self.request_current_consensus("fetch_epoch_count".to_owned(), ApiRequestErased::default())
+    async fn get_block_count(&self) -> FederationResult<u64> {
+        self.request_current_consensus("get_block_count".to_owned(), ApiRequestErased::default())
             .await
     }
 

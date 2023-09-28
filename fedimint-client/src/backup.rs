@@ -64,7 +64,7 @@ impl Metadata {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct ClientBackup {
     /// Epoch count taken right before taking the backup
-    epoch_count: u64,
+    fedimint_block_count: u64,
     /// Application metadata
     metadata: Metadata,
     /// Module specific-backup (if supported)
@@ -138,7 +138,7 @@ impl EncryptedClientBackup {
 impl Client {
     /// Create a backup, include provided `metadata`
     pub async fn create_backup(&self, metadata: Metadata) -> anyhow::Result<ClientBackup> {
-        let epoch_count = self.inner.api.fetch_epoch_count().await?;
+        let fedimint_block_count = self.inner.api.get_block_count().await?;
         let mut modules = BTreeMap::new();
         let mut dbtx = self.db().begin_transaction().await;
         for (id, kind, module) in self.inner.modules.iter_modules() {
@@ -165,7 +165,7 @@ impl Client {
         Ok(ClientBackup {
             metadata,
             modules,
-            epoch_count,
+            fedimint_block_count,
         })
     }
 
@@ -244,7 +244,7 @@ impl Client {
         let backup = if let Some(backup) = self.download_backup_from_federation().await? {
             info!(
                 target: LOG_CLIENT_RECOVERY,
-                epoch = backup.epoch_count,
+                epoch = backup.fedimint_block_count,
                 "Found backup"
             );
             Some(backup)
@@ -320,7 +320,7 @@ impl Client {
             responses.len()
         );
         // Use the newest (highest epoch)
-        responses.sort_by_key(|backup| Reverse(backup.epoch_count));
+        responses.sort_by_key(|backup| Reverse(backup.fedimint_block_count));
 
         Ok(responses.into_iter().next())
     }

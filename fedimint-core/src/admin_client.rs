@@ -103,18 +103,6 @@ impl WsAdminClient {
         .await
     }
 
-    /// Delegates to `fetch_epoch_history`
-    pub async fn fetch_last_epoch_history(
-        &self,
-        epoch_pk: PublicKey,
-        decoders: &ModuleDecoderRegistry,
-    ) -> FederationResult<SignedEpochOutcome> {
-        let epoch = self.inner.fetch_epoch_count().await? - 1;
-        self.inner
-            .fetch_epoch_history(epoch, epoch_pk, decoders)
-            .await
-    }
-
     /// Gets the default config gen params which can be configured by the
     /// leader, gives them a template to modify
     pub async fn get_default_config_gen_params(

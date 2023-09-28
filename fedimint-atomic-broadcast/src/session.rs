@@ -4,6 +4,7 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use async_channel::{Receiver, Sender};
 use bitcoin_hashes::Hash;
+use fedimint_core::block::{consensus_hash_sha256, Block, OrderedItem, SignedBlock};
 use fedimint_core::task::{sleep, spawn};
 use tokio::sync::{mpsc, oneshot, watch};
 
@@ -13,10 +14,7 @@ use crate::finalization_handler::FinalizationHandler;
 use crate::keychain::Keychain;
 use crate::network::Network;
 use crate::spawner::Spawner;
-use crate::{
-    consensus_hash_sha256, db, Block, Decision, Message, OrderedItem, Recipient, SignedBlock,
-};
-
+use crate::{db, Decision, Message, Recipient};
 /// this function completes a session with the following steps:
 /// - set up the aleph bft session
 /// - periodically request the corresponding signed block from peers

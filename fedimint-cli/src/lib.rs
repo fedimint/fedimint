@@ -370,12 +370,6 @@ enum Command {
 
 #[derive(Debug, Clone, Subcommand)]
 enum AdminCmd {
-    /// Gets the last epoch
-    LastEpoch,
-
-    /// Force processing an epoch
-    ForceEpoch { hex_outcome: String },
-
     /// Show the status according to the `status` endpoint
     Status,
 
@@ -431,8 +425,8 @@ Examples:
         peer_id: PeerId,
     },
 
-    /// Gets the current epoch count
-    EpochCount,
+    /// Gets the current fedimint AlephBFT block count
+    FedimintBlockCount,
 
     ConfigDecrypt {
         /// Encrypted config file
@@ -611,41 +605,6 @@ impl FedimintCli {
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::LastEpoch) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-                let cfg = user.get_config().clone();
-
-                let decoders = cli.load_decoders(&cfg, &self.module_inits);
-                let client = cli.admin_client(&cfg)?;
-                let last_epoch = client
-                    .fetch_last_epoch_history(cfg.global.epoch_pk, &decoders)
-                    .await?;
-
-                let hex_outcome = last_epoch.consensus_encode_to_hex().map_err_cli_io()?;
-                Ok(CliOutput::LastEpoch { hex_outcome })
-            }
-            Command::Admin(AdminCmd::ForceEpoch { hex_outcome }) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-                let cfg = user.get_config();
-
-                let decoders = cli.load_decoders(cfg, &self.module_inits);
-                let outcome: SignedEpochOutcome = Decodable::consensus_decode_hex(
-                    &hex_outcome,
-                    &decoders,
-                )
-                .map_err_cli_msg(CliErrorKind::SerializationError, "failed to decode outcome")?;
-                let client = cli.admin_client(cfg)?;
-                client
-                    .force_process_epoch(SerdeEpochHistory::from(&outcome), cli.auth()?)
-                    .await?;
-                Ok(CliOutput::ForceEpoch)
-            }
             Command::Admin(AdminCmd::SignalUpgrade) => {
                 let user = cli
                     .build_client_ng(&self.module_inits, None)
@@ -738,12 +697,12 @@ impl FedimintCli {
                     peer_id,
                 },
             }),
-            Command::Dev(DevCmd::EpochCount) => {
+            Command::Dev(DevCmd::FedimintBlockCount) => {
                 let count = cli
                     .build_client_ng(&self.module_inits, None)
                     .await?
                     .api()
-                    .fetch_epoch_count()
+                    .get_block_count()
                     .await?;
                 Ok(CliOutput::EpochCount { count })
             }

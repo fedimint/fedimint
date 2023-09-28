@@ -7,12 +7,13 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_atomic_broadcast::{Block, SignedBlock, SignedBlockKey, SignedBlockPrefix};
+use fedimint_atomic_broadcast::{SignedBlockKey, SignedBlockPrefix};
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus,
     ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::ClientBackupKey;
+use fedimint_core::block::{Block, SignedBlock};
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};

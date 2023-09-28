@@ -1,10 +1,12 @@
 use std::cmp::{self, max};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
+use std::io::Cursor;
 use std::ops::Range;
 
 use fedimint_client::sm::{OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::block::Block;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
 use fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -167,7 +169,6 @@ impl MintRestoreInProgressState {
                     .make_progress(
                         global_context.api().clone(),
                         global_context.decoders().clone(),
-                        global_context.client_config().global.epoch_pk,
                         secret,
                     )
                     .await
@@ -267,37 +268,27 @@ impl MintRestoreInProgressState {
         mut self,
         api: DynGlobalApi,
         decoders: ModuleDecoderRegistry,
-        epoch_pk: threshold_crypto::PublicKey,
         secret: DerivableSecret,
     ) -> Self {
         assert_eq!(secret.level(), 2);
-        let epoch_range = self.next_epoch
+        let block_range = self.next_epoch
             ..cmp::min(
                 self.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_EPOCHS),
                 self.end_epoch,
             );
         debug!(
             target: LOG_CLIENT_RECOVERY_MINT,
-            ?epoch_range,
+            ?block_range,
             "Processing epochs"
         );
-        let mut epoch_stream = Self::fetch_epochs_stream(api, epoch_pk, decoders, epoch_range);
-        while let Some((epoch, epoch_history)) = epoch_stream.next().await {
-            assert_eq!(epoch_history.outcome.epoch, epoch);
-            self.next_epoch = epoch + 1;
+        let mut block_stream = Self::fetch_block_stream(api, decoders, block_range);
+        while let Some((block_idx, epoch_history)) = block_stream.next().await {
+            self.next_epoch = block_idx + 1;
 
-            info!(target: LOG_CLIENT_RECOVERY_MINT, epoch, "Processing epoch");
+            info!(target: LOG_CLIENT_RECOVERY_MINT, block_idx, "Processing epoch");
             let mut processed_txs = Default::default();
-            for (peer_id, items) in &epoch_history.outcome.items {
-                for item in items {
-                    self.handle_consensus_item(
-                        *peer_id,
-                        item,
-                        &mut processed_txs,
-                        &epoch_history.outcome.rejected_txs,
-                        &secret,
-                    );
-                }
+            for (peer_id, item) in &epoch_history {
+                self.handle_consensus_item(*peer_id, item, &mut processed_txs, &secret);
             }
         }
         self
@@ -309,29 +300,43 @@ impl MintRestoreInProgressState {
     /// errors via `sender` itself.
     ///
     /// TODO: could be internal to recovery_loop?
-    fn fetch_epochs_stream<'a>(
+    fn fetch_block_stream<'a>(
         api: DynGlobalApi,
-        epoch_pk: threshold_crypto::PublicKey,
         decoders: ModuleDecoderRegistry,
         epoch_range: Range<u64>,
-    ) -> impl futures::Stream<Item = (u64, SignedEpochOutcome)> + 'a {
+    ) -> impl futures::Stream<Item = (u64, Vec<(PeerId, ConsensusItem)>)> + 'a {
         futures::stream::iter(epoch_range)
-            .map(move |epoch| {
+            .map(move |block_idx| {
                 let api = api.clone();
                 let decoders = decoders.clone();
                 Box::pin(async move {
-                    info!(epoch, "Fetching epoch");
-                    (
-                        epoch,
-                        loop {
-                            info!(target: LOG_CLIENT_RECOVERY_MINT, epoch, "Awaiting epoch");
-                            match api.fetch_epoch_history(epoch, epoch_pk, &decoders).await {
-                                Ok(o) => break o,
-                                Err(e) => {
-                                    info!(e = %e, epoch, "Error trying to fetch epoch history");
-                                }
+                    info!(block_idx, "Fetching epoch");
+
+                    let block = loop {
+                        info!(target: LOG_CLIENT_RECOVERY_MINT, block_idx, "Awaiting epoch");
+                        match api.get_block(block_idx).await {
+                            Ok(Some(block)) => break block,
+                            Ok(None) => {
+                                // TODO: better error handling, but endless looping wouldn't be good either
+                                panic!("We requested a block that doesn't exist, this should not happen");
                             }
-                        },
+                            Err(e) => {
+                                info!(e = %e, block_idx, "Error trying to fetch epoch history");
+                            }
+                        }
+                    };
+
+                    assert_eq!(block_idx, block.index);
+                    let consensus_items = block.items.into_iter().map(|item| {
+                        let mut item_bytes_cursor = Cursor::new(item.item);
+                        let ci: ConsensusItem = Decodable::consensus_decode(&mut item_bytes_cursor, &decoders).expect("Malicious federation returned non-decodable result");
+                        // FIXME: assert cursor fully consumed
+                        (item.peer_id, ci)
+                    }).collect::<Vec<_>>();
+
+                    (
+                        block_idx,
+                        consensus_items,
                     )
                 })
             })
@@ -675,7 +680,6 @@ impl MintRestoreInProgressState {
         peer_id: PeerId,
         item: &ConsensusItem,
         processed_txs: &mut HashSet<TransactionId>,
-        rejected_txs: &BTreeSet<TransactionId>,
         secret: &DerivableSecret,
     ) {
         trace!(
@@ -693,20 +697,6 @@ impl MintRestoreInProgressState {
                     tx_hash = %tx.tx_hash(),
                     "found transaction"
                 );
-
-                if rejected_txs.contains(&txid) {
-                    debug!(
-                        target: LOG_CLIENT_RECOVERY_MINT,
-                        tx_hash = %tx.tx_hash(),
-                        "transaction was rejected"
-                    );
-                    // Do not process invalid transactions.
-                    // Consensus history contains all data proposed by each peer, even invalid (e.g.
-                    // due to double spent) transactions. Precisely to save
-                    // downstream users from having to run the consensus themselves,
-                    // each epoch contains a list of transactions  that turned out to be invalid.
-                    return;
-                }
 
                 if !processed_txs.insert(txid) {
                     // Just like server side consensus, do not attempt to process the same

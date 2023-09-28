@@ -2,11 +2,12 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
+use fedimint_core::block::consensus_hash_sha256;
 use fedimint_core::{BitcoinHash, PeerId};
 use secp256k1_zkp::hashes::sha256;
 use secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
 
-use crate::{consensus_hash_sha256, conversion};
+use crate::conversion;
 
 #[derive(Clone, Debug)]
 pub struct Keychain {

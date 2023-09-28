@@ -49,6 +49,9 @@ pub mod transaction;
 pub mod txoproof;
 pub mod util;
 
+/// Atomic BFT unit containing consensus items
+pub mod block;
+
 hash_newtype!(
     TransactionId,
     Sha256,

@@ -2,9 +2,9 @@ use std::collections::BTreeSet;
 
 use aleph_bft::Keychain as KeychainTrait;
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_core::block::consensus_hash_sha256;
 use tokio::sync::watch;
 
-use crate::consensus_hash_sha256;
 use crate::keychain::Keychain;
 
 type ConsensusItem = Vec<u8>;

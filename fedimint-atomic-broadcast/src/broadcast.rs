@@ -1,3 +1,4 @@
+use fedimint_core::block::{OrderedItem, SignedBlock};
 use fedimint_core::db::Database;
 use fedimint_core::task::spawn;
 use fedimint_core::PeerId;
@@ -5,7 +6,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::keychain::Keychain;
-use crate::{db, session, Decision, Message, OrderedItem, Recipient, SignedBlock};
+use crate::{db, session, Decision, Message, Recipient};
 
 pub struct AtomicBroadcast {
     keychain: Keychain,
