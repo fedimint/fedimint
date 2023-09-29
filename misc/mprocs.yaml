@@ -1,4 +1,3 @@
-server: 127.0.0.1:4050
 procs:
   user:
     shell: bash --init-file scripts/dev/mprocs/user-shell.sh
