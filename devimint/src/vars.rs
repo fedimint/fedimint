@@ -103,7 +103,8 @@ declare_vars! {
         FM_PORT_LND_REST: u16 = port_alloc(1)?;
         FM_PORT_ELECTRS: u16 = port_alloc(1)?;
         FM_PORT_ESPLORA: u16 = port_alloc(1)?;
-        FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((2 * fed_size).try_into().unwrap())?;
+        // 3 = p2p + api + metrics
+        FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((3 * fed_size).try_into().unwrap())?;
         FM_PORT_GW_CLN: u16 = port_alloc(1)?;
         FM_PORT_GW_LND: u16 = port_alloc(1)?;
         FM_PORT_CLN_EXTENSION: u16 = port_alloc(1)?;
@@ -153,17 +154,13 @@ impl Global {
     }
 }
 
-// We allow ranges of 10 ports for each fedimintd / dkg instance starting from
-// 18173. Each port needed is incremented by 1 within this range.
-//
-// * `id` - ID of the server. Used to calculate port numbers.
 declare_vars! {
     Fedimintd = (globals: &Global, params: ConfigGenParams) => {
         FM_BIND_P2P: String = params.local.p2p_bind.to_string();
         FM_BIND_API: String = params.local.api_bind.to_string();
         FM_P2P_URL: String = params.consensus.peers[&params.local.our_id].p2p_url.to_string();
         FM_API_URL: String = params.consensus.peers[&params.local.our_id].api_url.to_string();
-        FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", 3510 + params.local.our_id.to_usize());
+        FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", globals.FM_PORT_FEDIMINTD_BASE as usize + 2 * globals.FM_FED_SIZE + params.local.our_id.to_usize());
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("server-{}", params.local.our_id.to_usize()))).await?;
     }
 }
