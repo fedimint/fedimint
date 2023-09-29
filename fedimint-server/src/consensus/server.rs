@@ -278,8 +278,10 @@ impl ConsensusServer {
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         self.confirm_consensus_config_hash().await?;
 
+        let mut session_index = 0;
+
         while !task_handle.is_shutting_down() {
-            let mut ordered_item_receiver = self.atomic_broadcast.run_session(0).await;
+            let mut ordered_item_receiver = self.atomic_broadcast.run_session(session_index).await;
 
             while !task_handle.is_shutting_down() {
                 let ordered_item = ordered_item_receiver
@@ -298,6 +300,8 @@ impl ConsensusServer {
             }
 
             info!(target: LOG_CONSENSUS, "Session completed");
+
+            session_index += 1;
         }
 
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
