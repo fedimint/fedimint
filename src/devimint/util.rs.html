@@ -425,6 +425,12 @@
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
 <a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -653,13 +659,19 @@
         <span class="kw">let </span>log = OpenOptions::new()
             .append(<span class="bool-val">true</span>)
             .create(<span class="bool-val">true</span>)
-            .open(path)
-            .<span class="kw">await</span><span class="question-mark">?
+            .open(<span class="kw-2">&amp;</span>path)
+            .<span class="kw">await
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;path: {} cmd: {}&quot;</span>, path, name))<span class="question-mark">?
             </span>.into_std()
             .<span class="kw">await</span>;
         <span class="self">self</span>.cmd.stdout(log.try_clone()<span class="question-mark">?</span>);
         <span class="self">self</span>.cmd.stderr(log);
-        <span class="kw">let </span>status = <span class="self">self</span>.cmd.spawn()<span class="question-mark">?</span>.wait().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>status = <span class="self">self
+            </span>.cmd
+            .spawn()
+            .with_context(|| <span class="macro">format!</span>(<span class="string">&quot;cmd: {name}&quot;</span>))<span class="question-mark">?
+            </span>.wait()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!status.success() {
             <span class="macro">bail!</span>(<span class="string">&quot;{}&quot;</span>, status);
         }
