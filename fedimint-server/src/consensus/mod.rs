@@ -77,15 +77,25 @@ impl FedimintConsensus {
         self.process_consensus_item_with_db_transaction(&mut dbtx, consensus_item, peer_id)
             .await?;
 
-        dbtx.commit_tx_result()
-            .await
-            .expect("Committing consensus epoch failed");
+        let mut audit = Audit::default();
 
-        let audit = self.audit().await;
+        for (module_instance_id, _, module) in self.modules.iter_modules() {
+            module
+                .audit(
+                    &mut dbtx.with_module_prefix(module_instance_id),
+                    &mut audit,
+                    module_instance_id,
+                )
+                .await
+        }
 
         if audit.net_assets().milli_sat < 0 {
             panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
         }
+
+        dbtx.commit_tx_result()
+            .await
+            .expect("Committing consensus epoch failed");
 
         Ok(())
     }
@@ -280,22 +290,6 @@ impl FedimintConsensus {
             .collect();
 
         VerificationCaches { caches }
-    }
-
-    pub async fn audit(&self) -> Audit {
-        let _timing /* logs on drop */ = timing::TimeReporter::new("audit");
-        let mut dbtx = self.db.begin_transaction().await;
-        let mut audit = Audit::default();
-        for (module_instance_id, _, module) in self.modules.iter_modules() {
-            module
-                .audit(
-                    &mut dbtx.with_module_prefix(module_instance_id),
-                    &mut audit,
-                    module_instance_id,
-                )
-                .await
-        }
-        audit
     }
 }
 
