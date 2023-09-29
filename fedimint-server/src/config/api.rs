@@ -775,17 +775,6 @@ mod tests {
             )
         }
 
-        /// Helper function to shutdown consensus with an upgrade signal
-        async fn retry_signal_upgrade(&self) {
-            while self.client.signal_upgrade(self.auth.clone()).await.is_err() {
-                sleep(Duration::from_millis(1000)).await;
-                tracing::info!(
-                    target: fedimint_logging::LOG_TEST,
-                    "Test retrying upgrade signal"
-                )
-            }
-        }
-
         /// Helper function using generated urls
         async fn set_connections(&self, leader: &Option<SafeUrl>) -> FederationResult<()> {
             self.client

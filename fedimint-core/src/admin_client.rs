@@ -79,13 +79,6 @@ impl WsAdminClient {
             .await
     }
 
-    /// Sends a signal to consensus that we are ready to shutdown the federation
-    /// and upgrade
-    pub async fn signal_upgrade(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_auth("upgrade", ApiRequestErased::default().with_auth(auth))
-            .await
-    }
-
     /// Sends a signal to consensus that we want to force running an epoch
     /// outcome
     pub async fn force_process_epoch(

@@ -79,8 +79,6 @@ enum CliOutput {
         transaction: String,
     },
 
-    SignalUpgrade,
-
     EpochCount {
         count: u64,
     },
@@ -341,9 +339,6 @@ enum AdminCmd {
     /// Show the status according to the `status` endpoint
     Status,
 
-    /// Signal a consensus upgrade
-    SignalUpgrade,
-
     /// Show an audit across all modules
     Audit,
 }
@@ -572,17 +567,6 @@ impl FedimintCli {
                     serde_json::to_value(status)
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "invalid response")?,
                 ))
-            }
-            Command::Admin(AdminCmd::SignalUpgrade) => {
-                let user = cli
-                    .build_client_ng(&self.module_inits, None)
-                    .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
-
-                cli.admin_client(user.get_config())?
-                    .signal_upgrade(cli.auth()?)
-                    .await?;
-                Ok(CliOutput::SignalUpgrade)
             }
             Command::Dev(DevCmd::Api {
                 method,
