@@ -226,13 +226,19 @@ impl Command {
         let log = OpenOptions::new()
             .append(true)
             .create(true)
-            .open(path)
-            .await?
+            .open(&path)
+            .await
+            .with_context(|| format!("path: {} cmd: {}", path, name))?
             .into_std()
             .await;
         self.cmd.stdout(log.try_clone()?);
         self.cmd.stderr(log);
-        let status = self.cmd.spawn()?.wait().await?;
+        let status = self
+            .cmd
+            .spawn()
+            .with_context(|| format!("cmd: {name}"))?
+            .wait()
+            .await?;
         if !status.success() {
             bail!("{}", status);
         }
