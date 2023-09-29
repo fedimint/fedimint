@@ -185,6 +185,7 @@ curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/tls-
 ```
 
 > At any point during the setup if you run into issues, you can run this command to wipe docker for each service and start over again with the install script:
+(Note: you can use the `docker-compose` command or on recent docker versions use `docker compose` instead)
 
 ```bash
 # for fedimintd
