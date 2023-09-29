@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+test_name="$1"
+shift 1
+
+if [ -z "$test_name" ]; then
+    >&2 "error: no test name"
+    exit 1
+fi
+
+set -eo pipefail # pipefail must be set manually again
+trap 'echo "## FAILED: $test_name"' ERR
+
+echo "## START: $test_name"
+
+export FM_TEST_NAME="$test_name"
+
+"$@" 2>&1 | ts -s
+
+echo "## COMPLETE: $test_name"

@@ -1987,7 +1987,6 @@ dependencies = [
  "cln-rpc",
  "fedimint-bitcoind",
  "fedimint-client",
- "fedimint-client-legacy",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-portalloc",

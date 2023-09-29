@@ -27,52 +27,52 @@ cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targe
 cargo test --no-run ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 
 function reconnect_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/reconnect-test.sh
 }
 export -f reconnect_test
 
 function lightning_reconnect_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/lightning-reconnect-test.sh
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/lightning-reconnect-test.sh
 }
 export -f lightning_reconnect_test
 
 function latency_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh
 }
 export -f latency_test
 
 function devimint_cli_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
 export -f devimint_cli_test
 
 function load_test_tool_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/load-test-tool-test.sh
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/load-test-tool-test.sh
 }
 export -f load_test_tool_test
 
 function backend_test_bitcoind() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/backend-test.sh
+  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/backend-test.sh
 }
 export -f backend_test_bitcoind
 
 function backend_test_electrs() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/backend-test.sh
+  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/backend-test.sh
 }
 export -f backend_test_electrs
 
 function backend_test_esplora() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/backend-test.sh
+  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/backend-test.sh
 }
 export -f backend_test_esplora
 
 function wasm_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/wasm-test.sh
+  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/wasm-test.sh
 }
 export -f wasm_test
 
 function always_success_test() {
-  fm-run-isolated-test "${FUNCNAME[0]}" ./scripts/tests/always-success-test.sh
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/always-success-test.sh
 }
 export -f always_success_test
 
@@ -88,7 +88,7 @@ tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT
 joblog="$tmpdir/joblog"
 
-PATH="$(pwd)/scripts/dev/run-isolated-test/:$PATH"
+PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 
 >&2 echo "## Starting all tests in parallel..."
 # --load to keep the load under-control, especially during target dir extraction
