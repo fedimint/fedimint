@@ -1001,6 +1001,11 @@ mod tests {
         // start consensus
         for peer in all_peers.iter() {
             peer.client.start_consensus(peer.auth.clone()).await.ok();
+        }
+
+        sleep(Duration::from_secs(5)).await;
+
+        for peer in all_peers.iter() {
             assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
         }
     }
