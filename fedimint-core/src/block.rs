@@ -83,7 +83,7 @@ impl<'de> Deserialize<'de> for SchnorrSignature {
 /// signature for its header created by the federation. The signed blocks allow
 /// clients and recovering guardians to verify the federations consensus
 /// history. After a signed block has been created it is stored in the database.
-#[derive(Clone, Debug, Encodable, Decodable)]
+#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize, Eq, PartialEq)]
 pub struct SignedBlock {
     pub block: Block,
     pub signatures: std::collections::BTreeMap<PeerId, SchnorrSignature>,

@@ -607,8 +607,8 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             "get_block",
-            async |fedimint: &ConsensusApi, _context, index: u64| -> Option<Block> {
-                Ok(fedimint.get_block(index).await.map(|sb| sb.block))
+            async |fedimint: &ConsensusApi, _context, index: u64| -> Option<SignedBlock> {
+                Ok(fedimint.get_block(index).await)
             }
         },
         api_endpoint! {

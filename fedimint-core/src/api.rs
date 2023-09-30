@@ -41,7 +41,7 @@ use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::backup::ClientBackupSnapshot;
-use crate::block::Block;
+use crate::block::SignedBlock;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
@@ -332,7 +332,7 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
 
-    async fn get_block(&self, block_index: u64) -> FederationResult<Option<Block>>;
+    async fn get_block(&self, block_index: u64) -> FederationResult<Option<SignedBlock>>;
 
     async fn get_block_count(&self) -> FederationResult<u64>;
 
@@ -402,7 +402,7 @@ where
         .await
     }
 
-    async fn get_block(&self, block_index: u64) -> FederationResult<Option<Block>> {
+    async fn get_block(&self, block_index: u64) -> FederationResult<Option<SignedBlock>> {
         self.request_current_consensus("get_block".to_string(), ApiRequestErased::new(block_index))
             .await
     }

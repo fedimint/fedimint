@@ -314,7 +314,7 @@ impl MintRestoreInProgressState {
                     let block = loop {
                         info!(target: LOG_CLIENT_RECOVERY_MINT, block_idx, "Awaiting epoch");
                         match api.get_block(block_idx).await {
-                            Ok(Some(block)) => break block,
+                            Ok(Some(signed_block)) => break signed_block.block,
                             Ok(None) => {
                                 // TODO: better error handling, but endless looping wouldn't be good either
                                 panic!("We requested a block that doesn't exist, this should not happen");
