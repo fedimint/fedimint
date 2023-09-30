@@ -15,6 +15,8 @@ pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
+    SessionIndex = 0x00,
+    AcceptedIndex = 0x01,
     AcceptedTransaction = 0x02,
     SignedBlock = 0x04,
     AlephUnits = 0x05,
@@ -29,6 +31,29 @@ impl std::fmt::Display for DbKeyPrefix {
         write!(f, "{self:?}")
     }
 }
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct SessionIndexKey;
+
+impl_db_record!(
+    key = SessionIndexKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::SessionIndex,
+);
+
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Ord, PartialOrd)]
+pub struct AcceptedIndex(pub u64);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct AcceptedIndexPrefix;
+
+impl_db_record!(
+    key = AcceptedIndex,
+    value = (),
+    db_prefix = DbKeyPrefix::AcceptedIndex,
+);
+
+impl_db_lookup!(key = AcceptedIndex, query_prefix = AcceptedIndexPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct AcceptedTransactionKey(pub TransactionId);
@@ -265,6 +290,8 @@ mod fedimint_migration_tests {
 
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {
+                        DbKeyPrefix::SessionIndex => {},
+                        DbKeyPrefix::AcceptedIndex => {},
                         DbKeyPrefix::AcceptedTransaction => {
                                 let accepted_transactions = dbtx
                                     .find_by_prefix(&AcceptedTransactionKeyPrefix)

@@ -197,6 +197,21 @@ impl<'a> DatabaseDump<'a> {
         });
         for table in filtered_prefixes {
             match table {
+                ConsensusRange::DbKeyPrefix::SessionIndex => {
+                    if let Some(index) = dbtx.get_value(&ConsensusRange::SessionIndexKey).await {
+                        consensus.insert("Client Config Signature".to_string(), Box::new(index));
+                    }
+                }
+                ConsensusRange::DbKeyPrefix::AcceptedIndex => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::AcceptedIndexPrefix,
+                        ConsensusRange::AcceptedIndexKey,
+                        (),
+                        consensus,
+                        "Accepted Index"
+                    );
+                }
                 ConsensusRange::DbKeyPrefix::AcceptedTransaction => {
                     push_db_pair_items_no_serde!(
                         dbtx,

@@ -3,7 +3,7 @@
 pub mod debug;
 pub mod server;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use anyhow::bail;
 use bitcoin_hashes::sha256;
@@ -22,8 +22,8 @@ use tracing::debug;
 
 use crate::config::ServerConfig;
 use crate::db::{
-    AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureShareKey,
-    ClientConfigSignatureSharePrefix,
+    AcceptedIndexPrefix, AcceptedTransactionKey, ClientConfigSignatureKey,
+    ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix, SessionIndexKey,
 };
 use crate::transaction::{Transaction, TransactionError};
 
@@ -57,6 +57,33 @@ impl VerificationCaches {
 impl FedimintConsensus {
     pub fn decoders(&self) -> ModuleDecoderRegistry {
         self.modules.decoder_registry()
+    }
+    pub async fn open_session(&self) -> (u64, BTreeSet<u64>) {
+        let mut dbtx = self.db.begin_transaction().await;
+        let session_index = dbtx.get_value(&SessionIndexKey).await.unwrap_or(0);
+        let accepted_indices = dbtx
+            .find_by_prefix(&AcceptedIndexPrefix)
+            .await
+            .map(|(key, _)| key.0)
+            .collect()
+            .await;
+
+        (session_index, accepted_indices)
+    }
+
+    pub async fn complete_session(&self) {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        let new_session_index = dbtx.get_value(&SessionIndexKey).await.unwrap_or(0) + 1;
+
+        dbtx.insert_entry(&SessionIndexKey, &new_session_index)
+            .await;
+
+        dbtx.remove_by_prefix(&AcceptedIndexPrefix).await;
+
+        dbtx.commit_tx_result()
+            .await
+            .expect("This is the only place we write to those keys");
     }
 
     pub async fn process_consensus_item(

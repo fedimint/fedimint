@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,13 +13,16 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::PeerId;
+use futures::StreamExt;
 use tokio::select;
 use tracing::{debug, info, warn};
 
 use crate::atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
-use crate::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
+use crate::db::{
+    get_global_database_migrations, AcceptedIndexPrefix, SessionIndexKey, GLOBAL_DATABASE_VERSION,
+};
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
 use crate::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
@@ -278,9 +281,9 @@ impl ConsensusServer {
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         self.confirm_consensus_config_hash().await?;
 
-        let mut session_index = 0;
-
         while !task_handle.is_shutting_down() {
+            let (session_index, accepted_indices) = self.consensus.open_session().await;
+
             let mut ordered_item_receiver = self.atomic_broadcast.run_session(session_index).await;
 
             while !task_handle.is_shutting_down() {
@@ -304,9 +307,9 @@ impl ConsensusServer {
                 };
             }
 
-            info!(target: LOG_CONSENSUS, "Session completed");
+            self.consensus.complete_session().await;
 
-            session_index += 1;
+            info!(target: LOG_CONSENSUS, "Session completed");
         }
 
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
