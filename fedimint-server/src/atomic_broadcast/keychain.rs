@@ -7,7 +7,7 @@ use fedimint_core::{BitcoinHash, PeerId};
 use secp256k1_zkp::hashes::sha256;
 use secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
 
-use crate::conversion;
+use super::conversion;
 
 #[derive(Clone, Debug)]
 pub struct Keychain {

@@ -33,6 +33,8 @@ use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 use crate::net::peers::ReconnectPeerConnections;
 
+pub mod atomic_broadcast;
+
 /// The actual implementation of consensus
 pub mod consensus;
 

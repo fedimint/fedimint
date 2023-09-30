@@ -164,7 +164,7 @@ fn open_temp_db_and_copy(
 }
 
 /// Helper function that recursively copies all of the contents from
-/// `src` to `dst`.
+/// `atomic_broadcast` to `dst`.
 pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
     // Create the destination directory if it doesn't exist
     fs::create_dir_all(dst)?;

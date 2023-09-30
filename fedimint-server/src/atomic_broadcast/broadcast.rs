@@ -5,8 +5,8 @@ use fedimint_core::PeerId;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
-use crate::keychain::Keychain;
-use crate::{db, session, Decision, Message, Recipient};
+use super::keychain::Keychain;
+use super::{db, session, Decision, Message, Recipient};
 
 pub struct AtomicBroadcast {
     keychain: Keychain,

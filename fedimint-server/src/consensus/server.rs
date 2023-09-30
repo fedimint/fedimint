@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::{Receiver, Sender};
-use fedimint_atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{apply_migrations, Database};
@@ -17,6 +16,7 @@ use fedimint_core::PeerId;
 use tokio::select;
 use tracing::{debug, info, warn};
 
+use crate::atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
 use crate::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};

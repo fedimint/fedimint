@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use async_channel::{bounded, Receiver, Sender};
-use fedimint_atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -10,6 +9,8 @@ use fedimint_core::task::{sleep, spawn};
 use fedimint_core::PeerId;
 use secp256k1_zkp::{rand, Secp256k1, SecretKey};
 use tokio::task::JoinHandle;
+
+use super::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 
 fn to_peer_id(peer_index: usize) -> PeerId {
     u16::try_from(peer_index)

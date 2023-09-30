@@ -4,7 +4,7 @@ use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 
-use crate::SignedBlock;
+use super::SignedBlock;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct SignedBlockKey(pub u64);

@@ -1218,26 +1218,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-atomic-broadcast"
-version = "0.1.0"
-dependencies = [
- "aleph-bft",
- "anyhow",
- "async-channel",
- "async-trait",
- "bitcoin 0.30.1",
- "bitcoin_hashes 0.12.0",
- "fedimint-core",
- "futures",
- "parity-scale-codec",
- "secp256k1-zkp",
- "serde",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "fedimint-bip39"
 version = "0.1.0"
 dependencies = [
@@ -1868,15 +1848,17 @@ dependencies = [
 name = "fedimint-server"
 version = "0.1.0"
 dependencies = [
+ "aleph-bft",
  "anyhow",
  "async-channel",
  "async-trait",
  "bincode",
  "bitcoin 0.29.2",
+ "bitcoin 0.30.1",
  "bitcoin_hashes 0.11.0",
+ "bitcoin_hashes 0.12.0",
  "bytes",
  "fedimint-aead",
- "fedimint-atomic-broadcast",
  "fedimint-build",
  "fedimint-core",
  "fedimint-dummy-common",
@@ -1888,6 +1870,7 @@ dependencies = [
  "futures",
  "itertools",
  "jsonrpsee",
+ "parity-scale-codec",
  "rand",
  "rcgen",
  "secp256k1-zkp",

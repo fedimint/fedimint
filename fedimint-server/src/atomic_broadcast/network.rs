@@ -1,12 +1,12 @@
 use std::io::Write;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes_12::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
-use crate::conversion::to_peer_id;
-use crate::data_provider::UnitData;
-use crate::keychain::Keychain;
-use crate::{Message, Recipient};
+use super::conversion::to_peer_id;
+use super::data_provider::UnitData;
+use super::keychain::Keychain;
+use super::{Message, Recipient};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hasher;

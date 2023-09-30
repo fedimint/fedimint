@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_atomic_broadcast::{SignedBlockKey, SignedBlockPrefix};
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus,
     ServerStatus, StatusResponse,
@@ -38,6 +37,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
+use crate::atomic_broadcast::{SignedBlockKey, SignedBlockPrefix};
 use crate::backup::ClientBackupSnapshot;
 use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
