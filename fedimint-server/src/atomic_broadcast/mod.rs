@@ -97,13 +97,14 @@ use fedimint_core::PeerId;
 /// The broadcasts uses this keychain to sign messages for peers and create
 /// the threshold signatures for the signed blocks.
 pub use keychain::Keychain;
+use serde::{Deserialize, Serialize};
 
 /// The majority of these messages need to be delivered to the intended
 /// [Recipient] in order for the broadcast to make progress. However, the
 /// broadcast does not assume a reliable network layer and implements all
 /// necessary retry logic. Therefore, the caller can discard a message
 /// immediately if its intended recipient is offline.
-#[derive(Clone, Debug, Encodable, Decodable)]
+#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
 pub struct Message(Vec<u8>);
 
 /// This enum defines the intended destination of a [Message].

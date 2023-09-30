@@ -1,10 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::{Receiver, Sender};
-use fedimint_core::api::{DynGlobalApi, GlobalFederationApi, WsFederationApi};
+use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{apply_migrations, Database};
 use fedimint_core::encoding::Decodable;
@@ -13,16 +13,14 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::PeerId;
-use futures::StreamExt;
 use tokio::select;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
 use crate::db::{
-    get_global_database_migrations, AcceptedIndex, AcceptedIndexPrefix, SessionIndexKey,
-    GLOBAL_DATABASE_VERSION,
+    get_global_database_migrations, AcceptedIndex, SessionIndexKey, GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
@@ -64,7 +62,7 @@ impl ConsensusServer {
         module_inits: ServerModuleInitRegistry,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
-        let connector: PeerConnector<Vec<u8>> =
+        let connector: PeerConnector<Message> =
             TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
 
         Self::new_with(
@@ -85,7 +83,7 @@ impl ConsensusServer {
         cfg: ServerConfig,
         db: Database,
         module_inits: ServerModuleInitRegistry,
-        connector: PeerConnector<Vec<u8>>,
+        connector: PeerConnector<Message>,
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
@@ -354,7 +352,7 @@ impl ConsensusServer {
 
 async fn relay_messages(
     task_group: &mut TaskGroup,
-    mut connections: PeerConnections<Vec<u8>>,
+    mut connections: PeerConnections<Message>,
     outgoing_receiver: Receiver<(Message, Recipient)>,
     incoming_sender: Sender<Message>,
     other_peers: Vec<PeerId>,
@@ -364,46 +362,38 @@ async fn relay_messages(
         .spawn("relay_messages", |task_handle| async move {
             while !task_handle.is_shutting_down() {
                 select! {
-                        message = outgoing_receiver.recv() => {
-                            match message{
-                                Ok((message, recipient))=> {
-                                    let message = message.consensus_encode_to_vec().expect("Infallible");
-                                    match recipient {
-                                        Recipient::Everyone => {
-                                            connections.send(
-                                                other_peers.as_slice(),
-                                                message
-                                            ).await.ok();
-                                        }
-                                        Recipient::Peer(peer_id) => {
-                                            connections.send(&[peer_id], message).await.ok();
-                                        }
+                    message = outgoing_receiver.recv() => {
+                        match message{
+                            Ok((message, recipient))=> {
+                                match recipient {
+                                    Recipient::Everyone => {
+                                        connections.send(
+                                            other_peers.as_slice(),
+                                            message
+                                        ).await.ok();
                                     }
-                                },
-                                Err(..) => break
-                            }
-
-                        }
-                        message = connections.receive() => {
-                            match message {
-                                Ok((peer_id, message)) => {
-                                    let mut reader = std::io::Cursor::new(message);
-                                    match Message::consensus_decode(&mut reader, &decoders){
-                                        Ok(message) => {
-                                            incoming_sender.send(message).await.ok();
-                                        }
-                                        Err(e) => {
-                                            warn!(target: LOG_CONSENSUS, "Failed to decode message from peer {}: {}", peer_id, e);
-                                        }
+                                    Recipient::Peer(peer_id) => {
+                                        connections.send(&[peer_id], message).await.ok();
                                     }
                                 }
-                                Err(..) => break
-                            }
-
+                            },
+                            Err(..) => break
                         }
+
                     }
+                    message = connections.receive() => {
+                        match message {
+                            Ok((.., message)) => {
+                                incoming_sender.send(message).await.ok();
+                            }
+                            Err(..) => break
+                        }
+
+                    }
+                }
             }
-        }).await;
+        })
+        .await;
 }
 
 async fn submit_module_consensus_items(
