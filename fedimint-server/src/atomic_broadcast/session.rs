@@ -20,7 +20,6 @@ use super::spawner::Spawner;
 use super::{db, Decision, Message, Recipient};
 /// this function completes a session with the following steps:
 /// - set up the aleph bft session
-/// - periodically request the corresponding signed block from peers
 /// - combine the accepted items into a block until we reach a preset number of
 ///   ordered batches or a signed block arrives
 /// - collect signatures until we reach the threshold or a signed block arrives
@@ -31,7 +30,7 @@ pub async fn run(
     backup_loader: std::io::Cursor<Vec<u8>>,
     backup_saver: db::UnitSaver,
     item_receiver: Receiver<Vec<u8>>,
-    network_data_receiver: Receiver<Vec<u8>>,
+    incoming_message_receiver: Receiver<Message>,
     outgoing_message_sender: Sender<(Message, Recipient)>,
     ordered_item_sender: mpsc::Sender<Option<(OrderedItem, oneshot::Sender<Decision>)>>,
     federation_api: WsFederationApi,
@@ -40,7 +39,6 @@ pub async fn run(
     const ROUND_DELAY: f64 = 250.0;
     const EXPONENTIAL_SLOWDOWN_OFFSET: usize = 3000;
     const BASE: f64 = 1.01;
-    const BLOCK_REQUEST_DELAY: Duration = Duration::from_secs(10);
 
     let mut config = aleph_bft::default_config(
         keychain.peer_count().into(),
@@ -83,36 +81,12 @@ pub async fn run(
                 backup_saver,
                 backup_loader,
             ),
-            Network::new(network_data_receiver, outgoing_message_sender.clone()),
+            Network::new(incoming_message_receiver, outgoing_message_sender.clone()),
             keychain.clone(),
             Spawner::new(),
             aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
         ),
     )
-    .expect("some handle on non-wasm");
-
-    // we periodically request the signed block corresponding to the current session
-    // to recover in case we have been left behind by our peers
-    let peer_count = keychain.peer_count();
-    let block_request_handle = spawn("atomic block request", async move {
-        for peer_id in (0..peer_count)
-            .map(|peer_index| to_peer_id(peer_index.into()))
-            .cycle()
-        {
-            if outgoing_message_sender
-                .send((
-                    Message::BlockRequest(session_index),
-                    Recipient::Peer(peer_id),
-                ))
-                .await
-                .is_err()
-            {
-                break;
-            }
-
-            sleep(BLOCK_REQUEST_DELAY).await;
-        }
-    })
     .expect("some handle on non-wasm");
 
     // this is the minimum number of unit data that will be ordered before we reach
@@ -185,12 +159,9 @@ pub async fn run(
                 }
 
                 terminator_sender.send(()).ok();
-                block_request_handle.abort();
                 aleph_handle.await.ok();
-                block_request_handle.await.ok();
 
                 return Ok(signed_block);
-
             }
 
             _ = ordered_item_sender.closed() => anyhow::bail!("Ordered Item Receiver has been dropped")
@@ -212,9 +183,9 @@ pub async fn run(
         items: accepted_items,
     };
     let header = block.header();
-    let single_signature = keychain.sign(&header).await;
 
-    signature_sender.send(Some(single_signature))?;
+    // we send our own signature to the data provider to be broadcasted
+    signature_sender.send(Some(keychain.sign(&header).await))?;
 
     let mut signatures = BTreeMap::new();
 
@@ -223,10 +194,10 @@ pub async fn run(
     while signatures.len() < keychain.threshold() {
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
-                if let UnitData::Signature(single_signature, node_index) = unit_data? {
-                    if keychain.verify(&header, &single_signature, node_index){
+                if let UnitData::Signature(signature, node_index) = unit_data? {
+                    if keychain.verify(&header, &signature, node_index){
                         // since the signature is valid the node index can be converted to a peer id
-                        signatures.insert(to_peer_id(node_index), single_signature);
+                        signatures.insert(to_peer_id(node_index), signature);
                     }
                 }
             }
@@ -236,9 +207,7 @@ pub async fn run(
                 assert!(header == signed_block.block.header());
 
                 terminator_sender.send(()).ok();
-                block_request_handle.abort();
                 aleph_handle.await.ok();
-                block_request_handle.await.ok();
 
                 return Ok(signed_block);
             }
@@ -246,9 +215,7 @@ pub async fn run(
     }
 
     terminator_sender.send(()).ok();
-    block_request_handle.abort();
     aleph_handle.await.ok();
-    block_request_handle.await.ok();
 
     Ok(SignedBlock { block, signatures })
 }
@@ -276,7 +243,7 @@ async fn request_signed_block(
             .request_with_strategy(
                 VerifiableResponse::new(verifier.clone(), false, total_peers),
                 "get_block".to_string(),
-                ApiRequestErased::default(),
+                ApiRequestErased::new(index),
             )
             .await;
         match result {

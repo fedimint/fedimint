@@ -356,7 +356,7 @@ async fn relay_messages(
     task_group: &mut TaskGroup,
     mut connections: PeerConnections<Vec<u8>>,
     outgoing_receiver: Receiver<(Message, Recipient)>,
-    incoming_sender: Sender<(Message, PeerId)>,
+    incoming_sender: Sender<Message>,
     other_peers: Vec<PeerId>,
     decoders: ModuleDecoderRegistry,
 ) {
@@ -390,7 +390,7 @@ async fn relay_messages(
                                     let mut reader = std::io::Cursor::new(message);
                                     match Message::consensus_decode(&mut reader, &decoders){
                                         Ok(message) => {
-                                            incoming_sender.send((message, peer_id)).await.ok();
+                                            incoming_sender.send(message).await.ok();
                                         }
                                         Err(e) => {
                                             warn!(target: LOG_CONSENSUS, "Failed to decode message from peer {}: {}", peer_id, e);

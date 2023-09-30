@@ -104,11 +104,7 @@ pub use keychain::Keychain;
 /// necessary retry logic. Therefore, the caller can discard a message
 /// immediately if its intended recipient is offline.
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub enum Message {
-    NetworkData(Vec<u8>),
-    BlockRequest(u64),
-    Block(SignedBlock),
-}
+pub struct Message(Vec<u8>);
 
 /// This enum defines the intended destination of a [Message].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
