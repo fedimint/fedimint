@@ -37,7 +37,6 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
-use crate::atomic_broadcast::{SignedBlockKey, SignedBlockPrefix};
 use crate::backup::ClientBackupSnapshot;
 use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
@@ -45,7 +44,7 @@ use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::{FundingVerifier, VerificationCaches};
 use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
-    ClientConfigSignatureKey,
+    ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;

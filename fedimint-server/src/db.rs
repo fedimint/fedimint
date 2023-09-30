@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use fedimint_core::api::ClientConfigDownloadToken;
+use fedimint_core::block::SignedBlock;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -15,8 +16,8 @@ pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
-    // SignedBlock = 0x04, this prefix is used in the atomic broadcast crate
-    // AlephBackup = 0x05, this prefix is used in the atomic broadcast crate
+    SignedBlock = 0x04,
+    AlephUnits = 0x05,
     ClientConfigSignature = 0x07,
     ClientConfigSignatureShare = 0x3,
     ClientConfigDownload = 0x09,
@@ -45,6 +46,34 @@ impl_db_lookup!(
     key = AcceptedTransactionKey,
     query_prefix = AcceptedTransactionKeyPrefix
 );
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct SignedBlockKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct SignedBlockPrefix;
+
+impl_db_record!(
+    key = SignedBlockKey,
+    value = SignedBlock,
+    db_prefix = DbKeyPrefix::SignedBlock,
+    notify_on_modify = false,
+);
+impl_db_lookup!(key = SignedBlockKey, query_prefix = SignedBlockPrefix);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct AlephUnitsKey(pub u64, pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct AlephUnitsPrefix;
+
+impl_db_record!(
+    key = AlephUnitsKey,
+    value = Vec<u8>,
+    db_prefix = DbKeyPrefix::AlephUnits,
+    notify_on_modify = false,
+);
+impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientConfigSignatureKey;
@@ -123,9 +152,9 @@ mod fedimint_migration_tests {
     };
     use crate::core::DynOutput;
     use crate::db::{
-        get_global_database_migrations, AcceptedTransactionKeyPrefix, ClientConfigDownloadKey,
-        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix,
-        GLOBAL_DATABASE_VERSION,
+        get_global_database_migrations, AcceptedTransactionKeyPrefix, AlephUnitsPrefix,
+        ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey,
+        DbKeyPrefix, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -243,6 +272,30 @@ mod fedimint_migration_tests {
                                 ensure!(
                                     num_accepted_transactions > 0,
                                     "validate_migrations was not able to read any AcceptedTransactions"
+                                );
+                            }
+                        DbKeyPrefix::SignedBlock => {
+                            let signed_blocks = dbtx
+                                .find_by_prefix(&SignedBlockPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_signed_blocks = signed_blocks.len();
+                            ensure!(
+                                    num_signed_blocks > 0,
+                                    "validate_migrations was not able to read any SignedBlocks"
+                                );
+                        }
+                        DbKeyPrefix::AlephUnits => {
+                            let units = dbtx
+                                .find_by_prefix(&AlephUnitsPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_units = units.len();
+                            ensure!(
+                                    num_units > 0,
+                                    "validate_migrations was not able to read any AlephUnits"
                                 );
                             }
                             DbKeyPrefix::ClientConfigSignature => {

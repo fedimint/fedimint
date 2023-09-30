@@ -207,6 +207,26 @@ impl<'a> DatabaseDump<'a> {
                         "Accepted Transactions"
                     );
                 }
+                ConsensusRange::DbKeyPrefix::SignedBlock => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::SignedBlockPrefix,
+                        ConsensusRange::SignedBlockKey,
+                        fedimint_server::consensus::SignedBlock,
+                        consensus,
+                        "Signed Blocks"
+                    );
+                }
+                ConsensusRange::DbKeyPrefix::AlephUnits => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::AlephUnitsPrefix,
+                        ConsensusRange::AlephUnitsKey,
+                        Vec<u8>,
+                        consensus,
+                        "Aleph Units"
+                    );
+                }
                 ConsensusRange::DbKeyPrefix::ClientConfigSignature => {
                     let signature = dbtx
                         .get_value(&ConsensusRange::ClientConfigSignatureKey)

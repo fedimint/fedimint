@@ -91,7 +91,6 @@ mod spawner;
 
 /// The atomic broadcast instance run once by every peer.
 pub use broadcast::AtomicBroadcast;
-pub use db::{SignedBlockKey, SignedBlockPrefix};
 use fedimint_core::block::SignedBlock;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
