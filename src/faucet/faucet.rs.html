@@ -151,6 +151,12 @@
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -174,6 +180,8 @@
     </span>bitcoind_rpc: String,
     <span class="attr">#[clap(long, env = <span class="string">&quot;FM_CLN_SOCKET&quot;</span>)]
     </span>cln_socket: String,
+    <span class="attr">#[clap(long, env = <span class="string">&quot;FM_PORT_GW_LND&quot;</span>)]
+    </span>gw_lnd_port: u16,
     <span class="attr">#[clap(long, env = <span class="string">&quot;FM_INVITE_CODE&quot;</span>)]
     </span>invite_code: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
@@ -295,6 +303,10 @@
                     .<span class="kw">await
                     </span>.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, <span class="macro">format!</span>(<span class="string">&quot;{e:?}&quot;</span>)))
             }),
+        )
+        .route(
+            <span class="string">&quot;/gateway-api&quot;</span>,
+            get(<span class="kw">move </span>|| <span class="kw">async move </span>{ <span class="macro">format!</span>(<span class="string">&quot;http://127.0.0.1:{}/&quot;</span>, cmd.gw_lnd_port) }),
         )
         .layer(CorsLayer::permissive())
         .with_state(faucet);

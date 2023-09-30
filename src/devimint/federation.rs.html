@@ -527,9 +527,6 @@
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
 <a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::{env, fs};
@@ -627,7 +624,7 @@
         <span class="kw">let </span>peers: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..servers).map(|id| PeerId::from(id <span class="kw">as </span>u16)).collect();
         <span class="kw">let </span>params: HashMap&lt;PeerId, ConfigGenParams&gt; = local_config_gen_params(
             <span class="kw-2">&amp;</span>peers,
-            BASE_PORT,
+            process_mgr.globals.FM_PORT_FEDIMINTD_BASE,
             ServerModuleConfigGenParamsRegistry::default(),
         )<span class="question-mark">?</span>;
 
@@ -879,9 +876,6 @@
         <span class="self">self</span>.process.terminate().<span class="kw">await
     </span>}
 }
-
-<span class="doccomment">/// Base port for devimint
-</span><span class="kw">const </span>BASE_PORT: u16 = <span class="number">8173 </span>+ <span class="number">10000</span>;
 
 <span class="kw">pub async fn </span>run_dkg(
     admin_clients: BTreeMap&lt;PeerId, WsAdminClient&gt;,

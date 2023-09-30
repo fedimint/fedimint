@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["__wbgt_build_client_0","__wbgt_derive_chacha_key_2","__wbgt_receive_1","__wbgt_receive_and_pay_3","build_client","derive_chacha_key","receive","receive_and_pay"]};
+window.SIDEBAR_ITEMS = {"fn":["__wbgt_build_client_0","__wbgt_derive_chacha_key_2","__wbgt_receive_1","__wbgt_receive_and_pay_3","build_client","derive_chacha_key","receive","receive_and_pay","set_gateway"]};

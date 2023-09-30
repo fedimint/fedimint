@@ -555,6 +555,49 @@
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -567,6 +610,7 @@
 <span class="kw">use </span>cln_rpc::ClnRpc;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, sleep};
+<span class="kw">use </span>fedimint_core::util::write_overwrite_async;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
 <span class="kw">use </span>futures::executor::block_on;
@@ -590,6 +634,14 @@
 <span class="kw">impl </span>Bitcoind {
     <span class="kw">pub async fn </span>new(processmgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_dir = utf8(<span class="kw-2">&amp;</span>processmgr.globals.FM_BTC_DIR);
+        <span class="kw">let </span>conf = <span class="macro">format!</span>(
+            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/bitcoin.conf&quot;</span>),
+            rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
+            p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
+            zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
+            zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+        );
+        write_overwrite_async(processmgr.globals.FM_BTC_DIR.join(<span class="string">&quot;bitcoin.conf&quot;</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>process = processmgr
             .spawn_daemon(<span class="string">&quot;bitcoind&quot;</span>, <span class="macro">cmd!</span>(<span class="string">&quot;bitcoind&quot;</span>, <span class="string">&quot;-datadir={btc_dir}&quot;</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -729,6 +781,12 @@
 <span class="kw">impl </span>Lightningd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>cln_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_CLN_DIR;
+        <span class="kw">let </span>conf = <span class="macro">format!</span>(
+            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/lightningd.conf&quot;</span>),
+            port = process_mgr.globals.FM_PORT_CLN,
+            bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
+        );
+        write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join(<span class="string">&quot;config&quot;</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
@@ -817,6 +875,16 @@
     }
 
     <span class="kw">pub async fn </span>start(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;(ProcessHandle, LndClient)&gt; {
+        <span class="kw">let </span>conf = <span class="macro">format!</span>(
+            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/lnd.conf&quot;</span>),
+            listen_port = process_mgr.globals.FM_PORT_LND_LISTEN,
+            rpc_port = process_mgr.globals.FM_PORT_LND_RPC,
+            rest_port = process_mgr.globals.FM_PORT_LND_REST,
+            btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
+            zmq_pub_raw_block = process_mgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
+            zmq_pub_raw_tx = process_mgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+        );
+        write_overwrite_async(process_mgr.globals.FM_LND_DIR.join(<span class="string">&quot;lnd.conf&quot;</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="string">&quot;lnd&quot;</span>,
             <span class="macro">format!</span>(<span class="string">&quot;--lnddir={}&quot;</span>, utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_DIR))
@@ -888,7 +956,12 @@
     </span>}
 }
 
-<span class="kw">pub async fn </span>open_channel(bitcoind: <span class="kw-2">&amp;</span>Bitcoind, cln: <span class="kw-2">&amp;</span>Lightningd, lnd: <span class="kw-2">&amp;</span>Lnd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<span class="kw">pub async fn </span>open_channel(
+    process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
+    bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
+    cln: <span class="kw-2">&amp;</span>Lightningd,
+    lnd: <span class="kw-2">&amp;</span>Lnd,
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
     <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;block sync done&quot;</span>);
     <span class="kw">let </span>cln_addr = cln
@@ -906,7 +979,7 @@
     cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()<span class="question-mark">?</span>,
         host: <span class="prelude-val">Some</span>(<span class="string">&quot;127.0.0.1&quot;</span>.to_owned()),
-        port: <span class="prelude-val">Some</span>(<span class="number">9734</span>),
+        port: <span class="prelude-val">Some</span>(process_mgr.globals.FM_PORT_LND_LISTEN),
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1032,6 +1105,17 @@
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>electrs_dir = env::var(<span class="string">&quot;FM_ELECTRS_DIR&quot;</span>)<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>conf = <span class="macro">format!</span>(
+            <span class="macro">include_str!</span>(<span class="string">&quot;cfg/electrs.toml&quot;</span>),
+            rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
+            p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
+            electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
+        );
+        write_overwrite_async(
+            process_mgr.globals.FM_ELECTRS_DIR.join(<span class="string">&quot;electrs.toml&quot;</span>),
+            conf,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="string">&quot;electrs&quot;</span>,
             <span class="string">&quot;--conf-dir={electrs_dir}&quot;</span>,
@@ -1058,6 +1142,8 @@
         <span class="kw">let </span>daemon_dir = env::var(<span class="string">&quot;FM_BTC_DIR&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>esplora_dir = env::var(<span class="string">&quot;FM_ESPLORA_DIR&quot;</span>)<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
+        <span class="kw">let </span>esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
         <span class="comment">// spawn esplora
         </span><span class="kw">let </span>cmd = <span class="macro">cmd!</span>(
             <span class="string">&quot;esplora&quot;</span>,
@@ -1065,9 +1151,9 @@
             <span class="string">&quot;--db-dir={esplora_dir}&quot;</span>,
             <span class="string">&quot;--cookie=bitcoin:bitcoin&quot;</span>,
             <span class="string">&quot;--network=regtest&quot;</span>,
-            <span class="string">&quot;--daemon-rpc-addr=127.0.0.1:18443&quot;</span>,
-            <span class="string">&quot;--http-addr=127.0.0.1:50002&quot;</span>,
-            <span class="string">&quot;--monitoring-addr=127.0.0.1:50003&quot;</span>,
+            <span class="string">&quot;--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}&quot;</span>,
+            <span class="string">&quot;--http-addr=127.0.0.1:{esplora_port}&quot;</span>,
+            <span class="string">&quot;--monitoring-addr=127.0.0.1:0&quot;</span>,
             <span class="string">&quot;--jsonrpc-import&quot;</span>, <span class="comment">// Workaround for incompatible on-disk format
         </span>);
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">&quot;esplora&quot;</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1098,7 +1184,7 @@
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
     )<span class="question-mark">?</span>;
-    open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+    open_channel(process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">info!</span>(
         target: LOG_DEVIMINT,
         <span class="string">&quot;starting base daemons took {:?}&quot;</span>,

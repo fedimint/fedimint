@@ -201,6 +201,9 @@
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -232,8 +235,11 @@
                 finality_delay: <span class="number">10</span>,
                 client_default_bitcoin_rpc: BitcoinRpcConfig {
                     kind: <span class="string">&quot;esplora&quot;</span>.to_string(),
-                    url: SafeUrl::parse(<span class="string">&quot;http://127.0.0.1:50002/&quot;</span>)
-                        .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
+                    url: SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                        <span class="string">&quot;http://127.0.0.1:{}/&quot;</span>,
+                        std::env::var(<span class="string">&quot;FM_PORT_ESPLORA&quot;</span>).unwrap_or(String::from(<span class="string">&quot;50002&quot;</span>))
+                    ))
+                    .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
                 },
             },
         }

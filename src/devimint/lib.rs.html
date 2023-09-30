@@ -178,44 +178,6 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -245,49 +207,35 @@
     <span class="kw">pub </span>gw_lnd: Gatewayd,
     <span class="kw">pub </span>electrs: Electrs,
     <span class="kw">pub </span>esplora: Esplora,
-    <span class="kw">pub </span>faucet: Faucet,
 }
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Gatewayd {
     _process: ProcessHandle,
     <span class="kw">pub </span>ln: <span class="prelude-ty">Option</span>&lt;LightningNode&gt;,
+    addr: String,
 }
 
 <span class="kw">impl </span>Gatewayd {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, ln: LightningNode) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>ln_name = ln.name();
         <span class="kw">let </span>test_dir = <span class="kw-2">&amp;</span>process_mgr.globals.FM_TEST_DIR;
-        <span class="kw">let </span>gateway_env: HashMap&lt;String, String&gt; = <span class="kw">match </span>ln {
-            LightningNode::Cln(<span class="kw">_</span>) =&gt; HashMap::from_iter([
-                (
-                    <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),
-                    <span class="macro">format!</span>(<span class="string">&quot;{}/gw-cln&quot;</span>, utf8(test_dir)),
-                ),
-                (
-                    <span class="string">&quot;FM_GATEWAY_LISTEN_ADDR&quot;</span>.to_owned(),
-                    <span class="string">&quot;127.0.0.1:8175&quot;</span>.to_owned(),
-                ),
-                (
-                    <span class="string">&quot;FM_GATEWAY_API_ADDR&quot;</span>.to_owned(),
-                    <span class="string">&quot;http://127.0.0.1:8175&quot;</span>.to_owned(),
-                ),
-            ]),
-            LightningNode::Lnd(<span class="kw">_</span>) =&gt; HashMap::from_iter([
-                (
-                    <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),
-                    <span class="macro">format!</span>(<span class="string">&quot;{}/gw-lnd&quot;</span>, utf8(test_dir)),
-                ),
-                (
-                    <span class="string">&quot;FM_GATEWAY_LISTEN_ADDR&quot;</span>.to_owned(),
-                    <span class="string">&quot;127.0.0.1:28175&quot;</span>.to_owned(),
-                ),
-                (
-                    <span class="string">&quot;FM_GATEWAY_API_ADDR&quot;</span>.to_owned(),
-                    <span class="string">&quot;http://127.0.0.1:28175&quot;</span>.to_owned(),
-                ),
-            ]),
+        <span class="kw">let </span>port = <span class="kw">match </span>ln {
+            LightningNode::Cln(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_CLN,
+            LightningNode::Lnd(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_LND,
         };
+        <span class="kw">let </span>addr = <span class="macro">format!</span>(<span class="string">&quot;http://127.0.0.1:{port}&quot;</span>);
+        <span class="kw">let </span>gateway_env: HashMap&lt;String, String&gt; = HashMap::from_iter([
+            (
+                <span class="string">&quot;FM_GATEWAY_DATA_DIR&quot;</span>.to_owned(),
+                <span class="macro">format!</span>(<span class="string">&quot;{}/{ln_name}&quot;</span>, utf8(test_dir)),
+            ),
+            (
+                <span class="string">&quot;FM_GATEWAY_LISTEN_ADDR&quot;</span>.to_owned(),
+                <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{port}&quot;</span>),
+            ),
+            (<span class="string">&quot;FM_GATEWAY_API_ADDR&quot;</span>.to_owned(), addr.clone()),
+        ]);
         <span class="kw">let </span>process = process_mgr
             .spawn_daemon(
                 <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;gatewayd-{ln_name}&quot;</span>),
@@ -298,6 +246,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             ln: <span class="prelude-val">Some</span>(ln),
             _process: process,
+            addr,
         })
     }
 
@@ -317,22 +266,12 @@
     }
 
     <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
-        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.ln {
-            <span class="prelude-val">Some</span>(LightningNode::Cln(<span class="kw">_</span>)) =&gt; {
-                <span class="macro">cmd!</span>(<span class="string">&quot;gateway-cli&quot;</span>, <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>)
-            }
-            <span class="prelude-val">Some</span>(LightningNode::Lnd(<span class="kw">_</span>)) =&gt; {
-                <span class="macro">cmd!</span>(
-                    <span class="string">&quot;gateway-cli&quot;</span>,
-                    <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>,
-                    <span class="string">&quot;-a&quot;</span>,
-                    <span class="string">&quot;http://127.0.0.1:28175&quot;
-                </span>)
-            }
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">panic!</span>(<span class="string">&quot;Cannot execute command when gateway is disconnected from Lightning Node&quot;</span>);
-            }
-        }
+        <span class="macro">cmd!</span>(
+            <span class="string">&quot;gateway-cli&quot;</span>,
+            <span class="string">&quot;--rpcpassword=theresnosecondbest&quot;</span>,
+            <span class="string">&quot;-a&quot;</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.addr
+        )
     }
 
     <span class="kw">pub async fn </span>gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
@@ -360,37 +299,23 @@
     }
 }
 
-<span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>Faucet {
-    _process: ProcessHandle,
-}
-
-<span class="kw">impl </span>Faucet {
-    <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            _process: process_mgr.spawn_daemon(<span class="string">&quot;faucet&quot;</span>, <span class="macro">cmd!</span>(<span class="string">&quot;faucet&quot;</span>)).<span class="kw">await</span><span class="question-mark">?</span>,
-        })
-    }
-}
-
 <span class="kw">pub async fn </span>dev_fed(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;DevFed&gt; {
     <span class="kw">let </span>start_time = fedimint_core::time::now();
     <span class="kw">let </span>bitcoind = Bitcoind::new(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd, faucet), electrs, esplora, fed) = <span class="macro">tokio::try_join!</span>(
+    <span class="kw">let </span>((cln, lnd, gw_cln, gw_lnd), electrs, esplora, fed) = <span class="macro">tokio::try_join!</span>(
         <span class="kw">async </span>{
             <span class="kw">let </span>(cln, lnd) = <span class="macro">tokio::try_join!</span>(
                 Lightningd::new(process_mgr, bitcoind.clone()),
                 Lnd::new(process_mgr, bitcoind.clone())
             )<span class="question-mark">?</span>;
             <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;lightning started&quot;</span>);
-            <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>, faucet) = <span class="macro">tokio::try_join!</span>(
+            <span class="kw">let </span>(gw_cln, gw_lnd, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
                 Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
                 Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-                open_channel(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
-                Faucet::new(process_mgr)
+                open_channel(process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd),
             )<span class="question-mark">?</span>;
             <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">&quot;gateways started&quot;</span>);
-            <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd, faucet))
+            <span class="prelude-val">Ok</span>((cln, lnd, gw_cln, gw_lnd))
         },
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
@@ -426,7 +351,6 @@
         bitcoind,
         cln,
         lnd,
-        faucet,
         fed,
         gw_cln,
         gw_lnd,
