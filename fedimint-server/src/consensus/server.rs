@@ -15,13 +15,14 @@ use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::PeerId;
 use futures::StreamExt;
 use tokio::select;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
 use crate::db::{
-    get_global_database_migrations, AcceptedIndexPrefix, SessionIndexKey, GLOBAL_DATABASE_VERSION,
+    get_global_database_migrations, AcceptedIndex, AcceptedIndexPrefix, SessionIndexKey,
+    GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
@@ -257,8 +258,12 @@ impl ConsensusServer {
         }
     }
 
-    async fn process_consensus_item(&self, item: Vec<u8>, peer_id: PeerId) -> Decision {
-        match self.consensus.process_consensus_item(item, peer_id).await {
+    async fn process_consensus_item(&self, item: Vec<u8>, index: u64, peer_id: PeerId) -> Decision {
+        match self
+            .consensus
+            .process_consensus_item(item, index, peer_id)
+            .await
+        {
             Ok(()) => {
                 debug!(
                     target: LOG_CONSENSUS,
@@ -283,6 +288,7 @@ impl ConsensusServer {
 
         while !task_handle.is_shutting_down() {
             let (session_index, accepted_indices) = self.consensus.open_session().await;
+            let max_index = accepted_indices.iter().max();
 
             let mut ordered_item_receiver = self.atomic_broadcast.run_session(session_index).await;
 
@@ -299,9 +305,33 @@ impl ConsensusServer {
                             .await
                             .insert(item.peer_id, session_index);
 
-                        decision_sender
-                            .send(self.process_consensus_item(item.item, item.peer_id).await)
-                            .expect("This is the only sender");
+                        // we process all items of higher index than last accepted item, which is
+                        // the last item that changed our state - notice how
+                        // we may call process_item on a ordered item
+                        // a second time after a crash but only if it is discarded both times and
+                        // therefore does not change our state
+                        match max_index {
+                            Some(max_index) if max_index >= &AcceptedIndex(item.index) => {
+                                if accepted_indices.contains(&AcceptedIndex(item.index)) {
+                                    decision_sender
+                                        .send(Decision::Accept)
+                                        .expect("This is the only sender");
+                                } else {
+                                    decision_sender
+                                        .send(Decision::Discard)
+                                        .expect("This is the only sender");
+                                }
+                            }
+                            _ => {
+                                let decision = self
+                                    .process_consensus_item(item.item, item.index, item.peer_id)
+                                    .await;
+
+                                decision_sender
+                                    .send(decision)
+                                    .expect("This is the only sender");
+                            }
+                        }
                     }
                     None => break,
                 };

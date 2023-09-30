@@ -22,7 +22,7 @@ use tracing::debug;
 
 use crate::config::ServerConfig;
 use crate::db::{
-    AcceptedIndexPrefix, AcceptedTransactionKey, ClientConfigSignatureKey,
+    AcceptedIndex, AcceptedIndexPrefix, AcceptedTransactionKey, ClientConfigSignatureKey,
     ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix, SessionIndexKey,
 };
 use crate::transaction::{Transaction, TransactionError};
@@ -58,13 +58,13 @@ impl FedimintConsensus {
     pub fn decoders(&self) -> ModuleDecoderRegistry {
         self.modules.decoder_registry()
     }
-    pub async fn open_session(&self) -> (u64, BTreeSet<u64>) {
+    pub async fn open_session(&self) -> (u64, BTreeSet<AcceptedIndex>) {
         let mut dbtx = self.db.begin_transaction().await;
         let session_index = dbtx.get_value(&SessionIndexKey).await.unwrap_or(0);
         let accepted_indices = dbtx
             .find_by_prefix(&AcceptedIndexPrefix)
             .await
-            .map(|(key, _)| key.0)
+            .map(|(key, _)| key)
             .collect()
             .await;
 
@@ -89,6 +89,7 @@ impl FedimintConsensus {
     pub async fn process_consensus_item(
         &self,
         item: Vec<u8>,
+        item_index: u64,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
@@ -103,6 +104,14 @@ impl FedimintConsensus {
 
         self.process_consensus_item_with_db_transaction(&mut dbtx, consensus_item, peer_id)
             .await?;
+
+        if dbtx
+            .insert_entry(&AcceptedIndex(item_index), &())
+            .await
+            .is_some()
+        {
+            panic!("The index {item_index} was accepted twice in one session");
+        }
 
         let mut audit = Audit::default();
 

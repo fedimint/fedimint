@@ -117,7 +117,6 @@ pub async fn run(
     // data
     let batches_per_block = EXPONENTIAL_SLOWDOWN_OFFSET * keychain.peer_count() / 3;
     let mut num_batches = 0;
-    let mut item_index = 0;
     let mut pending_items = vec![];
 
     // we build a block out of the ordered batches until either we have processed
@@ -132,7 +131,12 @@ pub async fn run(
                         let peer_id = to_peer_id(node_index);
 
                         for item in items {
-                            let ordered_item = OrderedItem{item, index: item_index, peer_id};
+                            let ordered_item = OrderedItem {
+                                item,
+                                index: pending_items.len() as u64,
+                                peer_id
+                            };
+
                             let (decision_sender, decision_receiver) = oneshot::channel();
 
                             ordered_item_sender.send(Some((
@@ -141,7 +145,6 @@ pub async fn run(
                             ))).await?;
 
                             pending_items.push((ordered_item, decision_receiver));
-                            item_index += 1;
                         }
 
                         num_batches += 1;
@@ -168,7 +171,7 @@ pub async fn run(
                     // The items we have already accepted have to be in the threshold signed block
                     assert!(accepted_items.iter().eq(block.items.iter().take(accepted_items.len())));
 
-                    // We send the not yet processesed items in the block to Fedimint Consensus
+                    // We send the not yet processed items in the block to Fedimint Consensus
                     let mut decision_receivers = vec![];
                     for ordered_item in block.items.iter().skip(accepted_items.len()) {
                         let (decision_sender, decision_receiver) = oneshot::channel();
