@@ -9,7 +9,9 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
@@ -55,7 +57,7 @@ use fedimint_metrics::{
     Histogram, IntCounter,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info_span, trace};
@@ -223,6 +225,26 @@ impl ExtendsCommonModuleInit for LightningGen {
     }
 }
 
+// Change LightningGatewayKey from a gateway's node id to its gateway id
+pub async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
+    // Select old entries
+    let v0_entries = dbtx
+        .find_by_prefix(&LightningGatewayKeyPrefix)
+        .await
+        .collect::<Vec<(LightningGatewayKey, LightningGatewayRegistration)>>()
+        .await;
+
+    // Remove old entries
+    dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
+
+    // Migrate to new entries
+    for (_v0_key, v0_val) in v0_entries {
+        let v1_key = LightningGatewayKey(v0_val.info.gateway_id);
+        dbtx.insert_new_entry(&v1_key, &v0_val).await;
+    }
+    Ok(())
+}
+
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for LightningGen {
     type Params = LightningGenParams;
@@ -242,6 +264,14 @@ impl ServerModuleInit for LightningGen {
             metric.collect();
         }
         Ok(Lightning::new(args.cfg().to_typed()?, &mut args.task_group().clone())?.into())
+    }
+
+    fn get_database_migrations(&self) -> MigrationMap {
+        let mut migrations = MigrationMap::new();
+
+        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+
+        migrations
     }
 
     fn trusted_dealer_gen(
@@ -1103,7 +1133,7 @@ impl Lightning {
         self.delete_expired_gateways(dbtx).await;
 
         dbtx.insert_entry(
-            &LightningGatewayKey(gateway.info.node_pub_key),
+            &LightningGatewayKey(gateway.info.gateway_id),
             &gateway.anchor(),
         )
         .await;
