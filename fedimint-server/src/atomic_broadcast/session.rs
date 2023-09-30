@@ -4,7 +4,10 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use async_channel::{Receiver, Sender};
 use bitcoin_hashes_12::Hash;
+use fedimint_core::api::{FederationApiExt, WsFederationApi};
 use fedimint_core::block::{consensus_hash_sha256, Block, OrderedItem, SignedBlock};
+use fedimint_core::module::ApiRequestErased;
+use fedimint_core::query::VerifiableResponse;
 use fedimint_core::task::{sleep, spawn};
 use tokio::sync::{mpsc, oneshot, watch};
 
@@ -31,7 +34,7 @@ pub async fn run(
     network_data_receiver: Receiver<Vec<u8>>,
     outgoing_message_sender: Sender<(Message, Recipient)>,
     ordered_item_sender: mpsc::Sender<Option<(OrderedItem, oneshot::Sender<Decision>)>>,
-    signed_block_receiver: Receiver<SignedBlock>,
+    federation_api: WsFederationApi,
 ) -> anyhow::Result<SignedBlock> {
     const MAX_ROUND: u16 = 5000;
     const ROUND_DELAY: f64 = 250.0;
@@ -151,51 +154,43 @@ pub async fn run(
                     }
                 }
             },
-
-            signed_block = signed_block_receiver.recv() => {
-                let SignedBlock{block, signatures} = signed_block?;
-
-                if block.index == session_index
-                    && signatures.len() == keychain.threshold()
-                    && signatures.iter().all(|(peer_id, sig)| {
-                        keychain.verify(&block.header(), sig, to_node_index(*peer_id))
-                }){
-                    let mut accepted_items = vec![];
-                    for (ordered_item, decision_receiver) in pending_items{
-                        // we add the item to the block if and only if it is accepted by Fedimint Consensus
-                        if decision_receiver.await? == Decision::Accept {
-                            accepted_items.push(ordered_item);
-                        }
+            signed_block = request_signed_block(session_index, keychain.clone(), &federation_api) => {
+                let mut accepted_items = vec![];
+                for (ordered_item, decision_receiver) in pending_items{
+                    // we add the item to the block if and only if it is accepted by Fedimint Consensus
+                    if decision_receiver.await? == Decision::Accept {
+                        accepted_items.push(ordered_item);
                     }
-
-                    // The items we have already accepted have to be in the threshold signed block
-                    assert!(accepted_items.iter().eq(block.items.iter().take(accepted_items.len())));
-
-                    // We send the not yet processed items in the block to Fedimint Consensus
-                    let mut decision_receivers = vec![];
-                    for ordered_item in block.items.iter().skip(accepted_items.len()) {
-                        let (decision_sender, decision_receiver) = oneshot::channel();
-
-                        ordered_item_sender.send(Some((
-                            ordered_item.clone(),
-                            decision_sender
-                        ))).await?;
-
-                        decision_receivers.push(decision_receiver);
-                    }
-
-                    for decision_receiver in decision_receivers {
-                        // The threshold signed blocks items have to be accepted by Fedimint Consensus.
-                        assert!(decision_receiver.await? == Decision::Accept);
-                    }
-
-                    terminator_sender.send(()).ok();
-                    block_request_handle.abort();
-                    aleph_handle.await.ok();
-                    block_request_handle.await.ok();
-
-                    return Ok(SignedBlock{block, signatures});
                 }
+
+                // The items we have already accepted have to be in the threshold signed block
+                assert!(accepted_items.iter().eq(signed_block.block.items.iter().take(accepted_items.len())));
+
+                // We send the not yet processed items in the block to Fedimint Consensus
+                let mut decision_receivers = vec![];
+                for ordered_item in signed_block.block.items.iter().skip(accepted_items.len()) {
+                    let (decision_sender, decision_receiver) = oneshot::channel();
+
+                    ordered_item_sender.send(Some((
+                        ordered_item.clone(),
+                        decision_sender
+                    ))).await?;
+
+                    decision_receivers.push(decision_receiver);
+                }
+
+                for decision_receiver in decision_receivers {
+                    // The threshold signed blocks items have to be accepted by Fedimint Consensus.
+                    assert!(decision_receiver.await? == Decision::Accept);
+                }
+
+                terminator_sender.send(()).ok();
+                block_request_handle.abort();
+                aleph_handle.await.ok();
+                block_request_handle.await.ok();
+
+                return Ok(signed_block);
+
             }
 
             _ = ordered_item_sender.closed() => anyhow::bail!("Ordered Item Receiver has been dropped")
@@ -236,25 +231,16 @@ pub async fn run(
                 }
             }
 
-            signed_block = signed_block_receiver.recv() => {
-                let SignedBlock{block, signatures}  = signed_block?;
+            signed_block = request_signed_block(session_index, keychain.clone(), &federation_api) => {
+                // We check that the block we have created agrees with the federations consensus
+                assert!(header == signed_block.block.header());
 
-                if block.index == session_index
-                    && signatures.len() == keychain.threshold()
-                    && signatures.iter().all(|(peer_id, sig)| {
-                        keychain.verify(&block.header(), sig, to_node_index(*peer_id))
-                }){
-                    // We check that the block we have created agrees with the fedarations consensus
-                    assert!(header == block.header());
+                terminator_sender.send(()).ok();
+                block_request_handle.abort();
+                aleph_handle.await.ok();
+                block_request_handle.await.ok();
 
-                    terminator_sender.send(()).ok();
-                    block_request_handle.abort();
-                    aleph_handle.await.ok();
-                    block_request_handle.await.ok();
-
-                    return Ok(SignedBlock{block, signatures});
-
-                }
+                return Ok(signed_block);
             }
         }
     }
@@ -265,4 +251,37 @@ pub async fn run(
     block_request_handle.await.ok();
 
     Ok(SignedBlock { block, signatures })
+}
+
+async fn request_signed_block(
+    index: u64,
+    keychain: Keychain,
+    federation_api: &WsFederationApi,
+) -> SignedBlock {
+    // we wait until we have stalled
+    sleep(Duration::from_secs(5)).await;
+
+    let total_peers = keychain.peer_count();
+
+    let verifier = move |signed_block: &SignedBlock| {
+        signed_block.block.index == index
+            && signed_block.signatures.len() == keychain.threshold()
+            && signed_block.signatures.iter().all(|(peer_id, sig)| {
+                keychain.verify(&signed_block.block.header(), sig, to_node_index(*peer_id))
+            })
+    };
+
+    loop {
+        let result = federation_api
+            .request_with_strategy(
+                VerifiableResponse::new(verifier.clone(), false, total_peers),
+                "get_block".to_string(),
+                ApiRequestErased::default(),
+            )
+            .await;
+        match result {
+            Ok(signed_block) => return signed_block,
+            Err(error) => tracing::error!("Error while requesting signed block: {}", error),
+        }
+    }
 }

@@ -47,8 +47,6 @@ pub struct ConsensusServer {
     pub atomic_broadcast: AtomicBroadcast,
     /// Our configuration
     pub cfg: ServerConfig,
-    /// Used to make API calls to our peers
-    pub api: DynGlobalApi,
     /// The list of all other peers
     pub other_peers: Vec<PeerId>,
     /// Under the HBBFT consensus algorithm, this will track the latest epoch
@@ -161,15 +159,6 @@ impl ConsensusServer {
             outgoing_sender,
         );
 
-        let api_endpoints = cfg
-            .consensus
-            .api_endpoints
-            .clone()
-            .into_iter()
-            .map(|(id, node)| (id, node.url));
-
-        let api = WsFederationApi::new(api_endpoints.collect());
-
         let other_peers: Vec<PeerId> = cfg
             .local
             .p2p_endpoints
@@ -226,20 +215,19 @@ impl ConsensusServer {
             consensus,
             consensus_api,
             cfg: cfg.clone(),
-            api: api.into(),
             other_peers,
             latest_contribution_by_peer,
             decoders: modules.decoder_registry(),
         })
     }
 
-    async fn confirm_consensus_config_hash(&self) -> anyhow::Result<()> {
+    async fn confirm_consensus_config_hash(&self, api: &WsFederationApi) -> anyhow::Result<()> {
         let our_hash = self.cfg.consensus.consensus_hash();
 
         info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
 
         loop {
-            match self.api.consensus_config_hash().await {
+            match api.consensus_config_hash().await {
                 Ok(consensus_hash) => {
                     if consensus_hash != our_hash {
                         bail!("Our consensus config doesn't match peers!")
@@ -284,13 +272,29 @@ impl ConsensusServer {
     }
 
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        self.confirm_consensus_config_hash().await?;
+        let api_endpoints: Vec<_> = self
+            .cfg
+            .consensus
+            .api_endpoints
+            .clone()
+            .into_iter()
+            .map(|(id, node)| (id, node.url))
+            .collect();
+
+        let federation_api = WsFederationApi::new(api_endpoints.clone());
+
+        self.confirm_consensus_config_hash(&federation_api).await?;
 
         while !task_handle.is_shutting_down() {
             let (session_index, accepted_indices) = self.consensus.open_session().await;
             let max_index = accepted_indices.iter().max();
 
-            let mut ordered_item_receiver = self.atomic_broadcast.run_session(session_index).await;
+            let federation_api = WsFederationApi::new(api_endpoints.clone());
+
+            let mut ordered_item_receiver = self
+                .atomic_broadcast
+                .run_session(session_index, federation_api)
+                .await;
 
             while !task_handle.is_shutting_down() {
                 let ordered_item = ordered_item_receiver

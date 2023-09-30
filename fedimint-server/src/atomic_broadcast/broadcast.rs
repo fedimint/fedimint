@@ -1,3 +1,4 @@
+use fedimint_core::api::WsFederationApi;
 use fedimint_core::block::{OrderedItem, SignedBlock};
 use fedimint_core::db::Database;
 use fedimint_core::task::spawn;
@@ -89,6 +90,7 @@ impl AtomicBroadcast {
     pub async fn run_session(
         &self,
         index: u64,
+        federation_api: WsFederationApi,
     ) -> mpsc::Receiver<Option<(OrderedItem, oneshot::Sender<Decision>)>> {
         let (ordered_item_sender, ordered_item_receiver) = mpsc::channel(256);
 
@@ -141,7 +143,7 @@ impl AtomicBroadcast {
                     network_data_receiver,
                     outgoing_message_sender.clone(),
                     ordered_item_sender.clone(),
-                    signed_block_receiver,
+                    federation_api,
                 );
 
                 if let Ok(signed_block) = session_result.await {

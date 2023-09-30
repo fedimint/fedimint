@@ -83,7 +83,6 @@ mod conversion;
 mod data_provider;
 mod db;
 mod finalization_handler;
-mod integration;
 mod keychain;
 mod network;
 mod session;
