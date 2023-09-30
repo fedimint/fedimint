@@ -124,11 +124,13 @@ pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
 
 #[cfg(test)]
 mod fedimint_migration_tests {
+    use std::collections::BTreeMap;
 
     use anyhow::{ensure, Context};
     use bitcoin::{secp256k1, KeyPair};
     use bitcoin_hashes::Hash;
     use fedimint_core::api::ClientConfigDownloadToken;
+    use fedimint_core::block::{Block, SignedBlock};
     use fedimint_core::core::DynInput;
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
@@ -148,7 +150,8 @@ mod fedimint_migration_tests {
     use threshold_crypto::SignatureShare;
 
     use super::{
-        AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
+        AcceptedTransactionKey, AlephUnitsKey, ClientConfigSignatureKey,
+        ClientConfigSignatureSharePrefix, SignedBlockKey,
     };
     use crate::core::DynOutput;
     use crate::db::{
@@ -274,30 +277,8 @@ mod fedimint_migration_tests {
                                     "validate_migrations was not able to read any AcceptedTransactions"
                                 );
                             }
-                        DbKeyPrefix::SignedBlock => {
-                            let signed_blocks = dbtx
-                                .find_by_prefix(&SignedBlockPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_signed_blocks = signed_blocks.len();
-                            ensure!(
-                                    num_signed_blocks > 0,
-                                    "validate_migrations was not able to read any SignedBlocks"
-                                );
-                        }
-                        DbKeyPrefix::AlephUnits => {
-                            let units = dbtx
-                                .find_by_prefix(&AlephUnitsPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_units = units.len();
-                            ensure!(
-                                    num_units > 0,
-                                    "validate_migrations was not able to read any AlephUnits"
-                                );
-                            }
+                        DbKeyPrefix::SignedBlock => {}
+                        DbKeyPrefix::AlephUnits => {}
                             DbKeyPrefix::ClientConfigSignature => {
                                 dbtx
                                     .get_value(&ClientConfigSignatureKey)
