@@ -291,6 +291,11 @@ impl ConsensusServer {
 
                 match ordered_item {
                     Some((item, decision_sender)) => {
+                        self.latest_contribution_by_peer
+                            .write()
+                            .await
+                            .insert(item.peer_id, session_index);
+
                         decision_sender
                             .send(self.process_consensus_item(item.item, item.peer_id).await)
                             .expect("This is the only sender");
