@@ -95,7 +95,7 @@ impl Federation {
         let peers: Vec<_> = (0..servers).map(|id| PeerId::from(id as u16)).collect();
         let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
             &peers,
-            BASE_PORT,
+            process_mgr.globals.FM_PORT_FEDIMINTD_BASE,
             ServerModuleConfigGenParamsRegistry::default(),
         )?;
 
@@ -347,9 +347,6 @@ impl Fedimintd {
         self.process.terminate().await
     }
 }
-
-/// Base port for devimint
-const BASE_PORT: u16 = 8173 + 10000;
 
 pub async fn run_dkg(
     admin_clients: BTreeMap<PeerId, WsAdminClient>,

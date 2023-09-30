@@ -7,7 +7,7 @@ export RUST_LOG="${RUST_LOG:-info}"
 source ./scripts/lib.sh
 source ./scripts/build.sh
 
-devimint dev-fed &
+devimint wasm-test-setup &
 auto_kill_last_cmd
 
 eval "$(devimint env)"

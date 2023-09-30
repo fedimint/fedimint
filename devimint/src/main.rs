@@ -34,7 +34,6 @@ pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
-        faucet,
     } = dev_fed;
 
     fed.pegin(10_000_000).await?;
@@ -143,7 +142,6 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
-        faucet,
     } = dev_fed;
 
     cmd!(
@@ -825,7 +823,6 @@ async fn lightning_gw_reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManag
         gw_lnd,
         electrs,
         esplora,
-        faucet,
     } = dev_fed;
 
     info!("Pegging-in both gateways");
@@ -901,7 +898,6 @@ async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
         gw_lnd,
         electrs,
         esplora,
-        faucet,
     } = dev_fed;
 
     // Query current gateway infos
@@ -1064,7 +1060,6 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
         gw_lnd,
         electrs,
         esplora,
-        faucet,
     } = dev_fed;
 
     bitcoind.mine_blocks(110).await?;
@@ -1114,6 +1109,8 @@ enum Cmd {
     DevFed,
     /// Runs bitcoind, spins up FM_FED_SIZE worth of fedimints
     RunUi,
+    /// `devfed` then spawns faucet for wasm tests
+    WasmTestSetup,
     /// `devfed` then checks the average latency of reissuing ecash, LN receive,
     /// and LN send
     LatencyTests,
@@ -1290,6 +1287,21 @@ async fn handle_command() -> Result<()> {
                 )?;
                 let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
                 Ok::<_, anyhow::Error>(daemons)
+            };
+            cleanup_on_exit(main, task_group).await?;
+        }
+        Cmd::WasmTestSetup => {
+            let (process_mgr, task_group) = setup(args.common).await?;
+            let main = async move {
+                let dev_fed = dev_fed(&process_mgr).await?;
+                let (_, _, _, faucet) = tokio::try_join!(
+                    dev_fed.fed.pegin(10_000),
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
+                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                    process_mgr.spawn_daemon("faucet", cmd!("faucet")),
+                )?;
+                let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+                Ok::<_, anyhow::Error>((daemons, faucet))
             };
             cleanup_on_exit(main, task_group).await?;
         }

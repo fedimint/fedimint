@@ -1017,6 +1017,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-logging",
+ "fedimint-portalloc",
  "fedimint-server",
  "fedimint-testing",
  "fedimint-tonic-lnd",
