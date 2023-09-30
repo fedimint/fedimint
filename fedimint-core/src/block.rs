@@ -1,4 +1,5 @@
 use bitcoin30::hashes::{sha256, Hash};
+use parity_scale_codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::encoding::{Decodable, Encodable};
@@ -48,6 +49,36 @@ impl Block {
     }
 }
 
+#[derive(Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash)]
+pub struct SchnorrSignature(pub [u8; 64]);
+
+impl Serialize for SchnorrSignature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Simply serialize the byte array as a sequence of u8 values.
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for SchnorrSignature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize as a byte array. Ensure it has the correct length.
+        let bytes: Vec<u8> = Deserialize::deserialize(deserializer)?;
+        if bytes.len() == 64 {
+            let mut array = [0u8; 64];
+            array.copy_from_slice(&bytes);
+            Ok(SchnorrSignature(array))
+        } else {
+            Err(serde::de::Error::invalid_length(bytes.len(), &"length 64"))
+        }
+    }
+}
+
 /// A signed block combines a block with the naive threshold secp schnorr
 /// signature for its header created by the federation. The signed blocks allow
 /// clients and recovering guardians to verify the federations consensus
@@ -55,7 +86,7 @@ impl Block {
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct SignedBlock {
     pub block: Block,
-    pub signatures: std::collections::BTreeMap<PeerId, [u8; 64]>,
+    pub signatures: std::collections::BTreeMap<PeerId, SchnorrSignature>,
 }
 
 // TODO: remove this as soon as we bump bitcoin_hashes in fedimint_core to

@@ -49,6 +49,7 @@ miniscript = { version = "9.0.2", features = [ "compiler", "serde" ] }
 secp256k1-zkp = { version = "0.7.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
 macro_rules_attribute = "0.1.3"
 bitvec = "1.0.1"
+parity-scale-codec = "3.5.0"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.18.0", features = ["webpki-tls"], default-features = false }

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
-use fedimint_core::block::consensus_hash_sha256;
+use fedimint_core::block::{consensus_hash_sha256, SchnorrSignature};
 use fedimint_core::{BitcoinHash, PeerId};
 use secp256k1_zkp::hashes::sha256;
 use secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
@@ -72,17 +72,19 @@ impl aleph_bft::Index for Keychain {
 
 #[async_trait::async_trait]
 impl aleph_bft::Keychain for Keychain {
-    type Signature = [u8; 64];
+    type Signature = SchnorrSignature;
 
     fn node_count(&self) -> aleph_bft::NodeCount {
         self.peer_count().into()
     }
 
     async fn sign(&self, message: &[u8]) -> Self::Signature {
-        self.secp
-            .sign_schnorr(&self.tagged_hash(message), &self.keypair)
-            .as_ref()
-            .to_owned()
+        SchnorrSignature(
+            self.secp
+                .sign_schnorr(&self.tagged_hash(message), &self.keypair)
+                .as_ref()
+                .to_owned(),
+        )
     }
 
     fn verify(
@@ -94,7 +96,7 @@ impl aleph_bft::Keychain for Keychain {
         let peer_id = conversion::to_peer_id(node_index);
 
         if let Some(public_key) = self.public_keys.get(&peer_id) {
-            if let Ok(sig) = schnorr::Signature::from_slice(signature) {
+            if let Ok(sig) = schnorr::Signature::from_slice(&signature.0) {
                 return self
                     .secp
                     .verify_schnorr(
@@ -111,7 +113,7 @@ impl aleph_bft::Keychain for Keychain {
 }
 
 impl aleph_bft::MultiKeychain for Keychain {
-    type PartialMultisignature = aleph_bft::NodeMap<[u8; 64]>;
+    type PartialMultisignature = aleph_bft::NodeMap<SchnorrSignature>;
 
     fn bootstrap_multi(
         &self,
@@ -119,7 +121,7 @@ impl aleph_bft::MultiKeychain for Keychain {
         index: aleph_bft::NodeIndex,
     ) -> Self::PartialMultisignature {
         let mut partial = aleph_bft::NodeMap::with_size(self.peer_count().into());
-        partial.insert(index, *signature);
+        partial.insert(index, signature.clone());
         partial
     }
 

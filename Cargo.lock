@@ -1349,6 +1349,7 @@ dependencies = [
  "macro_rules_attribute",
  "miniscript",
  "once_cell",
+ "parity-scale-codec",
  "rand",
  "secp256k1-zkp",
  "serde",
