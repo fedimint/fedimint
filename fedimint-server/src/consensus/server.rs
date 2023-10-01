@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::{Receiver, Sender};
+use bitcoin_hashes::sha256;
 use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{apply_migrations, Database};
-use fedimint_core::encoding::Decodable;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
@@ -19,9 +19,7 @@ use tracing::{debug, info, warn};
 use crate::atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
-use crate::db::{
-    get_global_database_migrations, AcceptedIndex, SessionIndexKey, GLOBAL_DATABASE_VERSION,
-};
+use crate::db::{get_global_database_migrations, AcceptedIndex, GLOBAL_DATABASE_VERSION};
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
 use crate::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
@@ -36,19 +34,15 @@ pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
 
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
-    /// `TaskGroup` that is running the server
-    pub task_group: TaskGroup,
     /// Delegate for processing consensus information
     pub consensus: FedimintConsensus,
+    /// Allows clients to access consensus state
     pub consensus_api: ConsensusApi,
     /// Aleph BFT instance
     pub atomic_broadcast: AtomicBroadcast,
     /// Our configuration
     pub cfg: ServerConfig,
-    /// The list of all other peers
-    pub other_peers: Vec<PeerId>,
-    /// Under the HBBFT consensus algorithm, this will track the latest epoch
-    /// message received by each peer and when it was received
+    /// tracks the last session a message was received by peer
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     /// Used for decoding module specific-values
     pub decoders: ModuleDecoderRegistry,
@@ -87,7 +81,11 @@ impl ConsensusServer {
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<Self> {
+        // We need four peers to run the atomic broadcast
         assert!(cfg.consensus.api_endpoints.len() >= 4);
+
+        // Check the configs are valid
+        cfg.validate_config(&cfg.local.identity, &module_inits)?;
 
         // Apply database migrations and build `ServerModuleRegistry`
         let mut modules = BTreeMap::new();
@@ -125,19 +123,7 @@ impl ConsensusServer {
             modules.insert(*module_id, (kind, module));
         }
 
-        // Check the configs are valid
-        cfg.validate_config(&cfg.local.identity, &module_inits)?;
-
-        // Build P2P connections for HBBFT consensus
-        let (connections, peer_status_channels) = ReconnectPeerConnections::new(
-            cfg.network_config(),
-            delay_calculator,
-            connector,
-            task_group,
-        )
-        .await;
-
-        let connections = connections.into_dyn();
+        let modules = ModuleRegistry::from(modules);
 
         let keychain = Keychain::new(
             cfg.local.identity,
@@ -157,6 +143,17 @@ impl ConsensusServer {
             outgoing_sender,
         );
 
+        // Build P2P connections for the atomic broadcast
+        let (connections, peer_status_channels) = ReconnectPeerConnections::new(
+            cfg.network_config(),
+            delay_calculator,
+            connector,
+            task_group,
+        )
+        .await;
+
+        let connections = connections.into_dyn();
+
         let other_peers: Vec<PeerId> = cfg
             .local
             .p2p_endpoints
@@ -165,25 +162,31 @@ impl ConsensusServer {
             .filter(|peer| *peer != cfg.local.identity)
             .collect();
 
+        relay_messages(
+            task_group,
+            connections,
+            outgoing_receiver,
+            incoming_sender,
+            other_peers,
+        )
+        .await;
+
         // Build API that can handle requests
-        let client_cfg = cfg.consensus.to_client_config(&module_inits)?;
-        let modules = ModuleRegistry::from(modules);
-        let latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>> = Default::default();
-        let supported_api_versions =
-            ServerConfig::supported_api_versions_summary(&cfg.consensus.modules, &module_inits);
+        let latest_contribution_by_peer = Default::default();
 
         let consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             invitation_codes_tracker: InvitationCodesTracker::new(db.clone(), task_group).await,
             db: db.clone(),
             modules: modules.clone(),
-            client_cfg,
+            client_cfg: cfg.consensus.to_client_config(&module_inits)?,
             submission_sender: submission_sender.clone(),
-            supported_api_versions,
+            supported_api_versions: ServerConfig::supported_api_versions_summary(
+                &cfg.consensus.modules,
+                &module_inits,
+            ),
             latest_contribution_by_peer: Arc::clone(&latest_contribution_by_peer),
             peer_status_channels,
-            // keep the status for a short time to protect the system against a denial-of-service
-            // attack
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
         };
 
@@ -195,78 +198,16 @@ impl ConsensusServer {
             client_cfg_hash: consensus_api.client_cfg.consensus_hash(),
         };
 
-        relay_messages(
-            task_group,
-            connections,
-            outgoing_receiver,
-            incoming_sender,
-            other_peers.clone(),
-            modules.decoder_registry().clone(),
-        )
-        .await;
-
         submit_module_consensus_items(task_group, consensus.clone(), submission_sender).await;
 
         Ok(ConsensusServer {
-            task_group: task_group.clone(),
             atomic_broadcast,
             consensus,
             consensus_api,
             cfg: cfg.clone(),
-            other_peers,
             latest_contribution_by_peer,
             decoders: modules.decoder_registry(),
         })
-    }
-
-    async fn confirm_consensus_config_hash(&self, api: &WsFederationApi) -> anyhow::Result<()> {
-        let our_hash = self.cfg.consensus.consensus_hash();
-
-        info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
-
-        loop {
-            match api.consensus_config_hash().await {
-                Ok(consensus_hash) => {
-                    if consensus_hash != our_hash {
-                        bail!("Our consensus config doesn't match peers!")
-                    }
-
-                    info!(target: LOG_CONSENSUS, "Confirmed peers config {our_hash}");
-
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
-                }
-            }
-
-            sleep(Duration::from_millis(100)).await;
-        }
-    }
-
-    async fn process_consensus_item(&self, item: Vec<u8>, index: u64, peer_id: PeerId) -> Decision {
-        match self
-            .consensus
-            .process_consensus_item(item, index, peer_id)
-            .await
-        {
-            Ok(()) => {
-                debug!(
-                    target: LOG_CONSENSUS,
-                    "Accept consensus item from {peer_id}"
-                );
-
-                Decision::Accept
-            }
-            Err(error) => {
-                debug!(
-                    target: LOG_CONSENSUS,
-                    "Discard consensus item from {peer_id}: {error}"
-                );
-
-                Decision::Discard
-            }
-        }
     }
 
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
@@ -281,7 +222,7 @@ impl ConsensusServer {
 
         let federation_api = WsFederationApi::new(api_endpoints.clone());
 
-        self.confirm_consensus_config_hash(&federation_api).await?;
+        confirm_consensus_config_hash(&federation_api, self.cfg.consensus.consensus_hash()).await?;
 
         while !task_handle.is_shutting_down() {
             let (session_index, accepted_indices) = self.consensus.open_session().await;
@@ -325,13 +266,27 @@ impl ConsensusServer {
                                 }
                             }
                             _ => {
-                                let decision = self
+                                match self
+                                    .consensus
                                     .process_consensus_item(item.item, item.index, item.peer_id)
-                                    .await;
+                                    .await
+                                {
+                                    Ok(()) => {
+                                        decision_sender
+                                            .send(Decision::Accept)
+                                            .expect("This is the only sender");
+                                    }
+                                    Err(error) => {
+                                        debug!(
+                                            target: LOG_CONSENSUS,
+                                            "Discard consensus item: {error}"
+                                        );
 
-                                decision_sender
-                                    .send(decision)
-                                    .expect("This is the only sender");
+                                        decision_sender
+                                            .send(Decision::Discard)
+                                            .expect("This is the only sender");
+                                    }
+                                }
                             }
                         }
                     }
@@ -350,13 +305,38 @@ impl ConsensusServer {
     }
 }
 
+async fn confirm_consensus_config_hash(
+    api: &WsFederationApi,
+    our_hash: sha256::Hash,
+) -> anyhow::Result<()> {
+    info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
+
+    loop {
+        match api.consensus_config_hash().await {
+            Ok(consensus_hash) => {
+                if consensus_hash != our_hash {
+                    bail!("Our consensus config doesn't match peers!")
+                }
+
+                info!(target: LOG_CONSENSUS, "Confirmed peers config {our_hash}");
+
+                return Ok(());
+            }
+            Err(e) => {
+                warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
+            }
+        }
+
+        sleep(Duration::from_millis(100)).await;
+    }
+}
+
 async fn relay_messages(
     task_group: &mut TaskGroup,
     mut connections: PeerConnections<Message>,
     outgoing_receiver: Receiver<(Message, Recipient)>,
     incoming_sender: Sender<Message>,
     other_peers: Vec<PeerId>,
-    decoders: ModuleDecoderRegistry,
 ) {
     task_group
         .spawn("relay_messages", |task_handle| async move {

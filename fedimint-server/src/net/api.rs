@@ -176,9 +176,7 @@ pub struct ConsensusApi {
     pub cfg: ServerConfig,
     /// Database for serving the API
     pub db: Database,
-
     pub invitation_codes_tracker: InvitationCodesTracker,
-
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Cached client config
