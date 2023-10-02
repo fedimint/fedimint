@@ -22,7 +22,7 @@ use tonic_lnd::Client as LndClient;
 use tracing::{info, trace, warn};
 
 use crate::cmd;
-use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
+use crate::util::{poll, poll_max_retries, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 
 #[derive(Clone)]
@@ -48,7 +48,9 @@ impl Bitcoind {
 
         let url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
         let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
-        let client = Arc::new(bitcoincore_rpc::Client::new(&host, auth)?);
+        let client = Arc::new(
+            bitcoincore_rpc::Client::new(&host, auth).context("Failed to connect to bitcoind")?,
+        );
 
         Self::init(&client).await?;
         Ok(Self {
@@ -69,7 +71,9 @@ impl Bitcoind {
 
         // mine blocks
         let address = client.get_new_address(None, None)?;
-        client.generate_to_address(101, &address)?;
+        client
+            .generate_to_address(101, &address)
+            .context("Failed to generate blocks")?;
 
         // wait bitciond is ready
         poll("bitcoind", || async {
@@ -190,8 +194,11 @@ impl Lightningd {
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
-        poll("lightningd", || async {
-            Ok(ClnRpc::new(socket_cln.clone()).await.is_ok())
+        poll_max_retries("lightningd", 10, || async {
+            ClnRpc::new(socket_cln.clone())
+                .await
+                .context("connect to lightningd")?;
+            Ok(true)
         })
         .await?;
         let rpc = ClnRpc::new(socket_cln).await?;
@@ -270,7 +277,7 @@ impl Lnd {
             process,
         };
         // wait for lnd rpc to be active
-        poll("lnd", || async { Ok(this.pub_key().await.is_ok()) }).await?;
+        poll("lnd_startup", || async { Ok(this.pub_key().await.is_ok()) }).await?;
         Ok(this)
     }
 
@@ -318,7 +325,8 @@ impl Lnd {
             lnd_tls_cert.clone(),
             lnd_macaroon.clone(),
         )
-        .await?;
+        .await
+        .context("connect to lnd")?;
         Ok((process, client))
     }
 
@@ -381,7 +389,8 @@ pub async fn open_channel(
         host: Some("127.0.0.1".to_owned()),
         port: Some(process_mgr.globals.FM_PORT_LND_LISTEN),
     })
-    .await?;
+    .await
+    .context("connect request")?;
 
     poll("fund channel", || async {
         Ok(cln
@@ -503,7 +512,11 @@ pub struct Electrs {
 
 impl Electrs {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        let electrs_dir = env::var("FM_ELECTRS_DIR")?;
+        let electrs_dir = process_mgr
+            .globals
+            .FM_ELECTRS_DIR
+            .to_str()
+            .context("non utf8 path")?;
 
         let conf = format!(
             include_str!("cfg/electrs.toml"),
@@ -539,8 +552,16 @@ pub struct Esplora {
 
 impl Esplora {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        let daemon_dir = env::var("FM_BTC_DIR")?;
-        let esplora_dir = env::var("FM_ESPLORA_DIR")?;
+        let daemon_dir = process_mgr
+            .globals
+            .FM_BTC_DIR
+            .to_str()
+            .context("non utf8 path")?;
+        let esplora_dir = process_mgr
+            .globals
+            .FM_ESPLORA_DIR
+            .to_str()
+            .context("non utf8 path")?;
 
         let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
         let esplora_port = process_mgr.globals.FM_PORT_ESPLORA;

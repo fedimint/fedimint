@@ -106,13 +106,8 @@ impl Gatewayd {
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
         let invite_code = fed.invite_code()?;
         poll_max_retries("gateway connect-fed", 60, || async {
-            match cmd!(self, "connect-fed", invite_code.clone()).run().await {
-                Ok(_) => Ok(true),
-                Err(e) => {
-                    debug!("gateway-cli connect-fed failed {:?}", e);
-                    Ok(false)
-                }
-            }
+            cmd!(self, "connect-fed", invite_code.clone()).run().await?;
+            Ok(true)
         })
         .await?;
         Ok(())

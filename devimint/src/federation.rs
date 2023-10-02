@@ -356,7 +356,8 @@ pub async fn run_dkg(
     for (peer_id, client) in &admin_clients {
         const MAX_RETRIES: usize = 20;
         super::poll_max_retries("trying-to-connect-to-peers", MAX_RETRIES, || async {
-            Ok(client.status().await.is_ok())
+            client.status().await?;
+            Ok(true)
         })
         .await?;
         info!("Connected to {peer_id}")
