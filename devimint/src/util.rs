@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::future::Future;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{env, unreachable};
 
 use anyhow::{bail, format_err, Context, Result};
 use fedimint_core::task::{self, block_in_place};
-use fedimint_core::time::now;
 use fedimint_logging::LOG_DEVIMINT;
 use futures::executor::block_on;
 use serde::de::DeserializeOwned;
@@ -290,70 +290,58 @@ macro_rules! cmd {
     };
 }
 
+#[macro_export]
+macro_rules! poll_eq {
+    ($left:expr, $right:expr) => {
+        match ($left, $right) {
+            (left, right) => {
+                if left == right {
+                    Ok(())
+                } else {
+                    Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
+                        "assertion failed, left: {left:?} right: {right:?}"
+                    )))
+                }
+            }
+        }
+    };
+}
+
 // Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 pub(crate) use cmd;
 
-const POLL_INTERVAL: Duration = Duration::from_millis(200);
-
-/// Will retry calling `f` until it returns `Ok(true)` or `retries` times.
-/// A notable difference from [`poll`] is that `f` may fail with an error at any
-/// time and we will still keep retrying.
-pub async fn poll_max_retries<Fut>(name: &str, retries: usize, f: impl Fn() -> Fut) -> Result<()>
+const DEFAULT_RETRIES: usize = 20;
+/// Will retry calling `f`.
+/// - if `f` return Ok(val), this returns with Ok(val).
+/// - if `f` return Err(Control::Break(err)), this returns Err(err)
+/// - if `f` return Err(ControlFlow::Continue(err)), retries a maximum of
+///   `retries` times.
+pub async fn poll<Fut, R>(
+    name: &str,
+    retries: impl Into<Option<usize>>,
+    f: impl Fn() -> Fut,
+) -> Result<R>
 where
-    Fut: Future<Output = Result<bool>>,
+    Fut: Future<Output = Result<R, ControlFlow<anyhow::Error, anyhow::Error>>>,
 {
+    let retries = retries.into().unwrap_or(DEFAULT_RETRIES);
     for i in 0.. {
         match f().await {
-            Ok(true) => return Ok(()),
-            other if i <= retries => {
-                debug!("polling {name} failed with: {other:?}, will retry... ({i}/{retries})");
+            Ok(value) => return Ok(value),
+            Err(ControlFlow::Break(err)) => {
+                return Err(err).with_context(|| format!("polling {name}"));
+            }
+            Err(ControlFlow::Continue(err)) if i <= retries => {
+                debug!("polling {name} failed with: {err:?}, will retry... ({i}/{retries})");
                 task::sleep(Duration::from_secs(1)).await;
             }
-            Ok(false) => {
-                bail!("{name} failed to reach good state after {retries} retries");
-            }
-            Err(e) => {
-                bail!("{name} failed after {retries} retries with: {e:?}");
+            Err(ControlFlow::Continue(err)) => {
+                return Err(err).with_context(|| format!("polling {name} after {retries} retries"));
             }
         }
     }
 
     unreachable!();
-}
-
-pub async fn poll<Fut>(name: &str, f: impl Fn() -> Fut) -> Result<()>
-where
-    Fut: Future<Output = Result<bool>>,
-{
-    poll_value(name, || async { Ok(f().await?.then_some(())) }).await?;
-    Ok(())
-}
-
-pub async fn poll_value<Fut, R>(name: &str, f: impl Fn() -> Fut) -> Result<R>
-where
-    Fut: Future<Output = Result<Option<R>>>,
-{
-    let start = fedimint_core::time::now();
-    for attempt in 0.. {
-        if let Some(output) = f().await? {
-            return Ok(output);
-        }
-        let duration = now().duration_since(start).unwrap_or_default();
-        if Duration::from_secs(10) <= duration {
-            warn!(
-                target: LOG_DEVIMINT,
-                name,
-                attempt = attempt,
-                duration_secs = %duration.as_secs(),
-                "Value not ready",
-            );
-        }
-        let delay =
-            (2 * attempt * POLL_INTERVAL).clamp(Duration::from_millis(10), Duration::from_secs(30));
-        task::sleep(delay).await;
-    }
-
-    unreachable!()
 }
 
 // used to add `cmd` method.

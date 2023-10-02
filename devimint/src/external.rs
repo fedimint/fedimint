@@ -1,10 +1,10 @@
-use std::env;
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::{bitcoin, RpcApi};
 use cln_rpc::ClnRpc;
@@ -21,9 +21,9 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, Pol
 use tonic_lnd::Client as LndClient;
 use tracing::{info, trace, warn};
 
-use crate::cmd;
-use crate::util::{poll, poll_max_retries, ClnLightningCli, ProcessHandle, ProcessManager};
+use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
+use crate::{cmd, poll_eq};
 
 #[derive(Clone)]
 pub struct Bitcoind {
@@ -76,10 +76,19 @@ impl Bitcoind {
             .context("Failed to generate blocks")?;
 
         // wait bitciond is ready
-        poll("bitcoind", || async {
-            Ok(client
+        poll("bitcoind", None, || async {
+            let info = client
                 .get_blockchain_info()
-                .map_or(false, |info| (info.blocks > 100)))
+                .context("bitcoind getblockchaininfo")
+                .map_err(ControlFlow::Continue)?;
+            if info.blocks > 100 {
+                Ok(())
+            } else {
+                Err(ControlFlow::Continue(anyhow!(
+                    "not enough blocks: {}",
+                    info.blocks
+                )))
+            }
         })
         .await?;
         Ok(())
@@ -194,11 +203,11 @@ impl Lightningd {
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
-        poll_max_retries("lightningd", 10, || async {
+        poll("lightningd", 10, || async {
             ClnRpc::new(socket_cln.clone())
                 .await
-                .context("connect to lightningd")?;
-            Ok(true)
+                .context("connect to lightningd")
+                .map_err(ControlFlow::Continue)
         })
         .await?;
         let rpc = ClnRpc::new(socket_cln).await?;
@@ -236,13 +245,20 @@ impl Lightningd {
     }
 
     pub async fn await_block_processing(&self) -> Result<()> {
-        poll("lightningd block processing", || async {
-            let btc_height = self.bitcoind.client().get_blockchain_info()?.blocks;
+        poll("lightningd block processing", None, || async {
+            let btc_height = self
+                .bitcoind
+                .client()
+                .get_blockchain_info()
+                .context("bitcoind getblockchaininfo")
+                .map_err(ControlFlow::Continue)?
+                .blocks;
             let lnd_height = self
                 .request(cln_rpc::model::requests::GetinfoRequest {})
-                .await?
+                .await
+                .map_err(ControlFlow::Continue)?
                 .blockheight;
-            Ok((lnd_height as u64) == btc_height)
+            poll_eq!(lnd_height as u64, btc_height)
         })
         .await?;
         Ok(())
@@ -277,7 +293,10 @@ impl Lnd {
             process,
         };
         // wait for lnd rpc to be active
-        poll("lnd_startup", || async { Ok(this.pub_key().await.is_ok()) }).await?;
+        poll("lnd_startup", None, || async {
+            this.pub_key().await.map_err(ControlFlow::Continue)
+        })
+        .await?;
         Ok(this)
     }
 
@@ -301,32 +320,37 @@ impl Lnd {
         let lnd_rpc_addr = &process_mgr.globals.FM_LND_RPC_ADDR;
         let lnd_macaroon = &process_mgr.globals.FM_LND_MACAROON;
         let lnd_tls_cert = &process_mgr.globals.FM_LND_TLS_CERT;
-        poll("lnd", || async {
-            Ok(fs::try_exists(lnd_tls_cert).await? && fs::try_exists(lnd_macaroon).await?)
+        poll("wait for lnd files", None, || async {
+            if fs::try_exists(lnd_tls_cert)
+                .await
+                .context("lnd tls cert")
+                .map_err(ControlFlow::Continue)?
+                && fs::try_exists(lnd_macaroon)
+                    .await
+                    .context("lnd macaroon")
+                    .map_err(ControlFlow::Continue)?
+            {
+                Ok(())
+            } else {
+                Err(ControlFlow::Continue(anyhow!(
+                    "lnd tls cert or lnd macaroon not found"
+                )))
+            }
         })
         .await?;
 
-        poll("lnd_connect", || async {
-            let result = tonic_lnd::connect(
+        let client = poll("lnd_connect", None, || async {
+            tonic_lnd::connect(
                 lnd_rpc_addr.clone(),
                 lnd_tls_cert.clone(),
                 lnd_macaroon.clone(),
             )
-            .await;
-            if let Err(e) = &result {
-                info!("lnd_connect failed: {:?}", e);
-            }
-            Ok(result.is_ok())
+            .await
+            .context("lnd connect")
+            .map_err(ControlFlow::Continue)
         })
         .await?;
 
-        let client = tonic_lnd::connect(
-            lnd_rpc_addr.clone(),
-            lnd_tls_cert.clone(),
-            lnd_macaroon.clone(),
-        )
-        .await
-        .context("connect to lnd")?;
         Ok((process, client))
     }
 
@@ -346,14 +370,22 @@ impl Lnd {
     }
 
     pub async fn await_block_processing(&self) -> Result<()> {
-        poll("lnd block processing", || async {
-            Ok(self
+        poll("lnd block processing", None, || async {
+            let synced = self
                 .client_lock()
-                .await?
+                .await
+                .map_err(ControlFlow::Break)?
                 .get_info(GetInfoRequest {})
-                .await?
+                .await
+                .context("lnd get_info")
+                .map_err(ControlFlow::Continue)?
                 .into_inner()
-                .synced_to_chain)
+                .synced_to_chain;
+            if synced {
+                Ok(())
+            } else {
+                Err(ControlFlow::Continue(anyhow!("lnd not synced_to_chain")))
+            }
         })
         .await?;
         Ok(())
@@ -392,43 +424,52 @@ pub async fn open_channel(
     .await
     .context("connect request")?;
 
-    poll("fund channel", || async {
-        Ok(cln
-            .request(cln_rpc::model::requests::FundchannelRequest {
-                id: lnd_pubkey.parse()?,
-                amount: cln_rpc::primitives::AmountOrAll::Amount(
-                    cln_rpc::primitives::Amount::from_sat(10_000_000),
-                ),
-                push_msat: Some(cln_rpc::primitives::Amount::from_sat(5_000_000)),
-                feerate: None,
-                announce: None,
-                minconf: None,
-                close_to: None,
-                request_amt: None,
-                compact_lease: None,
-                utxos: None,
-                mindepth: None,
-                reserve: None,
-            })
-            .await
-            .is_ok())
+    poll("fund channel", None, || async {
+        cln.request(cln_rpc::model::requests::FundchannelRequest {
+            id: lnd_pubkey
+                .parse()
+                .context("failed to parse lnd pubkey")
+                .map_err(ControlFlow::Break)?,
+            amount: cln_rpc::primitives::AmountOrAll::Amount(
+                cln_rpc::primitives::Amount::from_sat(10_000_000),
+            ),
+            push_msat: Some(cln_rpc::primitives::Amount::from_sat(5_000_000)),
+            feerate: None,
+            announce: None,
+            minconf: None,
+            close_to: None,
+            request_amt: None,
+            compact_lease: None,
+            utxos: None,
+            mindepth: None,
+            reserve: None,
+        })
+        .await
+        .map_err(ControlFlow::Continue)
     })
     .await?;
 
-    poll("list peers", || async {
-        Ok(!cln
+    poll("list peers", None, || async {
+        let num_peers = cln
             .request(cln_rpc::model::requests::ListpeersRequest {
-                id: Some(lnd_pubkey.parse()?),
+                id: Some(
+                    lnd_pubkey
+                        .parse()
+                        .context("parse lnd pubkey")
+                        .map_err(ControlFlow::Break)?,
+                ),
                 level: None,
             })
-            .await?
+            .await
+            .map_err(ControlFlow::Break)?
             .peers
-            .is_empty())
+            .len();
+        poll_eq!(num_peers, 1)
     })
     .await?;
     bitcoind.mine_blocks(10).await?;
 
-    poll("Wait for channel update", || async {
+    poll("Wait for channel update", None, || async {
         let mut lnd_client = lnd.client.lock().await;
         let channels = lnd_client
             .lightning()
@@ -436,7 +477,9 @@ pub async fn open_channel(
                 active_only: true,
                 ..Default::default()
             })
-            .await?
+            .await
+            .context("lnd list channels")
+            .map_err(ControlFlow::Break)?
             .into_inner();
 
         if let Some(channel) = channels
@@ -455,7 +498,7 @@ pub async fn open_channel(
                 Ok(info) => {
                     let edge = info.into_inner();
                     if edge.node1_policy.is_some() {
-                        return Ok(true);
+                        return Ok(());
                     } else {
                         warn!(?edge, "Empty chan info");
                     }
@@ -466,7 +509,7 @@ pub async fn open_channel(
             }
         }
 
-        Ok(false)
+        Err(ControlFlow::Continue(anyhow!("channel not found")))
     })
     .await?;
 

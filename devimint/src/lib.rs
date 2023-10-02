@@ -1,13 +1,14 @@
 use std::collections::HashMap;
+use std::ops::ControlFlow;
 
 use anyhow::{Context, Result};
 use federation::Federation;
 use fedimint_logging::LOG_DEVIMINT;
-use tracing::{debug, info};
+use tracing::info;
 
 pub mod util;
 pub mod vars;
-use util::{poll_max_retries, Command, ProcessHandle, ProcessManager};
+use util::{poll, Command, ProcessHandle, ProcessManager};
 use vars::utf8;
 
 mod external;
@@ -105,9 +106,12 @@ impl Gatewayd {
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
         let invite_code = fed.invite_code()?;
-        poll_max_retries("gateway connect-fed", 60, || async {
-            cmd!(self, "connect-fed", invite_code.clone()).run().await?;
-            Ok(true)
+        poll("gateway connect-fed", 60, || async {
+            cmd!(self, "connect-fed", invite_code.clone())
+                .run()
+                .await
+                .map_err(ControlFlow::Continue)?;
+            Ok(())
         })
         .await?;
         Ok(())
