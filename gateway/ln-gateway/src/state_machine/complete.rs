@@ -1,8 +1,8 @@
 use fedimint_client::sm::{OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_ln_client::incoming::IncomingSmStates;
 use fedimint_ln_common::contracts::Preimage;
-use fedimint_ln_common::incoming::IncomingSmStates;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

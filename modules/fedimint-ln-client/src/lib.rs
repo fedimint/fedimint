@@ -1,4 +1,5 @@
 mod db;
+pub mod incoming;
 pub mod pay;
 mod receive;
 
@@ -10,7 +11,7 @@ use std::time::{Duration, SystemTime};
 use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 use db::{DbKeyPrefix, LightningGatewayKey};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -29,26 +30,25 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
+use fedimint_core::task::timeout;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
-use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
+use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
     OutgoingContract, OutgoingContractAccount, OutgoingContractData,
 };
 use fedimint_ln_common::contracts::{
-    Contract, ContractId, EncryptedPreimage, IdentifiableContract, Preimage,
-};
-use fedimint_ln_common::incoming::{
-    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
+    Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
 };
 use fedimint_ln_common::{
-    create_incoming_contract_output, ln_operation, ContractOutput, LightningClientContext,
-    LightningCommonGen, LightningGateway, LightningModuleTypes, LightningOutput, KIND,
+    ln_operation, ContractOutput, LightningClientContext, LightningCommonGen, LightningGateway,
+    LightningModuleTypes, LightningOutput, KIND,
 };
 use futures::StreamExt;
+use incoming::IncomingSmError;
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
@@ -62,6 +62,9 @@ use thiserror::Error;
 use tracing::{debug, error};
 
 use crate::db::LightningGatewayKeyPrefix;
+use crate::incoming::{
+    FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
+};
 use crate::pay::{
     GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
     LightningPayStateMachine, LightningPayStates,
@@ -1100,4 +1103,55 @@ fn network_to_currency(network: Network) -> Currency {
         Network::Testnet => Currency::BitcoinTestnet,
         Network::Signet => Currency::Signet,
     }
+}
+
+async fn fetch_and_validate_offer(
+    module_api: &DynModuleApi,
+    payment_hash: sha256::Hash,
+    amount_msat: Amount,
+) -> anyhow::Result<IncomingContractOffer, IncomingSmError> {
+    let offer = timeout(Duration::from_secs(5), module_api.fetch_offer(payment_hash))
+        .await
+        .map_err(|_| IncomingSmError::TimeoutFetchingOffer { payment_hash })?
+        .map_err(|e| IncomingSmError::FetchContractError {
+            payment_hash,
+            error_message: e.to_string(),
+        })?;
+
+    if offer.amount > amount_msat {
+        return Err(IncomingSmError::ViolatedFeePolicy {
+            offer_amount: offer.amount,
+            payment_amount: amount_msat,
+        });
+    }
+    if offer.hash != payment_hash {
+        return Err(IncomingSmError::InvalidOffer {
+            offer_hash: offer.hash,
+            payment_hash,
+        });
+    }
+    Ok(offer)
+}
+
+pub async fn create_incoming_contract_output(
+    module_api: &DynModuleApi,
+    payment_hash: sha256::Hash,
+    amount_msat: Amount,
+    redeem_key: secp256k1::KeyPair,
+) -> Result<(LightningOutput, ContractId), IncomingSmError> {
+    let offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).await?;
+    let our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(&redeem_key).0;
+    let contract = IncomingContract {
+        hash: offer.hash,
+        encrypted_preimage: offer.encrypted_preimage.clone(),
+        decrypted_preimage: DecryptedPreimage::Pending,
+        gateway_key: our_pub_key,
+    };
+    let contract_id = contract.contract_id();
+    let incoming_output = LightningOutput::Contract(ContractOutput {
+        amount: offer.amount,
+        contract: Contract::Incoming(contract),
+    });
+
+    Ok((incoming_output, contract_id))
 }

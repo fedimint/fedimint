@@ -13,21 +13,17 @@ pub mod api;
 pub mod config;
 pub mod contracts;
 pub mod db;
-pub mod incoming;
 
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use anyhow::bail;
-use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::{Context, OperationId};
 use fedimint_client::Client;
-use fedimint_core::api::DynModuleApi;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::task::timeout;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use lightning::routing::gossip::RoutingFees;
@@ -35,13 +31,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::api::LnFederationApi;
-use crate::contracts::incoming::{IncomingContract, IncomingContractOffer, OfferId};
-use crate::contracts::{
-    Contract, ContractId, ContractOutcome, DecryptedPreimage, IdentifiableContract, Preimage,
-    PreimageDecryptionShare,
-};
-use crate::incoming::IncomingSmError;
+use crate::contracts::incoming::OfferId;
+use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, PreimageDecryptionShare};
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
@@ -451,55 +442,4 @@ pub async fn ln_operation(
     }
 
     Ok(operation)
-}
-
-async fn fetch_and_validate_offer(
-    module_api: &DynModuleApi,
-    payment_hash: sha256::Hash,
-    amount_msat: Amount,
-) -> anyhow::Result<IncomingContractOffer, IncomingSmError> {
-    let offer = timeout(Duration::from_secs(5), module_api.fetch_offer(payment_hash))
-        .await
-        .map_err(|_| IncomingSmError::TimeoutFetchingOffer { payment_hash })?
-        .map_err(|e| IncomingSmError::FetchContractError {
-            payment_hash,
-            error_message: e.to_string(),
-        })?;
-
-    if offer.amount > amount_msat {
-        return Err(IncomingSmError::ViolatedFeePolicy {
-            offer_amount: offer.amount,
-            payment_amount: amount_msat,
-        });
-    }
-    if offer.hash != payment_hash {
-        return Err(IncomingSmError::InvalidOffer {
-            offer_hash: offer.hash,
-            payment_hash,
-        });
-    }
-    Ok(offer)
-}
-
-pub async fn create_incoming_contract_output(
-    module_api: &DynModuleApi,
-    payment_hash: sha256::Hash,
-    amount_msat: Amount,
-    redeem_key: secp256k1::KeyPair,
-) -> Result<(LightningOutput, ContractId), IncomingSmError> {
-    let offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).await?;
-    let our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(&redeem_key).0;
-    let contract = IncomingContract {
-        hash: offer.hash,
-        encrypted_preimage: offer.encrypted_preimage.clone(),
-        decrypted_preimage: DecryptedPreimage::Pending,
-        gateway_key: our_pub_key,
-    };
-    let contract_id = contract.contract_id();
-    let incoming_output = LightningOutput::Contract(ContractOutput {
-        amount: offer.amount,
-        contract: Contract::Incoming(contract),
-    });
-
-    Ok((incoming_output, contract_id))
 }

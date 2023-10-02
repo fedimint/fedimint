@@ -18,15 +18,16 @@ use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
+use fedimint_ln_common::api::LnFederationApi;
+use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
+use fedimint_ln_common::contracts::{ContractId, DecryptedPreimage, Preimage};
+use fedimint_ln_common::{LightningInput, LightningOutputOutcome};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::api::LnFederationApi;
-use crate::contracts::incoming::IncomingContractAccount;
-use crate::contracts::{ContractId, DecryptedPreimage, Preimage};
-use crate::{LightningClientContext, LightningInput, LightningOutputOutcome};
+use crate::LightningClientContext;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes a transaction between two users
