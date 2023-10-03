@@ -169,7 +169,7 @@ impl GatewayPayInvoice {
     ) -> Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError> {
         let account = global_context
             .module_api()
-            .fetch_contract(contract_id)
+            .wait_contract(contract_id)
             .await
             .map_err(|_| OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id })?;
 

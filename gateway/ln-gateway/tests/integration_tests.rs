@@ -248,7 +248,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let (gateway_module, instance) =
                 gateway.get_first_module::<GatewayClientModule>(&fedimint_ln_common::KIND);
 
-            let account = instance.api.fetch_contract(contract_id).await?;
+            let account = instance.api.wait_contract(contract_id).await?;
             let outgoing_contract = match account.contract {
                 FundedContract::Outgoing(contract) => OutgoingContractAccount {
                     amount: account.amount,
