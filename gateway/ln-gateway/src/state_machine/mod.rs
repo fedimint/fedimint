@@ -24,16 +24,17 @@ use fedimint_core::module::{
 };
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+use fedimint_ln_client::create_incoming_contract_output;
+use fedimint_ln_client::incoming::{
+    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
+};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
-use fedimint_ln_common::incoming::{
-    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
-};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    create_incoming_contract_output, ln_operation, LightningClientContext, LightningCommonGen,
-    LightningGateway, LightningModuleTypes, LightningOutput, KIND,
+    ln_operation, LightningClientContext, LightningCommonGen, LightningGateway,
+    LightningModuleTypes, LightningOutput, KIND,
 };
 use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
