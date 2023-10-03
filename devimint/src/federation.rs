@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::{env, fs};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
 use bitcoincore_rpc::RpcApi;
 use fedimint_core::admin_client::{
@@ -26,9 +27,10 @@ use rand::Rng;
 use tracing::info;
 
 use super::external::Bitcoind;
-use super::util::{cmd, parse_map, poll, Command, ProcessHandle, ProcessManager};
+use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
-use crate::vars;
+use crate::util::poll;
+use crate::{poll_eq, vars};
 
 pub struct Federation {
     // client is only for internal use, use cli commands instead
@@ -208,14 +210,14 @@ impl Federation {
             .to_owned();
         self.bitcoind.send_to(pegin_addr, amount).await?;
         self.bitcoind.mine_blocks(21).await?;
-        poll("gateway pegin", || async {
+        poll("gateway pegin", None, || async {
             let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
                 .out_json()
-                .await?
+                .await
+                .map_err(ControlFlow::Continue)?
                 .as_u64()
                 .unwrap();
-
-            Ok(gateway_balance == (amount * 1000))
+            poll_eq!(gateway_balance, amount * 1000)
         })
         .await?;
         Ok(())
@@ -265,12 +267,16 @@ impl Federation {
     }
 
     pub async fn await_gateways_registered(&self) -> Result<()> {
-        poll("gateways registered", || async {
-            Ok(cmd!(self, "list-gateways")
+        poll("gateways registered", None, || async {
+            let num_gateways = cmd!(self, "list-gateways")
                 .out_json()
-                .await?
+                .await
+                .map_err(ControlFlow::Continue)?
                 .as_array()
-                .map_or(false, |x| x.len() == 2))
+                .context("invalid output")
+                .map_err(ControlFlow::Break)?
+                .len();
+            poll_eq!(num_gateways, 2)
         })
         .await?;
         Ok(())
@@ -355,8 +361,12 @@ pub async fn run_dkg(
     let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
     for (peer_id, client) in &admin_clients {
         const MAX_RETRIES: usize = 20;
-        super::poll_max_retries("trying-to-connect-to-peers", MAX_RETRIES, || async {
-            Ok(client.status().await.is_ok())
+        super::poll("trying-to-connect-to-peers", MAX_RETRIES, || async {
+            client
+                .status()
+                .await
+                .context("dkg status")
+                .map_err(ControlFlow::Continue)
         })
         .await?;
         info!("Connected to {peer_id}")
@@ -477,11 +487,8 @@ pub async fn run_dkg(
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
             tracing::info!("Error calling start_consensus: {e:?}, trying to continue...")
         }
-        const RETRIES: usize = 20;
-        super::poll_max_retries("waiting-consensus-running-for-peer", RETRIES, || async {
-            Ok(client.status().await?.server == ServerStatus::ConsensusRunning)
-        })
-        .await?;
+
+        wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
     info!("Consensus is running");
     Ok(())
@@ -521,8 +528,20 @@ async fn set_config_gen_params(
 
 async fn wait_server_status(client: &WsAdminClient, expected_status: ServerStatus) -> Result<()> {
     const RETRIES: usize = 60;
-    super::poll_max_retries("waiting-server-status", RETRIES, || async {
-        Ok(client.status().await?.server == expected_status)
+    super::poll("waiting-server-status", RETRIES, || async {
+        let server_status = client
+            .status()
+            .await
+            .context("server status")
+            .map_err(ControlFlow::Continue)?
+            .server;
+        if server_status == expected_status {
+            Ok(())
+        } else {
+            Err(ControlFlow::Continue(anyhow!(
+                "expected status: {expected_status:?} current status: {server_status:?}"
+            )))
+        }
     })
     .await?;
     Ok(())

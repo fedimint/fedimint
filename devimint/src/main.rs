@@ -1,18 +1,19 @@
 use std::env;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bitcoincore_rpc::bitcoin;
 use bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 use bitcoincore_rpc::bitcoin::Txid;
 use clap::{Parser, Subcommand};
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use devimint::federation::{Federation, Fedimintd};
-use devimint::util::{poll, poll_max_retries, poll_value, ProcessManager};
+use devimint::util::{poll, ProcessManager};
 use devimint::{
-    cmd, dev_fed, external_daemons, vars, DevFed, ExternalDaemons, Gatewayd, LightningNode,
-    Lightningd, Lnd,
+    cmd, dev_fed, external_daemons, poll_eq, vars, DevFed, ExternalDaemons, Gatewayd,
+    LightningNode, Lightningd, Lnd,
 };
 use fedimint_cli::LnInvoiceResponse;
 use fedimint_core::task::TaskGroup;
@@ -663,9 +664,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
     let fees_sat = withdraw_res["fees_sat"].as_u64().unwrap();
 
-    let tx_hex = poll_value("Waiting for transaction in mempool", || async {
+    let tx_hex = poll("Waiting for transaction in mempool", None, || async {
         // TODO: distinguish errors from not found
-        Ok(bitcoind.get_raw_transaction(&txid).await.ok())
+        bitcoind
+            .get_raw_transaction(&txid)
+            .await
+            .context("getrawtransaction")
+            .map_err(ControlFlow::Continue)
     })
     .await
     .expect("cannot fail, gets stuck");
@@ -916,41 +921,41 @@ async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     )?;
 
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
-    poll_max_retries(
+    poll(
         "Waiting for CLN Gateway Running state after reboot",
         10,
         || async {
             let mut new_cln_cmd = cmd!(new_gw_cln, "info");
-            let cln_value = new_cln_cmd.out_json().await?;
-            let reboot_info: GatewayInfo = serde_json::from_value(cln_value)?;
+            let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+            let reboot_info: GatewayInfo = serde_json::from_value(cln_value).context("json invalid").map_err(ControlFlow::Break)?;
 
             if reboot_info.gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "CLN Gateway restarted, with auto-rejoin to federation");
                 // Assert that the gateway info is the same as before the reboot
                 assert_eq!(cln_info, reboot_info);
-                return Ok(true);
+                return Ok(());
             }
-            Ok(false)
+            Err(ControlFlow::Continue(anyhow!("gateway not running")))
         },
     )
     .await?;
 
     let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
-    poll_max_retries(
+    poll(
         "Waiting for LND Gateway Running state after reboot",
         10,
         || async {
             let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
-            let lnd_value = new_lnd_cmd.out_json().await?;
-            let reboot_info: GatewayInfo = serde_json::from_value(lnd_value)?;
+            let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+            let reboot_info: GatewayInfo = serde_json::from_value(lnd_value).context("json invalid").map_err(ControlFlow::Break)?;
 
             if reboot_info.gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
                 // Assert that the gateway info is the same as before the reboot
                 assert_eq!(lnd_info, reboot_info);
-                return Ok(true);
+                return Ok(());
             }
-            Ok(false)
+            Err(ControlFlow::Continue(anyhow!("gateway not running")))
         },
     )
     .await?;
@@ -968,12 +973,18 @@ async fn do_try_create_and_pay_invoice(
     // Verify that after the lightning node has restarted, the gateway
     // automatically reconnects and can query the lightning node
     // info again.
-    poll("Waiting for info to succeed after restart", || async {
-        let mut info_cmd = cmd!(gw, "info");
-        let lightning_info = info_cmd.out_json().await?;
-        let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)?;
-        Ok(gateway_info.lightning_pub_key.is_some())
-    })
+    poll(
+        "Waiting for info to succeed after restart",
+        None,
+        || async {
+            let mut info_cmd = cmd!(gw, "info");
+            let lightning_info = info_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+            let gateway_info: GatewayInfo = serde_json::from_value(lightning_info)
+                .context("invalid json")
+                .map_err(ControlFlow::Break)?;
+            poll_eq!(gateway_info.lightning_pub_key.is_some(), true)
+        },
+    )
     .await?;
 
     fed.use_gateway(gw).await?;
@@ -1087,9 +1098,9 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     fed.start_server(process_mgr, 2).await?;
     fed.start_server(process_mgr, 3).await?;
 
-    poll_max_retries("federation back online", 15, || async {
-        fed.await_all_peers().await?;
-        Ok(true)
+    poll("federation back online", None, || async {
+        fed.await_all_peers().await.map_err(ControlFlow::Continue)?;
+        Ok(())
     })
     .await?;
 
@@ -1190,8 +1201,11 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
             let server_addr = &vars.FM_BIND_API;
 
-            poll("waiting for api startup", || async {
-                Ok(TcpStream::connect(server_addr).await.is_ok())
+            poll("waiting for api startup", None, || async {
+                TcpStream::connect(server_addr)
+                    .await
+                    .context("connect to api")
+                    .map_err(ControlFlow::Continue)
             })
             .await?;
 
@@ -1366,8 +1380,16 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
     match rpc {
         RpcCmd::Env => {
             let env_file = common.test_dir.join("env");
-            poll("env file", || async {
-                Ok(fs::try_exists(&env_file).await?)
+            poll("env file", None, || async {
+                if fs::try_exists(&env_file)
+                    .await
+                    .context("env file")
+                    .map_err(ControlFlow::Continue)?
+                {
+                    Ok(())
+                } else {
+                    Err(ControlFlow::Continue(anyhow!("env file not found")))
+                }
             })
             .await?;
             let env = fs::read_to_string(&env_file).await?;
@@ -1376,8 +1398,16 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
         }
         RpcCmd::Wait => {
             let ready_file = common.test_dir.join("ready");
-            poll("ready file", || async {
-                Ok(fs::try_exists(&ready_file).await?)
+            poll("ready file", None, || async {
+                if fs::try_exists(&ready_file)
+                    .await
+                    .context("ready file")
+                    .map_err(ControlFlow::Continue)?
+                {
+                    Ok(())
+                } else {
+                    Err(ControlFlow::Continue(anyhow!("ready file not found")))
+                }
             })
             .await?;
             let env = fs::read_to_string(&ready_file).await?;
