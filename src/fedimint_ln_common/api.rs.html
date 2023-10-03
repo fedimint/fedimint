@@ -127,11 +127,20 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
-    WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
+    ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::UnionResponses;
@@ -147,6 +156,7 @@
 </span><span class="kw">pub trait </span>LnFederationApi {
     <span class="kw">async fn </span>fetch_consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;;
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt;;
+    <span class="kw">async fn </span>wait_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt;;
     <span class="kw">async fn </span>fetch_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Sha256Hash,
@@ -180,6 +190,14 @@
     </span>}
 
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
+        <span class="self">self</span>.request_current_consensus(
+            ACCOUNT_ENDPOINT.to_string(),
+            ApiRequestErased::new(contract),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>wait_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
         <span class="self">self</span>.request_current_consensus(
             WAIT_ACCOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
@@ -232,7 +250,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: ContractId,
     ) -&gt; anyhow::Result&lt;IncomingContractAccount&gt; {
-        <span class="kw">let </span>account = <span class="self">self</span>.fetch_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>account = <span class="self">self</span>.wait_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">match </span>account.contract {
             FundedContract::Incoming(c) =&gt; <span class="prelude-val">Ok</span>(IncomingContractAccount {
                 amount: account.amount,
@@ -246,7 +264,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: ContractId,
     ) -&gt; anyhow::Result&lt;OutgoingContractAccount&gt; {
-        <span class="kw">let </span>account = <span class="self">self</span>.fetch_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>account = <span class="self">self</span>.wait_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">match </span>account.contract {
             FundedContract::Outgoing(c) =&gt; <span class="prelude-val">Ok</span>(OutgoingContractAccount {
                 amount: account.amount,

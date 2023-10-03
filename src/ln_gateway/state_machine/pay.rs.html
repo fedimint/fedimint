@@ -652,7 +652,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt; {
         <span class="kw">let </span>account = global_context
             .module_api()
-            .fetch_contract(contract_id)
+            .wait_contract(contract_id)
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id })<span class="question-mark">?</span>;
 
