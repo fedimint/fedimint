@@ -59,7 +59,7 @@ fn fixtures() -> Fixtures {
     fixtures.with_module(LightningClientGen, LightningGen, ln_params)
 }
 
-async fn single_gateway_test<B>(
+async fn single_federation_test<B>(
     f: impl FnOnce(
             GatewayTest,
             Box<dyn LightningTest>,
@@ -177,7 +177,7 @@ async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    single_gateway_test(|gateway, _, fed, user_client, bitcoin| async move {
+    single_federation_test(|gateway, _, fed, user_client, bitcoin| async move {
         let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
 
         ldk.open_channel(
@@ -208,7 +208,7 @@ async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
-    single_gateway_test(
+    single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for user_client
@@ -232,7 +232,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
-    single_gateway_test(
+    single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for user_client
@@ -294,7 +294,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
-    single_gateway_test(
+    single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for user client
@@ -339,7 +339,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
-    single_gateway_test(|gateway, _, fed, user_client, _| async move {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
@@ -390,7 +390,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<()> {
-    single_gateway_test(|gateway, _, fed, _, _| async move {
+    single_federation_test(|gateway, _, fed, _, _| async move {
         let gateway = gateway.remove_client(&fed).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
@@ -423,7 +423,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
-    single_gateway_test(|gateway, _, fed, user_client, _| async move {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
         let gateway = gateway.remove_client(&fed).await;
         // User client creates invoice in federation
         let (_invoice_op, invoice) = user_client
@@ -459,7 +459,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()> {
-    single_gateway_test(
+    single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             // Print money for gateway client
@@ -602,7 +602,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
-    single_gateway_test(
+    single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway = gateway.remove_client(&fed).await;
             let invoice = other_lightning_client
