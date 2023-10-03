@@ -3,7 +3,7 @@ root: .
 socket_name: fedimint-dev
 pre_window:
   - eval "$(devimint env)"
-  - source scripts/aliases.sh
+  - source scripts/dev/aliases.sh
 tmux_detached: false
 windows:
   - main:
