@@ -419,28 +419,16 @@
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
+<span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{env, unreachable};
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place};
-<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -723,70 +711,58 @@
     };
 }
 
+<span class="attr">#[macro_export]
+</span><span class="macro">macro_rules! </span>poll_eq {
+    (<span class="macro-nonterminal">$left</span>:expr, <span class="macro-nonterminal">$right</span>:expr) =&gt; {
+        <span class="kw">match </span>(<span class="macro-nonterminal">$left</span>, <span class="macro-nonterminal">$right</span>) {
+            (left, right) =&gt; {
+                <span class="kw">if </span>left == right {
+                    <span class="prelude-val">Ok</span>(())
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Err</span>(std::ops::ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+                        <span class="string">&quot;assertion failed, left: {left:?} right: {right:?}&quot;
+                    </span>)))
+                }
+            }
+        }
+    };
+}
+
 <span class="comment">// Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>cmd;
 
-<span class="kw">const </span>POLL_INTERVAL: Duration = Duration::from_millis(<span class="number">200</span>);
-
-<span class="doccomment">/// Will retry calling `f` until it returns `Ok(true)` or `retries` times.
-/// A notable difference from [`poll`] is that `f` may fail with an error at any
-/// time and we will still keep retrying.
-</span><span class="kw">pub async fn </span>poll_max_retries&lt;Fut&gt;(name: <span class="kw-2">&amp;</span>str, retries: usize, f: <span class="kw">impl </span>Fn() -&gt; Fut) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
+<span class="kw">const </span>DEFAULT_RETRIES: usize = <span class="number">20</span>;
+<span class="doccomment">/// Will retry calling `f`.
+/// - if `f` return Ok(val), this returns with Ok(val).
+/// - if `f` return Err(Control::Break(err)), this returns Err(err)
+/// - if `f` return Err(ControlFlow::Continue(err)), retries a maximum of
+///   `retries` times.
+</span><span class="kw">pub async fn </span>poll&lt;Fut, R&gt;(
+    name: <span class="kw-2">&amp;</span>str,
+    retries: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;usize&gt;&gt;,
+    f: <span class="kw">impl </span>Fn() -&gt; Fut,
+) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
 <span class="kw">where
-    </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;bool&gt;&gt;,
+    </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;R, ControlFlow&lt;anyhow::Error, anyhow::Error&gt;&gt;&gt;,
 {
+    <span class="kw">let </span>retries = retries.into().unwrap_or(DEFAULT_RETRIES);
     <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>.. {
         <span class="kw">match </span>f().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
-            other <span class="kw">if </span>i &lt;= retries =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;polling {name} failed with: {other:?}, will retry... ({i}/{retries})&quot;</span>);
+            <span class="prelude-val">Ok</span>(value) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(value),
+            <span class="prelude-val">Err</span>(ControlFlow::Break(err)) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">&quot;polling {name}&quot;</span>));
+            }
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) <span class="kw">if </span>i &lt;= retries =&gt; {
+                <span class="macro">debug!</span>(<span class="string">&quot;polling {name} failed with: {err:?}, will retry... ({i}/{retries})&quot;</span>);
                 task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
             }
-            <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>) =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;{name} failed to reach good state after {retries} retries&quot;</span>);
-            }
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">bail!</span>(<span class="string">&quot;{name} failed after {retries} retries with: {e:?}&quot;</span>);
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(err).with_context(|| <span class="macro">format!</span>(<span class="string">&quot;polling {name} after {retries} retries&quot;</span>));
             }
         }
     }
 
     <span class="macro">unreachable!</span>();
-}
-
-<span class="kw">pub async fn </span>poll&lt;Fut&gt;(name: <span class="kw-2">&amp;</span>str, f: <span class="kw">impl </span>Fn() -&gt; Fut) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
-<span class="kw">where
-    </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;bool&gt;&gt;,
-{
-    poll_value(name, || <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(f().<span class="kw">await</span><span class="question-mark">?</span>.then_some(())) }).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(())
-}
-
-<span class="kw">pub async fn </span>poll_value&lt;Fut, R&gt;(name: <span class="kw-2">&amp;</span>str, f: <span class="kw">impl </span>Fn() -&gt; Fut) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
-<span class="kw">where
-    </span>Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;R&gt;&gt;&gt;,
-{
-    <span class="kw">let </span>start = fedimint_core::time::now();
-    <span class="kw">for </span>attempt <span class="kw">in </span><span class="number">0</span>.. {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = f().<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(output);
-        }
-        <span class="kw">let </span>duration = now().duration_since(start).unwrap_or_default();
-        <span class="kw">if </span>Duration::from_secs(<span class="number">10</span>) &lt;= duration {
-            <span class="macro">warn!</span>(
-                target: LOG_DEVIMINT,
-                name,
-                attempt = attempt,
-                duration_secs = %duration.as_secs(),
-                <span class="string">&quot;Value not ready&quot;</span>,
-            );
-        }
-        <span class="kw">let </span>delay =
-            (<span class="number">2 </span>* attempt * POLL_INTERVAL).clamp(Duration::from_millis(<span class="number">10</span>), Duration::from_secs(<span class="number">30</span>));
-        task::sleep(delay).<span class="kw">await</span>;
-    }
-
-    <span class="macro">unreachable!</span>()
 }
 
 <span class="comment">// used to add `cmd` method.

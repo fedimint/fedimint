@@ -527,11 +527,31 @@
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
 <a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+<span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::{env, fs};
 
-<span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>bitcoincore_rpc::RpcApi;
 <span class="kw">use </span>fedimint_core::admin_client::{
@@ -555,9 +575,10 @@
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">super</span>::external::Bitcoind;
-<span class="kw">use </span><span class="kw">super</span>::util::{cmd, parse_map, poll, Command, ProcessHandle, ProcessManager};
+<span class="kw">use </span><span class="kw">super</span>::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">super</span>::vars::utf8;
-<span class="kw">use </span><span class="kw">crate</span>::vars;
+<span class="kw">use </span><span class="kw">crate</span>::util::poll;
+<span class="kw">use crate</span>::{poll_eq, vars};
 
 <span class="kw">pub struct </span>Federation {
     <span class="comment">// client is only for internal use, use cli commands instead
@@ -737,14 +758,14 @@
             </span>.to_owned();
         <span class="self">self</span>.bitcoind.send_to(pegin_addr, amount).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        poll(<span class="string">&quot;gateway pegin&quot;</span>, || <span class="kw">async </span>{
+        poll(<span class="string">&quot;gateway pegin&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">&quot;balance&quot;</span>, <span class="string">&quot;--federation-id={fed_id}&quot;</span>)
                 .out_json()
-                .<span class="kw">await</span><span class="question-mark">?
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.as_u64()
                 .unwrap();
-
-            <span class="prelude-val">Ok</span>(gateway_balance == (amount * <span class="number">1000</span>))
+            <span class="macro">poll_eq!</span>(gateway_balance, amount * <span class="number">1000</span>)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -794,12 +815,16 @@
     }
 
     <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">&quot;gateways registered&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(<span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;list-gateways&quot;</span>)
+        poll(<span class="string">&quot;gateways registered&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;list-gateways&quot;</span>)
                 .out_json()
-                .<span class="kw">await</span><span class="question-mark">?
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.as_array()
-                .map_or(<span class="bool-val">false</span>, |x| x.len() == <span class="number">2</span>))
+                .context(<span class="string">&quot;invalid output&quot;</span>)
+                .map_err(ControlFlow::Break)<span class="question-mark">?
+                </span>.len();
+            <span class="macro">poll_eq!</span>(num_gateways, <span class="number">2</span>)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -884,8 +909,12 @@
     <span class="kw">let </span>auth_for = |peer: <span class="kw-2">&amp;</span>PeerId| -&gt; ApiAuth { params[peer].local.api_auth.clone() };
     <span class="kw">for </span>(peer_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span>admin_clients {
         <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">20</span>;
-        <span class="kw">super</span>::poll_max_retries(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span>.is_ok())
+        <span class="kw">super</span>::poll(<span class="string">&quot;trying-to-connect-to-peers&quot;</span>, MAX_RETRIES, || <span class="kw">async </span>{
+            client
+                .status()
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;dkg status&quot;</span>)
+                .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">&quot;Connected to {peer_id}&quot;</span>)
@@ -1006,11 +1035,8 @@
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.start_consensus(auth_for(peer_id)).<span class="kw">await </span>{
             <span class="macro">tracing::info!</span>(<span class="string">&quot;Error calling start_consensus: {e:?}, trying to continue...&quot;</span>)
         }
-        <span class="kw">const </span>RETRIES: usize = <span class="number">20</span>;
-        <span class="kw">super</span>::poll_max_retries(<span class="string">&quot;waiting-consensus-running-for-peer&quot;</span>, RETRIES, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span><span class="question-mark">?</span>.server == ServerStatus::ConsensusRunning)
-        })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        wait_server_status(client, ServerStatus::ConsensusRunning).<span class="kw">await</span><span class="question-mark">?</span>;
     }
     <span class="macro">info!</span>(<span class="string">&quot;Consensus is running&quot;</span>);
     <span class="prelude-val">Ok</span>(())
@@ -1050,8 +1076,20 @@
 
 <span class="kw">async fn </span>wait_server_status(client: <span class="kw-2">&amp;</span>WsAdminClient, expected_status: ServerStatus) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">const </span>RETRIES: usize = <span class="number">60</span>;
-    <span class="kw">super</span>::poll_max_retries(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
-        <span class="prelude-val">Ok</span>(client.status().<span class="kw">await</span><span class="question-mark">?</span>.server == expected_status)
+    <span class="kw">super</span>::poll(<span class="string">&quot;waiting-server-status&quot;</span>, RETRIES, || <span class="kw">async </span>{
+        <span class="kw">let </span>server_status = client
+            .status()
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;server status&quot;</span>)
+            .map_err(ControlFlow::Continue)<span class="question-mark">?
+            </span>.server;
+        <span class="kw">if </span>server_status == expected_status {
+            <span class="prelude-val">Ok</span>(())
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
+                <span class="string">&quot;expected status: {expected_status:?} current status: {server_status:?}&quot;
+            </span>)))
+        }
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())

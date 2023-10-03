@@ -598,13 +598,77 @@
 <a href="#598" id="598">598</a>
 <a href="#599" id="599">599</a>
 <a href="#600" id="600">600</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoincore_rpc::{bitcoin, RpcApi};
 <span class="kw">use </span>cln_rpc::ClnRpc;
@@ -621,9 +685,9 @@
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
 <span class="kw">use </span>tracing::{info, trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::cmd;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
+<span class="kw">use crate</span>::{cmd, poll_eq};
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Bitcoind {
@@ -648,7 +712,9 @@
 
         <span class="kw">let </span>url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()<span class="question-mark">?</span>;
         <span class="kw">let </span>(host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(<span class="kw-2">&amp;</span>url)<span class="question-mark">?</span>;
-        <span class="kw">let </span>client = Arc::new(bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>host, auth)<span class="question-mark">?</span>);
+        <span class="kw">let </span>client = Arc::new(
+            bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>host, auth).context(<span class="string">&quot;Failed to connect to bitcoind&quot;</span>)<span class="question-mark">?</span>,
+        );
 
         <span class="self">Self</span>::init(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
@@ -669,13 +735,24 @@
 
         <span class="comment">// mine blocks
         </span><span class="kw">let </span>address = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
-        client.generate_to_address(<span class="number">101</span>, <span class="kw-2">&amp;</span>address)<span class="question-mark">?</span>;
+        client
+            .generate_to_address(<span class="number">101</span>, <span class="kw-2">&amp;</span>address)
+            .context(<span class="string">&quot;Failed to generate blocks&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="comment">// wait bitciond is ready
-        </span>poll(<span class="string">&quot;bitcoind&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(client
+        </span>poll(<span class="string">&quot;bitcoind&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>info = client
                 .get_blockchain_info()
-                .map_or(<span class="bool-val">false</span>, |info| (info.blocks &gt; <span class="number">100</span>)))
+                .context(<span class="string">&quot;bitcoind getblockchaininfo&quot;</span>)
+                .map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+            <span class="kw">if </span>info.blocks &gt; <span class="number">100 </span>{
+                <span class="prelude-val">Ok</span>(())
+            } <span class="kw">else </span>{
+                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
+                    <span class="string">&quot;not enough blocks: {}&quot;</span>,
+                    info.blocks
+                )))
+            }
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -790,8 +867,11 @@
         <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">&quot;regtest/lightning-rpc&quot;</span>);
-        poll(<span class="string">&quot;lightningd&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(ClnRpc::new(socket_cln.clone()).<span class="kw">await</span>.is_ok())
+        poll(<span class="string">&quot;lightningd&quot;</span>, <span class="number">10</span>, || <span class="kw">async </span>{
+            ClnRpc::new(socket_cln.clone())
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;connect to lightningd&quot;</span>)
+                .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>rpc = ClnRpc::new(socket_cln).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -829,13 +909,20 @@
     }
 
     <span class="kw">pub async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">&quot;lightningd block processing&quot;</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>btc_height = <span class="self">self</span>.bitcoind.client().get_blockchain_info()<span class="question-mark">?</span>.blocks;
+        poll(<span class="string">&quot;lightningd block processing&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>btc_height = <span class="self">self
+                </span>.bitcoind
+                .client()
+                .get_blockchain_info()
+                .context(<span class="string">&quot;bitcoind getblockchaininfo&quot;</span>)
+                .map_err(ControlFlow::Continue)<span class="question-mark">?
+                </span>.blocks;
             <span class="kw">let </span>lnd_height = <span class="self">self
                 </span>.request(cln_rpc::model::requests::GetinfoRequest {})
-                .<span class="kw">await</span><span class="question-mark">?
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.blockheight;
-            <span class="prelude-val">Ok</span>((lnd_height <span class="kw">as </span>u64) == btc_height)
+            <span class="macro">poll_eq!</span>(lnd_height <span class="kw">as </span>u64, btc_height)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -870,7 +957,10 @@
             process,
         };
         <span class="comment">// wait for lnd rpc to be active
-        </span>poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{ <span class="prelude-val">Ok</span>(this.pub_key().<span class="kw">await</span>.is_ok()) }).<span class="kw">await</span><span class="question-mark">?</span>;
+        </span>poll(<span class="string">&quot;lnd_startup&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            this.pub_key().<span class="kw">await</span>.map_err(ControlFlow::Continue)
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(this)
     }
 
@@ -894,31 +984,37 @@
         <span class="kw">let </span>lnd_rpc_addr = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_RPC_ADDR;
         <span class="kw">let </span>lnd_macaroon = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_MACAROON;
         <span class="kw">let </span>lnd_tls_cert = <span class="kw-2">&amp;</span>process_mgr.globals.FM_LND_TLS_CERT;
-        poll(<span class="string">&quot;lnd&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(fs::try_exists(lnd_tls_cert).<span class="kw">await</span><span class="question-mark">? </span>&amp;&amp; fs::try_exists(lnd_macaroon).<span class="kw">await</span><span class="question-mark">?</span>)
+        poll(<span class="string">&quot;wait for lnd files&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">if </span>fs::try_exists(lnd_tls_cert)
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;lnd tls cert&quot;</span>)
+                .map_err(ControlFlow::Continue)<span class="question-mark">?
+                </span>&amp;&amp; fs::try_exists(lnd_macaroon)
+                    .<span class="kw">await
+                    </span>.context(<span class="string">&quot;lnd macaroon&quot;</span>)
+                    .map_err(ControlFlow::Continue)<span class="question-mark">?
+            </span>{
+                <span class="prelude-val">Ok</span>(())
+            } <span class="kw">else </span>{
+                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
+                    <span class="string">&quot;lnd tls cert or lnd macaroon not found&quot;
+                </span>)))
+            }
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        poll(<span class="string">&quot;lnd_connect&quot;</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>result = tonic_lnd::connect(
+        <span class="kw">let </span>client = poll(<span class="string">&quot;lnd_connect&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            tonic_lnd::connect(
                 lnd_rpc_addr.clone(),
                 lnd_tls_cert.clone(),
                 lnd_macaroon.clone(),
             )
-            .<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw-2">&amp;</span>result {
-                <span class="macro">info!</span>(<span class="string">&quot;lnd_connect failed: {:?}&quot;</span>, e);
-            }
-            <span class="prelude-val">Ok</span>(result.is_ok())
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;lnd connect&quot;</span>)
+            .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client = tonic_lnd::connect(
-            lnd_rpc_addr.clone(),
-            lnd_tls_cert.clone(),
-            lnd_macaroon.clone(),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((process, client))
     }
 
@@ -938,14 +1034,22 @@
     }
 
     <span class="kw">pub async fn </span>await_block_processing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        poll(<span class="string">&quot;lnd block processing&quot;</span>, || <span class="kw">async </span>{
-            <span class="prelude-val">Ok</span>(<span class="self">self
+        poll(<span class="string">&quot;lnd block processing&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+            <span class="kw">let </span>synced = <span class="self">self
                 </span>.client_lock()
-                .<span class="kw">await</span><span class="question-mark">?
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Break)<span class="question-mark">?
                 </span>.get_info(GetInfoRequest {})
-                .<span class="kw">await</span><span class="question-mark">?
+                .<span class="kw">await
+                </span>.context(<span class="string">&quot;lnd get_info&quot;</span>)
+                .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.into_inner()
-                .synced_to_chain)
+                .synced_to_chain;
+            <span class="kw">if </span>synced {
+                <span class="prelude-val">Ok</span>(())
+            } <span class="kw">else </span>{
+                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;lnd not synced_to_chain&quot;</span>)))
+            }
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -981,45 +1085,55 @@
         host: <span class="prelude-val">Some</span>(<span class="string">&quot;127.0.0.1&quot;</span>.to_owned()),
         port: <span class="prelude-val">Some</span>(process_mgr.globals.FM_PORT_LND_LISTEN),
     })
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    .<span class="kw">await
+    </span>.context(<span class="string">&quot;connect request&quot;</span>)<span class="question-mark">?</span>;
 
-    poll(<span class="string">&quot;fund channel&quot;</span>, || <span class="kw">async </span>{
-        <span class="prelude-val">Ok</span>(cln
-            .request(cln_rpc::model::requests::FundchannelRequest {
-                id: lnd_pubkey.parse()<span class="question-mark">?</span>,
-                amount: cln_rpc::primitives::AmountOrAll::Amount(
-                    cln_rpc::primitives::Amount::from_sat(<span class="number">10_000_000</span>),
-                ),
-                push_msat: <span class="prelude-val">Some</span>(cln_rpc::primitives::Amount::from_sat(<span class="number">5_000_000</span>)),
-                feerate: <span class="prelude-val">None</span>,
-                announce: <span class="prelude-val">None</span>,
-                minconf: <span class="prelude-val">None</span>,
-                close_to: <span class="prelude-val">None</span>,
-                request_amt: <span class="prelude-val">None</span>,
-                compact_lease: <span class="prelude-val">None</span>,
-                utxos: <span class="prelude-val">None</span>,
-                mindepth: <span class="prelude-val">None</span>,
-                reserve: <span class="prelude-val">None</span>,
-            })
-            .<span class="kw">await
-            </span>.is_ok())
+    poll(<span class="string">&quot;fund channel&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        cln.request(cln_rpc::model::requests::FundchannelRequest {
+            id: lnd_pubkey
+                .parse()
+                .context(<span class="string">&quot;failed to parse lnd pubkey&quot;</span>)
+                .map_err(ControlFlow::Break)<span class="question-mark">?</span>,
+            amount: cln_rpc::primitives::AmountOrAll::Amount(
+                cln_rpc::primitives::Amount::from_sat(<span class="number">10_000_000</span>),
+            ),
+            push_msat: <span class="prelude-val">Some</span>(cln_rpc::primitives::Amount::from_sat(<span class="number">5_000_000</span>)),
+            feerate: <span class="prelude-val">None</span>,
+            announce: <span class="prelude-val">None</span>,
+            minconf: <span class="prelude-val">None</span>,
+            close_to: <span class="prelude-val">None</span>,
+            request_amt: <span class="prelude-val">None</span>,
+            compact_lease: <span class="prelude-val">None</span>,
+            utxos: <span class="prelude-val">None</span>,
+            mindepth: <span class="prelude-val">None</span>,
+            reserve: <span class="prelude-val">None</span>,
+        })
+        .<span class="kw">await
+        </span>.map_err(ControlFlow::Continue)
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    poll(<span class="string">&quot;list peers&quot;</span>, || <span class="kw">async </span>{
-        <span class="prelude-val">Ok</span>(!cln
+    poll(<span class="string">&quot;list peers&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
+        <span class="kw">let </span>num_peers = cln
             .request(cln_rpc::model::requests::ListpeersRequest {
-                id: <span class="prelude-val">Some</span>(lnd_pubkey.parse()<span class="question-mark">?</span>),
+                id: <span class="prelude-val">Some</span>(
+                    lnd_pubkey
+                        .parse()
+                        .context(<span class="string">&quot;parse lnd pubkey&quot;</span>)
+                        .map_err(ControlFlow::Break)<span class="question-mark">?</span>,
+                ),
                 level: <span class="prelude-val">None</span>,
             })
-            .<span class="kw">await</span><span class="question-mark">?
+            .<span class="kw">await
+            </span>.map_err(ControlFlow::Break)<span class="question-mark">?
             </span>.peers
-            .is_empty())
+            .len();
+        <span class="macro">poll_eq!</span>(num_peers, <span class="number">1</span>)
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    poll(<span class="string">&quot;Wait for channel update&quot;</span>, || <span class="kw">async </span>{
+    poll(<span class="string">&quot;Wait for channel update&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>lnd_client = lnd.client.lock().<span class="kw">await</span>;
         <span class="kw">let </span>channels = lnd_client
             .lightning()
@@ -1027,7 +1141,9 @@
                 active_only: <span class="bool-val">true</span>,
                 ..Default::default()
             })
-            .<span class="kw">await</span><span class="question-mark">?
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;lnd list channels&quot;</span>)
+            .map_err(ControlFlow::Break)<span class="question-mark">?
             </span>.into_inner();
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(channel) = channels
@@ -1046,7 +1162,7 @@
                 <span class="prelude-val">Ok</span>(info) =&gt; {
                     <span class="kw">let </span>edge = info.into_inner();
                     <span class="kw">if </span>edge.node1_policy.is_some() {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">true</span>);
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                     } <span class="kw">else </span>{
                         <span class="macro">warn!</span>(<span class="question-mark">?</span>edge, <span class="string">&quot;Empty chan info&quot;</span>);
                     }
@@ -1057,7 +1173,7 @@
             }
         }
 
-        <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)
+        <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">&quot;channel not found&quot;</span>)))
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1103,7 +1219,11 @@
 
 <span class="kw">impl </span>Electrs {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>electrs_dir = env::var(<span class="string">&quot;FM_ELECTRS_DIR&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>electrs_dir = process_mgr
+            .globals
+            .FM_ELECTRS_DIR
+            .to_str()
+            .context(<span class="string">&quot;non utf8 path&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>conf = <span class="macro">format!</span>(
             <span class="macro">include_str!</span>(<span class="string">&quot;cfg/electrs.toml&quot;</span>),
@@ -1139,8 +1259,16 @@
 
 <span class="kw">impl </span>Esplora {
     <span class="kw">pub async fn </span>new(process_mgr: <span class="kw-2">&amp;</span>ProcessManager, bitcoind: Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>daemon_dir = env::var(<span class="string">&quot;FM_BTC_DIR&quot;</span>)<span class="question-mark">?</span>;
-        <span class="kw">let </span>esplora_dir = env::var(<span class="string">&quot;FM_ESPLORA_DIR&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>daemon_dir = process_mgr
+            .globals
+            .FM_BTC_DIR
+            .to_str()
+            .context(<span class="string">&quot;non utf8 path&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>esplora_dir = process_mgr
+            .globals
+            .FM_ESPLORA_DIR
+            .to_str()
+            .context(<span class="string">&quot;non utf8 path&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
         <span class="kw">let </span>esplora_port = process_mgr.globals.FM_PORT_ESPLORA;

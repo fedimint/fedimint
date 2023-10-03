@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["LightningNode"],"fn":["dev_fed","external_daemons","open_channel"],"macro":["cmd"],"mod":["external","federation","util","vars"],"struct":["Bitcoind","DevFed","Electrs","Esplora","ExternalDaemons","Gatewayd","Lightningd","Lnd"]};
+window.SIDEBAR_ITEMS = {"enum":["LightningNode"],"fn":["dev_fed","external_daemons","open_channel"],"macro":["cmd","poll_eq"],"mod":["external","federation","util","vars"],"struct":["Bitcoind","DevFed","Electrs","Esplora","ExternalDaemons","Gatewayd","Lightningd","Lnd"]};

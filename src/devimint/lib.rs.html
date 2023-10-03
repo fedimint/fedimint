@@ -177,17 +177,17 @@
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::ops::ControlFlow;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>federation::Federation;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
-<span class="kw">use </span>tracing::{debug, info};
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">pub mod </span>util;
 <span class="kw">pub mod </span>vars;
-<span class="kw">use </span>util::{poll_max_retries, Command, ProcessHandle, ProcessManager};
+<span class="kw">use </span>util::{poll, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span>vars::utf8;
 
 <span class="kw">mod </span>external;
@@ -285,14 +285,12 @@
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>invite_code = fed.invite_code()<span class="question-mark">?</span>;
-        poll_max_retries(<span class="string">&quot;gateway connect-fed&quot;</span>, <span class="number">60</span>, || <span class="kw">async </span>{
-            <span class="kw">match </span><span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;connect-fed&quot;</span>, invite_code.clone()).run().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">debug!</span>(<span class="string">&quot;gateway-cli connect-fed failed {:?}&quot;</span>, e);
-                    <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)
-                }
-            }
+        poll(<span class="string">&quot;gateway connect-fed&quot;</span>, <span class="number">60</span>, || <span class="kw">async </span>{
+            <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">&quot;connect-fed&quot;</span>, invite_code.clone())
+                .run()
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(())
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
