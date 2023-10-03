@@ -15,8 +15,8 @@ var srcIndex = JSON.parse('{\
 "fedimint_dummy_client":["",[],["api.rs","db.rs","lib.rs","states.rs"]],\
 "fedimint_dummy_common":["",[],["config.rs","lib.rs"]],\
 "fedimint_dummy_server":["",[],["db.rs","lib.rs"]],\
-"fedimint_ln_client":["",[],["db.rs","lib.rs","pay.rs","receive.rs"]],\
-"fedimint_ln_common":["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["api.rs","config.rs","db.rs","incoming.rs","lib.rs"]],\
+"fedimint_ln_client":["",[],["db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]],\
+"fedimint_ln_common":["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["api.rs","config.rs","db.rs","lib.rs"]],\
 "fedimint_ln_server":["",[],["lib.rs"]],\
 "fedimint_load_test_tool":["",[],["common.rs","main.rs"]],\
 "fedimint_logging":["",[],["lib.rs"]],\

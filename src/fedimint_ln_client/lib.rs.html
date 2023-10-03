@@ -1101,7 +1101,62 @@
 <a href="#1101" id="1101">1101</a>
 <a href="#1102" id="1102">1102</a>
 <a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
+<span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
 <span class="kw">mod </span>receive;
 
@@ -1113,7 +1168,7 @@
 <span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::{KeyPair, Network};
-<span class="kw">use </span>bitcoin_hashes::Hash;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>db::{DbKeyPrefix, LightningGatewayKey};
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -1132,26 +1187,25 @@
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,
 };
+<span class="kw">use </span>fedimint_core::task::timeout;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
 };
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractOffer;
+<span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::{
     OutgoingContract, OutgoingContractAccount, OutgoingContractData,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::{
-    Contract, ContractId, EncryptedPreimage, IdentifiableContract, Preimage,
-};
-<span class="kw">use </span>fedimint_ln_common::incoming::{
-    FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
+    Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
 };
 <span class="kw">use </span>fedimint_ln_common::{
-    create_incoming_contract_output, ln_operation, ContractOutput, LightningClientContext,
-    LightningCommonGen, LightningGateway, LightningModuleTypes, LightningOutput, KIND,
+    ln_operation, ContractOutput, LightningClientContext, LightningCommonGen, LightningGateway,
+    LightningModuleTypes, LightningOutput, KIND,
 };
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>incoming::IncomingSmError;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
@@ -1165,6 +1219,9 @@
 <span class="kw">use </span>tracing::{debug, error};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::LightningGatewayKeyPrefix;
+<span class="kw">use </span><span class="kw">crate</span>::incoming::{
+    FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
+};
 <span class="kw">use </span><span class="kw">crate</span>::pay::{
     GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
     LightningPayStateMachine, LightningPayStates,
@@ -2203,5 +2260,56 @@
         Network::Testnet =&gt; Currency::BitcoinTestnet,
         Network::Signet =&gt; Currency::Signet,
     }
+}
+
+<span class="kw">async fn </span>fetch_and_validate_offer(
+    module_api: <span class="kw-2">&amp;</span>DynModuleApi,
+    payment_hash: sha256::Hash,
+    amount_msat: Amount,
+) -&gt; anyhow::Result&lt;IncomingContractOffer, IncomingSmError&gt; {
+    <span class="kw">let </span>offer = timeout(Duration::from_secs(<span class="number">5</span>), module_api.fetch_offer(payment_hash))
+        .<span class="kw">await
+        </span>.map_err(|<span class="kw">_</span>| IncomingSmError::TimeoutFetchingOffer { payment_hash })<span class="question-mark">?
+        </span>.map_err(|e| IncomingSmError::FetchContractError {
+            payment_hash,
+            error_message: e.to_string(),
+        })<span class="question-mark">?</span>;
+
+    <span class="kw">if </span>offer.amount &gt; amount_msat {
+        <span class="kw">return </span><span class="prelude-val">Err</span>(IncomingSmError::ViolatedFeePolicy {
+            offer_amount: offer.amount,
+            payment_amount: amount_msat,
+        });
+    }
+    <span class="kw">if </span>offer.hash != payment_hash {
+        <span class="kw">return </span><span class="prelude-val">Err</span>(IncomingSmError::InvalidOffer {
+            offer_hash: offer.hash,
+            payment_hash,
+        });
+    }
+    <span class="prelude-val">Ok</span>(offer)
+}
+
+<span class="kw">pub async fn </span>create_incoming_contract_output(
+    module_api: <span class="kw-2">&amp;</span>DynModuleApi,
+    payment_hash: sha256::Hash,
+    amount_msat: Amount,
+    redeem_key: secp256k1::KeyPair,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(LightningOutput, ContractId), IncomingSmError&gt; {
+    <span class="kw">let </span>offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key).<span class="number">0</span>;
+    <span class="kw">let </span>contract = IncomingContract {
+        hash: offer.hash,
+        encrypted_preimage: offer.encrypted_preimage.clone(),
+        decrypted_preimage: DecryptedPreimage::Pending,
+        gateway_key: our_pub_key,
+    };
+    <span class="kw">let </span>contract_id = contract.contract_id();
+    <span class="kw">let </span>incoming_output = LightningOutput::Contract(ContractOutput {
+        amount: offer.amount,
+        contract: Contract::Incoming(contract),
+    });
+
+    <span class="prelude-val">Ok</span>((incoming_output, contract_id))
 }
 </code></pre></div></section></main></body></html>

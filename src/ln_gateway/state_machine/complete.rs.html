@@ -211,8 +211,8 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_ln_client::incoming::IncomingSmStates;
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
-<span class="kw">use </span>fedimint_ln_common::incoming::IncomingSmStates;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
