@@ -1398,7 +1398,7 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
         }
         RpcCmd::Wait => {
             let ready_file = common.test_dir.join("ready");
-            poll("ready file", None, || async {
+            poll("ready file", 60, || async {
                 if fs::try_exists(&ready_file)
                     .await
                     .context("ready file")
