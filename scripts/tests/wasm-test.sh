@@ -15,4 +15,4 @@ devimint wait
 
 echo Funding LND gateway e-cash wallet ...
 
-wasm-pack test --firefox --headless fedimint-wasm-tests
+WASM_BINDGEN_TEST_TIMEOUT=120 wasm-pack test --firefox --headless fedimint-wasm-tests
