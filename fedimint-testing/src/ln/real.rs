@@ -33,8 +33,6 @@ use crate::btc::BitcoinTest;
 use crate::gateway::LightningNodeType;
 use crate::ln::LightningTest;
 
-const DEFAULT_ESPLORA_SERVER: &str = "http://127.0.0.1:50002";
-
 pub struct ClnLightningTest {
     rpc_cln: Arc<Mutex<ClnRpc>>,
     initial_balance: Amount,
@@ -102,7 +100,8 @@ impl LightningTest for ClnLightningTest {
     }
 
     fn listening_address(&self) -> String {
-        "127.0.0.1:9000".to_string()
+        let cln_listen_port = std::env::var("FM_PORT_CLN").unwrap_or(String::from("9000"));
+        format!("127.0.0.1:{}", cln_listen_port)
     }
 
     fn lightning_node_type(&self) -> LightningNodeType {
@@ -250,7 +249,8 @@ impl LightningTest for LndLightningTest {
     }
 
     fn listening_address(&self) -> String {
-        "127.0.0.1:9734".to_string()
+        let lnd_listen_port = std::env::var("FM_PORT_LND_LISTEN").unwrap_or(String::from("9734"));
+        format!("127.0.0.1:{}", lnd_listen_port)
     }
 
     fn lightning_node_type(&self) -> LightningNodeType {
@@ -422,7 +422,8 @@ impl LdkLightningTest {
                 .expect("Couldnt parse listening address"),
         );
         builder.set_storage_dir_path(db_path.to_string_lossy().to_string());
-        builder.set_esplora_server(DEFAULT_ESPLORA_SERVER.to_string());
+        let esplora_port = std::env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"));
+        builder.set_esplora_server(format!("http://127.0.0.1:{esplora_port}"));
         builder.set_log_level(LogLevel::Debug);
         let node = builder.build().map_err(|e| {
             error!("Failed to build LDK Node: {e:?}");
@@ -612,7 +613,7 @@ impl LdkLightningTest {
             .await
             .send(LdkMessage::OpenChannelRequest {
                 node_id: node_pubkey,
-                amount: amount.msats,
+                amount: amount.msats / 1000,
                 connect_address,
                 response_sender: sender,
             })

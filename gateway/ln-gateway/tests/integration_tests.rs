@@ -181,7 +181,7 @@ async fn test_gateway_can_pay_ldk_node() -> anyhow::Result<()> {
         let ldk = Fixtures::spawn_ldk(bitcoin.clone()).await;
 
         ldk.open_channel(
-            Amount::from_msats(5000000),
+            Amount::from_msats(5_000_000_000),
             gateway.node_pub_key,
             gateway.listening_addr.clone(),
             bitcoin.lock_exclusive().await,
