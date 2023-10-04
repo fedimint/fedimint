@@ -17,6 +17,7 @@ use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::Encodable;
+use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
@@ -46,7 +47,8 @@ use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::endpoint_constants::{
     AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
-    RECOVER_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+    FETCH_BLOCK_COUNT_ENDPOINT, RECOVER_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    WAIT_TRANSACTION_ENDPOINT,
 };
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
@@ -408,15 +410,18 @@ where
 
     async fn await_signed_block(&self, block_index: u64) -> FederationResult<SignedBlock> {
         self.request_current_consensus(
-            "await_signed_block".to_string(),
+            AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )
         .await
     }
 
     async fn fetch_block_count(&self) -> FederationResult<u64> {
-        self.request_current_consensus("fetch_block_count".to_owned(), ApiRequestErased::default())
-            .await
+        self.request_current_consensus(
+            FETCH_BLOCK_COUNT_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+        )
+        .await
     }
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {

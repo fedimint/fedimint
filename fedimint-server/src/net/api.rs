@@ -18,10 +18,11 @@ use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT,
-    CONFIG_HASH_ENDPOINT, GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT,
-    MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
-    VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SIGNED_BLOCK_ENDPOINT,
+    BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT, FETCH_BLOCK_COUNT_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
+    RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    WAIT_TRANSACTION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -603,13 +604,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            "fetch_block_count",
+            FETCH_BLOCK_COUNT_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
                 Ok(fedimint.fetch_block_count().await)
             }
         },
         api_endpoint! {
-            "await_signed_block",
+            AWAIT_SIGNED_BLOCK_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, index: u64| -> SignedBlock {
                 Ok(fedimint.await_signed_block(index).await)
             }

@@ -6,6 +6,7 @@ use async_channel::{Receiver, Sender};
 use bitcoin_hashes_12::Hash;
 use fedimint_core::api::{FederationApiExt, WsFederationApi};
 use fedimint_core::block::{consensus_hash_sha256, Block, OrderedItem, SignedBlock};
+use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::VerifiableResponse;
 use fedimint_core::task::{sleep, spawn};
@@ -246,7 +247,7 @@ async fn request_signed_block(
         let result = federation_api
             .request_with_strategy(
                 VerifiableResponse::new(verifier.clone(), false, total_peers),
-                "get_signed_block".to_string(),
+                AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
                 ApiRequestErased::new(index),
             )
             .await;
