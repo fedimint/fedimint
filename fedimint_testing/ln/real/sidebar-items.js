@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["DEFAULT_ESPLORA_SERVER"],"enum":["LdkMessage"],"fn":["find_unused_port"],"struct":["ClnLightningTest","LdkLightningTest","LndLightningTest"]};
+window.SIDEBAR_ITEMS = {"enum":["LdkMessage"],"fn":["find_unused_port"],"struct":["ClnLightningTest","LdkLightningTest","LndLightningTest"]};

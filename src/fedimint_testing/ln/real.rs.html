@@ -773,6 +773,7 @@
 <a href="#773" id="773">773</a>
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::TcpListener;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -807,8 +808,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::btc::BitcoinTest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway::LightningNodeType;
 <span class="kw">use </span><span class="kw">crate</span>::ln::LightningTest;
-
-<span class="kw">const </span>DEFAULT_ESPLORA_SERVER: <span class="kw-2">&amp;</span>str = <span class="string">&quot;http://127.0.0.1:50002&quot;</span>;
 
 <span class="kw">pub struct </span>ClnLightningTest {
     rpc_cln: Arc&lt;Mutex&lt;ClnRpc&gt;&gt;,
@@ -877,7 +876,8 @@
     </span>}
 
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="string">&quot;127.0.0.1:9000&quot;</span>.to_string()
+        <span class="kw">let </span>cln_listen_port = std::env::var(<span class="string">&quot;FM_PORT_CLN&quot;</span>).unwrap_or(String::from(<span class="string">&quot;9000&quot;</span>));
+        <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, cln_listen_port)
     }
 
     <span class="kw">fn </span>lightning_node_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType {
@@ -1025,7 +1025,8 @@
     </span>}
 
     <span class="kw">fn </span>listening_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-        <span class="string">&quot;127.0.0.1:9734&quot;</span>.to_string()
+        <span class="kw">let </span>lnd_listen_port = std::env::var(<span class="string">&quot;FM_PORT_LND_LISTEN&quot;</span>).unwrap_or(String::from(<span class="string">&quot;9734&quot;</span>));
+        <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, lnd_listen_port)
     }
 
     <span class="kw">fn </span>lightning_node_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningNodeType {
@@ -1197,7 +1198,8 @@
                 .expect(<span class="string">&quot;Couldnt parse listening address&quot;</span>),
         );
         builder.set_storage_dir_path(db_path.to_string_lossy().to_string());
-        builder.set_esplora_server(DEFAULT_ESPLORA_SERVER.to_string());
+        <span class="kw">let </span>esplora_port = std::env::var(<span class="string">&quot;FM_PORT_ESPLORA&quot;</span>).unwrap_or(String::from(<span class="string">&quot;50002&quot;</span>));
+        builder.set_esplora_server(<span class="macro">format!</span>(<span class="string">&quot;http://127.0.0.1:{esplora_port}&quot;</span>));
         builder.set_log_level(LogLevel::Debug);
         <span class="kw">let </span>node = builder.build().map_err(|e| {
             <span class="macro">error!</span>(<span class="string">&quot;Failed to build LDK Node: {e:?}&quot;</span>);
@@ -1387,7 +1389,7 @@
             .<span class="kw">await
             </span>.send(LdkMessage::OpenChannelRequest {
                 node_id: node_pubkey,
-                amount: amount.msats,
+                amount: amount.msats / <span class="number">1000</span>,
                 connect_address,
                 response_sender: sender,
             })
