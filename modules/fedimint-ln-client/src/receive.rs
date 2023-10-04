@@ -11,7 +11,6 @@ use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-use fedimint_ln_common::contracts::DecryptedPreimage;
 use fedimint_ln_common::{LightningClientContext, LightningInput};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -192,23 +191,16 @@ impl LightningReceiveConfirmedInvoice {
         invoice: Bolt11Invoice,
         global_context: DynGlobalClientContext,
     ) -> Result<IncomingContractAccount, LightningReceiveError> {
-        // TODO: Get rid of polling
+        let contract_id = (*invoice.payment_hash()).into();
         loop {
-            let contract_id = (*invoice.payment_hash()).into();
-            let contract = global_context
+            if let Ok((incoming_contract_account, preimage)) = global_context
                 .module_api()
-                .get_incoming_contract(contract_id)
-                .await;
-
-            if let Ok(contract) = contract {
-                match contract.contract.decrypted_preimage {
-                    DecryptedPreimage::Pending => {}
-                    DecryptedPreimage::Some(_) => {
-                        return Ok(contract);
-                    }
-                    DecryptedPreimage::Invalid => {
-                        return Err(LightningReceiveError::InvalidPreimage);
-                    }
+                .wait_preimage_decrypted(contract_id)
+                .await
+            {
+                match preimage {
+                    Some(_) => return Ok(incoming_contract_account),
+                    None => return Err(LightningReceiveError::InvalidPreimage),
                 }
             }
 

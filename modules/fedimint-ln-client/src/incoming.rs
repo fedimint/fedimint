@@ -20,7 +20,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-use fedimint_ln_common::contracts::{ContractId, DecryptedPreimage, Preimage};
+use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutputOutcome};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -225,32 +225,24 @@ impl DecryptingPreimageState {
         global_context: DynGlobalClientContext,
         contract_id: ContractId,
     ) -> Result<Preimage, IncomingSmError> {
-        // TODO: Get rid of polling
-        let preimage = loop {
-            let contract = global_context
+        loop {
+            if let Ok((incoming_contract_account, preimage)) = global_context
                 .module_api()
-                .get_incoming_contract(contract_id)
-                .await;
-
-            match contract {
-                Ok(contract) => match contract.contract.decrypted_preimage {
-                    DecryptedPreimage::Pending => {}
-                    DecryptedPreimage::Some(preimage) => break preimage,
-                    DecryptedPreimage::Invalid => {
+                .wait_preimage_decrypted(contract_id)
+                .await
+            {
+                match preimage {
+                    Some(preimage) => return Ok(preimage),
+                    None => {
                         return Err(IncomingSmError::InvalidPreimage {
-                            contract: Box::new(contract),
-                        });
+                            contract: Box::new(incoming_contract_account),
+                        })
                     }
-                },
-                Err(e) => {
-                    error!("Failed to fetch contract {e:?}");
                 }
             }
 
             sleep(Duration::from_secs(1)).await;
-        };
-
-        Ok(preimage)
+        }
     }
 
     async fn transition_incoming_contract_funded(
