@@ -1,4 +1,4 @@
-use crate::data_provider::UnitData;
+use super::data_provider::UnitData;
 
 pub struct FinalizationHandler {
     sender: async_channel::Sender<UnitData>,

@@ -298,7 +298,6 @@ fn sanity_check_recovery_fresh_backup() {
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_a),
         &mut Default::default(),
-        &Default::default(),
         &c1.secret,
     );
 
@@ -319,7 +318,6 @@ fn sanity_check_recovery_fresh_backup() {
                 confirmations_c1_a[0].1.clone(),
             )),
             &mut Default::default(),
-            &Default::default(),
             &c1.secret,
         );
 
@@ -344,7 +342,6 @@ fn sanity_check_recovery_fresh_backup() {
                 confirmations_c1_a[0].1.clone(),
             )),
             &mut Default::default(),
-            &Default::default(),
             &c1.secret,
         );
 
@@ -369,7 +366,6 @@ fn sanity_check_recovery_fresh_backup() {
                 mint_output_confirmation.clone(),
             )),
             &mut Default::default(),
-            &Default::default(),
             &c1.secret,
         );
     }
@@ -401,7 +397,6 @@ fn sanity_check_recovery_fresh_backup() {
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_b),
         &mut Default::default(),
-        &Default::default(),
         &c1.secret,
     );
     assert!(tracker.spendable_note_by_nonce.is_empty());
@@ -485,7 +480,6 @@ fn sanity_check_recovery_non_empty_backup() {
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_b),
         &mut Default::default(),
-        &Default::default(),
         &c1.secret,
     );
 
@@ -497,7 +491,6 @@ fn sanity_check_recovery_non_empty_backup() {
                 mint_output_confirmation.clone(),
             )),
             &mut Default::default(),
-            &Default::default(),
             &c1.secret,
         );
     }
@@ -581,14 +574,12 @@ fn sanity_check_recovery_bn_reuse_with_invalid_amount() {
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_a),
         &mut Default::default(),
-        &Default::default(),
         &c1.secret,
     );
     tracker.handle_consensus_item(
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_b),
         &mut Default::default(),
-        &Default::default(),
         &c1.secret,
     );
 
@@ -669,14 +660,12 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_a),
         &mut Default::default(),
-        &Default::default(),
         &c1.secret,
     );
     tracker.handle_consensus_item(
         PeerId::from(0),
         &ConsensusItem::Transaction(tx_b),
         &mut Default::default(),
-        &Default::default(),
         &c1.secret,
     );
 
@@ -695,7 +684,6 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
                 mint_output_confirmation.clone(),
             )),
             &mut Default::default(),
-            &Default::default(),
             &c1.secret,
         );
     }
@@ -713,7 +701,6 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
                 mint_output_confirmation.clone(),
             )),
             &mut Default::default(),
-            &Default::default(),
             &c1.secret,
         );
     }

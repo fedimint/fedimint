@@ -39,7 +39,6 @@ use tracing::error;
 
 use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
-use crate::db::ConsensusUpgradeKey;
 use crate::net::peers::DelayCalculator;
 use crate::{check_auth, ApiResult, HasApiContext};
 
@@ -329,10 +328,6 @@ impl ConfigGenApi {
         let cfg = read_server_config(&auth.0, self.data_dir.clone())
             .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
 
-        let mut tx = self.db.begin_transaction().await;
-        tx.remove_entry(&ConsensusUpgradeKey).await;
-        tx.commit_tx().await;
-
         self.config_generated_tx.send(cfg).await.expect("Can send");
 
         Ok(())
@@ -340,21 +335,7 @@ impl ConfigGenApi {
 
     /// Returns the server status
     pub async fn server_status(&self) -> ServerStatus {
-        let has_upgrade_flag = { self.has_upgrade_flag().await };
-
-        let state = self.state.lock().expect("lock poisoned");
-        if has_upgrade_flag {
-            ServerStatus::Upgrading
-        } else {
-            state.status.clone()
-        }
-    }
-
-    /// Returns true if the upgrade flag is set indicating that the server was
-    /// shutdown due to a planned upgrade
-    pub async fn has_upgrade_flag(&self) -> bool {
-        let mut tx = self.db.begin_transaction().await;
-        tx.get_value(&ConsensusUpgradeKey).await.is_some()
+        self.state.lock().expect("lock poisoned").status.clone()
     }
 
     fn bad_request<T>(msg: &str) -> ApiResult<T> {
@@ -713,7 +694,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiAuth;
-    use fedimint_core::task::{sleep, TaskGroup};
+    use fedimint_core::task::{sleep, spawn, TaskGroup};
     use fedimint_core::util::SafeUrl;
     use fedimint_core::Amount;
     use fedimint_dummy_common::config::{
@@ -799,17 +780,6 @@ mod tests {
                 },
                 api,
             )
-        }
-
-        /// Helper function to shutdown consensus with an upgrade signal
-        async fn retry_signal_upgrade(&self) {
-            while self.client.signal_upgrade(self.auth.clone()).await.is_err() {
-                sleep(Duration::from_millis(1000)).await;
-                tracing::info!(
-                    target: fedimint_logging::LOG_TEST,
-                    "Test retrying upgrade signal"
-                )
-            }
         }
 
         /// Helper function using generated urls
@@ -903,160 +873,136 @@ mod tests {
         let mut apis = vec![];
         let mut followers = vec![];
         let (mut leader, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+
         apis.push(api);
 
-        for i in 1..=2 {
+        for i in 1..4 {
             let port = base_port + (i * 2);
             let (follower, api) = TestConfigApi::new(port, i, data_dir.clone()).await;
             apis.push(api);
             followers.push(follower);
         }
 
-        let test = async {
-            assert_eq!(leader.status().await.server, ServerStatus::AwaitingPassword);
-
-            // Cannot set the password twice
-            leader
-                .client
-                .set_password(leader.auth.clone())
-                .await
-                .unwrap();
-            assert!(leader
-                .client
-                .set_password(leader.auth.clone())
-                .await
-                .is_err());
-
-            // We can call this twice to change the leader name
-            leader.set_connections(&None).await.unwrap();
-            leader.name = "leader".to_string();
-            leader.set_connections(&None).await.unwrap();
-
-            // Leader sets the config
-            let _ = leader
-                .client
-                .get_default_config_gen_params(leader.auth.clone())
-                .await
-                .unwrap();
-            leader.set_config_gen_params().await;
-
-            // Setup followers and send connection info
-            for follower in &mut followers {
-                assert_eq!(
-                    follower.status().await.server,
-                    ServerStatus::AwaitingPassword
-                );
-                follower
-                    .client
-                    .set_password(follower.auth.clone())
-                    .await
-                    .unwrap();
-                let leader_url = Some(leader.settings.api_url.clone());
-                follower.set_connections(&leader_url).await.unwrap();
-                follower.name = format!("{}_", follower.name);
-                follower.set_connections(&leader_url).await.unwrap();
-                follower.set_config_gen_params().await;
-            }
-
-            // Confirm we can get peer servers if we are the leader
-            let peers = leader.client.get_config_gen_peers().await.unwrap();
-            let names: Vec<_> = peers.into_iter().map(|peer| peer.name).sorted().collect();
-            assert_eq!(names, vec!["leader", "peer1_", "peer2_"]);
-
-            leader
-                .wait_status(ServerStatus::SharingConfigGenParams)
-                .await;
-
-            // Followers can fetch configs
-            let mut configs = vec![];
-            for peer in &followers {
-                configs.push(peer.client.get_consensus_config_gen_params().await.unwrap());
-            }
-            // Confirm all consensus configs are the same
-            let mut consensus: Vec<_> = configs.iter().map(|p| p.consensus.clone()).collect();
-            consensus.dedup();
-            assert_eq!(consensus.len(), 1);
-            // Confirm all peer ids are unique
-            let ids: BTreeSet<_> = configs.iter().map(|p| p.our_current_id).collect();
-            assert_eq!(ids.len(), followers.len());
-
-            // all peers run DKG
-            let leader_amount = leader.amount;
-            let leader_name = leader.name.clone();
-            followers.push(leader);
-            let all_peers = Arc::new(followers);
-            let (results, _) = tokio::join!(
-                join_all(
-                    all_peers
-                        .iter()
-                        .map(|peer| peer.client.run_dkg(peer.auth.clone()))
-                ),
-                all_peers[0].wait_status(ServerStatus::VerifyingConfigs)
-            );
-            for result in results {
-                result.expect("DKG failed");
-            }
-
-            // verify config hashes equal for all peers
-            let mut hashes = HashSet::new();
-            for peer in all_peers.iter() {
-                peer.wait_status(ServerStatus::VerifyingConfigs).await;
-                hashes.insert(
-                    peer.client
-                        .get_verify_config_hash(peer.auth.clone())
-                        .await
-                        .unwrap(),
-                );
-            }
-            assert_eq!(hashes.len(), 1);
-
-            // verify the local and consensus values for peers
-            for peer in all_peers.iter() {
-                let cfg = peer.read_config();
-                let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
-                assert_eq!(dummy.consensus.tx_fee, leader_amount);
-                assert_eq!(dummy.local.example, peer.name);
-                assert_eq!(cfg.consensus.meta["test"], leader_name);
-            }
-
-            // start consensus
-            for peer in all_peers.iter() {
-                peer.client.start_consensus(peer.auth.clone()).await.ok();
-                assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
-            }
-
-            // shutdown
-            for peer in all_peers.iter() {
-                peer.retry_signal_upgrade().await;
-            }
-
-            all_peers
-        };
-
         // Run the Fedimint servers and test concurrently
-        let (_, followers) = tokio::join!(
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
-            test
+        spawn("Fedimint server apis", async move {
+            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))).await;
+        });
+
+        assert_eq!(leader.status().await.server, ServerStatus::AwaitingPassword);
+
+        // Cannot set the password twice
+        leader
+            .client
+            .set_password(leader.auth.clone())
+            .await
+            .unwrap();
+        assert!(leader
+            .client
+            .set_password(leader.auth.clone())
+            .await
+            .is_err());
+
+        // We can call this twice to change the leader name
+        leader.set_connections(&None).await.unwrap();
+        leader.name = "leader".to_string();
+        leader.set_connections(&None).await.unwrap();
+
+        // Leader sets the config
+        let _ = leader
+            .client
+            .get_default_config_gen_params(leader.auth.clone())
+            .await
+            .unwrap();
+        leader.set_config_gen_params().await;
+
+        // Setup followers and send connection info
+        for follower in &mut followers {
+            assert_eq!(
+                follower.status().await.server,
+                ServerStatus::AwaitingPassword
+            );
+            follower
+                .client
+                .set_password(follower.auth.clone())
+                .await
+                .unwrap();
+            let leader_url = Some(leader.settings.api_url.clone());
+            follower.set_connections(&leader_url).await.unwrap();
+            follower.name = format!("{}_", follower.name);
+            follower.set_connections(&leader_url).await.unwrap();
+            follower.set_config_gen_params().await;
+        }
+
+        // Confirm we can get peer servers if we are the leader
+        let peers = leader.client.get_config_gen_peers().await.unwrap();
+        let names: Vec<_> = peers.into_iter().map(|peer| peer.name).sorted().collect();
+        assert_eq!(names, vec!["leader", "peer1_", "peer2_", "peer3_"]);
+
+        leader
+            .wait_status(ServerStatus::SharingConfigGenParams)
+            .await;
+
+        // Followers can fetch configs
+        let mut configs = vec![];
+        for peer in &followers {
+            configs.push(peer.client.get_consensus_config_gen_params().await.unwrap());
+        }
+        // Confirm all consensus configs are the same
+        let mut consensus: Vec<_> = configs.iter().map(|p| p.consensus.clone()).collect();
+        consensus.dedup();
+        assert_eq!(consensus.len(), 1);
+        // Confirm all peer ids are unique
+        let ids: BTreeSet<_> = configs.iter().map(|p| p.our_current_id).collect();
+        assert_eq!(ids.len(), followers.len());
+
+        // all peers run DKG
+        let leader_amount = leader.amount;
+        let leader_name = leader.name.clone();
+        followers.push(leader);
+        let all_peers = Arc::new(followers);
+        let (results, _) = tokio::join!(
+            join_all(
+                all_peers
+                    .iter()
+                    .map(|peer| peer.client.run_dkg(peer.auth.clone()))
+            ),
+            all_peers[0].wait_status(ServerStatus::VerifyingConfigs)
         );
+        for result in results {
+            result.expect("DKG failed");
+        }
 
-        let test2 = async {
-            // Confirm we are stuck in upgrading after an upgrade
-            for peer in followers.iter() {
-                assert_eq!(peer.status().await.server, ServerStatus::Upgrading);
-                peer.client.start_consensus(peer.auth.clone()).await.ok();
-                assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
-            }
+        // verify config hashes equal for all peers
+        let mut hashes = HashSet::new();
+        for peer in all_peers.iter() {
+            peer.wait_status(ServerStatus::VerifyingConfigs).await;
+            hashes.insert(
+                peer.client
+                    .get_verify_config_hash(peer.auth.clone())
+                    .await
+                    .unwrap(),
+            );
+        }
+        assert_eq!(hashes.len(), 1);
 
-            // shutdown again
-            for peer in followers.iter() {
-                peer.retry_signal_upgrade().await;
-            }
-        };
+        // verify the local and consensus values for peers
+        for peer in all_peers.iter() {
+            let cfg = peer.read_config();
+            let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
+            assert_eq!(dummy.consensus.tx_fee, leader_amount);
+            assert_eq!(dummy.local.example, peer.name);
+            assert_eq!(cfg.consensus.meta["test"], leader_name);
+        }
 
-        //  Restart the Fedimint servers and a new test concurrently
-        tokio::join!(
-            join_all(apis.iter_mut().map(|api| api.run(TaskGroup::new()))),
-            test2
-        );
+        // start consensus
+        for peer in all_peers.iter() {
+            peer.client.start_consensus(peer.auth.clone()).await.ok();
+        }
+
+        sleep(Duration::from_secs(5)).await;
+
+        for peer in all_peers.iter() {
+            assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
+        }
     }
 }

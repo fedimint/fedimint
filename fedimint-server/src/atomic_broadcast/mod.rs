@@ -35,7 +35,7 @@
 //! * As the local subgraph grows the units within it are ordered and so are the
 //!   attached batches. As soon as it is ordered the broadcast instances unpacks
 //!   our batch sends the serialization to Fedimint Consensus in the form of an
-//!   [OrderedItem] .
+//!   ordered item.
 //! * Fedimint Consensus then deserializes the item and either accepts the item
 //!   bases on its current consensus state or discards it otherwise. Fedimint
 //!   Consensus transmits its decision to its broadcast instance via the
@@ -88,28 +88,24 @@ mod network;
 mod session;
 mod spawner;
 
-use bitcoin::merkle_tree;
-use bitcoin_hashes::{sha256, Hash};
 /// The atomic broadcast instance run once by every peer.
 pub use broadcast::AtomicBroadcast;
+use fedimint_core::block::SignedBlock;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 /// This keychain implements naive threshold schnorr signatures over secp256k1.
 /// The broadcasts uses this keychain to sign messages for peers and create
 /// the threshold signatures for the signed blocks.
 pub use keychain::Keychain;
+use serde::{Deserialize, Serialize};
 
 /// The majority of these messages need to be delivered to the intended
 /// [Recipient] in order for the broadcast to make progress. However, the
 /// broadcast does not assume a reliable network layer and implements all
 /// necessary retry logic. Therefore, the caller can discard a message
 /// immediately if its intended recipient is offline.
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub enum Message {
-    NetworkData(Vec<u8>),
-    BlockRequest(u64),
-    Block(SignedBlock),
-}
+#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
+pub struct Message(Vec<u8>);
 
 /// This enum defines the intended destination of a [Message].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -118,73 +114,10 @@ pub enum Recipient {
     Peer(PeerId),
 }
 
-/// This enum specifies whether an [OrderedItem] has been accepted or discarded
+/// This enum specifies whether an ordered item has been accepted or discarded
 /// by Fedimint Consensus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Decision {
     Accept,
     Discard,
-}
-
-/// If two correct nodes obtain two ordered items from the broadcast they
-/// are guaranteed to be in the same order. However, an ordered items is
-/// only guaranteed to be seen by all correct nodes if a correct node decides to
-/// accept it.
-#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
-pub struct OrderedItem {
-    pub item: Vec<u8>,
-    pub index: u64,
-    pub peer_id: PeerId,
-}
-
-/// All items ordered in a session that have been accepted by Fedimint Consensus
-/// are recorded in the corresponding block. A running Federation produces a
-/// [Block] roughly every five minutes.  Therefore, just like in Bitcoin, a
-/// [Block] might be empty if no items are ordered in that time or all ordered
-/// items are discarded by Fedimint Consensus.
-#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
-pub struct Block {
-    pub index: u64,
-    pub items: Vec<OrderedItem>,
-}
-
-impl Block {
-    /// A blocks header consists of 40 bytes formed by its index in big endian
-    /// bytes concatenated with the merkle root build from the consensus
-    /// hashes of its [OrderedItem]s or 32 zero bytes if the block is
-    /// empty. The use of a merkle tree allows for efficient inclusion
-    /// proofs of accepted consensus items for clients.
-    pub fn header(&self) -> [u8; 40] {
-        let mut header = [0; 40];
-
-        header[..8].copy_from_slice(&self.index.to_be_bytes());
-
-        let leaf_hashes = self.items.iter().map(consensus_hash_sha256);
-
-        if let Some(root) = merkle_tree::calculate_root(leaf_hashes) {
-            header[8..].copy_from_slice(&root.to_byte_array());
-        }
-
-        header
-    }
-}
-
-/// A signed block combines a block with the naive threshold secp schnorr
-/// signature for its header created by the federation. The signed blocks allow
-/// clients and recovering guardians to verify the federations consensus
-/// history. After a signed block has been created it is stored in the database.
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub struct SignedBlock {
-    pub block: Block,
-    pub signatures: std::collections::BTreeMap<PeerId, [u8; 64]>,
-}
-
-// TODO: remove this as soon as we bump bitcoin_hashes in fedimint_core to
-// 0.12.0
-fn consensus_hash_sha256<E: Encodable>(encodable: &E) -> sha256::Hash {
-    let mut engine = sha256::HashEngine::default();
-    encodable
-        .consensus_encode(&mut engine)
-        .expect("Writing to HashEngine cannot fail");
-    sha256::Hash::from_engine(engine)
 }

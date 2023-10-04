@@ -39,8 +39,8 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -307,16 +307,10 @@ impl ServerModule for Wallet {
     type Gen = WalletGen;
     type VerificationCache = WalletVerificationCache;
 
-    async fn await_consensus_proposal(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
-        while !self.consensus_proposal(dbtx).await.forces_new_epoch() {
-            sleep(Duration::from_millis(1000)).await;
-        }
-    }
-
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ConsensusProposal<WalletConsensusItem> {
+    ) -> Vec<WalletConsensusItem> {
         let mut items = dbtx
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .await
@@ -355,7 +349,7 @@ impl ServerModule for Wallet {
             items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
         }
 
-        ConsensusProposal::new_auto_trigger(items)
+        items
     }
 
     async fn process_consensus_item<'a, 'b>(

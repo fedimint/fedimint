@@ -1,30 +1,10 @@
 use std::io::Cursor;
 
 use fedimint_core::db::Database;
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_record;
 
-use crate::SignedBlock;
-
-#[derive(Debug, Encodable, Decodable)]
-struct SignedBlockKey(u64);
-
-impl_db_record!(
-    key = SignedBlockKey,
-    value = SignedBlock,
-    db_prefix = 0x00,
-    notify_on_modify = false,
-);
-
-#[derive(Debug, Encodable, Decodable)]
-struct UnitsKey(u64, u64);
-
-impl_db_record!(
-    key = UnitsKey,
-    value = Vec<u8>,
-    db_prefix = 0x01,
-    notify_on_modify = false,
-);
+use super::SignedBlock;
+use crate::db::{AlephUnitsKey, SignedBlockKey};
+use crate::LOG_CONSENSUS;
 
 pub async fn load_block(db: &Database, index: u64) -> Option<SignedBlock> {
     db.begin_transaction()
@@ -41,14 +21,17 @@ pub async fn open_session(db: Database, session_index: u64) -> (Cursor<Vec<u8>>,
     let mut units_index = 0;
     let mut dbtx = db.begin_transaction().await;
 
-    while let Some(bytes) = dbtx.get_value(&UnitsKey(session_index, units_index)).await {
+    while let Some(bytes) = dbtx
+        .get_value(&AlephUnitsKey(session_index, units_index))
+        .await
+    {
         buffer.extend(bytes);
         units_index += 1;
     }
 
     std::mem::drop(dbtx);
 
-    tracing::info!("Loaded aleph buffer with {} bytes", buffer.len());
+    tracing::info!(target: LOG_CONSENSUS,"Loaded aleph buffer with {} bytes", buffer.len());
 
     // the cursor enables aleph bft to read the units via std::io::Read
     let unit_loader = Cursor::new(buffer);
@@ -88,7 +71,7 @@ impl std::io::Write for UnitSaver {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        let units_key = UnitsKey(self.session_index, self.units_index);
+        let units_key = AlephUnitsKey(self.session_index, self.units_index);
 
         futures::executor::block_on(async {
             let mut dbtx = self.db.begin_transaction().await;
@@ -118,7 +101,7 @@ pub async fn complete_session(db: &Database, index: u64, signed_block: SignedBlo
     let mut units_index = 0;
 
     while dbtx
-        .remove_entry(&UnitsKey(index, units_index))
+        .remove_entry(&AlephUnitsKey(index, units_index))
         .await
         .is_some()
     {

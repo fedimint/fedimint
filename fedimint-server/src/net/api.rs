@@ -12,18 +12,19 @@ use fedimint_core::api::{
     ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::ClientBackupKey;
+use fedimint_core::block::SignedBlock;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT,
-    CONFIG_HASH_ENDPOINT, FETCH_EPOCH_COUNT_ENDPOINT, FETCH_EPOCH_HISTORY_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SIGNED_BLOCK_ENDPOINT,
+    BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT, FETCH_BLOCK_COUNT_ENDPOINT,
     GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    PROCESS_OUTCOME_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
-    UPGRADE_ENDPOINT, VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+    RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    WAIT_TRANSACTION_ENDPOINT,
 };
-use fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
@@ -39,8 +40,6 @@ use futures::StreamExt;
 use itertools::Itertools;
 use jsonrpsee::RpcModule;
 use secp256k1_zkp::SECP256K1;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
@@ -49,10 +48,10 @@ use crate::backup::ClientBackupSnapshot;
 use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::consensus::{ApiEvent, FundingVerifier, VerificationCaches};
+use crate::consensus::{FundingVerifier, VerificationCaches};
 use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
-    ClientConfigSignatureKey, EpochHistoryKey, LastEpochKey,
+    ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::transaction::SerdeTransaction;
@@ -184,15 +183,13 @@ pub struct ConsensusApi {
     pub cfg: ServerConfig,
     /// Database for serving the API
     pub db: Database,
-
     pub invitation_codes_tracker: InvitationCodesTracker,
-
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Cached client config
     pub client_cfg: ClientConfig,
     /// For sending API events to consensus such as transactions
-    pub api_sender: Sender<ApiEvent>,
+    pub submission_sender: async_channel::Sender<Vec<u8>>,
     pub peer_status_channels: PeerStatusChannels,
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,
@@ -265,8 +262,12 @@ impl ConsensusApi {
 
         funding_verifier.verify_funding()?;
 
-        self.api_sender
-            .send(ApiEvent::Transaction(transaction))
+        self.submission_sender
+            .send(
+                ConsensusItem::Transaction(transaction)
+                    .consensus_encode_to_vec()
+                    .expect("Infallible"),
+            )
             .await?;
 
         Ok(())
@@ -316,6 +317,23 @@ impl ConsensusApi {
         Ok((&outcome).into())
     }
 
+    pub async fn fetch_block_count(&self) -> u64 {
+        self.db
+            .begin_transaction()
+            .await
+            .find_by_prefix(&SignedBlockPrefix)
+            .await
+            .count()
+            .await as u64
+    }
+
+    pub async fn await_signed_block(&self, index: u64) -> SignedBlock {
+        self.db
+            .wait_key_check(&SignedBlockKey(index), std::convert::identity)
+            .await
+            .0
+    }
+
     pub async fn download_client_config(&self, info: InviteCode) -> ApiResult<ClientConfig> {
         let token = self.cfg.local.download_token.clone();
 
@@ -346,50 +364,16 @@ impl ConsensusApi {
         Ok(self.client_cfg.clone())
     }
 
-    pub async fn epoch_history(&self, epoch: u64) -> Option<SignedEpochOutcome> {
-        self.db
-            .begin_transaction()
-            .await
-            .get_value(&EpochHistoryKey(epoch))
-            .await
-    }
-
-    pub async fn get_epoch_count(&self) -> u64 {
-        self.db
-            .begin_transaction()
-            .await
-            .get_value(&LastEpochKey)
-            .await
-            .map(|ep_hist_key| ep_hist_key.0 + 1)
-            .unwrap_or(0)
-    }
-
-    /// Sends an upgrade signal to the fedimint server thread
-    pub async fn signal_upgrade(&self) -> Result<(), SendError<ApiEvent>> {
-        self.api_sender.send(ApiEvent::UpgradeSignal).await
-    }
-
-    /// Force process an outcome
-    pub async fn force_process_outcome(&self, outcome: SerdeEpochHistory) -> ApiResult<()> {
-        let event = outcome
-            .try_into_inner(&self.modules.decoder_registry())
-            .map_err(|_| ApiError::bad_request("Unable to decode outcome".to_string()))?;
-        self.api_sender
-            .send(ApiEvent::ForceProcessOutcome(event.outcome))
-            .await
-            .map_err(|_| ApiError::server_error("Unable send event".to_string()))
-    }
-
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
         let peers_connection_status = self.peer_status_channels.get_all_status().await;
         let latest_contribution_by_peer = self.latest_contribution_by_peer.read().await.clone();
-        let epoch_count = self.get_epoch_count().await;
+        let session_count = self.fetch_block_count().await;
 
         let status_by_peer = peers_connection_status
             .into_iter()
             .map(|(peer, connection_status)| {
                 let last_contribution = latest_contribution_by_peer.get(&peer).cloned();
-                let flagged = last_contribution.unwrap_or(0) + 1 < epoch_count;
+                let flagged = last_contribution.unwrap_or(0) + 1 < session_count;
                 let connection_status = match connection_status {
                     Ok(status) => status,
                     Err(e) => {
@@ -426,7 +410,7 @@ impl ConsensusApi {
         Ok(FederationStatus {
             // the naming is in preparation for aleph bft since we will switch to
             // the session count here and want to keep the public API stable
-            session_count: epoch_count,
+            session_count,
             peers_online,
             peers_offline,
             peers_flagged,
@@ -581,20 +565,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            FETCH_EPOCH_HISTORY_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, epoch: u64| -> SerdeEpochHistory {
-                let epoch = fedimint.epoch_history(epoch).await
-                  .ok_or_else(|| ApiError::not_found(format!("epoch {epoch} not found")))?;
-                Ok((&epoch).into())
-            }
-        },
-        api_endpoint! {
-            FETCH_EPOCH_COUNT_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
-                Ok(fedimint.get_epoch_count().await)
-            }
-        },
-        api_endpoint! {
             INVITE_CODE_ENDPOINT,
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
                 Ok(fedimint.cfg.get_invite_code().to_string())
@@ -621,23 +591,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            UPGRADE_ENDPOINT,
-            async |fedimint: &ConsensusApi, context, _v: ()| -> () {
-               check_auth(context)?;
-               fedimint.signal_upgrade().await.map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
-               Ok(())
-            }
-        },
-        api_endpoint! {
-            PROCESS_OUTCOME_ENDPOINT,
-            async |fedimint: &ConsensusApi, context, outcome: SerdeEpochHistory| -> () {
-                check_auth(context)?;
-                fedimint.force_process_outcome(outcome).await
-                  .map_err(|_| ApiError::server_error("Unable to send signal to server".to_string()))?;
-                Ok(())
-            }
-        },
-        api_endpoint! {
             STATUS_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 let consensus_status = fedimint
@@ -648,6 +601,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     server: ServerStatus::ConsensusRunning,
                     federation: Some(consensus_status)
                 })
+            }
+        },
+        api_endpoint! {
+            FETCH_BLOCK_COUNT_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
+                Ok(fedimint.fetch_block_count().await)
+            }
+        },
+        api_endpoint! {
+            AWAIT_SIGNED_BLOCK_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SignedBlock {
+                Ok(fedimint.await_signed_block(index).await)
             }
         },
         api_endpoint! {

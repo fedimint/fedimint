@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 use anyhow::anyhow;
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash;
 use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
@@ -16,10 +15,9 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::Database;
-use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::{BitcoinHash, ServerModule};
+use fedimint_core::ServerModule;
 use fedimint_ln_common::LightningCommonGen;
 use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
@@ -27,8 +25,6 @@ use fedimint_mint_server::common::MintCommonGen;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
-use fedimint_server::db::EpochHistoryKeyPrefix;
-use fedimint_server::epoch::{IterUnzipConsensusItem, SignedEpochOutcome, UnzipConsensusItem};
 use fedimint_server::transaction::Transaction;
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
@@ -42,7 +38,6 @@ use futures::stream::StreamExt;
 use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
 use serde::Serialize;
-use tracing::info;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
@@ -187,9 +182,13 @@ async fn main() -> anyhow::Result<()> {
             ]);
 
             let db = Database::new(RocksDb::open(db).expect("Error opening DB"), decoders);
-            let mut dbtx = db.begin_transaction().await;
+            let _dbtx = db.begin_transaction().await;
 
-            let mut change_tweak_idx: u64 = 0;
+            let _change_tweak_idx: u64 = 0;
+
+            unimplemented!();
+
+            /*
             let tweaks = dbtx.find_by_prefix(&EpochHistoryKeyPrefix).await.flat_map(
                 |(_, SignedEpochOutcome { outcome, .. })| {
                     let UnzipConsensusItem {
@@ -229,12 +228,16 @@ async fn main() -> anyhow::Result<()> {
 
             serde_json::to_writer(std::io::stdout().lock(), &wallets)
                 .expect("Could not encode to stdout")
+             */
         }
     }
 
     Ok(())
 }
 
+// FIXME: @joschisan: decide if still needed, probably currently unused because
+// of commented out code
+#[allow(dead_code)]
 fn input_tweaks_output_present(
     transactions: impl Iterator<Item = Transaction>,
 ) -> (BTreeSet<[u8; 32]>, bool) {

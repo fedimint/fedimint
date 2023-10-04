@@ -6,23 +6,19 @@ use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::task::MaybeSend;
 use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
-use threshold_crypto::PublicKey;
 use tokio_rustls::rustls;
 
 use crate::api::{
-    DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
-    StatusResponse, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationResult, ServerStatus, StatusResponse, WsFederationApi,
 };
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
     GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, PROCESS_OUTCOME_ENDPOINT, RUN_DKG_ENDPOINT,
-    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, UPGRADE_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT,
 };
-use crate::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-use crate::module::registry::ModuleDecoderRegistry;
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
 
@@ -89,42 +85,6 @@ impl WsAdminClient {
     /// Could be called on the leader, so it's not authenticated
     pub async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>> {
         self.request(GET_CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
-            .await
-    }
-
-    /// Sends a signal to consensus that we are ready to shutdown the federation
-    /// and upgrade
-    pub async fn signal_upgrade(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request(
-            UPGRADE_ENDPOINT,
-            ApiRequestErased::default().with_auth(auth),
-        )
-        .await
-    }
-
-    /// Sends a signal to consensus that we want to force running an epoch
-    /// outcome
-    pub async fn force_process_epoch(
-        &self,
-        outcome: SerdeEpochHistory,
-        auth: ApiAuth,
-    ) -> FederationResult<()> {
-        self.request(
-            PROCESS_OUTCOME_ENDPOINT,
-            ApiRequestErased::new(outcome).with_auth(auth),
-        )
-        .await
-    }
-
-    /// Delegates to `fetch_epoch_history`
-    pub async fn fetch_last_epoch_history(
-        &self,
-        epoch_pk: PublicKey,
-        decoders: &ModuleDecoderRegistry,
-    ) -> FederationResult<SignedEpochOutcome> {
-        let epoch = self.inner.fetch_epoch_count().await? - 1;
-        self.inner
-            .fetch_epoch_history(epoch, epoch_pk, decoders)
             .await
     }
 

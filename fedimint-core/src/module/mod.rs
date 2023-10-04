@@ -844,14 +844,11 @@ pub trait ServerModule: Debug + Sized {
         Self::Common::decoder_builder().build()
     }
 
-    /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self, dbtx: &mut ModuleDatabaseTransaction<'_>);
-
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal<'a>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> ConsensusProposal<<Self::Common as ModuleCommon>::ConsensusItem>;
+    ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
     /// returns an error if and only if the consensus item does not change

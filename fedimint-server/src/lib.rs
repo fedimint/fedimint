@@ -29,10 +29,11 @@ use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::consensus::server::ConsensusServer;
-use crate::consensus::HbbftConsensusOutcome;
 use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 use crate::net::peers::ReconnectPeerConnections;
+
+pub mod atomic_broadcast;
 
 /// The actual implementation of consensus
 pub mod consensus;
@@ -126,9 +127,7 @@ impl FedimintServer {
                 .map_err(|_| format_err!("Unable to use local password"))?;
             info!(target: LOG_CONSENSUS, "Setting password from local file");
 
-            if config_gen.has_upgrade_flag().await {
-                info!(target: LOG_CONSENSUS, "Restarted from an upgrade");
-            } else if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
+            if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
                 info!(target: LOG_CONSENSUS, "Configs found locally");
                 return Ok(config_generated_rx.recv().await.expect("should not close"));
             }
@@ -150,7 +149,7 @@ impl FedimintServer {
         server: &ConsensusServer,
         force_shutdown: bool,
     ) -> FedimintApiHandler {
-        let api = server.get_consensus().get_api();
+        let api = &server.consensus_api;
         let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
