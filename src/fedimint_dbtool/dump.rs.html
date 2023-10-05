@@ -333,6 +333,19 @@
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -597,6 +610,21 @@
         });
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
             <span class="kw">match </span>table {
+                ConsensusRange::DbKeyPrefix::SessionIndex =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(index) = dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusRange::SessionIndexKey).<span class="kw">await </span>{
+                        consensus.insert(<span class="string">&quot;Client Config Signature&quot;</span>.to_string(), Box::new(index));
+                    }
+                }
+                ConsensusRange::DbKeyPrefix::AcceptedIndex =&gt; {
+                    <span class="macro">push_db_pair_items_no_serde!</span>(
+                        dbtx,
+                        ConsensusRange::AcceptedIndexPrefix,
+                        ConsensusRange::AcceptedIndexKey,
+                        (),
+                        consensus,
+                        <span class="string">&quot;Accepted Index&quot;
+                    </span>);
+                }
                 ConsensusRange::DbKeyPrefix::AcceptedTransaction =&gt; {
                     <span class="macro">push_db_pair_items_no_serde!</span>(
                         dbtx,
@@ -607,21 +635,25 @@
                         <span class="string">&quot;Accepted Transactions&quot;
                     </span>);
                 }
-                ConsensusRange::DbKeyPrefix::EpochHistory =&gt; {
+                ConsensusRange::DbKeyPrefix::SignedBlock =&gt; {
                     <span class="macro">push_db_pair_items_no_serde!</span>(
                         dbtx,
-                        ConsensusRange::EpochHistoryKeyPrefix,
-                        ConsensusRange::EpochHistoryKey,
-                        fedimint_core::epoch::EpochHistory,
+                        ConsensusRange::SignedBlockPrefix,
+                        ConsensusRange::SignedBlockKey,
+                        fedimint_server::consensus::SignedBlock,
                         consensus,
-                        <span class="string">&quot;Epoch History&quot;
+                        <span class="string">&quot;Signed Blocks&quot;
                     </span>);
                 }
-                ConsensusRange::DbKeyPrefix::LastEpoch =&gt; {
-                    <span class="kw">let </span>last_epoch = dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusRange::LastEpochKey).<span class="kw">await</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(last_epoch) = last_epoch {
-                        consensus.insert(<span class="string">&quot;LastEpoch&quot;</span>.to_string(), Box::new(last_epoch));
-                    }
+                ConsensusRange::DbKeyPrefix::AlephUnits =&gt; {
+                    <span class="macro">push_db_pair_items_no_serde!</span>(
+                        dbtx,
+                        ConsensusRange::AlephUnitsPrefix,
+                        ConsensusRange::AlephUnitsKey,
+                        Vec&lt;u8&gt;,
+                        consensus,
+                        <span class="string">&quot;Aleph Units&quot;
+                    </span>);
                 }
                 ConsensusRange::DbKeyPrefix::ClientConfigSignature =&gt; {
                     <span class="kw">let </span>signature = dbtx
@@ -642,12 +674,6 @@
                         consensus,
                         <span class="string">&quot;Client Config Signature Share&quot;
                     </span>);
-                }
-                ConsensusRange::DbKeyPrefix::ConsensusUpgrade =&gt; {
-                    <span class="kw">let </span>upgrade = dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusRange::ConsensusUpgradeKey).<span class="kw">await</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(upgrade) = upgrade {
-                        consensus.insert(<span class="string">&quot;ConsensusUpgrade&quot;</span>.to_string(), Box::new(upgrade));
-                    }
                 }
                 ConsensusRange::DbKeyPrefix::ClientConfigDownload =&gt; {
                     <span class="macro">push_db_pair_items!</span>(

@@ -348,7 +348,7 @@
 }
 
 <span class="doccomment">/// Helper function that recursively copies all of the contents from
-/// `src` to `dst`.
+/// `atomic_broadcast` to `dst`.
 </span><span class="kw">pub fn </span>copy_directory(src: <span class="kw-2">&amp;</span>Path, dst: <span class="kw-2">&amp;</span>Path) -&gt; io::Result&lt;()&gt; {
     <span class="comment">// Create the destination directory if it doesn&#39;t exist
     </span>fs::create_dir_all(dst)<span class="question-mark">?</span>;

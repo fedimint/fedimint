@@ -1023,9 +1023,6 @@
 <a href="#1023" id="1023">1023</a>
 <a href="#1024" id="1024">1024</a>
 <a href="#1025" id="1025">1025</a>
-<a href="#1026" id="1026">1026</a>
-<a href="#1027" id="1027">1027</a>
-<a href="#1028" id="1028">1028</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
@@ -1872,14 +1869,11 @@
         <span class="self">Self</span>::Common::decoder_builder().build()
     }
 
-    <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
-    </span><span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);
-
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ConsensusProposal&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
+    ) -&gt; Vec&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::ConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once for every consensus item. The function
     /// returns an error if and only if the consensus item does not change

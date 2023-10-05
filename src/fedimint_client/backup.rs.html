@@ -431,7 +431,7 @@
 </span><span class="attr">#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ClientBackup {
     <span class="doccomment">/// Epoch count taken right before taking the backup
-    </span>epoch_count: u64,
+    </span>fedimint_block_count: u64,
     <span class="doccomment">/// Application metadata
     </span>metadata: Metadata,
     <span class="doccomment">/// Module specific-backup (if supported)
@@ -505,7 +505,7 @@
 <span class="kw">impl </span>Client {
     <span class="doccomment">/// Create a backup, include provided `metadata`
     </span><span class="kw">pub async fn </span>create_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, metadata: Metadata) -&gt; anyhow::Result&lt;ClientBackup&gt; {
-        <span class="kw">let </span>epoch_count = <span class="self">self</span>.inner.api.fetch_epoch_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>fedimint_block_count = <span class="self">self</span>.inner.api.fetch_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>;
         <span class="kw">for </span>(id, kind, module) <span class="kw">in </span><span class="self">self</span>.inner.modules.iter_modules() {
@@ -532,7 +532,7 @@
         <span class="prelude-val">Ok</span>(ClientBackup {
             metadata,
             modules,
-            epoch_count,
+            fedimint_block_count,
         })
     }
 
@@ -611,7 +611,7 @@
         <span class="kw">let </span>backup = <span class="kw">if let </span><span class="prelude-val">Some</span>(backup) = <span class="self">self</span>.download_backup_from_federation().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="macro">info!</span>(
                 target: LOG_CLIENT_RECOVERY,
-                epoch = backup.epoch_count,
+                epoch = backup.fedimint_block_count,
                 <span class="string">&quot;Found backup&quot;
             </span>);
             <span class="prelude-val">Some</span>(backup)
@@ -687,7 +687,7 @@
             responses.len()
         );
         <span class="comment">// Use the newest (highest epoch)
-        </span>responses.sort_by_key(|backup| Reverse(backup.epoch_count));
+        </span>responses.sort_by_key(|backup| Reverse(backup.fedimint_block_count));
 
         <span class="prelude-val">Ok</span>(responses.into_iter().next())
     }

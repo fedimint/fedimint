@@ -1642,16 +1642,7 @@
 <a href="#1642" id="1642">1642</a>
 <a href="#1643" id="1643">1643</a>
 <a href="#1644" id="1644">1644</a>
-<a href="#1645" id="1645">1645</a>
-<a href="#1646" id="1646">1646</a>
-<a href="#1647" id="1647">1647</a>
-<a href="#1648" id="1648">1648</a>
-<a href="#1649" id="1649">1649</a>
-<a href="#1650" id="1650">1650</a>
-<a href="#1651" id="1651">1651</a>
-<a href="#1652" id="1652">1652</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
@@ -1669,13 +1660,12 @@
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, CoreConsensusVersion, ExtendsCommonModuleInit,
+    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
@@ -2018,16 +2008,10 @@
     <span class="kw">type </span>Gen = LightningGen;
     <span class="kw">type </span>VerificationCache = LightningVerificationCache;
 
-    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="kw">while </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
-            sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
-        }
-    }
-
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ConsensusProposal&lt;LightningConsensusItem&gt; {
+    ) -&gt; Vec&lt;LightningConsensusItem&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;LightningConsensusItem&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
             .<span class="kw">await
@@ -2043,7 +2027,7 @@
             items.push(LightningConsensusItem::BlockCount(block_count_vote));
         }
 
-        ConsensusProposal::new_auto_trigger(items)
+        items
     }
 
     <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(

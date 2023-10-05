@@ -304,12 +304,6 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -325,8 +319,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::ModuleDatabaseTransaction;
 <span class="kw">use </span><span class="kw">crate</span>::maybe_add_send_sync;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, ConsensusProposal, InputMeta, ModuleCommon,
-    ModuleError, ServerModule, TransactionItemAmount,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ModuleError,
+    ServerModule, TransactionItemAmount,
 };
 <span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, MaybeSync};
 
@@ -365,15 +359,12 @@
     <span class="doccomment">/// Returns the decoder belonging to the server module
     </span><span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
 
-    <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
-    </span><span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;);
-
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; ConsensusProposal&lt;DynModuleConsensusItem&gt;;
+    ) -&gt; Vec&lt;DynModuleConsensusItem&gt;;
 
     <span class="doccomment">/// This function is called once for every consensus item. The function
     /// returns an error if any only if the consensus item does not change
@@ -466,20 +457,17 @@
         <span class="self">self
     </span>}
 
-    <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.
-    </span><span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::await_consensus_proposal(<span class="self">self</span>, dbtx).<span class="kw">await
-    </span>}
-
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
-    ) -&gt; ConsensusProposal&lt;DynModuleConsensusItem&gt; {
+    ) -&gt; Vec&lt;DynModuleConsensusItem&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::consensus_proposal(<span class="self">self</span>, dbtx)
             .<span class="kw">await
-            </span>.map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
+            </span>.into_iter()
+            .map(|v| DynModuleConsensusItem::from_typed(module_instance_id, v))
+            .collect()
     }
 
     <span class="doccomment">/// This function is called once for every consensus item. The function

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["request_signed_block","run"]};

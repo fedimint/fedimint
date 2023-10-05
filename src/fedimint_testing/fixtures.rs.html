@@ -226,9 +226,6 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -283,10 +280,7 @@
         <span class="comment">// Ensure tracing has been set once
         </span><span class="kw">let _ </span>= TracingSetup::default().init();
         <span class="kw">let </span>real_testing = Fixtures::is_real_test();
-        <span class="kw">let </span>num_peers = <span class="kw">match </span>real_testing {
-            <span class="bool-val">true </span>=&gt; <span class="number">2</span>,
-            <span class="bool-val">false </span>=&gt; <span class="number">1</span>,
-        };
+        <span class="kw">let </span>num_peers = <span class="number">4</span>;
         <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">let </span>(dyn_bitcoin_rpc, bitcoin, config): (
             DynBitcoindRpc,

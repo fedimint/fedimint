@@ -471,13 +471,6 @@
 <a href="#471" id="471">471</a>
 <a href="#472" id="472">472</a>
 <a href="#473" id="473">473</a>
-<a href="#474" id="474">474</a>
-<a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::string::ToString;
 
@@ -493,8 +486,8 @@
 <span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
@@ -719,17 +712,10 @@
     <span class="kw">type </span>Gen = DummyGen;
     <span class="kw">type </span>VerificationCache = DummyVerificationCache;
 
-    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="comment">// Wait until we have a proposal
-        </span><span class="kw">if </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
-            <span class="self">self</span>.sign_notify.notified().<span class="kw">await</span>;
-        }
-    }
-
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ConsensusProposal&lt;DummyConsensusItem&gt; {
+    ) -&gt; Vec&lt;DummyConsensusItem&gt; {
         <span class="comment">// Sign and send the print requests to consensus
         </span><span class="kw">let </span>sign_requests: Vec&lt;<span class="kw">_</span>&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>DummySignaturePrefix)
@@ -737,14 +723,14 @@
             </span>.collect()
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>consensus_items = sign_requests
+        sign_requests
             .into_iter()
             .filter(|(<span class="kw">_</span>, sig)| sig.is_none())
             .map(|(DummySignatureKey(message), <span class="kw">_</span>)| {
                 <span class="kw">let </span>sig = <span class="self">self</span>.cfg.private.private_key_share.sign(<span class="kw-2">&amp;</span>message);
                 DummyConsensusItem::Sign(message, SerdeSignatureShare(sig))
-            });
-        ConsensusProposal::new_auto_trigger(consensus_items.collect())
+            })
+            .collect()
     }
 
     <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(

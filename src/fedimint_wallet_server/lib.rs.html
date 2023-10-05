@@ -1971,12 +1971,6 @@
 <a href="#1971" id="1971">1971</a>
 <a href="#1972" id="1972">1972</a>
 <a href="#1973" id="1973">1973</a>
-<a href="#1974" id="1974">1974</a>
-<a href="#1975" id="1975">1975</a>
-<a href="#1976" id="1976">1976</a>
-<a href="#1977" id="1977">1977</a>
-<a href="#1978" id="1978">1978</a>
-<a href="#1979" id="1979">1979</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2018,8 +2012,8 @@
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ConsensusProposal, CoreConsensusVersion, ExtendsCommonModuleInit,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
@@ -2286,16 +2280,10 @@
     <span class="kw">type </span>Gen = WalletGen;
     <span class="kw">type </span>VerificationCache = WalletVerificationCache;
 
-    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="kw">while </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
-            sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
-        }
-    }
-
     <span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ConsensusProposal&lt;WalletConsensusItem&gt; {
+    ) -&gt; Vec&lt;WalletConsensusItem&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>items = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>PegOutTxSignatureCIPrefix)
             .<span class="kw">await
@@ -2334,7 +2322,7 @@
             items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
         }
 
-        ConsensusProposal::new_auto_trigger(items)
+        items
     }
 
     <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(

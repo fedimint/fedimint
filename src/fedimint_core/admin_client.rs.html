@@ -276,46 +276,6 @@
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -324,23 +284,19 @@
 <span class="kw">use </span>fedimint_core::task::MaybeSend;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>threshold_crypto::PublicKey;
 <span class="kw">use </span>tokio_rustls::rustls;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::{
-    DynGlobalApi, FederationApiExt, FederationResult, GlobalFederationApi, ServerStatus,
-    StatusResponse, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationResult, ServerStatus, StatusResponse, WsFederationApi,
 };
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
     GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, PROCESS_OUTCOME_ENDPOINT, RUN_DKG_ENDPOINT,
-    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, UPGRADE_ENDPOINT,
+    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
+    STATUS_ENDPOINT,
 };
-<span class="kw">use </span><span class="kw">crate</span>::epoch::{SerdeEpochHistory, SignedEpochOutcome};
-<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
@@ -407,42 +363,6 @@
     /// Could be called on the leader, so it&#39;s not authenticated
     </span><span class="kw">pub async fn </span>get_config_gen_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;PeerServerParams&gt;&gt; {
         <span class="self">self</span>.request(GET_CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
-            .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Sends a signal to consensus that we are ready to shutdown the federation
-    /// and upgrade
-    </span><span class="kw">pub async fn </span>signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request(
-            UPGRADE_ENDPOINT,
-            ApiRequestErased::default().with_auth(auth),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Sends a signal to consensus that we want to force running an epoch
-    /// outcome
-    </span><span class="kw">pub async fn </span>force_process_epoch(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        outcome: SerdeEpochHistory,
-        auth: ApiAuth,
-    ) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request(
-            PROCESS_OUTCOME_ENDPOINT,
-            ApiRequestErased::new(outcome).with_auth(auth),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Delegates to `fetch_epoch_history`
-    </span><span class="kw">pub async fn </span>fetch_last_epoch_history(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        epoch_pk: PublicKey,
-        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; FederationResult&lt;SignedEpochOutcome&gt; {
-        <span class="kw">let </span>epoch = <span class="self">self</span>.inner.fetch_epoch_count().<span class="kw">await</span><span class="question-mark">? </span>- <span class="number">1</span>;
-        <span class="self">self</span>.inner
-            .fetch_epoch_history(epoch, epoch_pk, decoders)
             .<span class="kw">await
     </span>}
 

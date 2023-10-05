@@ -781,7 +781,7 @@
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
 <span class="kw">use </span>fedimint_client::Client;
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
-<span class="kw">use </span>fedimint_core::endpoint_constants::FETCH_EPOCH_COUNT_ENDPOINT;
+<span class="kw">use </span>fedimint_core::endpoint_constants::FETCH_BLOCK_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, SafeUrl};
@@ -1324,12 +1324,12 @@
                     <span class="kw">let </span>m = fedimint_core::time::now();
                     <span class="kw">let </span>_epoch: u64 = client
                         .request::&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;(
-                            FETCH_EPOCH_COUNT_ENDPOINT,
+                            FETCH_BLOCK_COUNT_ENDPOINT,
                             <span class="macro">vec!</span>[ApiRequestErased::default()],
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
                     event_sender.send(MetricEvent {
-                        name: FETCH_EPOCH_COUNT_ENDPOINT.into(),
+                        name: FETCH_BLOCK_COUNT_ENDPOINT.into(),
                         duration: m.elapsed()<span class="question-mark">?</span>,
                     })<span class="question-mark">?</span>;
                     fedimint_core::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;

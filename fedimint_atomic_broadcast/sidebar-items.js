@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Decision","Message","Recipient"],"fn":["consensus_hash_sha256"],"mod":["broadcast","conversion","data_provider","db","finalization_handler","keychain","network","session","spawner"],"struct":["AtomicBroadcast","Block","Keychain","OrderedItem","SignedBlock"]};

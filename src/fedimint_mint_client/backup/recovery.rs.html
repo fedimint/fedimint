@@ -871,27 +871,16 @@
 <a href="#871" id="871">871</a>
 <a href="#872" id="872">872</a>
 <a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{<span class="self">self</span>, max};
-<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
+<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt;
+<span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::ops::Range;
 
 <span class="kw">use </span>fedimint_client::sm::{OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-<span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SignedEpochOutcome};
+<span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{Amount, NumPeers, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
@@ -1052,7 +1041,6 @@
                     .make_progress(
                         global_context.api().clone(),
                         global_context.decoders().clone(),
-                        global_context.client_config().global.epoch_pk,
                         secret,
                     )
                     .<span class="kw">await
@@ -1152,37 +1140,27 @@
         <span class="kw-2">mut </span><span class="self">self</span>,
         api: DynGlobalApi,
         decoders: ModuleDecoderRegistry,
-        epoch_pk: threshold_crypto::PublicKey,
         secret: DerivableSecret,
     ) -&gt; <span class="self">Self </span>{
         <span class="macro">assert_eq!</span>(secret.level(), <span class="number">2</span>);
-        <span class="kw">let </span>epoch_range = <span class="self">self</span>.next_epoch
+        <span class="kw">let </span>block_range = <span class="self">self</span>.next_epoch
             ..cmp::min(
                 <span class="self">self</span>.next_epoch.wrapping_add(PROGRESS_SNAPSHOT_EPOCHS),
                 <span class="self">self</span>.end_epoch,
             );
         <span class="macro">debug!</span>(
             target: LOG_CLIENT_RECOVERY_MINT,
-            <span class="question-mark">?</span>epoch_range,
+            <span class="question-mark">?</span>block_range,
             <span class="string">&quot;Processing epochs&quot;
         </span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>epoch_stream = <span class="self">Self</span>::fetch_epochs_stream(api, epoch_pk, decoders, epoch_range);
-        <span class="kw">while let </span><span class="prelude-val">Some</span>((epoch, epoch_history)) = epoch_stream.next().<span class="kw">await </span>{
-            <span class="macro">assert_eq!</span>(epoch_history.outcome.epoch, epoch);
-            <span class="self">self</span>.next_epoch = epoch + <span class="number">1</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>block_stream = <span class="self">Self</span>::fetch_block_stream(api, decoders, block_range);
+        <span class="kw">while let </span><span class="prelude-val">Some</span>((block_idx, epoch_history)) = block_stream.next().<span class="kw">await </span>{
+            <span class="self">self</span>.next_epoch = block_idx + <span class="number">1</span>;
 
-            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, epoch, <span class="string">&quot;Processing epoch&quot;</span>);
+            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, block_idx, <span class="string">&quot;Processing epoch&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>processed_txs = Default::default();
-            <span class="kw">for </span>(peer_id, items) <span class="kw">in </span><span class="kw-2">&amp;</span>epoch_history.outcome.items {
-                <span class="kw">for </span>item <span class="kw">in </span>items {
-                    <span class="self">self</span>.handle_consensus_item(
-                        <span class="kw-2">*</span>peer_id,
-                        item,
-                        <span class="kw-2">&amp;mut </span>processed_txs,
-                        <span class="kw-2">&amp;</span>epoch_history.outcome.rejected_txs,
-                        <span class="kw-2">&amp;</span>secret,
-                    );
-                }
+            <span class="kw">for </span>(peer_id, item) <span class="kw">in </span><span class="kw-2">&amp;</span>epoch_history {
+                <span class="self">self</span>.handle_consensus_item(<span class="kw-2">*</span>peer_id, item, <span class="kw-2">&amp;mut </span>processed_txs, <span class="kw-2">&amp;</span>secret);
             }
         }
         <span class="self">self
@@ -1194,30 +1172,43 @@
     /// errors via `sender` itself.
     ///
     /// TODO: could be internal to recovery_loop?
-    </span><span class="kw">fn </span>fetch_epochs_stream&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">fn </span>fetch_block_stream&lt;<span class="lifetime">&#39;a</span>&gt;(
         api: DynGlobalApi,
-        epoch_pk: threshold_crypto::PublicKey,
         decoders: ModuleDecoderRegistry,
         epoch_range: Range&lt;u64&gt;,
-    ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, SignedEpochOutcome)&gt; + <span class="lifetime">&#39;a </span>{
+    ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, Vec&lt;(PeerId, ConsensusItem)&gt;)&gt; + <span class="lifetime">&#39;a </span>{
         futures::stream::iter(epoch_range)
-            .map(<span class="kw">move </span>|epoch| {
+            .map(<span class="kw">move </span>|block_idx| {
                 <span class="kw">let </span>api = api.clone();
                 <span class="kw">let </span>decoders = decoders.clone();
                 Box::pin(<span class="kw">async move </span>{
-                    <span class="macro">info!</span>(epoch, <span class="string">&quot;Fetching epoch&quot;</span>);
-                    (
-                        epoch,
-                        <span class="kw">loop </span>{
-                            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, epoch, <span class="string">&quot;Awaiting epoch&quot;</span>);
-                            <span class="kw">match </span>api.fetch_epoch_history(epoch, epoch_pk, <span class="kw-2">&amp;</span>decoders).<span class="kw">await </span>{
-                                <span class="prelude-val">Ok</span>(o) =&gt; <span class="kw">break </span>o,
-                                <span class="prelude-val">Err</span>(e) =&gt; {
-                                    <span class="macro">info!</span>(e = %e, epoch, <span class="string">&quot;Error trying to fetch epoch history&quot;</span>);
-                                }
+                    <span class="macro">info!</span>(block_idx, <span class="string">&quot;Fetching epoch&quot;</span>);
+
+                    <span class="kw">let </span>block = <span class="kw">loop </span>{
+                        <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, block_idx, <span class="string">&quot;Awaiting signed block&quot;</span>);
+                        <span class="kw">match </span>api.await_signed_block(block_idx).<span class="kw">await </span>{
+                            <span class="prelude-val">Ok</span>(signed_block) =&gt; <span class="kw">break </span>signed_block.block,
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="macro">info!</span>(e = %e, block_idx, <span class="string">&quot;Error trying to fetch signed block&quot;</span>);
                             }
-                        },
-                    )
+                        }
+                    };
+
+                    <span class="macro">assert_eq!</span>(block_idx, block.index);
+                    <span class="kw">let </span>consensus_items = block
+                        .items
+                        .into_iter()
+                        .map(|item| {
+                            <span class="kw">let </span><span class="kw-2">mut </span>item_bytes_cursor = Cursor::new(item.item);
+                            <span class="kw">let </span>ci: ConsensusItem =
+                                Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>item_bytes_cursor, <span class="kw-2">&amp;</span>decoders)
+                                    .expect(<span class="string">&quot;Malicious federation returned non-decodable result&quot;</span>);
+                            <span class="comment">// FIXME: assert cursor fully consumed
+                            </span>(item.peer_id, ci)
+                        })
+                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+                    (block_idx, consensus_items)
                 })
             })
             .buffered(<span class="number">8</span>)
@@ -1237,7 +1228,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>s = <span class="self">Self </span>{
             start_epoch: backup.epoch_count,
             next_epoch: backup.epoch_count,
-            end_epoch: current_epoch_count,
+            end_epoch: current_epoch_count + <span class="number">1</span>,
             spendable_note_by_nonce: backup
                 .notes
                 .into_iter()
@@ -1560,7 +1551,6 @@
         peer_id: PeerId,
         item: <span class="kw-2">&amp;</span>ConsensusItem,
         processed_txs: <span class="kw-2">&amp;mut </span>HashSet&lt;TransactionId&gt;,
-        rejected_txs: <span class="kw-2">&amp;</span>BTreeSet&lt;TransactionId&gt;,
         secret: <span class="kw-2">&amp;</span>DerivableSecret,
     ) {
         <span class="macro">trace!</span>(
@@ -1578,20 +1568,6 @@
                     tx_hash = %tx.tx_hash(),
                     <span class="string">&quot;found transaction&quot;
                 </span>);
-
-                <span class="kw">if </span>rejected_txs.contains(<span class="kw-2">&amp;</span>txid) {
-                    <span class="macro">debug!</span>(
-                        target: LOG_CLIENT_RECOVERY_MINT,
-                        tx_hash = %tx.tx_hash(),
-                        <span class="string">&quot;transaction was rejected&quot;
-                    </span>);
-                    <span class="comment">// Do not process invalid transactions.
-                    // Consensus history contains all data proposed by each peer, even invalid (e.g.
-                    // due to double spent) transactions. Precisely to save
-                    // downstream users from having to run the consensus themselves,
-                    // each epoch contains a list of transactions  that turned out to be invalid.
-                    </span><span class="kw">return</span>;
-                }
 
                 <span class="kw">if </span>!processed_txs.insert(txid) {
                     <span class="comment">// Just like server side consensus, do not attempt to process the same

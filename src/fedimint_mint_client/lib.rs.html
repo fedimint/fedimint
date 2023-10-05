@@ -2433,9 +2433,9 @@
             .transpose()<span class="question-mark">?
             </span>.unwrap_or(EcashBackup::new_empty());
 
-        <span class="kw">let </span>current_epoch_count = api.fetch_epoch_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>current_block_count = api.fetch_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>state = MintRestoreInProgressState::from_backup(
-            current_epoch_count,
+            current_block_count,
             snapshot,
             <span class="number">30</span>,
             <span class="self">self</span>.cfg.tbs_pks.clone(),

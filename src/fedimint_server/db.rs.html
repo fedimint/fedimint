@@ -376,14 +376,45 @@
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
-<span class="kw">use </span>std::fmt::Debug;
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::api::ClientConfigDownloadToken;
+<span class="kw">use </span>fedimint_core::block::SignedBlock;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare, SignedEpochOutcome};
+<span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
@@ -393,12 +424,13 @@
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
+    SessionIndex = <span class="number">0x00</span>,
+    AcceptedIndex = <span class="number">0x01</span>,
     AcceptedTransaction = <span class="number">0x02</span>,
-    EpochHistory = <span class="number">0x05</span>,
-    LastEpoch = <span class="number">0x06</span>,
+    SignedBlock = <span class="number">0x04</span>,
+    AlephUnits = <span class="number">0x05</span>,
     ClientConfigSignature = <span class="number">0x07</span>,
     ClientConfigSignatureShare = <span class="number">0x3</span>,
-    ConsensusUpgrade = <span class="number">0x08</span>,
     ClientConfigDownload = <span class="number">0x09</span>,
     Module = MODULE_GLOBAL_PREFIX,
 }
@@ -408,6 +440,29 @@
         <span class="macro">write!</span>(f, <span class="string">&quot;{self:?}&quot;</span>)
     }
 }
+
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>SessionIndexKey;
+
+<span class="macro">impl_db_record!</span>(
+    key = SessionIndexKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::SessionIndex,
+);
+
+<span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Ord, PartialOrd)]
+</span><span class="kw">pub struct </span>AcceptedIndex(<span class="kw">pub </span>u64);
+
+<span class="attr">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>AcceptedIndexPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = AcceptedIndex,
+    value = (),
+    db_prefix = DbKeyPrefix::AcceptedIndex,
+);
+
+<span class="macro">impl_db_lookup!</span>(key = AcceptedIndex, query_prefix = AcceptedIndexPrefix);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>AcceptedTransactionKey(<span class="kw">pub </span>TransactionId);
@@ -426,27 +481,33 @@
     query_prefix = AcceptedTransactionKeyPrefix
 );
 
-<span class="attr">#[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>EpochHistoryKey(<span class="kw">pub </span>u64);
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>SignedBlockKey(<span class="kw">pub </span>u64);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>EpochHistoryKeyPrefix;
+</span><span class="kw">pub struct </span>SignedBlockPrefix;
 
 <span class="macro">impl_db_record!</span>(
-    key = EpochHistoryKey,
-    value = SignedEpochOutcome,
-    db_prefix = DbKeyPrefix::EpochHistory,
+    key = SignedBlockKey,
+    value = SignedBlock,
+    db_prefix = DbKeyPrefix::SignedBlock,
+    notify_on_modify = <span class="bool-val">true</span>,
 );
-<span class="macro">impl_db_lookup!</span>(key = EpochHistoryKey, query_prefix = EpochHistoryKeyPrefix);
+<span class="macro">impl_db_lookup!</span>(key = SignedBlockKey, query_prefix = SignedBlockPrefix);
 
-<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>LastEpochKey;
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>AlephUnitsKey(<span class="kw">pub </span>u64, <span class="kw">pub </span>u64);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>AlephUnitsPrefix;
 
 <span class="macro">impl_db_record!</span>(
-    key = LastEpochKey,
-    value = EpochHistoryKey,
-    db_prefix = DbKeyPrefix::LastEpoch
+    key = AlephUnitsKey,
+    value = Vec&lt;u8&gt;,
+    db_prefix = DbKeyPrefix::AlephUnits,
+    notify_on_modify = <span class="bool-val">false</span>,
 );
+<span class="macro">impl_db_lookup!</span>(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ClientConfigSignatureKey;
@@ -476,15 +537,6 @@
 );
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
-</span><span class="kw">pub struct </span>ConsensusUpgradeKey;
-
-<span class="macro">impl_db_record!</span>(
-    key = ConsensusUpgradeKey,
-    value = BTreeSet&lt;PeerId&gt;,
-    db_prefix = DbKeyPrefix::ConsensusUpgrade,
-);
-
-<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>ClientConfigDownloadKeyPrefix;
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -506,27 +558,23 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_migration_tests {
-    <span class="kw">use </span>std::collections::BTreeSet;
+    <span class="kw">use </span>std::collections::BTreeMap;
 
     <span class="kw">use </span>anyhow::{ensure, Context};
     <span class="kw">use </span>bitcoin::{secp256k1, KeyPair};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::api::ClientConfigDownloadToken;
+    <span class="kw">use </span>fedimint_core::block::{Block, SignedBlock};
     <span class="kw">use </span>fedimint_core::core::DynInput;
     <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
-    <span class="kw">use </span>fedimint_core::epoch::{
-        ConsensusItem, ConsensusUpgrade, EpochOutcome, SerdeSignature, SerdeSignatureShare,
-        SignedEpochOutcome,
-    };
+    <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
     <span class="kw">use </span>fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
-    <span class="kw">use </span>fedimint_testing::db::{
-        prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
-    };
+    <span class="kw">use </span>fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::distributions::{Distribution, Standard};
     <span class="kw">use </span>rand::rngs::OsRng;
@@ -537,13 +585,13 @@
 
     <span class="kw">use super</span>::{
         AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
-        ConsensusUpgradeKey, EpochHistoryKey, LastEpochKey,
     };
     <span class="kw">use </span><span class="kw">crate</span>::core::DynOutput;
     <span class="kw">use </span><span class="kw">crate</span>::db::{
-        get_global_database_migrations, AcceptedTransactionKeyPrefix, ClientConfigDownloadKey,
-        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix,
-        EpochHistoryKeyPrefix, GLOBAL_DATABASE_VERSION,
+        get_global_database_migrations, AcceptedIndex, AcceptedIndexPrefix,
+        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, ClientConfigDownloadKey,
+        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix, SessionIndexKey,
+        SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
     };
 
     <span class="doccomment">/// Create a database with version 0 data. The database produced is not
@@ -553,6 +601,9 @@
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     </span><span class="kw">async fn </span>create_db_with_v0_data(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>SessionIndexKey, <span class="kw-2">&amp;</span><span class="number">0</span>).<span class="kw">await</span>;
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AcceptedIndex(<span class="number">0</span>), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
+
         <span class="kw">let </span>accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap());
 
         <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
@@ -585,35 +636,27 @@
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>accepted_tx_id, <span class="kw-2">&amp;</span>module_ids).<span class="kw">await</span>;
 
-        <span class="kw">let </span>epoch_history_key = EpochHistoryKey(<span class="number">6</span>);
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>SignedBlockKey(<span class="number">0</span>),
+            <span class="kw-2">&amp;</span>SignedBlock {
+                block: Block {
+                    index: <span class="number">0</span>,
+                    items: Vec::new(),
+                },
+                signatures: BTreeMap::new(),
+            },
+        )
+        .<span class="kw">await</span>;
+
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AlephUnitsKey(<span class="number">0</span>, <span class="number">0</span>), <span class="kw-2">&amp;</span><span class="macro">vec!</span>[<span class="number">42</span>, <span class="number">42</span>, <span class="number">42</span>])
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span>sig_share = SignatureShare(Standard.sample(<span class="kw-2">&amp;mut </span>OsRng));
 
-        <span class="kw">let </span>consensus_items = <span class="macro">vec!</span>[
-            ConsensusItem::ConsensusUpgrade(ConsensusUpgrade),
+        <span class="kw">let </span>_consensus_items = <span class="macro">vec!</span>[
             ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig_share.clone())),
-            ConsensusItem::EpochOutcomeSignatureShare(SerdeSignatureShare(sig_share)),
             ConsensusItem::Transaction(transaction),
         ];
-
-        <span class="kw">let </span>epoch_outcome = EpochOutcome {
-            epoch: <span class="number">6</span>,
-            last_hash: <span class="prelude-val">Some</span>(secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>BYTE_8)),
-            items: <span class="macro">vec!</span>[(<span class="number">0</span>.into(), consensus_items)],
-            rejected_txs: BTreeSet::new(),
-        };
-
-        <span class="kw">let </span>signed_epoch_outcome = SignedEpochOutcome {
-            outcome: epoch_outcome,
-            hash: secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>BYTE_8),
-            signature: <span class="prelude-val">Some</span>(SerdeSignature(Standard.sample(<span class="kw-2">&amp;mut </span>OsRng))),
-        };
-
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>epoch_history_key, <span class="kw-2">&amp;</span>signed_epoch_outcome)
-            .<span class="kw">await</span>;
-
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>LastEpochKey, <span class="kw-2">&amp;</span>epoch_history_key)
-            .<span class="kw">await</span>;
 
         <span class="kw">let </span>serde_sig = SerdeSignature(Standard.sample(<span class="kw-2">&amp;mut </span>OsRng));
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientConfigSignatureKey, <span class="kw-2">&amp;</span>serde_sig)
@@ -632,11 +675,6 @@
         )
         .<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>peers: BTreeSet&lt;PeerId&gt; = BTreeSet::new();
-        peers.insert(<span class="number">0</span>.into());
-        peers.insert(<span class="number">1</span>.into());
-        peers.insert(<span class="number">2</span>.into());
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ConsensusUpgradeKey, <span class="kw-2">&amp;</span>peers).<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
     }
 
@@ -679,6 +717,24 @@
 
                 <span class="kw">for </span>prefix <span class="kw">in </span>DbKeyPrefix::iter() {
                     <span class="kw">match </span>prefix {
+                        DbKeyPrefix::SessionIndex =&gt; {
+                            dbtx
+                                .get_value(<span class="kw-2">&amp;</span>SessionIndexKey)
+                                .<span class="kw">await
+                                </span>.expect(<span class="string">&quot;validate_migrations was not able to read the SessionIndexKey&quot;</span>);
+                        },
+                        DbKeyPrefix::AcceptedIndex =&gt; {
+                                <span class="kw">let </span>accepted_indexes = dbtx
+                                    .find_by_prefix(<span class="kw-2">&amp;</span>AcceptedIndexPrefix)
+                                    .<span class="kw">await
+                                    </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                                    .<span class="kw">await</span>;
+                                <span class="kw">let </span>num_accepted_indexes = accepted_indexes.len();
+                                <span class="macro">ensure!</span>(
+                                    num_accepted_indexes &gt; <span class="number">0</span>,
+                                    <span class="string">&quot;validate_migrations was not able to read any AcceptedIndexes&quot;
+                                </span>);
+                        },
                         DbKeyPrefix::AcceptedTransaction =&gt; {
                                 <span class="kw">let </span>accepted_transactions = dbtx
                                     .find_by_prefix(<span class="kw-2">&amp;</span>AcceptedTransactionKeyPrefix)
@@ -691,56 +747,62 @@
                                     <span class="string">&quot;validate_migrations was not able to read any AcceptedTransactions&quot;
                                 </span>);
                             }
-                            DbKeyPrefix::EpochHistory =&gt; {
-                                <span class="kw">let </span>epoch_history = dbtx
-                                    .find_by_prefix(<span class="kw-2">&amp;</span>EpochHistoryKeyPrefix)
+                        DbKeyPrefix::SignedBlock =&gt; {
+                                <span class="kw">let </span>signed_blocks = dbtx
+                                    .find_by_prefix(<span class="kw-2">&amp;</span>SignedBlockPrefix)
                                     .<span class="kw">await
                                     </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                     .<span class="kw">await</span>;
-                                <span class="kw">let </span>num_epochs = epoch_history.len();
+                                <span class="kw">let </span>num_signed_blocks = signed_blocks.len();
                                 <span class="macro">ensure!</span>(
-                                    num_epochs &gt; <span class="number">0</span>,
-                                    <span class="string">&quot;validate_migrations was not able to read any EpochHistory&quot;
+                                    num_signed_blocks &gt; <span class="number">0</span>,
+                                    <span class="string">&quot;validate_migrations was not able to read any SignedBlocks&quot;
                                 </span>);
-                            }
-                            DbKeyPrefix::LastEpoch =&gt; {
-                                <span class="macro">ensure!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>LastEpochKey).<span class="kw">await</span>.is_some());
-                            }
-                            DbKeyPrefix::ClientConfigSignature =&gt; {
-                                dbtx
-                                    .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
-                                    .<span class="kw">await
-                                    </span>.expect(<span class="string">&quot;validate_migrations was not able to read the ClientConfigSignature&quot;</span>);
-                            }
-                            DbKeyPrefix::ClientConfigSignatureShare =&gt; {
-                                <span class="kw">let </span>signature_shares = dbtx
-                                    .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigSignatureSharePrefix)
+                        }
+                        DbKeyPrefix::AlephUnits =&gt; {
+                                <span class="kw">let </span>aleph_units = dbtx
+                                    .find_by_prefix(<span class="kw-2">&amp;</span>AlephUnitsPrefix)
                                     .<span class="kw">await
                                     </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                                     .<span class="kw">await</span>;
-                                <span class="kw">let </span>num_signature_shares = signature_shares.len();
+                                <span class="kw">let </span>num_aleph_units = aleph_units.len();
                                 <span class="macro">ensure!</span>(
-                                    num_signature_shares &gt; <span class="number">0</span>,
-                                    <span class="string">&quot;validate_migrations was not able to read any ClientConfigSignatureShares&quot;
+                                    num_aleph_units &gt; <span class="number">0</span>,
+                                    <span class="string">&quot;validate_migrations was not able to read any AlephUnits&quot;
                                 </span>);
-                            }
-                            DbKeyPrefix::ConsensusUpgrade =&gt; {
-                                <span class="macro">ensure!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusUpgradeKey).<span class="kw">await</span>.is_some());
-                            }
-                            DbKeyPrefix::ClientConfigDownload =&gt; {
-                                <span class="kw">let </span>downloads = dbtx
-                                    .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigDownloadKeyPrefix)
-                                    .<span class="kw">await
-                                    </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                                    .<span class="kw">await</span>;
-                                <span class="kw">let </span>downloads_len = downloads.len();
-                                <span class="macro">ensure!</span>(
-                                    downloads_len &gt; <span class="number">0</span>,
-                                    <span class="string">&quot;validate_migrations was not able to read any ClientConfigDownloadKey&quot;
-                                </span>);
-                            }
-                            <span class="comment">// Module prefix is reserved for modules, no migration testing is needed
-                            </span>DbKeyPrefix::Module =&gt; {}
+                        }
+                        DbKeyPrefix::ClientConfigSignature =&gt; {
+                            dbtx
+                                .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
+                                .<span class="kw">await
+                                </span>.expect(<span class="string">&quot;validate_migrations was not able to read the ClientConfigSignature&quot;</span>);
+                        }
+                        DbKeyPrefix::ClientConfigSignatureShare =&gt; {
+                            <span class="kw">let </span>signature_shares = dbtx
+                                .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigSignatureSharePrefix)
+                                .<span class="kw">await
+                                </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                                .<span class="kw">await</span>;
+                            <span class="kw">let </span>num_signature_shares = signature_shares.len();
+                            <span class="macro">ensure!</span>(
+                                num_signature_shares &gt; <span class="number">0</span>,
+                                <span class="string">&quot;validate_migrations was not able to read any ClientConfigSignatureShares&quot;
+                            </span>);
+                        }
+                        DbKeyPrefix::ClientConfigDownload =&gt; {
+                            <span class="kw">let </span>downloads = dbtx
+                                .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigDownloadKeyPrefix)
+                                .<span class="kw">await
+                                </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                                .<span class="kw">await</span>;
+                            <span class="kw">let </span>downloads_len = downloads.len();
+                            <span class="macro">ensure!</span>(
+                                downloads_len &gt; <span class="number">0</span>,
+                                <span class="string">&quot;validate_migrations was not able to read any ClientConfigDownloadKey&quot;
+                            </span>);
+                        }
+                        <span class="comment">// Module prefix is reserved for modules, no migration testing is needed
+                        </span>DbKeyPrefix::Module =&gt; {}
                     }
                 }
                 <span class="prelude-val">Ok</span>(())

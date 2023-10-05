@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ApiEvent"],"mod":["debug","server"],"struct":["ConsensusOutcomeConversion","ConsensusProposal","FedimintConsensus","FundingVerifier","VerificationCaches"],"type":["HbbftConsensusOutcome","HbbftMessage","HbbftSerdeConsensusOutcome"]};
+window.SIDEBAR_ITEMS = {"mod":["debug","server"],"struct":["FedimintConsensus","FundingVerifier","VerificationCaches"]};

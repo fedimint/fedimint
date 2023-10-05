@@ -1147,15 +1147,6 @@
 <a href="#1147" id="1147">1147</a>
 <a href="#1148" id="1148">1148</a>
 <a href="#1149" id="1149">1149</a>
-<a href="#1150" id="1150">1150</a>
-<a href="#1151" id="1151">1151</a>
-<a href="#1152" id="1152">1152</a>
-<a href="#1153" id="1153">1153</a>
-<a href="#1154" id="1154">1154</a>
-<a href="#1155" id="1155">1155</a>
-<a href="#1156" id="1156">1156</a>
-<a href="#1157" id="1157">1157</a>
-<a href="#1158" id="1158">1158</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1169,10 +1160,9 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ConsensusProposal, CoreConsensusVersion,
-    ExtendsCommonModuleInit, InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError,
-    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
-    TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::MaybeSend;
@@ -1484,27 +1474,19 @@
     <span class="kw">type </span>Gen = MintGen;
     <span class="kw">type </span>VerificationCache = VerificationCache;
 
-    <span class="kw">async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
-        <span class="kw">if </span>!<span class="self">self</span>.consensus_proposal(dbtx).<span class="kw">await</span>.forces_new_epoch() {
-            std::future::pending().<span class="kw">await
-        </span>}
-    }
-
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; ConsensusProposal&lt;MintConsensusItem&gt; {
-        ConsensusProposal::new_auto_trigger(
-            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
-                .<span class="kw">await
-                </span>.map(|(key, signatures)| MintConsensusItem {
-                    out_point: key.<span class="number">0</span>,
-                    signatures,
-                })
-                .collect::&lt;Vec&lt;MintConsensusItem&gt;&gt;()
-                .<span class="kw">await</span>,
-        )
-    }
+    ) -&gt; Vec&lt;MintConsensusItem&gt; {
+        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(key, signatures)| MintConsensusItem {
+                out_point: key.<span class="number">0</span>,
+                signatures,
+            })
+            .collect::&lt;Vec&lt;MintConsensusItem&gt;&gt;()
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,

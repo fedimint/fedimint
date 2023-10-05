@@ -140,7 +140,7 @@
         module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;EcashBackup&gt; {
         <span class="comment">// fetch consensus height first - so we dont miss anything when scanning
-        </span><span class="kw">let </span>epoch_count = api.fetch_epoch_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>fedimint_block_count = api.fetch_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>notes = <span class="self">Self</span>::get_all_spendable_notes(dbtx).<span class="kw">await</span>;
 
@@ -182,7 +182,7 @@
             notes,
             pending_notes,
             next_note_idx,
-            epoch_count,
+            epoch_count: fedimint_block_count,
         })
     }
 }

@@ -729,41 +729,6 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
-<a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -778,18 +743,19 @@
     ServerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
+<span class="kw">use </span>fedimint_core::block::SignedBlock;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT,
-    CONFIG_HASH_ENDPOINT, FETCH_EPOCH_COUNT_ENDPOINT, FETCH_EPOCH_HISTORY_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SIGNED_BLOCK_ENDPOINT,
+    BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT, FETCH_BLOCK_COUNT_ENDPOINT,
     GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    PROCESS_OUTCOME_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
-    UPGRADE_ENDPOINT, VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+    RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    WAIT_TRANSACTION_ENDPOINT,
 };
-<span class="kw">use </span>fedimint_core::epoch::{SerdeEpochHistory, SignedEpochOutcome};
+<span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{
@@ -805,8 +771,6 @@
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>jsonrpsee::RpcModule;
 <span class="kw">use </span>secp256k1_zkp::SECP256K1;
-<span class="kw">use </span>tokio::sync::mpsc::error::SendError;
-<span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::{debug, info};
 
@@ -815,10 +779,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::api::get_verification_hashes;
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::{ApiEvent, FundingVerifier, VerificationCaches};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::{FundingVerifier, VerificationCaches};
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
-    ClientConfigSignatureKey, EpochHistoryKey, LastEpochKey,
+    ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::SerdeTransaction;
@@ -950,15 +914,13 @@
     </span><span class="kw">pub </span>cfg: ServerConfig,
     <span class="doccomment">/// Database for serving the API
     </span><span class="kw">pub </span>db: Database,
-
     <span class="kw">pub </span>invitation_codes_tracker: InvitationCodesTracker,
-
     <span class="doccomment">/// Modules registered with the federation
     </span><span class="kw">pub </span>modules: ServerModuleRegistry,
     <span class="doccomment">/// Cached client config
     </span><span class="kw">pub </span>client_cfg: ClientConfig,
     <span class="doccomment">/// For sending API events to consensus such as transactions
-    </span><span class="kw">pub </span>api_sender: Sender&lt;ApiEvent&gt;,
+    </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;Vec&lt;u8&gt;&gt;,
     <span class="kw">pub </span>peer_status_channels: PeerStatusChannels,
     <span class="kw">pub </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
     <span class="kw">pub </span>consensus_status_cache: ExpiringCache&lt;ApiResult&lt;FederationStatus&gt;&gt;,
@@ -1031,8 +993,12 @@
 
         funding_verifier.verify_funding()<span class="question-mark">?</span>;
 
-        <span class="self">self</span>.api_sender
-            .send(ApiEvent::Transaction(transaction))
+        <span class="self">self</span>.submission_sender
+            .send(
+                ConsensusItem::Transaction(transaction)
+                    .consensus_encode_to_vec()
+                    .expect(<span class="string">&quot;Infallible&quot;</span>),
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
@@ -1082,6 +1048,23 @@
         <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>outcome).into())
     }
 
+    <span class="kw">pub async fn </span>fetch_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.db
+            .begin_transaction()
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedBlockPrefix)
+            .<span class="kw">await
+            </span>.count()
+            .<span class="kw">await as </span>u64
+    }
+
+    <span class="kw">pub async fn </span>await_signed_block(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; SignedBlock {
+        <span class="self">self</span>.db
+            .wait_key_check(<span class="kw-2">&amp;</span>SignedBlockKey(index), std::convert::identity)
+            .<span class="kw">await
+            </span>.<span class="number">0
+    </span>}
+
     <span class="kw">pub async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: InviteCode) -&gt; ApiResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>token = <span class="self">self</span>.cfg.local.download_token.clone();
 
@@ -1112,50 +1095,16 @@
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_cfg.clone())
     }
 
-    <span class="kw">pub async fn </span>epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;SignedEpochOutcome&gt; {
-        <span class="self">self</span>.db
-            .begin_transaction()
-            .<span class="kw">await
-            </span>.get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch))
-            .<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>get_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-        <span class="self">self</span>.db
-            .begin_transaction()
-            .<span class="kw">await
-            </span>.get_value(<span class="kw-2">&amp;</span>LastEpochKey)
-            .<span class="kw">await
-            </span>.map(|ep_hist_key| ep_hist_key.<span class="number">0 </span>+ <span class="number">1</span>)
-            .unwrap_or(<span class="number">0</span>)
-    }
-
-    <span class="doccomment">/// Sends an upgrade signal to the fedimint server thread
-    </span><span class="kw">pub async fn </span>signal_upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), SendError&lt;ApiEvent&gt;&gt; {
-        <span class="self">self</span>.api_sender.send(ApiEvent::UpgradeSignal).<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Force process an outcome
-    </span><span class="kw">pub async fn </span>force_process_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, outcome: SerdeEpochHistory) -&gt; ApiResult&lt;()&gt; {
-        <span class="kw">let </span>event = outcome
-            .try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>.modules.decoder_registry())
-            .map_err(|<span class="kw">_</span>| ApiError::bad_request(<span class="string">&quot;Unable to decode outcome&quot;</span>.to_string()))<span class="question-mark">?</span>;
-        <span class="self">self</span>.api_sender
-            .send(ApiEvent::ForceProcessOutcome(event.outcome))
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable send event&quot;</span>.to_string()))
-    }
-
     <span class="kw">pub async fn </span>get_federation_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;FederationStatus&gt; {
         <span class="kw">let </span>peers_connection_status = <span class="self">self</span>.peer_status_channels.get_all_status().<span class="kw">await</span>;
         <span class="kw">let </span>latest_contribution_by_peer = <span class="self">self</span>.latest_contribution_by_peer.read().<span class="kw">await</span>.clone();
-        <span class="kw">let </span>epoch_count = <span class="self">self</span>.get_epoch_count().<span class="kw">await</span>;
+        <span class="kw">let </span>session_count = <span class="self">self</span>.fetch_block_count().<span class="kw">await</span>;
 
         <span class="kw">let </span>status_by_peer = peers_connection_status
             .into_iter()
             .map(|(peer, connection_status)| {
                 <span class="kw">let </span>last_contribution = latest_contribution_by_peer.get(<span class="kw-2">&amp;</span>peer).cloned();
-                <span class="kw">let </span>flagged = last_contribution.unwrap_or(<span class="number">0</span>) + <span class="number">1 </span>&lt; epoch_count;
+                <span class="kw">let </span>flagged = last_contribution.unwrap_or(<span class="number">0</span>) + <span class="number">1 </span>&lt; session_count;
                 <span class="kw">let </span>connection_status = <span class="kw">match </span>connection_status {
                     <span class="prelude-val">Ok</span>(status) =&gt; status,
                     <span class="prelude-val">Err</span>(e) =&gt; {
@@ -1192,7 +1141,7 @@
         <span class="prelude-val">Ok</span>(FederationStatus {
             <span class="comment">// the naming is in preparation for aleph bft since we will switch to
             // the session count here and want to keep the public API stable
-            </span>session_count: epoch_count,
+            </span>session_count,
             peers_online,
             peers_offline,
             peers_flagged,
@@ -1347,20 +1296,6 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            FETCH_EPOCH_HISTORY_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, epoch: u64| -&gt; SerdeEpochHistory {
-                <span class="kw">let </span>epoch = fedimint.epoch_history(epoch).<span class="kw">await
-                  </span>.ok_or_else(|| ApiError::not_found(<span class="macro">format!</span>(<span class="string">&quot;epoch {epoch} not found&quot;</span>)))<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>epoch).into())
-            }
-        },
-        <span class="macro">api_endpoint! </span>{
-            FETCH_EPOCH_COUNT_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; u64 {
-                <span class="prelude-val">Ok</span>(fedimint.get_epoch_count().<span class="kw">await</span>)
-            }
-        },
-        <span class="macro">api_endpoint! </span>{
             INVITE_CODE_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context,  _v: ()| -&gt; String {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code().to_string())
@@ -1387,23 +1322,6 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            UPGRADE_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; () {
-               check_auth(context)<span class="question-mark">?</span>;
-               fedimint.signal_upgrade().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to send signal to server&quot;</span>.to_string()))<span class="question-mark">?</span>;
-               <span class="prelude-val">Ok</span>(())
-            }
-        },
-        <span class="macro">api_endpoint! </span>{
-            PROCESS_OUTCOME_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, outcome: SerdeEpochHistory| -&gt; () {
-                check_auth(context)<span class="question-mark">?</span>;
-                fedimint.force_process_outcome(outcome).<span class="kw">await
-                  </span>.map_err(|<span class="kw">_</span>| ApiError::server_error(<span class="string">&quot;Unable to send signal to server&quot;</span>.to_string()))<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>(())
-            }
-        },
-        <span class="macro">api_endpoint! </span>{
             STATUS_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; StatusResponse {
                 <span class="kw">let </span>consensus_status = fedimint
@@ -1414,6 +1332,18 @@
                     server: ServerStatus::ConsensusRunning,
                     federation: <span class="prelude-val">Some</span>(consensus_status)
                 })
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            FETCH_BLOCK_COUNT_ENDPOINT,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; u64 {
+                <span class="prelude-val">Ok</span>(fedimint.fetch_block_count().<span class="kw">await</span>)
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
+            AWAIT_SIGNED_BLOCK_ENDPOINT,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SignedBlock {
+                <span class="prelude-val">Ok</span>(fedimint.await_signed_block(index).<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
