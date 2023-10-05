@@ -27,7 +27,7 @@ use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
-use client::StandardGatewayClientBuilder;
+use client::GatewayClientBuilder;
 use db::{DbKeyPrefix, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
@@ -212,7 +212,7 @@ pub struct Gateway {
 
     // Builder struct that allows the gateway to build a Fedimint client, which handles the
     // communication with a federation.
-    client_builder: StandardGatewayClientBuilder,
+    client_builder: GatewayClientBuilder,
 
     // Database for Gateway metadata.
     gateway_db: Database,
@@ -237,7 +237,7 @@ impl Gateway {
     #[allow(clippy::too_many_arguments)]
     pub async fn new_with_custom_registry(
         lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
-        client_builder: StandardGatewayClientBuilder,
+        client_builder: GatewayClientBuilder,
         listen: SocketAddr,
         api_addr: SafeUrl,
         cli_password: Option<String>,
@@ -289,7 +289,7 @@ impl Gateway {
             decoders.clone(),
         );
 
-        let client_builder = StandardGatewayClientBuilder::new(
+        let client_builder = GatewayClientBuilder::new(
             opts.data_dir.clone(),
             registry.clone(),
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
