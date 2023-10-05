@@ -751,6 +751,7 @@ mod tests {
                 .expect("parses");
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(0, DummyGen::kind(), DummyGenParams::default());
+
             let default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
                 modules,
