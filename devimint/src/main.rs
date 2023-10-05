@@ -479,7 +479,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Receive the ecash notes
     info!("Testing receiving e-cash notes");
     let operation_id = ln_invoice_response.operation_id;
-    cmd!(fed, "wait-invoice", operation_id).run().await?;
+    cmd!(fed, "await-invoice", operation_id).run().await?;
 
     // Assert balances changed by 1000 msat
     let final_cln_incoming_client_balance = fed.client_balance().await?;
@@ -594,7 +594,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // Receive the ecash notes
     info!("Testing receiving ecash notes");
     let operation_id = ln_invoice_response.operation_id;
-    cmd!(fed, "wait-invoice", operation_id).run().await?;
+    cmd!(fed, "await-invoice", operation_id).run().await?;
 
     // Assert balances changed by 1000 msat
     let final_lnd_incoming_client_balance = fed.client_balance().await?;
