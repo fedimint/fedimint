@@ -10,10 +10,9 @@ use crate::PeerId;
 /// only guaranteed to be seen by all correct nodes if a correct node decides to
 /// accept it.
 #[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
-pub struct OrderedItem {
+pub struct AcceptedItem {
     pub item: Vec<u8>,
-    pub index: u64,
-    pub peer_id: PeerId,
+    pub peer: PeerId,
 }
 
 /// All items ordered in a session that have been accepted by Fedimint Consensus
@@ -24,13 +23,13 @@ pub struct OrderedItem {
 #[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
 pub struct Block {
     pub index: u64,
-    pub items: Vec<OrderedItem>,
+    pub items: Vec<AcceptedItem>,
 }
 
 impl Block {
     /// A blocks header consists of 40 bytes formed by its index in big endian
     /// bytes concatenated with the merkle root build from the consensus
-    /// hashes of its [OrderedItem]s or 32 zero bytes if the block is
+    /// hashes of its [AcceptedItem]s or 32 zero bytes if the block is
     /// empty. The use of a merkle tree allows for efficient inclusion
     /// proofs of accepted consensus items for clients.
     pub fn header(&self) -> [u8; 40] {

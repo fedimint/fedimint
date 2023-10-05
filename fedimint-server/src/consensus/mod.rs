@@ -3,10 +3,11 @@
 pub mod debug;
 pub mod server;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 use anyhow::bail;
 use bitcoin_hashes::sha256;
+use fedimint_core::block::{AcceptedItem, Block, SignedBlock};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::encoding::Decodable;
@@ -22,8 +23,9 @@ use tracing::debug;
 
 use crate::config::ServerConfig;
 use crate::db::{
-    AcceptedIndex, AcceptedIndexPrefix, AcceptedTransactionKey, ClientConfigSignatureKey,
-    ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix, SessionIndexKey,
+    AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
+    ClientConfigSignatureKey, ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix,
+    SignedBlockKey, SignedBlockPrefix,
 };
 use crate::transaction::{Transaction, TransactionError};
 
@@ -39,6 +41,10 @@ pub struct FedimintConsensus {
     pub db: Database,
     /// API for accessing state
     pub client_cfg_hash: sha256::Hash,
+    /// The index of the current consensus session
+    pub session_index: u64,
+    /// The index of the next consensus item
+    pub item_index: u64,
 }
 
 #[derive(Debug)]
@@ -58,60 +64,92 @@ impl FedimintConsensus {
     pub fn decoders(&self) -> ModuleDecoderRegistry {
         self.modules.decoder_registry()
     }
-    pub async fn open_session(&self) -> (u64, BTreeSet<AcceptedIndex>) {
-        let mut dbtx = self.db.begin_transaction().await;
-        let session_index = dbtx.get_value(&SessionIndexKey).await.unwrap_or(0);
-        let accepted_indices = dbtx
-            .find_by_prefix(&AcceptedIndexPrefix)
-            .await
-            .map(|(key, _)| key)
-            .collect()
-            .await;
 
-        (session_index, accepted_indices)
+    pub async fn load_current_session(
+        cfg: ServerConfig,
+        modules: ServerModuleRegistry,
+        db: Database,
+        client_cfg_hash: sha256::Hash,
+    ) -> Self {
+        let session_index = db
+            .begin_transaction()
+            .await
+            .find_by_prefix(&SignedBlockPrefix)
+            .await
+            .count()
+            .await as u64;
+
+        FedimintConsensus {
+            cfg,
+            modules,
+            db,
+            client_cfg_hash,
+            session_index,
+            item_index: 0,
+        }
     }
 
-    pub async fn complete_session(&self) {
+    pub async fn build_block(&self) -> Block {
+        Block {
+            index: self.session_index,
+            items: self
+                .db
+                .begin_transaction()
+                .await
+                .find_by_prefix(&AcceptedItemPrefix)
+                .await
+                .map(|entry| entry.1)
+                .collect()
+                .await,
+        }
+    }
+
+    pub async fn complete_session(&self, signed_block: SignedBlock) {
         let mut dbtx = self.db.begin_transaction().await;
 
-        let new_session_index = dbtx.get_value(&SessionIndexKey).await.unwrap_or(0) + 1;
+        dbtx.remove_by_prefix(&AlephUnitsPrefix).await;
 
-        dbtx.insert_entry(&SessionIndexKey, &new_session_index)
+        dbtx.remove_by_prefix(&AcceptedItemPrefix).await;
+
+        dbtx.insert_new_entry(&SignedBlockKey(self.session_index), &signed_block)
             .await;
-
-        dbtx.remove_by_prefix(&AcceptedIndexPrefix).await;
 
         dbtx.commit_tx_result()
             .await
-            .expect("This is the only place we write to those keys");
+            .expect("This is the only place where we write to this key");
     }
 
     pub async fn process_consensus_item(
-        &self,
+        &mut self,
         item: Vec<u8>,
-        item_index: u64,
-        peer_id: PeerId,
+        peer: PeerId,
     ) -> anyhow::Result<()> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
 
-        let mut reader = std::io::Cursor::new(item);
-        let consensus_item = ConsensusItem::consensus_decode(&mut reader, &self.decoders())?;
-
-        let item_debug = debug::item_message(&consensus_item);
-        debug!("\n  Peer {peer_id}: {item_debug}");
-
         let mut dbtx = self.db.begin_transaction().await;
 
-        self.process_consensus_item_with_db_transaction(&mut dbtx, consensus_item, peer_id)
+        if let Some(accepted_item) = dbtx.get_value(&AcceptedItemKey(self.item_index)).await {
+            if accepted_item.item == item && accepted_item.peer == peer {
+                self.item_index += 1;
+                return Ok(());
+            }
+
+            bail!("Consensus item was discarded before recovery");
+        }
+
+        let mut reader = std::io::Cursor::new(item.clone());
+        let consensus_item = ConsensusItem::consensus_decode(&mut reader, &self.decoders())?;
+
+        debug!("Peer {peer}: {}", debug::item_message(&consensus_item));
+
+        self.process_consensus_item_with_db_transaction(&mut dbtx, consensus_item, peer)
             .await?;
 
-        if dbtx
-            .insert_entry(&AcceptedIndex(item_index), &())
-            .await
-            .is_some()
-        {
-            panic!("The index {item_index} was accepted twice in one session");
-        }
+        dbtx.insert_entry(
+            &AcceptedItemKey(self.item_index),
+            &AcceptedItem { item, peer },
+        )
+        .await;
 
         let mut audit = Audit::default();
 
@@ -132,6 +170,8 @@ impl FedimintConsensus {
         dbtx.commit_tx_result()
             .await
             .expect("Committing consensus epoch failed");
+
+        self.item_index += 1;
 
         Ok(())
     }
@@ -273,41 +313,6 @@ impl FedimintConsensus {
                 Ok(())
             }
         }
-    }
-
-    pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
-        let mut dbtx = self.db.begin_transaction().await;
-
-        // We ignore any writes
-        dbtx.ignore_uncommitted();
-
-        let mut consensus_items = Vec::new();
-
-        for (instance_id, _, module) in self.modules.iter_modules() {
-            let items = module
-                .consensus_proposal(&mut dbtx.with_module_prefix(instance_id), instance_id)
-                .await
-                .into_iter()
-                .map(ConsensusItem::Module);
-
-            consensus_items.extend(items);
-        }
-
-        // Add a signature share for the client config hash
-        let sig = dbtx
-            .get_isolated()
-            .get_value(&ClientConfigSignatureKey)
-            .await;
-
-        if sig.is_none() {
-            let timing = timing::TimeReporter::new("sign client config");
-            let share = self.cfg.private.auth_sks.0.sign(self.client_cfg_hash);
-            drop(timing);
-            let item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
-            consensus_items.push(item);
-        }
-
-        consensus_items
     }
 
     fn build_verification_caches(&self, transaction: Transaction) -> VerificationCaches {

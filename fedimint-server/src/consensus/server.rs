@@ -8,18 +8,21 @@ use bitcoin_hashes::sha256;
 use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{apply_migrations, Database};
+use fedimint_core::epoch::{ConsensusItem, SerdeSignatureShare};
 use fedimint_core::fmt_utils::OptStacktrace;
-use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_core::module::registry::{ModuleRegistry, ServerModuleRegistry};
 use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
-use fedimint_core::PeerId;
+use fedimint_core::{timing, PeerId};
 use tokio::select;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
-use crate::atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
+use crate::atomic_broadcast::{AtomicBroadcast, Keychain, Message, Recipient};
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
-use crate::db::{get_global_database_migrations, AcceptedIndex, GLOBAL_DATABASE_VERSION};
+use crate::db::{
+    get_global_database_migrations, ClientConfigSignatureKey, GLOBAL_DATABASE_VERSION,
+};
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::net::peers::IPeerConnections;
 use crate::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
@@ -34,9 +37,9 @@ pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
 
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
-    /// Delegate for processing consensus information
-    pub consensus: FedimintConsensus,
     /// Allows clients to access consensus state
+    pub db: Database,
+    pub modules: ServerModuleRegistry,
     pub consensus_api: ConsensusApi,
     /// Aleph BFT instance
     pub atomic_broadcast: AtomicBroadcast,
@@ -44,8 +47,6 @@ pub struct ConsensusServer {
     pub cfg: ServerConfig,
     /// tracks the last session a message was received by peer
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
-    /// Used for decoding module specific-values
-    pub decoders: ModuleDecoderRegistry,
 }
 
 impl ConsensusServer {
@@ -190,23 +191,23 @@ impl ConsensusServer {
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
         };
 
-        // Build consensus processor
-        let consensus = FedimintConsensus {
-            cfg: cfg.clone(),
-            modules: modules.clone(),
-            db: db.clone(),
-            client_cfg_hash: consensus_api.client_cfg.consensus_hash(),
-        };
-
-        submit_module_consensus_items(task_group, consensus.clone(), submission_sender).await;
+        submit_module_consensus_items(
+            task_group,
+            db.clone(),
+            modules.clone(),
+            cfg.clone(),
+            consensus_api.client_cfg.consensus_hash(),
+            submission_sender,
+        )
+        .await;
 
         Ok(ConsensusServer {
             atomic_broadcast,
-            consensus,
+            db,
             consensus_api,
             cfg: cfg.clone(),
             latest_contribution_by_peer,
-            decoders: modules.decoder_registry(),
+            modules,
         })
     }
 
@@ -224,77 +225,20 @@ impl ConsensusServer {
 
         confirm_consensus_config_hash(&federation_api, self.cfg.consensus.consensus_hash()).await?;
 
+        // TODO: latest contribution by peer
         while !task_handle.is_shutting_down() {
-            let (session_index, accepted_indices) = self.consensus.open_session().await;
-            let max_index = accepted_indices.iter().max();
+            let consensus = FedimintConsensus::load_current_session(
+                self.cfg.clone(),
+                self.modules.clone(),
+                self.db.clone(),
+                self.consensus_api.client_cfg.consensus_hash(),
+            );
 
             let federation_api = WsFederationApi::new(api_endpoints.clone());
 
-            let mut ordered_item_receiver = self
-                .atomic_broadcast
-                .run_session(session_index, federation_api)
-                .await;
-
-            while !task_handle.is_shutting_down() {
-                let ordered_item = ordered_item_receiver
-                    .recv()
-                    .await
-                    .expect("Session was interrupted unexpectedly");
-
-                match ordered_item {
-                    Some((item, decision_sender)) => {
-                        self.latest_contribution_by_peer
-                            .write()
-                            .await
-                            .insert(item.peer_id, session_index);
-
-                        // we process all items of higher index than last accepted item, which is
-                        // the last item that changed our state - notice how
-                        // we may call process_item on a ordered item
-                        // a second time after a crash but only if it is discarded both times and
-                        // therefore does not change our state
-                        match max_index {
-                            Some(max_index) if max_index >= &AcceptedIndex(item.index) => {
-                                if accepted_indices.contains(&AcceptedIndex(item.index)) {
-                                    decision_sender
-                                        .send(Decision::Accept)
-                                        .expect("This is the only sender");
-                                } else {
-                                    decision_sender
-                                        .send(Decision::Discard)
-                                        .expect("This is the only sender");
-                                }
-                            }
-                            _ => {
-                                match self
-                                    .consensus
-                                    .process_consensus_item(item.item, item.index, item.peer_id)
-                                    .await
-                                {
-                                    Ok(()) => {
-                                        decision_sender
-                                            .send(Decision::Accept)
-                                            .expect("This is the only sender");
-                                    }
-                                    Err(error) => {
-                                        debug!(
-                                            target: LOG_CONSENSUS,
-                                            "Discard consensus item: {error}"
-                                        );
-
-                                        decision_sender
-                                            .send(Decision::Discard)
-                                            .expect("This is the only sender");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    None => break,
-                };
-            }
-
-            self.consensus.complete_session().await;
+            self.atomic_broadcast
+                .run_session(consensus.await, federation_api)
+                .await?;
 
             info!(target: LOG_CONSENSUS, "Session completed");
         }
@@ -378,24 +322,65 @@ async fn relay_messages(
 
 async fn submit_module_consensus_items(
     task_group: &mut TaskGroup,
-    consensus: FedimintConsensus,
+    db: Database,
+    modules: ServerModuleRegistry,
+    cfg: ServerConfig,
+    client_cfg_hash: sha256::Hash,
     submission_sender: Sender<Vec<u8>>,
 ) {
     task_group
-        .spawn("submit_module_consensus_items", |task_handle| async move {
-            while !task_handle.is_shutting_down() {
-                for item in consensus.get_consensus_proposal().await {
-                    if submission_sender
-                        .send(item.consensus_encode_to_vec().expect("Infallible"))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    };
-                }
+        .spawn(
+            "submit_module_consensus_items",
+            move |task_handle| async move {
+                while !task_handle.is_shutting_down() {
+                    let mut dbtx = db.begin_transaction().await;
 
-                sleep(Duration::from_secs(1)).await;
-            }
-        })
+                    // We ignore any writes
+                    dbtx.ignore_uncommitted();
+
+                    let mut consensus_items = Vec::new();
+
+                    for (instance_id, _, module) in modules.iter_modules() {
+                        let items = module
+                            .consensus_proposal(
+                                &mut dbtx.with_module_prefix(instance_id),
+                                instance_id,
+                            )
+                            .await
+                            .into_iter()
+                            .map(ConsensusItem::Module);
+
+                        consensus_items.extend(items);
+                    }
+
+                    // Add a signature share for the client config hash
+                    let sig = dbtx
+                        .get_isolated()
+                        .get_value(&ClientConfigSignatureKey)
+                        .await;
+
+                    if sig.is_none() {
+                        let timing = timing::TimeReporter::new("sign client config");
+                        let share = cfg.private.auth_sks.0.sign(client_cfg_hash);
+                        drop(timing);
+                        let item =
+                            ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
+                        consensus_items.push(item);
+                    }
+
+                    for item in consensus_items {
+                        if submission_sender
+                            .send(item.consensus_encode_to_vec().expect("Infallible"))
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        };
+                    }
+
+                    sleep(Duration::from_secs(1)).await;
+                }
+            },
+        )
         .await;
 }

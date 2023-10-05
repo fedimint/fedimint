@@ -331,7 +331,7 @@ impl MintRestoreInProgressState {
                                 Decodable::consensus_decode(&mut item_bytes_cursor, &decoders)
                                     .expect("Malicious federation returned non-decodable result");
                             // FIXME: assert cursor fully consumed
-                            (item.peer_id, ci)
+                            (item.peer, ci)
                         })
                         .collect::<Vec<_>>();
 
