@@ -91,7 +91,6 @@ impl FedimintConsensus {
 
     pub async fn build_block(&self) -> Block {
         Block {
-            index: self.session_index,
             items: self
                 .db
                 .begin_transaction()

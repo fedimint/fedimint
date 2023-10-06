@@ -227,10 +227,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(
             &SignedBlockKey(0),
             &SignedBlock {
-                block: Block {
-                    index: 0,
-                    items: Vec::new(),
-                },
+                block: Block { items: Vec::new() },
                 signatures: BTreeMap::new(),
             },
         )

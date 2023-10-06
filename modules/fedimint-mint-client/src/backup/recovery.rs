@@ -321,7 +321,6 @@ impl MintRestoreInProgressState {
                         }
                     };
 
-                    assert_eq!(block_idx, block.index);
                     let consensus_items = block
                         .items
                         .into_iter()

@@ -64,7 +64,7 @@ pub async fn run(
     }
 
     let block = consensus.build_block().await;
-    let header = block.header();
+    let header = block.header(consensus.session_index);
 
     // we send our own signature to the data provider to be broadcasted
     signature_sender.send(Some(keychain.sign(&header).await))?;
@@ -85,7 +85,7 @@ pub async fn run(
             }
             signed_block = request_signed_block(consensus.session_index, keychain.clone(), &federation_api) => {
                 // We check that the block we have created agrees with the federations consensus
-                assert!(header == signed_block.block.header());
+                assert!(header == signed_block.block.header(consensus.session_index));
 
                 consensus.complete_session(signed_block).await;
 
@@ -112,10 +112,13 @@ async fn request_signed_block(
     let total_peers = keychain.peer_count();
 
     let verifier = move |signed_block: &SignedBlock| {
-        signed_block.block.index == index
-            && signed_block.signatures.len() == keychain.threshold()
+        signed_block.signatures.len() == keychain.threshold()
             && signed_block.signatures.iter().all(|(peer_id, sig)| {
-                keychain.verify(&signed_block.block.header(), sig, to_node_index(*peer_id))
+                keychain.verify(
+                    &signed_block.block.header(index),
+                    sig,
+                    to_node_index(*peer_id),
+                )
             })
     };
 

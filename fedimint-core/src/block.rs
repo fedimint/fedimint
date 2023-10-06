@@ -22,7 +22,6 @@ pub struct AcceptedItem {
 /// items are discarded by Fedimint Consensus.
 #[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
 pub struct Block {
-    pub index: u64,
     pub items: Vec<AcceptedItem>,
 }
 
@@ -32,10 +31,10 @@ impl Block {
     /// hashes of its [AcceptedItem]s or 32 zero bytes if the block is
     /// empty. The use of a merkle tree allows for efficient inclusion
     /// proofs of accepted consensus items for clients.
-    pub fn header(&self) -> [u8; 40] {
+    pub fn header(&self, index: u64) -> [u8; 40] {
         let mut header = [0; 40];
 
-        header[..8].copy_from_slice(&self.index.to_be_bytes());
+        header[..8].copy_from_slice(&index.to_be_bytes());
 
         let leaf_hashes = self.items.iter().map(consensus_hash_sha256);
 
