@@ -73,7 +73,7 @@ pub enum ClientCmd {
         expiry_time: Option<u64>,
     },
     /// Wait for incoming invoice to be paid
-    WaitInvoice { operation_id: OperationId },
+    AwaitInvoice { operation_id: OperationId },
     /// Pay a lightning invoice via a gateway
     LnPay {
         bolt11: lightning_invoice::Bolt11Invoice,
@@ -205,7 +205,7 @@ pub async fn handle_command(
             })
             .unwrap())
         }
-        ClientCmd::WaitInvoice { operation_id } => {
+        ClientCmd::AwaitInvoice { operation_id } => {
             let mut updates = client
                 .subscribe_ln_receive(operation_id)
                 .await?

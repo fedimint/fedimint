@@ -154,7 +154,7 @@ $ lncli payinvoice --force lnbcrt10n1pjq2zwxdqjv...
 Have mint client check that payment succeeded and display new balances:
 
 ```shell
-$ fedimint-cli wait-invoice "5b37007b6a1fcb74e71631dcdb9d96504...."
+$ fedimint-cli await-invoice "5b37007b6a1fcb74e71631dcdb9d96504...."
 $ fedimint-cli info
 ```
 
@@ -174,7 +174,7 @@ Commands:
   reissue          Reissue notes received from a third party to avoid double spends
   spend            Prepare notes to send to a third party as a payment
   ln-invoice       Create a lightning invoice to receive payment via gateway
-  wait-invoice     Wait for incoming invoice to be paid
+  await-invoice    Wait for incoming invoice to be paid
   ln-pay           Pay a lightning invoice via a gateway
   list-gateways    List registered gateways
   switch-gateway   Switch active gateway

@@ -16,7 +16,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_TEST;
 use futures::executor::block_on;
 use lightning::routing::gossip::RoutingFees;
-use ln_gateway::client::StandardGatewayClientBuilder;
+use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
@@ -94,8 +94,8 @@ impl GatewayTest {
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
 
         // Create federation client builder for the gateway
-        let client_builder: StandardGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(path.clone(), registry, 0);
+        let client_builder: GatewayClientBuilder =
+            GatewayClientBuilder::new(path.clone(), registry, 0);
 
         let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> = if Fixtures::is_real_test()
         {
