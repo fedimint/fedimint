@@ -141,13 +141,13 @@
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>StandardGatewayClientBuilder {
+</span><span class="kw">pub struct </span>GatewayClientBuilder {
     work_dir: PathBuf,
     registry: ClientModuleInitRegistry,
     primary_module: ModuleInstanceId,
 }
 
-<span class="kw">impl </span>StandardGatewayClientBuilder {
+<span class="kw">impl </span>GatewayClientBuilder {
     <span class="kw">pub fn </span>new(
         work_dir: PathBuf,
         registry: ClientModuleInitRegistry,
@@ -161,7 +161,7 @@
     }
 }
 
-<span class="kw">impl </span>StandardGatewayClientBuilder {
+<span class="kw">impl </span>GatewayClientBuilder {
     <span class="kw">pub async fn </span>build(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,

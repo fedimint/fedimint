@@ -270,7 +270,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>futures::executor::block_on;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
-<span class="kw">use </span>ln_gateway::client::StandardGatewayClientBuilder;
+<span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
 <span class="kw">use </span>ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo};
@@ -348,8 +348,8 @@
         <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;gateway-{}&quot;</span>, rand::random::&lt;u64&gt;()));
 
         <span class="comment">// Create federation client builder for the gateway
-        </span><span class="kw">let </span>client_builder: StandardGatewayClientBuilder =
-            StandardGatewayClientBuilder::new(path.clone(), registry, <span class="number">0</span>);
+        </span><span class="kw">let </span>client_builder: GatewayClientBuilder =
+            GatewayClientBuilder::new(path.clone(), registry, <span class="number">0</span>);
 
         <span class="kw">let </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt; = <span class="kw">if </span>Fixtures::is_real_test()
         {

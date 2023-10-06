@@ -1236,7 +1236,7 @@
 <span class="kw">use </span>bitcoin::{Address, Txid};
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>client::StandardGatewayClientBuilder;
+<span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>db::{DbKeyPrefix, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::Client;
@@ -1421,7 +1421,7 @@
 
     <span class="comment">// Builder struct that allows the gateway to build a Fedimint client, which handles the
     // communication with a federation.
-    </span>client_builder: StandardGatewayClientBuilder,
+    </span>client_builder: GatewayClientBuilder,
 
     <span class="comment">// Database for Gateway metadata.
     </span>gateway_db: Database,
@@ -1446,7 +1446,7 @@
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub async fn </span>new_with_custom_registry(
         lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
-        client_builder: StandardGatewayClientBuilder,
+        client_builder: GatewayClientBuilder,
         listen: SocketAddr,
         api_addr: SafeUrl,
         cli_password: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -1498,7 +1498,7 @@
             decoders.clone(),
         );
 
-        <span class="kw">let </span>client_builder = StandardGatewayClientBuilder::new(
+        <span class="kw">let </span>client_builder = GatewayClientBuilder::new(
             opts.data_dir.clone(),
             registry.clone(),
             LEGACY_HARDCODED_INSTANCE_ID_MINT,

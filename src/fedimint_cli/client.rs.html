@@ -590,7 +590,7 @@
         </span>expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
     <span class="doccomment">/// Wait for incoming invoice to be paid
-    </span>WaitInvoice { operation_id: OperationId },
+    </span>AwaitInvoice { operation_id: OperationId },
     <span class="doccomment">/// Pay a lightning invoice via a gateway
     </span>LnPay {
         bolt11: lightning_invoice::Bolt11Invoice,
@@ -722,7 +722,7 @@
             })
             .unwrap())
         }
-        ClientCmd::WaitInvoice { operation_id } =&gt; {
+        ClientCmd::AwaitInvoice { operation_id } =&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client
                 .subscribe_ln_receive(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?
