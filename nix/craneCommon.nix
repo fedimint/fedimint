@@ -5,7 +5,7 @@
 # * build inputs
 # * env variables
 
-{ src, srcDotCargo, pkgs, lib, clightning-dev, pkgs-kitman, moreutils-ts, ... }:
+{ src, srcDotCargo, pkgs, lib, pkgs-kitman, moreutils-ts, ... }:
 craneLib:
 craneLib.overrideScope' (self: prev:
 
@@ -111,7 +111,7 @@ in
       (hiPrio pkgs.bashInteractive)
       bc
       bitcoind
-      clightning-dev
+      clightning
       electrs
       jq
       lnd

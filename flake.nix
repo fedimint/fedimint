@@ -35,6 +35,12 @@
                 cargo-udeps = pkgs-unstable.cargo-udeps;
                 wasm-bindgen-cli = pkgs-unstable.wasm-bindgen-cli;
 
+                clightning = prev.clightning.overrideAttrs (oldAttrs: {
+                  configureFlags = [ "--enable-developer" "--disable-valgrind" ];
+                } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+                  NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -w";
+                });
+
                 # mold wrapper from https://discourse.nixos.org/t/using-mold-as-linker-prevents-libraries-from-being-found/18530/5
                 mold =
                   let
@@ -104,11 +110,6 @@
 
           stdenv = pkgs.stdenv;
 
-          clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
-            configureFlags = [ "--enable-developer" "--disable-valgrind" ];
-          } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-            NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation -w";
-          });
 
           # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
           # the binary we need from `moreutils`
@@ -127,7 +128,7 @@
           ;
           craneExtendCommon = import ./nix/craneCommon.nix
             {
-              inherit pkgs pkgs-kitman clightning-dev advisory-db lib moreutils-ts;
+              inherit pkgs pkgs-kitman advisory-db lib moreutils-ts;
 
               src = ./.;
               srcDotCargo = ./.cargo;
@@ -135,7 +136,7 @@
 
           craneExtendBuild = import ./nix/craneBuild.nix
             {
-              inherit pkgs pkgs-kitman clightning-dev advisory-db lib moreutils-ts;
+              inherit pkgs pkgs-kitman advisory-db lib moreutils-ts;
             };
 
           craneLibNative = craneExtendBuild (craneExtendCommon craneLibNative');
