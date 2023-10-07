@@ -112,11 +112,3 @@ pub enum Recipient {
     Everyone,
     Peer(PeerId),
 }
-
-/// This enum specifies whether an ordered item has been accepted or discarded
-/// by Fedimint Consensus.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Decision {
-    Accept,
-    Discard,
-}

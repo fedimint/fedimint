@@ -13,9 +13,10 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 use fedimint_core::query::FilterMap;
 use fedimint_core::task::sleep;
+use fedimint_core::PeerId;
 use tokio::sync::watch;
 
-use super::conversion::{to_node_index, to_peer_id};
+use super::conversion::to_node_index;
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
 use crate::consensus::FedimintConsensus;
@@ -24,7 +25,7 @@ use crate::consensus::FedimintConsensus;
 pub async fn run(
     mut consensus: FedimintConsensus,
     batches_per_block: usize,
-    unit_data_receiver: Receiver<UnitData>,
+    unit_data_receiver: Receiver<(UnitData, PeerId)>,
     signature_sender: watch::Sender<Option<SchnorrSignature>>,
     keychain: Keychain,
     federation_api: WsFederationApi,
@@ -36,16 +37,14 @@ pub async fn run(
     while num_batches < batches_per_block {
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
-                if let UnitData::Batch(bytes, signature, node_index) = unit_data? {
-                    if keychain.verify(&bytes, &signature, node_index){
-                        if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &consensus.decoders()){
-                            for item in items {
-                                // since the signature is valid the node index can be converted to a peer id
-                                consensus.process_consensus_item(item.clone(), to_peer_id(node_index)).await.ok();
-                            }
+                if let (UnitData::Batch(bytes), peer) = unit_data? {
+                    if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &consensus.decoders()){
+                        for item in items {
+                            // since the signature is valid the node index can be converted to a peer id
+                            consensus.process_consensus_item(item.clone(), peer).await.ok();
                         }
-                        num_batches += 1;
                     }
+                    num_batches += 1;
                 }
             },
             signed_block = request_signed_block(
@@ -75,7 +74,7 @@ pub async fn run(
     let header = block.header(consensus.session_index);
 
     // we send our own signature to the data provider to be broadcasted
-    signature_sender.send(Some(keychain.sign(&header).await))?;
+    signature_sender.send(Some(keychain.sign(&header)))?;
 
     let mut signatures = BTreeMap::new();
 
@@ -84,10 +83,10 @@ pub async fn run(
     while signatures.len() < keychain.threshold() {
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
-                if let UnitData::Signature(signature, node_index) = unit_data? {
-                    if keychain.verify(&header, &signature, node_index){
+                if let (UnitData::Signature(signature), peer) = unit_data? {
+                    if keychain.verify(&header, &signature, to_node_index(peer)){
                         // since the signature is valid the node index can be converted to a peer id
-                        signatures.insert(to_peer_id(node_index), signature);
+                        signatures.insert(peer, signature);
                     }
                 }
             }
@@ -95,8 +94,8 @@ pub async fn run(
                 consensus.session_index,
                 keychain.clone(),
                 consensus.decoders(),
-                &federation_api)
-            => {
+                &federation_api
+            ) => {
                 // We check that the block we have created agrees with the federations consensus
                 assert!(header == signed_block.block.header(consensus.session_index));
 

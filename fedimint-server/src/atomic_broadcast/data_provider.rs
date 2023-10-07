@@ -1,13 +1,11 @@
 use std::collections::BTreeSet;
 
-use aleph_bft::Keychain as KeychainTrait;
 use bitcoin_hashes_12::sha256;
 use fedimint_core::block::{consensus_hash_sha256, SchnorrSignature};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
 use tokio::sync::watch;
 
-use super::keychain::Keychain;
 use crate::LOG_CONSENSUS;
 
 // This limits the RAM consumption of a Unit to roughly 10kB
@@ -17,8 +15,8 @@ const BYTE_LIMIT: usize = 10_000;
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
 )]
 pub enum UnitData {
-    Batch(Vec<u8>, SchnorrSignature, aleph_bft::NodeIndex),
-    Signature(SchnorrSignature, aleph_bft::NodeIndex),
+    Batch(Vec<u8>),
+    Signature(SchnorrSignature),
 }
 
 impl UnitData {
@@ -33,7 +31,6 @@ impl UnitData {
 }
 
 pub struct DataProvider {
-    keychain: Keychain,
     mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
     signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
     submitted_items: BTreeSet<sha256::Hash>,
@@ -42,12 +39,10 @@ pub struct DataProvider {
 
 impl DataProvider {
     pub fn new(
-        keychain: Keychain,
         mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
         signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
     ) -> Self {
         Self {
-            keychain,
             mempool_item_receiver,
             signature_receiver,
             submitted_items: BTreeSet::new(),
@@ -61,10 +56,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
     async fn get_data(&mut self) -> Option<UnitData> {
         // we only attach our signature as no more items can be ordered in this session
         if let Some(signature) = self.signature_receiver.borrow().clone() {
-            return Some(UnitData::Signature(
-                signature,
-                self.keychain.peer_id().to_usize().into(),
-            ));
+            return Some(UnitData::Signature(signature));
         }
 
         // an empty vector is encoded in at most 8 bytes
@@ -101,6 +93,7 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
                 }
             } else {
                 self.leftover_item = Some(item);
+
                 break;
             }
         }
@@ -108,11 +101,9 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         let bytes = items
             .consensus_encode_to_vec()
             .expect("Writing to a vector cant fail");
-        let signature = self.keychain.sign(&bytes).await;
-        let node_index = self.keychain.peer_id().to_usize().into();
 
         assert!(bytes.len() <= BYTE_LIMIT);
 
-        Some(UnitData::Batch(bytes, signature, node_index))
+        return Some(UnitData::Batch(bytes));
     }
 }

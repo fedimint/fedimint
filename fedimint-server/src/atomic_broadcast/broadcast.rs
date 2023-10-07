@@ -68,12 +68,6 @@ impl AtomicBroadcast {
         // the EXPONENTIAL_SLOWDOWN_OFFSET even if f peers do not attach unit data
         let batches_per_session = EXPECTED_ROUNDS_PER_SESSION * self.keychain.peer_count();
 
-        let mut config = aleph_bft::default_config(
-            self.keychain.peer_count().into(),
-            self.keychain.peer_id().to_usize().into(),
-            consensus.session_index,
-        );
-
         // In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
         // create a threshold signature for the corresponding block we have to
@@ -83,8 +77,8 @@ impl AtomicBroadcast {
         // such that MAX_ROUND would only be reached after roughly 350 years.
         // In case of such an attack the broadcast stops ordering any items until the
         // attack subsides as not items are ordered while the signatures are collected.
-        config.max_round = MAX_ROUND;
-        config.delay_config.unit_creation_delay = std::sync::Arc::new(|round_index| {
+        let mut delay_config = aleph_bft::default_delay_config();
+        delay_config.unit_creation_delay = std::sync::Arc::new(|round_index| {
             let delay = if round_index == 0 {
                 0.0
             } else {
@@ -94,6 +88,16 @@ impl AtomicBroadcast {
 
             Duration::from_millis(delay.round() as u64)
         });
+
+        let config = aleph_bft::create_config(
+            self.keychain.peer_count().into(),
+            self.keychain.peer_id().to_usize().into(),
+            consensus.session_index,
+            MAX_ROUND,
+            delay_config,
+            Duration::from_secs(100 * 365 * 24 * 60 * 60),
+        )
+        .expect("Config is valid");
 
         // the number of units ordered in a single aleph session is bounded
         let (unit_data_sender, unit_data_receiver) = async_channel::unbounded();
@@ -107,11 +111,7 @@ impl AtomicBroadcast {
             aleph_bft::run_session(
                 config,
                 aleph_bft::LocalIO::new(
-                    DataProvider::new(
-                        self.keychain.clone(),
-                        self.mempool_item_receiver.clone(),
-                        signature_receiver,
-                    ),
+                    DataProvider::new(self.mempool_item_receiver.clone(), signature_receiver),
                     FinalizationHandler::new(unit_data_sender),
                     saver,
                     loader,
@@ -122,7 +122,7 @@ impl AtomicBroadcast {
                 ),
                 self.keychain.clone(),
                 Spawner::new(),
-                aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
+                aleph_bft_types::Terminator::create_root(terminator_receiver, "Terminator"),
             ),
         )
         .expect("some handle on non-wasm");
