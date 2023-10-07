@@ -232,6 +232,7 @@ impl ConsensusServer {
                 self.modules.clone(),
                 self.db.clone(),
                 self.consensus_api.client_cfg.consensus_hash(),
+                self.latest_contribution_by_peer.clone(),
             );
 
             let federation_api = WsFederationApi::new(api_endpoints.clone());

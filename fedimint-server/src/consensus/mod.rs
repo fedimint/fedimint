@@ -4,6 +4,7 @@ pub mod debug;
 pub mod server;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::bail;
 use bitcoin_hashes::sha256;
@@ -18,9 +19,11 @@ use fedimint_core::server::DynVerificationCache;
 use fedimint_core::{timing, Amount, OutPoint, PeerId};
 use futures::StreamExt;
 use itertools::Itertools;
+use tokio::sync::RwLock;
 use tracing::debug;
 
 use crate::config::ServerConfig;
+use crate::consensus::server::LatestContributionByPeer;
 use crate::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     ClientConfigSignatureKey, ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix,
@@ -40,6 +43,8 @@ pub struct FedimintConsensus {
     pub db: Database,
     /// API for accessing state
     pub client_cfg_hash: sha256::Hash,
+    /// track the latest contribution by peer
+    pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     /// The index of the current consensus session
     pub session_index: u64,
     /// The index of the next consensus item
@@ -69,6 +74,7 @@ impl FedimintConsensus {
         modules: ServerModuleRegistry,
         db: Database,
         client_cfg_hash: sha256::Hash,
+        latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     ) -> Self {
         let session_index = db
             .begin_transaction()
@@ -83,6 +89,7 @@ impl FedimintConsensus {
             modules,
             db,
             client_cfg_hash,
+            latest_contribution_by_peer,
             session_index,
             item_index: 0,
         }
@@ -109,8 +116,13 @@ impl FedimintConsensus {
 
         dbtx.remove_by_prefix(&AcceptedItemPrefix).await;
 
-        dbtx.insert_new_entry(&SignedBlockKey(self.session_index), &signed_block)
-            .await;
+        if dbtx
+            .insert_entry(&SignedBlockKey(self.session_index), &signed_block)
+            .await
+            .is_some()
+        {
+            panic!("We tried to overwrite a signed block");
+        }
 
         dbtx.commit_tx_result()
             .await
@@ -125,6 +137,11 @@ impl FedimintConsensus {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
 
         debug!("Peer {peer}: {}", debug::item_message(&item));
+
+        self.latest_contribution_by_peer
+            .write()
+            .await
+            .insert(peer, self.session_index);
 
         let mut dbtx = self.db.begin_transaction().await;
 
