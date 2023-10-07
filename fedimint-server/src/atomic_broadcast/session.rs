@@ -2,195 +2,79 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use aleph_bft::Keychain as KeychainTrait;
-use async_channel::{Receiver, Sender};
-use bitcoin_hashes_12::Hash;
+use anyhow::anyhow;
+use async_channel::Receiver;
 use fedimint_core::api::{FederationApiExt, WsFederationApi};
-use fedimint_core::block::{consensus_hash_sha256, Block, OrderedItem, SignedBlock};
+use fedimint_core::block::{SchnorrSignature, SignedBlock};
+use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
-use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::VerifiableResponse;
-use fedimint_core::task::{sleep, spawn};
-use tokio::sync::{mpsc, oneshot, watch};
+use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::query::FilterMap;
+use fedimint_core::task::sleep;
+use fedimint_core::PeerId;
+use tokio::sync::watch;
 
-use super::conversion::{to_node_index, to_peer_id};
-use super::data_provider::{DataProvider, UnitData};
-use super::finalization_handler::FinalizationHandler;
+use super::conversion::to_node_index;
+use super::data_provider::UnitData;
 use super::keychain::Keychain;
-use super::network::Network;
-use super::spawner::Spawner;
-use super::{db, Decision, Message, Recipient};
-/// this function completes a session with the following steps:
-/// - set up the aleph bft session
-/// - combine the accepted items into a block until we reach a preset number of
-///   ordered batches or a signed block arrives
-/// - collect signatures until we reach the threshold or a signed block arrives
+use crate::consensus::FedimintConsensus;
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
-    session_index: u64,
+    mut consensus: FedimintConsensus,
+    batches_per_block: usize,
+    unit_data_receiver: Receiver<(UnitData, PeerId)>,
+    signature_sender: watch::Sender<Option<SchnorrSignature>>,
     keychain: Keychain,
-    backup_loader: std::io::Cursor<Vec<u8>>,
-    backup_saver: db::UnitSaver,
-    item_receiver: Receiver<Vec<u8>>,
-    incoming_message_receiver: Receiver<Message>,
-    outgoing_message_sender: Sender<(Message, Recipient)>,
-    ordered_item_sender: mpsc::Sender<Option<(OrderedItem, oneshot::Sender<Decision>)>>,
     federation_api: WsFederationApi,
-) -> anyhow::Result<SignedBlock> {
-    // if all nodes are correct the session will take 45 to 60 seconds. The
-    // more nodes go offline the longer the session will take to complete.
-    const EXPECTED_ROUNDS_PER_SESSION: usize = 45 * 4;
-    // this constant needs to be 3000 or less to guarantee that the session
-    // can never reach MAX_ROUNDs.
-    const EXPONENTIAL_SLOWDOWN_OFFSET: usize = 3 * EXPECTED_ROUNDS_PER_SESSION;
-    const MAX_ROUND: u16 = 5000;
-    const ROUND_DELAY: f64 = 250.0;
-    const BASE: f64 = 1.01;
-
-    let mut config = aleph_bft::default_config(
-        keychain.peer_count().into(),
-        keychain.peer_id().to_usize().into(),
-        session_index,
-    );
-
-    // In order to bound a sessions RAM consumption we need to bound its number of
-    // units and therefore its number of rounds. Since we use a session to
-    // create a threshold signature for the corresponding block we have to
-    // guarantee that an attacker cannot exhaust our memory by preventing the
-    // creation of a threshold signature, thereby keeping the session open
-    // indefinitely. Hence we increase the delay between rounds exponentially
-    // such that MAX_ROUND would only be reached after roughly 350 years.
-    // In case of such an attack the broadcast stops ordering any items until the
-    // attack subsides as not items are ordered while the signatures are collected.
-    config.max_round = MAX_ROUND;
-    config.delay_config.unit_creation_delay = std::sync::Arc::new(|round_index| {
-        let delay = if round_index == 0 {
-            0.0
-        } else {
-            ROUND_DELAY * BASE.powf(round_index.saturating_sub(EXPONENTIAL_SLOWDOWN_OFFSET) as f64)
-        };
-
-        Duration::from_millis(delay.round() as u64)
-    });
-
-    // the number of units ordered in a single aleph session is bounded
-    let (unit_data_sender, unit_data_receiver) = async_channel::unbounded();
-    let (signature_sender, signature_receiver) = watch::channel(None);
-    let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
-
-    let aleph_handle = spawn(
-        "aleph run session",
-        aleph_bft::run_session(
-            config,
-            aleph_bft::LocalIO::new(
-                DataProvider::new(keychain.clone(), item_receiver, signature_receiver),
-                FinalizationHandler::new(unit_data_sender),
-                backup_saver,
-                backup_loader,
-            ),
-            Network::new(incoming_message_receiver, outgoing_message_sender.clone()),
-            keychain.clone(),
-            Spawner::new(),
-            aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
-        ),
-    )
-    .expect("some handle on non-wasm");
-
-    // this is the minimum number of unit data that will be ordered before we reach
-    // the EXPONENTIAL_SLOWDOWN_OFFSET even if f peers do not attach unit data
-    let batches_per_block = EXPECTED_ROUNDS_PER_SESSION * keychain.peer_count();
+) -> anyhow::Result<()> {
     let mut num_batches = 0;
-    let mut pending_items = vec![];
 
     // we build a block out of the ordered batches until either we have processed
     // n_batches_per_block blocks or a signed block arrives from our peers
     while num_batches < batches_per_block {
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
-                if let UnitData::Batch(items, signature, node_index) = unit_data? {
-                    let hash = consensus_hash_sha256(&items);
-                    if keychain.verify(hash.as_byte_array(), &signature, node_index){
-                        // since the signature is valid the node index can be converted to a peer id
-                        let peer_id = to_peer_id(node_index);
-
+                if let (UnitData::Batch(bytes), peer) = unit_data? {
+                    if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &consensus.decoders()){
                         for item in items {
-                            let ordered_item = OrderedItem {
-                                item,
-                                index: pending_items.len() as u64,
-                                peer_id
-                            };
-
-                            let (decision_sender, decision_receiver) = oneshot::channel();
-
-                            ordered_item_sender.send(Some((
-                                ordered_item.clone(),
-                                decision_sender
-                            ))).await?;
-
-                            pending_items.push((ordered_item, decision_receiver));
+                            // since the signature is valid the node index can be converted to a peer id
+                            consensus.process_consensus_item(item.clone(), peer).await.ok();
                         }
-
-                        num_batches += 1;
                     }
+                    num_batches += 1;
                 }
             },
-            signed_block = request_signed_block(session_index, keychain.clone(), &federation_api) => {
-                let mut accepted_items = vec![];
-                for (ordered_item, decision_receiver) in pending_items{
-                    // we add the item to the block if and only if it is accepted by Fedimint Consensus
-                    if decision_receiver.await? == Decision::Accept {
-                        accepted_items.push(ordered_item);
-                    }
+            signed_block = request_signed_block(
+                consensus.session_index,
+                keychain.clone(),
+                consensus.decoders(),
+                &federation_api)
+            => {
+                let partial_block = consensus.build_block().await.items;
+
+                assert!(partial_block.len() <= signed_block.block.items.len());
+
+                assert!(signed_block.block.items.iter().take(partial_block.len()).eq(partial_block.iter()));
+
+                for accepted_item in signed_block.block.items.clone() {
+                    assert!(consensus.process_consensus_item(accepted_item.item, accepted_item.peer).await.is_ok());
                 }
 
-                // The items we have already accepted have to be in the threshold signed block
-                assert!(accepted_items.iter().eq(signed_block.block.items.iter().take(accepted_items.len())));
+                consensus.complete_session(signed_block).await;
 
-                // We send the not yet processed items in the block to Fedimint Consensus
-                let mut decision_receivers = vec![];
-                for ordered_item in signed_block.block.items.iter().skip(accepted_items.len()) {
-                    let (decision_sender, decision_receiver) = oneshot::channel();
-
-                    ordered_item_sender.send(Some((
-                        ordered_item.clone(),
-                        decision_sender
-                    ))).await?;
-
-                    decision_receivers.push(decision_receiver);
-                }
-
-                for decision_receiver in decision_receivers {
-                    // The threshold signed blocks items have to be accepted by Fedimint Consensus.
-                    assert!(decision_receiver.await? == Decision::Accept);
-                }
-
-                terminator_sender.send(()).ok();
-                aleph_handle.await.ok();
-
-                return Ok(signed_block);
+                return Ok(());
             }
-
-            _ = ordered_item_sender.closed() => anyhow::bail!("Ordered Item Receiver has been dropped")
         }
     }
 
-    let mut accepted_items = vec![];
-    for (ordered_item, decision_receiver) in pending_items {
-        // we add the item to the block if and only if it is accepted by Fedimint
-        // Consensus
-        if decision_receiver.await? == Decision::Accept {
-            accepted_items.push(ordered_item);
-        }
-    }
-
-    // sign the block and send the signature to the data_provider to order it
-    let block = Block {
-        index: session_index,
-        items: accepted_items,
-    };
-    let header = block.header();
+    let block = consensus.build_block().await;
+    let header = block.header(consensus.session_index);
 
     // we send our own signature to the data provider to be broadcasted
-    signature_sender.send(Some(keychain.sign(&header).await))?;
+    signature_sender.send(Some(keychain.sign(&header)))?;
 
     let mut signatures = BTreeMap::new();
 
@@ -199,54 +83,71 @@ pub async fn run(
     while signatures.len() < keychain.threshold() {
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
-                if let UnitData::Signature(signature, node_index) = unit_data? {
-                    if keychain.verify(&header, &signature, node_index){
+                if let (UnitData::Signature(signature), peer) = unit_data? {
+                    if keychain.verify(&header, &signature, to_node_index(peer)){
                         // since the signature is valid the node index can be converted to a peer id
-                        signatures.insert(to_peer_id(node_index), signature);
+                        signatures.insert(peer, signature);
                     }
                 }
             }
-
-            signed_block = request_signed_block(session_index, keychain.clone(), &federation_api) => {
+            signed_block = request_signed_block(
+                consensus.session_index,
+                keychain.clone(),
+                consensus.decoders(),
+                &federation_api
+            ) => {
                 // We check that the block we have created agrees with the federations consensus
-                assert!(header == signed_block.block.header());
+                assert!(header == signed_block.block.header(consensus.session_index));
 
-                terminator_sender.send(()).ok();
-                aleph_handle.await.ok();
+                consensus.complete_session(signed_block).await;
 
-                return Ok(signed_block);
+                return Ok(());
             }
         }
     }
 
-    terminator_sender.send(()).ok();
-    aleph_handle.await.ok();
+    consensus
+        .complete_session(SignedBlock { block, signatures })
+        .await;
 
-    Ok(SignedBlock { block, signatures })
+    Ok(())
 }
 
 async fn request_signed_block(
     index: u64,
     keychain: Keychain,
+    decoders: ModuleDecoderRegistry,
     federation_api: &WsFederationApi,
 ) -> SignedBlock {
-    // we wait until we have stalled
-    sleep(Duration::from_secs(5)).await;
-
     let total_peers = keychain.peer_count();
+    let decoder_clone = decoders.clone();
 
-    let verifier = move |signed_block: &SignedBlock| {
-        signed_block.block.index == index
-            && signed_block.signatures.len() == keychain.threshold()
-            && signed_block.signatures.iter().all(|(peer_id, sig)| {
-                keychain.verify(&signed_block.block.header(), sig, to_node_index(*peer_id))
-            })
+    let filter_map = move |response: SerdeModuleEncoding<SignedBlock>| match response
+        .try_into_inner(&decoder_clone)
+    {
+        Ok(signed_block) => {
+            match signed_block.signatures.len() == keychain.threshold()
+                && signed_block.signatures.iter().all(|(peer_id, sig)| {
+                    keychain.verify(
+                        &signed_block.block.header(index),
+                        sig,
+                        to_node_index(*peer_id),
+                    )
+                }) {
+                true => Ok(signed_block),
+                false => Err(anyhow!("Invalid signatures")),
+            }
+        }
+        Err(error) => Err(anyhow!(error.to_string())),
     };
 
     loop {
+        // we wait until we have stalled
+        sleep(Duration::from_secs(5)).await;
+
         let result = federation_api
             .request_with_strategy(
-                VerifiableResponse::new(verifier.clone(), false, total_peers),
+                FilterMap::new(filter_map.clone(), total_peers),
                 AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
                 ApiRequestErased::new(index),
             )

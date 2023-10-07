@@ -78,7 +78,7 @@ impl aleph_bft::Keychain for Keychain {
         self.peer_count().into()
     }
 
-    async fn sign(&self, message: &[u8]) -> Self::Signature {
+    fn sign(&self, message: &[u8]) -> Self::Signature {
         SchnorrSignature(
             self.secp
                 .sign_schnorr(&self.tagged_hash(message), &self.keypair)

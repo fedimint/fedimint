@@ -82,48 +82,6 @@ pub enum QueryStep<R> {
     },
 }
 
-/// Returns first response with a valid signature
-pub struct VerifiableResponse<R> {
-    verifier: Box<maybe_add_send_sync!(dyn Fn(&R) -> bool)>,
-    threshold_consensus: ThresholdConsensus<R>,
-    allow_threshold_fallback: bool,
-}
-
-impl<R> VerifiableResponse<R> {
-    /// Strategy for returning first response that is verifiable (typically with
-    /// a signature)
-    pub fn new(
-        verifier: impl Fn(&R) -> bool + MaybeSend + MaybeSync + 'static,
-        allow_threshold_fallback: bool,
-        total_peers: usize,
-    ) -> Self {
-        Self {
-            verifier: Box::new(verifier),
-            threshold_consensus: ThresholdConsensus::overcome_evil(total_peers),
-            allow_threshold_fallback,
-        }
-    }
-}
-
-impl<R: Debug + Eq + Clone> QueryStrategy<R> for VerifiableResponse<R> {
-    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<R> {
-        match result {
-            Ok(response) if (self.verifier)(&response) => QueryStep::Success(response),
-            Ok(response) => {
-                if self.allow_threshold_fallback {
-                    self.threshold_consensus.process(peer, Ok(response))
-                } else {
-                    self.threshold_consensus.process(
-                        peer,
-                        Err(PeerError::InvalidResponse("Invalid signature".to_string())),
-                    )
-                }
-            }
-            error => self.threshold_consensus.process(peer, error),
-        }
-    }
-}
-
 struct ErrorStrategy {
     errors: BTreeMap<PeerId, PeerError>,
     threshold: usize,
@@ -167,6 +125,42 @@ impl ErrorStrategy {
             }
         } else {
             QueryStep::Continue
+        }
+    }
+}
+
+/// Returns first response with a valid signature
+pub struct FilterMap<R, T> {
+    filter_map: Box<maybe_add_send_sync!(dyn Fn(R) -> anyhow::Result<T>)>,
+    error_strategy: ErrorStrategy,
+}
+
+impl<R, T> FilterMap<R, T> {
+    /// Strategy for returning first response that is verifiable (typically with
+    /// a signature)
+    pub fn new(
+        filter_map: impl Fn(R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
+        total_peers: usize,
+    ) -> Self {
+        let max_evil = (total_peers - 1) / 3;
+
+        Self {
+            filter_map: Box::new(filter_map),
+            error_strategy: ErrorStrategy::new(max_evil + 1),
+        }
+    }
+}
+
+impl<R: Debug + Eq + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
+    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<T> {
+        match result {
+            Ok(response) => match (self.filter_map)(response) {
+                Ok(value) => QueryStep::Success(value),
+                Err(error) => self
+                    .error_strategy
+                    .process(peer, PeerError::InvalidResponse(error.to_string())),
+            },
+            Err(error) => self.error_strategy.process(peer, error),
         }
     }
 }

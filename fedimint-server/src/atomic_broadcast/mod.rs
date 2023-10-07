@@ -3,7 +3,7 @@
 //! vectors. The Broadcast is able to recover from a crash at any time via a
 //! backup that it maintains in the servers [fedimint_core::db::Database]. In
 //! Addition, it stores the history of accepted items in the form of
-//! [SignedBlock]s in the database as well in order to catch up fellow guardians
+//! signed blocks in the database as well in order to catch up fellow guardians
 //! which have been offline for a prolonged period of time.
 //!
 //! Though the broadcast depends on [fedimint_core] for [fedimint_core::PeerId],
@@ -45,7 +45,7 @@
 //!   session.
 //! * Roughly every five minutes the session completes. Then the broadcast
 //!   creates a threshold signature for the blocks header and saves both in the
-//!   form of a [SignedBlock] in the local database.
+//!   form of a signed block in the local database.
 //!
 //! # Interplay with Fedimint Consensus
 //!
@@ -78,10 +78,10 @@
 //! session regardless. However, it did so by processing one less ordered item
 //! and without realizing that a double spend had occurred.
 
+mod backup;
 mod broadcast;
 mod conversion;
 mod data_provider;
-mod db;
 mod finalization_handler;
 mod keychain;
 mod network;
@@ -90,7 +90,6 @@ mod spawner;
 
 /// The atomic broadcast instance run once by every peer.
 pub use broadcast::AtomicBroadcast;
-use fedimint_core::block::SignedBlock;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 /// This keychain implements naive threshold schnorr signatures over secp256k1.
@@ -112,12 +111,4 @@ pub struct Message(Vec<u8>);
 pub enum Recipient {
     Everyone,
     Peer(PeerId),
-}
-
-/// This enum specifies whether an ordered item has been accepted or discarded
-/// by Fedimint Consensus.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Decision {
-    Accept,
-    Discard,
 }

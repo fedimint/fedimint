@@ -9,6 +9,7 @@ pub const BLOCK_COUNT_LOCAL_ENDPOINT: &str = "block_count_local";
 pub const CONFIG_ENDPOINT: &str = "config";
 pub const CONFIG_HASH_ENDPOINT: &str = "config_hash";
 pub const FETCH_BLOCK_COUNT_ENDPOINT: &str = "fetch_block_count";
+pub const AWAIT_BLOCK_ENDPOINT: &str = "await_block";
 pub const AWAIT_SIGNED_BLOCK_ENDPOINT: &str = "await_signed_block";
 pub const GET_CONFIG_GEN_PEERS_ENDPOINT: &str = "get_config_gen_peers";
 pub const GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT: &str = "get_consensus_config_gen_params";

@@ -50,9 +50,9 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft"
-version = "0.20.5"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3e70117d5481f1194ceafcf71d027377717d6fc738fc10a1433f412bb5bdc4d"
+checksum = "bb050890181b868ad4d601661a5e7106aca6191273c99c092d6d472119f46e56"
 dependencies = [
  "aleph-bft-rmc",
  "aleph-bft-types",
@@ -61,7 +61,7 @@ dependencies = [
  "derivative",
  "futures",
  "futures-timer",
- "itertools",
+ "itertools 0.11.0",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -71,9 +71,9 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-crypto"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39ef65bb0b342d411e32789cdf722cbf163667e1656577ef356221c5aebf75c9"
+checksum = "de73b5bd99955d8728d2cce8199b02f938c2b44f2d2b738e6bea287a70500bad"
 dependencies = [
  "async-trait",
  "bit-vec",
@@ -84,9 +84,9 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-rmc"
-version = "0.6.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1a34546c3d75df640c0224294be256fd0c17ed3f7191367124ece4d93753061"
+checksum = "4470671c60202933de1945c7208125accd42f2cbd45fc8dcb5dd15d1d053ddd2"
 dependencies = [
  "aleph-bft-crypto",
  "async-trait",
@@ -98,13 +98,14 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-types"
-version = "0.8.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b39893b3cb3670ade7d8fe3cb807f9b032cd2a2937df88a64b53ad927fc1510"
+checksum = "a01d898329af9530cc10526b212eaa4365a4f199257e85ca712e959a24cb67fc"
 dependencies = [
  "aleph-bft-crypto",
  "async-trait",
  "futures",
+ "log",
  "parity-scale-codec",
 ]
 
@@ -193,7 +194,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df752953c49ce90719c7bf1fc587bc8227aed04732ea0c0f85e5397d7fdbd1a1"
 dependencies = [
  "include_dir",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro-error",
  "proc-macro2",
  "quote 1.0.33",
@@ -1303,7 +1304,7 @@ dependencies = [
  "fedimint-derive-secret",
  "fedimint-logging",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "rand",
  "ring",
  "secp256k1-zkp",
@@ -1340,7 +1341,7 @@ dependencies = [
  "getrandom",
  "gloo-timers",
  "hex",
- "itertools",
+ "itertools 0.10.5",
  "js-sys",
  "jsonrpsee-core 0.18.2",
  "jsonrpsee-types 0.18.2",
@@ -1547,7 +1548,7 @@ dependencies = [
  "fedimint-ln-common",
  "fedimint-threshold-crypto",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "lightning 0.0.116",
  "lightning-invoice 0.24.0",
  "rand",
@@ -1580,7 +1581,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-threshold-crypto",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "lightning 0.0.116",
  "lightning-invoice 0.24.0",
  "rand",
@@ -1615,7 +1616,7 @@ dependencies = [
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "lightning 0.0.116",
  "lightning-invoice 0.24.0",
  "rand",
@@ -1732,7 +1733,7 @@ dependencies = [
  "fedimint-mint-common",
  "fedimint-threshold-crypto",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "rand",
  "secp256k1 0.24.3",
  "secp256k1-zkp",
@@ -1761,7 +1762,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "impl-tools",
- "itertools",
+ "itertools 0.10.5",
  "rand",
  "secp256k1 0.24.3",
  "secp256k1-zkp",
@@ -1791,7 +1792,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "impl-tools",
- "itertools",
+ "itertools 0.10.5",
  "rand",
  "rayon",
  "secp256k1 0.24.3",
@@ -1861,6 +1862,7 @@ name = "fedimint-server"
 version = "0.1.0"
 dependencies = [
  "aleph-bft",
+ "aleph-bft-types",
  "anyhow",
  "async-channel",
  "async-trait",
@@ -1880,7 +1882,7 @@ dependencies = [
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "futures",
- "itertools",
+ "itertools 0.10.5",
  "jsonrpsee",
  "parity-scale-codec",
  "rand",
@@ -2143,7 +2145,7 @@ dependencies = [
  "http",
  "http-body",
  "hyper",
- "itertools",
+ "itertools 0.10.5",
  "jsonrpsee",
  "rand",
  "rayon",
@@ -2839,6 +2841,15 @@ name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
 dependencies = [
  "either",
 ]
@@ -3908,7 +3919,7 @@ checksum = "355f634b43cdd80724ee7848f95770e7e70eefa6dcf14fea676216573b8fd603"
 dependencies = [
  "bytes",
  "heck 0.3.3",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "multimap",
  "petgraph 0.5.1",
@@ -3926,7 +3937,7 @@ checksum = "119533552c9a7ffacc21e099c24a0ac8bb19c2a2a3f363de84cd9b844feab270"
 dependencies = [
  "bytes",
  "heck 0.4.1",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "multimap",
@@ -3947,7 +3958,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote 1.0.33",
  "syn 1.0.109",
@@ -3960,7 +3971,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote 1.0.33",
  "syn 1.0.109",
@@ -3973,7 +3984,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote 1.0.33",
  "syn 1.0.109",

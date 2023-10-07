@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use fedimint_core::api::ClientConfigDownloadToken;
-use fedimint_core::block::SignedBlock;
+use fedimint_core::block::{AcceptedItem, SignedBlock};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -15,8 +15,7 @@ pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    SessionIndex = 0x00,
-    AcceptedIndex = 0x01,
+    AcceptedItem = 0x01,
     AcceptedTransaction = 0x02,
     SignedBlock = 0x04,
     AlephUnits = 0x05,
@@ -32,28 +31,19 @@ impl std::fmt::Display for DbKeyPrefix {
     }
 }
 
-#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct SessionIndexKey;
-
-impl_db_record!(
-    key = SessionIndexKey,
-    value = u64,
-    db_prefix = DbKeyPrefix::SessionIndex,
-);
-
-#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Ord, PartialOrd)]
-pub struct AcceptedIndex(pub u64);
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct AcceptedItemKey(pub u64);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct AcceptedIndexPrefix;
+pub struct AcceptedItemPrefix;
 
 impl_db_record!(
-    key = AcceptedIndex,
-    value = (),
-    db_prefix = DbKeyPrefix::AcceptedIndex,
+    key = AcceptedItemKey,
+    value = AcceptedItem,
+    db_prefix = DbKeyPrefix::AcceptedItem,
+    notify_on_modify = false,
 );
-
-impl_db_lookup!(key = AcceptedIndex, query_prefix = AcceptedIndexPrefix);
+impl_db_lookup!(key = AcceptedItemKey, query_prefix = AcceptedItemPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct AcceptedTransactionKey(pub TransactionId);
@@ -87,7 +77,7 @@ impl_db_record!(
 impl_db_lookup!(key = SignedBlockKey, query_prefix = SignedBlockPrefix);
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct AlephUnitsKey(pub u64, pub u64);
+pub struct AlephUnitsKey(pub u64);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct AlephUnitsPrefix;
@@ -150,6 +140,7 @@ pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::collections::BTreeMap;
+    use std::str::FromStr;
 
     use anyhow::{ensure, Context};
     use bitcoin::{secp256k1, KeyPair};
@@ -179,10 +170,10 @@ mod fedimint_migration_tests {
     };
     use crate::core::DynOutput;
     use crate::db::{
-        get_global_database_migrations, AcceptedIndex, AcceptedIndexPrefix,
+        get_global_database_migrations, AcceptedItem, AcceptedItemKey,
         AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, ClientConfigDownloadKey,
-        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix, SessionIndexKey,
-        SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix, SignedBlockKey,
+        SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -192,9 +183,6 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
-        dbtx.insert_new_entry(&SessionIndexKey, &0).await;
-        dbtx.insert_new_entry(&AcceptedIndex(0), &()).await;
-
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
@@ -228,18 +216,24 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&accepted_tx_id, &module_ids).await;
 
         dbtx.insert_new_entry(
+            &AcceptedItemKey(0),
+            &AcceptedItem {
+                item: ConsensusItem::Transaction(transaction.clone()),
+                peer: PeerId::from_str("0").unwrap(),
+            },
+        )
+        .await;
+
+        dbtx.insert_new_entry(
             &SignedBlockKey(0),
             &SignedBlock {
-                block: Block {
-                    index: 0,
-                    items: Vec::new(),
-                },
+                block: Block { items: Vec::new() },
                 signatures: BTreeMap::new(),
             },
         )
         .await;
 
-        dbtx.insert_new_entry(&AlephUnitsKey(0, 0), &vec![42, 42, 42])
+        dbtx.insert_new_entry(&AlephUnitsKey(0), &vec![42, 42, 42])
             .await;
 
         let sig_share = SignatureShare(Standard.sample(&mut OsRng));
@@ -308,24 +302,7 @@ mod fedimint_migration_tests {
 
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {
-                        DbKeyPrefix::SessionIndex => {
-                            dbtx
-                                .get_value(&SessionIndexKey)
-                                .await
-                                .expect("validate_migrations was not able to read the SessionIndexKey");
-                        },
-                        DbKeyPrefix::AcceptedIndex => {
-                                let accepted_indexes = dbtx
-                                    .find_by_prefix(&AcceptedIndexPrefix)
-                                    .await
-                                    .collect::<Vec<_>>()
-                                    .await;
-                                let num_accepted_indexes = accepted_indexes.len();
-                                ensure!(
-                                    num_accepted_indexes > 0,
-                                    "validate_migrations was not able to read any AcceptedIndexes"
-                                );
-                        },
+                        DbKeyPrefix::AcceptedItem => {},
                         DbKeyPrefix::AcceptedTransaction => {
                                 let accepted_transactions = dbtx
                                     .find_by_prefix(&AcceptedTransactionKeyPrefix)
