@@ -12,17 +12,17 @@ use fedimint_core::api::{
     ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::ClientBackupKey;
-use fedimint_core::block::SignedBlock;
+use fedimint_core::block::{Block, SignedBlock};
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SIGNED_BLOCK_ENDPOINT,
-    BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT, FETCH_BLOCK_COUNT_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
-    WAIT_TRANSACTION_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
+    AWAIT_SIGNED_BLOCK_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
+    FETCH_BLOCK_COUNT_ENDPOINT, GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT,
+    MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
+    VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -189,7 +189,7 @@ pub struct ConsensusApi {
     /// Cached client config
     pub client_cfg: ClientConfig,
     /// For sending API events to consensus such as transactions
-    pub submission_sender: async_channel::Sender<Vec<u8>>,
+    pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub peer_status_channels: PeerStatusChannels,
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,
@@ -263,11 +263,7 @@ impl ConsensusApi {
         funding_verifier.verify_funding()?;
 
         self.submission_sender
-            .send(
-                ConsensusItem::Transaction(transaction)
-                    .consensus_encode_to_vec()
-                    .expect("Infallible"),
-            )
+            .send(ConsensusItem::Transaction(transaction))
             .await?;
 
         Ok(())
@@ -610,9 +606,15 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            AWAIT_BLOCK_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<Block> {
+                Ok((&fedimint.await_signed_block(index).await.block).into())
+            }
+        },
+        api_endpoint! {
             AWAIT_SIGNED_BLOCK_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SignedBlock {
-                Ok(fedimint.await_signed_block(index).await)
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedBlock> {
+                Ok((&fedimint.await_signed_block(index).await).into())
             }
         },
         api_endpoint! {

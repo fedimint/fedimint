@@ -326,7 +326,7 @@ async fn submit_module_consensus_items(
     modules: ServerModuleRegistry,
     cfg: ServerConfig,
     client_cfg_hash: sha256::Hash,
-    submission_sender: Sender<Vec<u8>>,
+    submission_sender: Sender<ConsensusItem>,
 ) {
     task_group
         .spawn(
@@ -369,13 +369,7 @@ async fn submit_module_consensus_items(
                     }
 
                     for item in consensus_items {
-                        if submission_sender
-                            .send(item.consensus_encode_to_vec().expect("Infallible"))
-                            .await
-                            .is_err()
-                        {
-                            return;
-                        };
+                        submission_sender.send(item).await.ok();
                     }
 
                     sleep(Duration::from_secs(1)).await;

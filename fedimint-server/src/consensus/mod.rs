@@ -10,7 +10,6 @@ use bitcoin_hashes::sha256;
 use fedimint_core::block::{AcceptedItem, Block, SignedBlock};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
-use fedimint_core::encoding::Decodable;
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
@@ -120,10 +119,12 @@ impl FedimintConsensus {
 
     pub async fn process_consensus_item(
         &mut self,
-        item: Vec<u8>,
+        item: ConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item");
+
+        debug!("Peer {peer}: {}", debug::item_message(&item));
 
         let mut dbtx = self.db.begin_transaction().await;
 
@@ -136,12 +137,7 @@ impl FedimintConsensus {
             bail!("Consensus item was discarded before recovery");
         }
 
-        let mut reader = std::io::Cursor::new(item.clone());
-        let consensus_item = ConsensusItem::consensus_decode(&mut reader, &self.decoders())?;
-
-        debug!("Peer {peer}: {}", debug::item_message(&consensus_item));
-
-        self.process_consensus_item_with_db_transaction(&mut dbtx, consensus_item, peer)
+        self.process_consensus_item_with_db_transaction(&mut dbtx, item.clone(), peer)
             .await?;
 
         dbtx.insert_entry(

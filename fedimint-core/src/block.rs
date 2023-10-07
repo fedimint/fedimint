@@ -1,17 +1,17 @@
 use bitcoin30::hashes::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode};
-use serde::{Deserialize, Serialize};
 
 use crate::encoding::{Decodable, Encodable};
+use crate::epoch::ConsensusItem;
 use crate::PeerId;
 
 /// If two correct nodes obtain two ordered items from the broadcast they
 /// are guaranteed to be in the same order. However, an ordered items is
 /// only guaranteed to be seen by all correct nodes if a correct node decides to
 /// accept it.
-#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
 pub struct AcceptedItem {
-    pub item: Vec<u8>,
+    pub item: ConsensusItem,
     pub peer: PeerId,
 }
 
@@ -20,7 +20,7 @@ pub struct AcceptedItem {
 /// [Block] roughly every five minutes.  Therefore, just like in Bitcoin, a
 /// [Block] might be empty if no items are ordered in that time or all ordered
 /// items are discarded by Fedimint Consensus.
-#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
 pub struct Block {
     pub items: Vec<AcceptedItem>,
 }
@@ -50,38 +50,11 @@ impl Block {
 #[derive(Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash)]
 pub struct SchnorrSignature(pub [u8; 64]);
 
-impl Serialize for SchnorrSignature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Simply serialize the byte array as a sequence of u8 values.
-        serializer.serialize_bytes(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for SchnorrSignature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // Deserialize as a byte array. Ensure it has the correct length.
-        let bytes: Vec<u8> = Deserialize::deserialize(deserializer)?;
-        if bytes.len() == 64 {
-            let mut array = [0u8; 64];
-            array.copy_from_slice(&bytes);
-            Ok(SchnorrSignature(array))
-        } else {
-            Err(serde::de::Error::invalid_length(bytes.len(), &"length 64"))
-        }
-    }
-}
-
 /// A signed block combines a block with the naive threshold secp schnorr
 /// signature for its header created by the federation. The signed blocks allow
 /// clients and recovering guardians to verify the federations consensus
 /// history. After a signed block has been created it is stored in the database.
-#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Encodable, Decodable, Eq, PartialEq)]
 pub struct SignedBlock {
     pub block: Block,
     pub signatures: std::collections::BTreeMap<PeerId, SchnorrSignature>,

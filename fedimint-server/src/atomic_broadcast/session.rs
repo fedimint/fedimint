@@ -2,13 +2,16 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use aleph_bft::Keychain as KeychainTrait;
+use anyhow::anyhow;
 use async_channel::Receiver;
-use bitcoin_hashes_12::Hash;
 use fedimint_core::api::{FederationApiExt, WsFederationApi};
-use fedimint_core::block::{consensus_hash_sha256, SchnorrSignature, SignedBlock};
+use fedimint_core::block::{SchnorrSignature, SignedBlock};
+use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
-use fedimint_core::module::ApiRequestErased;
-use fedimint_core::query::VerifiableResponse;
+use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::query::FilterMap;
 use fedimint_core::task::sleep;
 use tokio::sync::watch;
 
@@ -33,19 +36,24 @@ pub async fn run(
     while num_batches < batches_per_block {
         tokio::select! {
             unit_data = unit_data_receiver.recv() => {
-                if let UnitData::Batch(items, signature, node_index) = unit_data? {
-                    let hash = consensus_hash_sha256(&items);
-                    if keychain.verify(hash.as_byte_array(), &signature, node_index){
-                        for item in items {
-                            // since the signature is valid the node index can be converted to a peer id
-                            consensus.process_consensus_item(item.clone(), to_peer_id(node_index)).await.ok();
+                if let UnitData::Batch(bytes, signature, node_index) = unit_data? {
+                    if keychain.verify(&bytes, &signature, node_index){
+                        if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &consensus.decoders()){
+                            for item in items {
+                                // since the signature is valid the node index can be converted to a peer id
+                                consensus.process_consensus_item(item.clone(), to_peer_id(node_index)).await.ok();
+                            }
                         }
-
                         num_batches += 1;
                     }
                 }
             },
-            signed_block = request_signed_block(consensus.session_index, keychain.clone(), &federation_api) => {
+            signed_block = request_signed_block(
+                consensus.session_index,
+                keychain.clone(),
+                consensus.decoders(),
+                &federation_api)
+            => {
                 let partial_block = consensus.build_block().await.items;
 
                 assert!(partial_block.len() <= signed_block.block.items.len());
@@ -83,7 +91,12 @@ pub async fn run(
                     }
                 }
             }
-            signed_block = request_signed_block(consensus.session_index, keychain.clone(), &federation_api) => {
+            signed_block = request_signed_block(
+                consensus.session_index,
+                keychain.clone(),
+                consensus.decoders(),
+                &federation_api)
+            => {
                 // We check that the block we have created agrees with the federations consensus
                 assert!(header == signed_block.block.header(consensus.session_index));
 
@@ -104,28 +117,38 @@ pub async fn run(
 async fn request_signed_block(
     index: u64,
     keychain: Keychain,
+    decoders: ModuleDecoderRegistry,
     federation_api: &WsFederationApi,
 ) -> SignedBlock {
-    // we wait until we have stalled
-    sleep(Duration::from_secs(5)).await;
-
     let total_peers = keychain.peer_count();
+    let decoder_clone = decoders.clone();
 
-    let verifier = move |signed_block: &SignedBlock| {
-        signed_block.signatures.len() == keychain.threshold()
-            && signed_block.signatures.iter().all(|(peer_id, sig)| {
-                keychain.verify(
-                    &signed_block.block.header(index),
-                    sig,
-                    to_node_index(*peer_id),
-                )
-            })
+    let filter_map = move |response: SerdeModuleEncoding<SignedBlock>| match response
+        .try_into_inner(&decoder_clone)
+    {
+        Ok(signed_block) => {
+            match signed_block.signatures.len() == keychain.threshold()
+                && signed_block.signatures.iter().all(|(peer_id, sig)| {
+                    keychain.verify(
+                        &signed_block.block.header(index),
+                        sig,
+                        to_node_index(*peer_id),
+                    )
+                }) {
+                true => Ok(signed_block),
+                false => Err(anyhow!("Invalid signatures")),
+            }
+        }
+        Err(error) => Err(anyhow!(error.to_string())),
     };
 
     loop {
+        // we wait until we have stalled
+        sleep(Duration::from_secs(5)).await;
+
         let result = federation_api
             .request_with_strategy(
-                VerifiableResponse::new(verifier.clone(), false, total_peers),
+                FilterMap::new(filter_map.clone(), total_peers),
                 AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
                 ApiRequestErased::new(index),
             )

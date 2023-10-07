@@ -1,7 +1,6 @@
 use std::cmp::{self, max};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
-use std::io::Cursor;
 use std::ops::Range;
 
 use fedimint_client::sm::{OperationId, State, StateTransition};
@@ -313,8 +312,8 @@ impl MintRestoreInProgressState {
 
                     let block = loop {
                         info!(target: LOG_CLIENT_RECOVERY_MINT, block_idx, "Awaiting signed block");
-                        match api.await_signed_block(block_idx).await {
-                            Ok(signed_block) => break signed_block.block,
+                        match api.await_block(block_idx, &decoders).await {
+                            Ok(block) => break block,
                             Err(e) => {
                                 info!(e = %e, block_idx, "Error trying to fetch signed block");
                             }
@@ -324,14 +323,7 @@ impl MintRestoreInProgressState {
                     let consensus_items = block
                         .items
                         .into_iter()
-                        .map(|item| {
-                            let mut item_bytes_cursor = Cursor::new(item.item);
-                            let ci: ConsensusItem =
-                                Decodable::consensus_decode(&mut item_bytes_cursor, &decoders)
-                                    .expect("Malicious federation returned non-decodable result");
-                            // FIXME: assert cursor fully consumed
-                            (item.peer, ci)
-                        })
+                        .map(|accepted_item| (accepted_item.peer, accepted_item.item))
                         .collect::<Vec<_>>();
 
                     (block_idx, consensus_items)

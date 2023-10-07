@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use fedimint_core::api::WsFederationApi;
 use fedimint_core::db::Database;
+use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::task::spawn;
 use tokio::sync::watch;
 
@@ -17,7 +18,7 @@ use crate::consensus::FedimintConsensus;
 pub struct AtomicBroadcast {
     keychain: Keychain,
     db: Database,
-    mempool_item_receiver: async_channel::Receiver<Vec<u8>>,
+    mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
     incoming_message_receiver: async_channel::Receiver<Message>,
     outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
 }
@@ -29,7 +30,7 @@ impl AtomicBroadcast {
     pub fn new(
         keychain: Keychain,
         db: Database,
-        mempool_item_receiver: async_channel::Receiver<Vec<u8>>,
+        mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
         incoming_message_receiver: async_channel::Receiver<Message>,
         outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
     ) -> Self {

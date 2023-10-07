@@ -17,13 +17,14 @@ use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
+use fedimint_core::endpoint_constants::AWAIT_BLOCK_ENDPOINT;
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 use fedimint_core::time::now;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeers, OutPoint,
+    PeerId, TransactionId,
 };
 use fedimint_derive::Decodable;
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
@@ -42,7 +43,7 @@ use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::backup::ClientBackupSnapshot;
-use crate::block::SignedBlock;
+use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::endpoint_constants::{
@@ -52,8 +53,8 @@ use crate::endpoint_constants::{
 };
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
-    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
-    VerifiableResponse,
+    DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
+    UnionResponsesSingle,
 };
 use crate::transaction::{SerdeTransaction, Transaction};
 use crate::util::SafeUrl;
@@ -338,7 +339,11 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 pub trait GlobalFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
 
-    async fn await_signed_block(&self, block_index: u64) -> FederationResult<SignedBlock>;
+    async fn await_block(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<Block>;
 
     async fn fetch_block_count(&self) -> FederationResult<u64>;
 
@@ -408,12 +413,18 @@ where
         .await
     }
 
-    async fn await_signed_block(&self, block_index: u64) -> FederationResult<SignedBlock> {
-        self.request_current_consensus(
-            AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
+    async fn await_block(
+        &self,
+        block_index: u64,
+        decoders: &ModuleDecoderRegistry,
+    ) -> anyhow::Result<Block> {
+        self.request_current_consensus::<SerdeModuleEncoding<Block>>(
+            AWAIT_BLOCK_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )
-        .await
+        .await?
+        .try_into_inner(decoders)
+        .map_err(|e| anyhow!(e.to_string()))
     }
 
     async fn fetch_block_count(&self) -> FederationResult<u64> {
@@ -459,12 +470,14 @@ where
 
     async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig> {
         let id = info.id;
-        let qs = VerifiableResponse::new(
-            move |config: &ClientConfigResponse| {
-                let hash = config.client_config.consensus_hash();
-                id.0.verify(&config.signature.0, hash)
+        let qs = FilterMap::new(
+            move |config: ClientConfigResponse| match id
+                .0
+                .verify(&config.signature.0, config.client_config.consensus_hash())
+            {
+                true => Ok(config),
+                false => Err(anyhow!("Invalid signature")),
             },
-            false,
             self.all_peers().total(),
         )
         // downloading a config shouldn't take too long

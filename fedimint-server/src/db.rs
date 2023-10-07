@@ -183,15 +183,6 @@ mod fedimint_migration_tests {
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
     async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
-        dbtx.insert_new_entry(
-            &AcceptedItemKey(0),
-            &AcceptedItem {
-                item: Vec::new(),
-                peer: PeerId::from_str("0").unwrap(),
-            },
-        )
-        .await;
-
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
@@ -223,6 +214,15 @@ mod fedimint_migration_tests {
             .collect::<Vec<_>>();
 
         dbtx.insert_new_entry(&accepted_tx_id, &module_ids).await;
+
+        dbtx.insert_new_entry(
+            &AcceptedItemKey(0),
+            &AcceptedItem {
+                item: ConsensusItem::Transaction(transaction.clone()),
+                peer: PeerId::from_str("0").unwrap(),
+            },
+        )
+        .await;
 
         dbtx.insert_new_entry(
             &SignedBlockKey(0),
