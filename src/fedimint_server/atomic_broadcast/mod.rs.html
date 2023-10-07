@@ -112,21 +112,12 @@
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module implements fedimints custom atomic broadcast abstraction. A
 //! such, it is responsible for ordering serialized items in the form of byte
 //! vectors. The Broadcast is able to recover from a crash at any time via a
 //! backup that it maintains in the servers [fedimint_core::db::Database]. In
 //! Addition, it stores the history of accepted items in the form of
-//! [SignedBlock]s in the database as well in order to catch up fellow guardians
+//! signed blocks in the database as well in order to catch up fellow guardians
 //! which have been offline for a prolonged period of time.
 //!
 //! Though the broadcast depends on [fedimint_core] for [fedimint_core::PeerId],
@@ -168,7 +159,7 @@
 //!   session.
 //! * Roughly every five minutes the session completes. Then the broadcast
 //!   creates a threshold signature for the blocks header and saves both in the
-//!   form of a [SignedBlock] in the local database.
+//!   form of a signed block in the local database.
 //!
 //! # Interplay with Fedimint Consensus
 //!
@@ -201,10 +192,10 @@
 //! session regardless. However, it did so by processing one less ordered item
 //! and without realizing that a double spend had occurred.
 
-</span><span class="kw">mod </span>broadcast;
+</span><span class="kw">mod </span>backup;
+<span class="kw">mod </span>broadcast;
 <span class="kw">mod </span>conversion;
 <span class="kw">mod </span>data_provider;
-<span class="kw">mod </span>db;
 <span class="kw">mod </span>finalization_handler;
 <span class="kw">mod </span>keychain;
 <span class="kw">mod </span>network;
@@ -213,7 +204,6 @@
 
 <span class="doccomment">/// The atomic broadcast instance run once by every peer.
 </span><span class="kw">pub use </span>broadcast::AtomicBroadcast;
-<span class="kw">use </span>fedimint_core::block::SignedBlock;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="doccomment">/// This keychain implements naive threshold schnorr signatures over secp256k1.
@@ -235,13 +225,5 @@
 </span><span class="kw">pub enum </span>Recipient {
     Everyone,
     Peer(PeerId),
-}
-
-<span class="doccomment">/// This enum specifies whether an ordered item has been accepted or discarded
-/// by Fedimint Consensus.
-</span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-</span><span class="kw">pub enum </span>Decision {
-    Accept,
-    Discard,
 }
 </code></pre></div></section></main></body></html>

@@ -368,18 +368,36 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug;
 <span class="kw">pub mod </span>server;
 
-<span class="kw">use </span>std::collections::{BTreeSet, HashMap};
+<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>fedimint_core::block::{AcceptedItem, Block, SignedBlock};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::epoch::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
@@ -388,12 +406,15 @@
 <span class="kw">use </span>fedimint_core::{timing, Amount, OutPoint, PeerId};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    AcceptedIndex, AcceptedIndexPrefix, AcceptedTransactionKey, ClientConfigSignatureKey,
-    ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix, SessionIndexKey,
+    AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
+    ClientConfigSignatureKey, ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix,
+    SignedBlockKey, SignedBlockPrefix,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{Transaction, TransactionError};
 
@@ -409,6 +430,12 @@
     </span><span class="kw">pub </span>db: Database,
     <span class="doccomment">/// API for accessing state
     </span><span class="kw">pub </span>client_cfg_hash: sha256::Hash,
+    <span class="doccomment">/// track the latest contribution by peer
+    </span><span class="kw">pub </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
+    <span class="doccomment">/// The index of the current consensus session
+    </span><span class="kw">pub </span>session_index: u64,
+    <span class="doccomment">/// The index of the next consensus item
+    </span><span class="kw">pub </span>item_index: u64,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -428,60 +455,100 @@
     <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="self">self</span>.modules.decoder_registry()
     }
-    <span class="kw">pub async fn </span>open_session(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (u64, BTreeSet&lt;AcceptedIndex&gt;) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>session_index = dbtx.get_value(<span class="kw-2">&amp;</span>SessionIndexKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
-        <span class="kw">let </span>accepted_indices = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>AcceptedIndexPrefix)
-            .<span class="kw">await
-            </span>.map(|(key, <span class="kw">_</span>)| key)
-            .collect()
-            .<span class="kw">await</span>;
 
-        (session_index, accepted_indices)
+    <span class="kw">pub async fn </span>load_current_session(
+        cfg: ServerConfig,
+        modules: ServerModuleRegistry,
+        db: Database,
+        client_cfg_hash: sha256::Hash,
+        latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>session_index = db
+            .begin_transaction()
+            .<span class="kw">await
+            </span>.find_by_prefix(<span class="kw-2">&amp;</span>SignedBlockPrefix)
+            .<span class="kw">await
+            </span>.count()
+            .<span class="kw">await as </span>u64;
+
+        FedimintConsensus {
+            cfg,
+            modules,
+            db,
+            client_cfg_hash,
+            latest_contribution_by_peer,
+            session_index,
+            item_index: <span class="number">0</span>,
+        }
     }
 
-    <span class="kw">pub async fn </span>complete_session(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-
-        <span class="kw">let </span>new_session_index = dbtx.get_value(<span class="kw-2">&amp;</span>SessionIndexKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>) + <span class="number">1</span>;
-
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>SessionIndexKey, <span class="kw-2">&amp;</span>new_session_index)
-            .<span class="kw">await</span>;
-
-        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>AcceptedIndexPrefix).<span class="kw">await</span>;
-
-        dbtx.commit_tx_result()
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;This is the only place we write to those keys&quot;</span>);
+    <span class="kw">pub async fn </span>build_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Block {
+        Block {
+            items: <span class="self">self
+                </span>.db
+                .begin_transaction()
+                .<span class="kw">await
+                </span>.find_by_prefix(<span class="kw-2">&amp;</span>AcceptedItemPrefix)
+                .<span class="kw">await
+                </span>.map(|entry| entry.<span class="number">1</span>)
+                .collect()
+                .<span class="kw">await</span>,
+        }
     }
 
-    <span class="kw">pub async fn </span>process_consensus_item(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        item: Vec&lt;u8&gt;,
-        item_index: u64,
-        peer_id: PeerId,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_consensus_item&quot;</span>);
-
-        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(item);
-        <span class="kw">let </span>consensus_item = ConsensusItem::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span><span class="self">self</span>.decoders())<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>item_debug = debug::item_message(<span class="kw-2">&amp;</span>consensus_item);
-        <span class="macro">debug!</span>(<span class="string">&quot;\n  Peer {peer_id}: {item_debug}&quot;</span>);
-
+    <span class="kw">pub async fn </span>complete_session(<span class="kw-2">&amp;</span><span class="self">self</span>, signed_block: SignedBlock) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx, consensus_item, peer_id)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>AlephUnitsPrefix).<span class="kw">await</span>;
+
+        dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>AcceptedItemPrefix).<span class="kw">await</span>;
 
         <span class="kw">if </span>dbtx
-            .insert_entry(<span class="kw-2">&amp;</span>AcceptedIndex(item_index), <span class="kw-2">&amp;</span>())
+            .insert_entry(<span class="kw-2">&amp;</span>SignedBlockKey(<span class="self">self</span>.session_index), <span class="kw-2">&amp;</span>signed_block)
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="macro">panic!</span>(<span class="string">&quot;The index {item_index} was accepted twice in one session&quot;</span>);
+            <span class="macro">panic!</span>(<span class="string">&quot;We tried to overwrite a signed block&quot;</span>);
         }
+
+        dbtx.commit_tx_result()
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;This is the only place where we write to this key&quot;</span>);
+    }
+
+    <span class="kw">pub async fn </span>process_consensus_item(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        item: ConsensusItem,
+        peer: PeerId,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">&quot;process_consensus_item&quot;</span>);
+
+        <span class="macro">debug!</span>(<span class="string">&quot;Peer {peer}: {}&quot;</span>, debug::item_message(<span class="kw-2">&amp;</span>item));
+
+        <span class="self">self</span>.latest_contribution_by_peer
+            .write()
+            .<span class="kw">await
+            </span>.insert(peer, <span class="self">self</span>.session_index);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(accepted_item) = dbtx.get_value(<span class="kw-2">&amp;</span>AcceptedItemKey(<span class="self">self</span>.item_index)).<span class="kw">await </span>{
+            <span class="kw">if </span>accepted_item.item == item &amp;&amp; accepted_item.peer == peer {
+                <span class="self">self</span>.item_index += <span class="number">1</span>;
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+
+            <span class="macro">bail!</span>(<span class="string">&quot;Consensus item was discarded before recovery&quot;</span>);
+        }
+
+        <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx, item.clone(), peer)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        dbtx.insert_entry(
+            <span class="kw-2">&amp;</span>AcceptedItemKey(<span class="self">self</span>.item_index),
+            <span class="kw-2">&amp;</span>AcceptedItem { item, peer },
+        )
+        .<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
 
@@ -502,6 +569,8 @@
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Committing consensus epoch failed&quot;</span>);
+
+        <span class="self">self</span>.item_index += <span class="number">1</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -643,41 +712,6 @@
                 <span class="prelude-val">Ok</span>(())
             }
         }
-    }
-
-    <span class="kw">pub async fn </span>get_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ConsensusItem&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-
-        <span class="comment">// We ignore any writes
-        </span>dbtx.ignore_uncommitted();
-
-        <span class="kw">let </span><span class="kw-2">mut </span>consensus_items = Vec::new();
-
-        <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
-            <span class="kw">let </span>items = module
-                .consensus_proposal(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance_id), instance_id)
-                .<span class="kw">await
-                </span>.into_iter()
-                .map(ConsensusItem::Module);
-
-            consensus_items.extend(items);
-        }
-
-        <span class="comment">// Add a signature share for the client config hash
-        </span><span class="kw">let </span>sig = dbtx
-            .get_isolated()
-            .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
-            .<span class="kw">await</span>;
-
-        <span class="kw">if </span>sig.is_none() {
-            <span class="kw">let </span>timing = timing::TimeReporter::new(<span class="string">&quot;sign client config&quot;</span>);
-            <span class="kw">let </span>share = <span class="self">self</span>.cfg.private.auth_sks.<span class="number">0</span>.sign(<span class="self">self</span>.client_cfg_hash);
-            drop(timing);
-            <span class="kw">let </span>item = ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
-            consensus_items.push(item);
-        }
-
-        consensus_items
     }
 
     <span class="kw">fn </span>build_verification_caches(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; VerificationCaches {

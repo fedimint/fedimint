@@ -69,51 +69,21 @@
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
 <a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode};
-<span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+<span class="kw">use </span><span class="kw">crate</span>::epoch::ConsensusItem;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="doccomment">/// If two correct nodes obtain two ordered items from the broadcast they
 /// are guaranteed to be in the same order. However, an ordered items is
 /// only guaranteed to be seen by all correct nodes if a correct node decides to
 /// accept it.
-</span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
-</span><span class="kw">pub struct </span>OrderedItem {
-    <span class="kw">pub </span>item: Vec&lt;u8&gt;,
-    <span class="kw">pub </span>index: u64,
-    <span class="kw">pub </span>peer_id: PeerId,
+</span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>AcceptedItem {
+    <span class="kw">pub </span>item: ConsensusItem,
+    <span class="kw">pub </span>peer: PeerId,
 }
 
 <span class="doccomment">/// All items ordered in a session that have been accepted by Fedimint Consensus
@@ -121,22 +91,21 @@
 /// [Block] roughly every five minutes.  Therefore, just like in Bitcoin, a
 /// [Block] might be empty if no items are ordered in that time or all ordered
 /// items are discarded by Fedimint Consensus.
-</span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable, Deserialize, Serialize)]
+</span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Block {
-    <span class="kw">pub </span>index: u64,
-    <span class="kw">pub </span>items: Vec&lt;OrderedItem&gt;,
+    <span class="kw">pub </span>items: Vec&lt;AcceptedItem&gt;,
 }
 
 <span class="kw">impl </span>Block {
     <span class="doccomment">/// A blocks header consists of 40 bytes formed by its index in big endian
     /// bytes concatenated with the merkle root build from the consensus
-    /// hashes of its [OrderedItem]s or 32 zero bytes if the block is
+    /// hashes of its [AcceptedItem]s or 32 zero bytes if the block is
     /// empty. The use of a merkle tree allows for efficient inclusion
     /// proofs of accepted consensus items for clients.
-    </span><span class="kw">pub fn </span>header(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; [u8; <span class="number">40</span>] {
+    </span><span class="kw">pub fn </span>header(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; [u8; <span class="number">40</span>] {
         <span class="kw">let </span><span class="kw-2">mut </span>header = [<span class="number">0</span>; <span class="number">40</span>];
 
-        header[..<span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.index.to_be_bytes());
+        header[..<span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>index.to_be_bytes());
 
         <span class="kw">let </span>leaf_hashes = <span class="self">self</span>.items.iter().map(consensus_hash_sha256);
 
@@ -152,38 +121,11 @@
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>SchnorrSignature(<span class="kw">pub </span>[u8; <span class="number">64</span>]);
 
-<span class="kw">impl </span>Serialize <span class="kw">for </span>SchnorrSignature {
-    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-    <span class="kw">where
-        </span>S: serde::Serializer,
-    {
-        <span class="comment">// Simply serialize the byte array as a sequence of u8 values.
-        </span>serializer.serialize_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>SchnorrSignature {
-    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
-    <span class="kw">where
-        </span>D: serde::Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
-    {
-        <span class="comment">// Deserialize as a byte array. Ensure it has the correct length.
-        </span><span class="kw">let </span>bytes: Vec&lt;u8&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-        <span class="kw">if </span>bytes.len() == <span class="number">64 </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>array = [<span class="number">0u8</span>; <span class="number">64</span>];
-            array.copy_from_slice(<span class="kw-2">&amp;</span>bytes);
-            <span class="prelude-val">Ok</span>(SchnorrSignature(array))
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(serde::de::Error::invalid_length(bytes.len(), <span class="kw-2">&amp;</span><span class="string">&quot;length 64&quot;</span>))
-        }
-    }
-}
-
 <span class="doccomment">/// A signed block combines a block with the naive threshold secp schnorr
 /// signature for its header created by the federation. The signed blocks allow
 /// clients and recovering guardians to verify the federations consensus
 /// history. After a signed block has been created it is stored in the database.
-</span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize, Eq, PartialEq)]
+</span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>SignedBlock {
     <span class="kw">pub </span>block: Block,
     <span class="kw">pub </span>signatures: std::collections::BTreeMap&lt;PeerId, SchnorrSignature&gt;,

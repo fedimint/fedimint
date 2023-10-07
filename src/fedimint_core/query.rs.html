@@ -609,12 +609,6 @@
 <a href="#609" id="609">609</a>
 <a href="#610" id="610">610</a>
 <a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::mem;
@@ -699,48 +693,6 @@
     },
 }
 
-<span class="doccomment">/// Returns first response with a valid signature
-</span><span class="kw">pub struct </span>VerifiableResponse&lt;R&gt; {
-    verifier: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(<span class="kw-2">&amp;</span>R) -&gt; bool)&gt;,
-    threshold_consensus: ThresholdConsensus&lt;R&gt;,
-    allow_threshold_fallback: bool,
-}
-
-<span class="kw">impl</span>&lt;R&gt; VerifiableResponse&lt;R&gt; {
-    <span class="doccomment">/// Strategy for returning first response that is verifiable (typically with
-    /// a signature)
-    </span><span class="kw">pub fn </span>new(
-        verifier: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>R) -&gt; bool + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-        allow_threshold_fallback: bool,
-        total_peers: usize,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            verifier: Box::new(verifier),
-            threshold_consensus: ThresholdConsensus::overcome_evil(total_peers),
-            allow_threshold_fallback,
-        }
-    }
-}
-
-<span class="kw">impl</span>&lt;R: Debug + Eq + Clone&gt; QueryStrategy&lt;R&gt; <span class="kw">for </span>VerifiableResponse&lt;R&gt; {
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::PeerResult&lt;R&gt;) -&gt; QueryStep&lt;R&gt; {
-        <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(response) <span class="kw">if </span>(<span class="self">self</span>.verifier)(<span class="kw-2">&amp;</span>response) =&gt; QueryStep::Success(response),
-            <span class="prelude-val">Ok</span>(response) =&gt; {
-                <span class="kw">if </span><span class="self">self</span>.allow_threshold_fallback {
-                    <span class="self">self</span>.threshold_consensus.process(peer, <span class="prelude-val">Ok</span>(response))
-                } <span class="kw">else </span>{
-                    <span class="self">self</span>.threshold_consensus.process(
-                        peer,
-                        <span class="prelude-val">Err</span>(PeerError::InvalidResponse(<span class="string">&quot;Invalid signature&quot;</span>.to_string())),
-                    )
-                }
-            }
-            error =&gt; <span class="self">self</span>.threshold_consensus.process(peer, error),
-        }
-    }
-}
-
 <span class="kw">struct </span>ErrorStrategy {
     errors: BTreeMap&lt;PeerId, PeerError&gt;,
     threshold: usize,
@@ -784,6 +736,42 @@
             }
         } <span class="kw">else </span>{
             QueryStep::Continue
+        }
+    }
+}
+
+<span class="doccomment">/// Returns first response with a valid signature
+</span><span class="kw">pub struct </span>FilterMap&lt;R, T&gt; {
+    filter_map: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Fn(R) -&gt; anyhow::Result&lt;T&gt;)&gt;,
+    error_strategy: ErrorStrategy,
+}
+
+<span class="kw">impl</span>&lt;R, T&gt; FilterMap&lt;R, T&gt; {
+    <span class="doccomment">/// Strategy for returning first response that is verifiable (typically with
+    /// a signature)
+    </span><span class="kw">pub fn </span>new(
+        filter_map: <span class="kw">impl </span>Fn(R) -&gt; anyhow::Result&lt;T&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
+        total_peers: usize,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>max_evil = (total_peers - <span class="number">1</span>) / <span class="number">3</span>;
+
+        <span class="self">Self </span>{
+            filter_map: Box::new(filter_map),
+            error_strategy: ErrorStrategy::new(max_evil + <span class="number">1</span>),
+        }
+    }
+}
+
+<span class="kw">impl</span>&lt;R: Debug + Eq + Clone, T&gt; QueryStrategy&lt;R, T&gt; <span class="kw">for </span>FilterMap&lt;R, T&gt; {
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, result: api::PeerResult&lt;R&gt;) -&gt; QueryStep&lt;T&gt; {
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(response) =&gt; <span class="kw">match </span>(<span class="self">self</span>.filter_map)(response) {
+                <span class="prelude-val">Ok</span>(value) =&gt; QueryStep::Success(value),
+                <span class="prelude-val">Err</span>(error) =&gt; <span class="self">self
+                    </span>.error_strategy
+                    .process(peer, PeerError::InvalidResponse(error.to_string())),
+            },
+            <span class="prelude-val">Err</span>(error) =&gt; <span class="self">self</span>.error_strategy.process(peer, error),
         }
     }
 }

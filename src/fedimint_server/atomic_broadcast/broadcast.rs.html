@@ -120,20 +120,50 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::WsFederationApi;
-<span class="kw">use </span>fedimint_core::block::OrderedItem;
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+
+<span class="kw">use </span>fedimint_core::api::WsFederationApi;
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::task::spawn;
-<span class="kw">use </span>tokio::sync::{mpsc, oneshot};
+<span class="kw">use </span>tokio::sync::watch;
 
 <span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
-<span class="kw">use super</span>::{db, session, Decision, Message, Recipient};
-<span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
+<span class="kw">use super</span>::{session, Message, Recipient};
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::backup;
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::data_provider::DataProvider;
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::finalization_handler::FinalizationHandler;
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::network::Network;
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::spawner::Spawner;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
 
 <span class="kw">pub struct </span>AtomicBroadcast {
     keychain: Keychain,
     db: Database,
-    mempool_item_receiver: async_channel::Receiver&lt;Vec&lt;u8&gt;&gt;,
+    mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
     incoming_message_receiver: async_channel::Receiver&lt;Message&gt;,
     outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
 }
@@ -145,7 +175,7 @@
     </span><span class="kw">pub fn </span>new(
         keychain: Keychain,
         db: Database,
-        mempool_item_receiver: async_channel::Receiver&lt;Vec&lt;u8&gt;&gt;,
+        mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
         incoming_message_receiver: async_channel::Receiver&lt;Message&gt;,
         outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
     ) -&gt; <span class="self">Self </span>{
@@ -166,80 +196,96 @@
     /// decision_sender without sending a decision.
     </span><span class="kw">pub async fn </span>run_session(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        index: u64,
+        consensus: FedimintConsensus,
         federation_api: WsFederationApi,
-    ) -&gt; mpsc::Receiver&lt;<span class="prelude-ty">Option</span>&lt;(OrderedItem, oneshot::Sender&lt;Decision&gt;)&gt;&gt; {
-        <span class="kw">let </span>(ordered_item_sender, ordered_item_receiver) = mpsc::channel(<span class="number">256</span>);
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="comment">// if all nodes are correct the session will take 45 to 60 seconds. The
+        // more nodes go offline the longer the session will take to complete.
+        </span><span class="kw">const </span>EXPECTED_ROUNDS_PER_SESSION: usize = <span class="number">45 </span>* <span class="number">4</span>;
+        <span class="comment">// this constant needs to be 3000 or less to guarantee that the session
+        // can never reach MAX_ROUNDs.
+        </span><span class="kw">const </span>EXPONENTIAL_SLOWDOWN_OFFSET: usize = <span class="number">3 </span>* EXPECTED_ROUNDS_PER_SESSION;
+        <span class="kw">const </span>MAX_ROUND: u16 = <span class="number">5000</span>;
+        <span class="kw">const </span>ROUND_DELAY: f64 = <span class="number">250.0</span>;
+        <span class="kw">const </span>BASE: f64 = <span class="number">1.01</span>;
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(signed_block) = db::load_block(<span class="kw-2">&amp;</span><span class="self">self</span>.db, index).<span class="kw">await </span>{
-            <span class="macro">tracing::info!</span>(target: LOG_CONSENSUS,<span class="string">&quot;Loaded block with index {}&quot;</span>, index);
+        <span class="comment">// this is the minimum number of unit data that will be ordered before we reach
+        // the EXPONENTIAL_SLOWDOWN_OFFSET even if f peers do not attach unit data
+        </span><span class="kw">let </span>batches_per_session = EXPECTED_ROUNDS_PER_SESSION * <span class="self">self</span>.keychain.peer_count();
 
-            spawn(<span class="string">&quot;atomic run session db&quot;</span>, <span class="kw">async move </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>decision_receivers = <span class="macro">vec!</span>[];
+        <span class="comment">// In order to bound a sessions RAM consumption we need to bound its number of
+        // units and therefore its number of rounds. Since we use a session to
+        // create a threshold signature for the corresponding block we have to
+        // guarantee that an attacker cannot exhaust our memory by preventing the
+        // creation of a threshold signature, thereby keeping the session open
+        // indefinitely. Hence we increase the delay between rounds exponentially
+        // such that MAX_ROUND would only be reached after roughly 350 years.
+        // In case of such an attack the broadcast stops ordering any items until the
+        // attack subsides as not items are ordered while the signatures are collected.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>delay_config = aleph_bft::default_delay_config();
+        delay_config.unit_creation_delay = std::sync::Arc::new(|round_index| {
+            <span class="kw">let </span>delay = <span class="kw">if </span>round_index == <span class="number">0 </span>{
+                <span class="number">0.0
+            </span>} <span class="kw">else </span>{
+                ROUND_DELAY
+                    * BASE.powf(round_index.saturating_sub(EXPONENTIAL_SLOWDOWN_OFFSET) <span class="kw">as </span>f64)
+            };
 
-                <span class="kw">for </span>ordered_item <span class="kw">in </span>signed_block.block.items.into_iter() {
-                    <span class="kw">let </span>(decision_sender, decision_receiver) = oneshot::channel();
+            Duration::from_millis(delay.round() <span class="kw">as </span>u64)
+        });
 
-                    ordered_item_sender
-                        .send(<span class="prelude-val">Some</span>((ordered_item, decision_sender)))
-                        .<span class="kw">await
-                        </span>.ok();
+        <span class="kw">let </span>config = aleph_bft::create_config(
+            <span class="self">self</span>.keychain.peer_count().into(),
+            <span class="self">self</span>.keychain.peer_id().to_usize().into(),
+            consensus.session_index,
+            MAX_ROUND,
+            delay_config,
+            Duration::from_secs(<span class="number">100 </span>* <span class="number">365 </span>* <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>),
+        )
+        .expect(<span class="string">&quot;Config is valid&quot;</span>);
 
-                    decision_receivers.push(decision_receiver);
-                }
+        <span class="comment">// the number of units ordered in a single aleph session is bounded
+        </span><span class="kw">let </span>(unit_data_sender, unit_data_receiver) = async_channel::unbounded();
+        <span class="kw">let </span>(signature_sender, signature_receiver) = watch::channel(<span class="prelude-val">None</span>);
+        <span class="kw">let </span>(terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
-                <span class="comment">// signal that the session is complete
-                </span>ordered_item_sender.send(<span class="prelude-val">None</span>).<span class="kw">await</span>.ok();
+        <span class="kw">let </span>(loader, saver) = backup::load_session(<span class="self">self</span>.db.clone()).<span class="kw">await</span>;
 
-                <span class="kw">for </span>decision_receiver <span class="kw">in </span>decision_receivers {
-                    <span class="comment">// The items in a threshold signed block have to be accepted
-                    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(decision) = decision_receiver.<span class="kw">await </span>{
-                        <span class="macro">assert_eq!</span>(decision, Decision::Accept)
-                    }
-                }
-            });
-        } <span class="kw">else </span>{
-            <span class="macro">tracing::info!</span>(target: LOG_CONSENSUS,<span class="string">&quot;Run session with index {}&quot;</span>, index);
+        <span class="kw">let </span>aleph_handle = spawn(
+            <span class="string">&quot;aleph run session&quot;</span>,
+            aleph_bft::run_session(
+                config,
+                aleph_bft::LocalIO::new(
+                    DataProvider::new(<span class="self">self</span>.mempool_item_receiver.clone(), signature_receiver),
+                    FinalizationHandler::new(unit_data_sender),
+                    saver,
+                    loader,
+                ),
+                Network::new(
+                    <span class="self">self</span>.incoming_message_receiver.clone(),
+                    <span class="self">self</span>.outgoing_message_sender.clone(),
+                ),
+                <span class="self">self</span>.keychain.clone(),
+                Spawner::new(),
+                aleph_bft_types::Terminator::create_root(terminator_receiver, <span class="string">&quot;Terminator&quot;</span>),
+            ),
+        )
+        .expect(<span class="string">&quot;some handle on non-wasm&quot;</span>);
 
-            <span class="kw">let </span>(backup_loader, backup_saver) = db::open_session(<span class="self">self</span>.db.clone(), index).<span class="kw">await</span>;
+        session::run(
+            consensus,
+            batches_per_session,
+            unit_data_receiver,
+            signature_sender,
+            <span class="self">self</span>.keychain.clone(),
+            federation_api,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>keychain = <span class="self">self</span>.keychain.clone();
-            <span class="kw">let </span>db = <span class="self">self</span>.db.clone();
-            <span class="kw">let </span>mempool_item_receiver = <span class="self">self</span>.mempool_item_receiver.clone();
-            <span class="kw">let </span>incoming_message_receiver = <span class="self">self</span>.incoming_message_receiver.clone();
-            <span class="kw">let </span>outgoing_message_sender = <span class="self">self</span>.outgoing_message_sender.clone();
+        terminator_sender.send(()).ok();
+        aleph_handle.<span class="kw">await</span>.ok();
 
-            spawn(<span class="string">&quot;atomic run session&quot;</span>, <span class="kw">async move </span>{
-                <span class="kw">let </span>session_result = session::run(
-                    index,
-                    keychain,
-                    backup_loader,
-                    backup_saver,
-                    mempool_item_receiver,
-                    incoming_message_receiver,
-                    outgoing_message_sender,
-                    ordered_item_sender.clone(),
-                    federation_api,
-                );
-
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(signed_block) = session_result.<span class="kw">await </span>{
-                    db::complete_session(<span class="kw-2">&amp;</span>db, index, signed_block.clone()).<span class="kw">await</span>;
-
-                    <span class="macro">tracing::info!</span>(target: LOG_CONSENSUS,<span class="string">&quot;Completed session with index {}&quot;</span>, index);
-
-                    <span class="comment">// signal that the session is complete. It is critical that we do so only after
-                    // we call db::complete_session.
-                    // Otherwise the broadcast may miss a signed block in its history if Fedimint
-                    // Consensus signal first and the system
-                    // crashes before the signed block is stable on disk.
-                    </span>ordered_item_sender.send(<span class="prelude-val">None</span>).<span class="kw">await</span>.ok();
-                } <span class="kw">else </span>{
-                    <span class="macro">tracing::warn!</span>(target: LOG_CONSENSUS,<span class="string">&quot;Session with index {} has been interrupted&quot;</span>, index);
-                }
-            });
-        }
-
-        ordered_item_receiver
+        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div></section></main></body></html>

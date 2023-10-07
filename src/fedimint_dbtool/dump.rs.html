@@ -341,11 +341,6 @@
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -610,19 +605,14 @@
         });
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
             <span class="kw">match </span>table {
-                ConsensusRange::DbKeyPrefix::SessionIndex =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(index) = dbtx.get_value(<span class="kw-2">&amp;</span>ConsensusRange::SessionIndexKey).<span class="kw">await </span>{
-                        consensus.insert(<span class="string">&quot;Client Config Signature&quot;</span>.to_string(), Box::new(index));
-                    }
-                }
-                ConsensusRange::DbKeyPrefix::AcceptedIndex =&gt; {
+                ConsensusRange::DbKeyPrefix::AcceptedItem =&gt; {
                     <span class="macro">push_db_pair_items_no_serde!</span>(
                         dbtx,
-                        ConsensusRange::AcceptedIndexPrefix,
-                        ConsensusRange::AcceptedIndexKey,
-                        (),
+                        ConsensusRange::AcceptedItemPrefix,
+                        ConsensusRange::AcceptedItemKey,
+                        fedimint_server::consensus::AcceptedItem,
                         consensus,
-                        <span class="string">&quot;Accepted Index&quot;
+                        <span class="string">&quot;Accepted Items&quot;
                     </span>);
                 }
                 ConsensusRange::DbKeyPrefix::AcceptedTransaction =&gt; {

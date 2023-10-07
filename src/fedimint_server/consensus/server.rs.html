@@ -379,26 +379,6 @@
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -409,18 +389,21 @@
 <span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::{apply_migrations, Database};
+<span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
-<span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+<span class="kw">use </span>fedimint_core::module::registry::{ModuleRegistry, ServerModuleRegistry};
 <span class="kw">use </span>fedimint_core::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
-<span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_core::{timing, PeerId};
 <span class="kw">use </span>tokio::select;
-<span class="kw">use </span>tracing::{debug, info, warn};
+<span class="kw">use </span>tracing::{info, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::{AtomicBroadcast, Decision, Keychain, Message, Recipient};
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::{AtomicBroadcast, Keychain, Message, Recipient};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
-<span class="kw">use </span><span class="kw">crate</span>::db::{get_global_database_migrations, AcceptedIndex, GLOBAL_DATABASE_VERSION};
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    get_global_database_migrations, ClientConfigSignatureKey, GLOBAL_DATABASE_VERSION,
+};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::net::peers::IPeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
@@ -435,18 +418,16 @@
 
 <span class="doccomment">/// Runs the main server consensus loop
 </span><span class="kw">pub struct </span>ConsensusServer {
-    <span class="doccomment">/// Delegate for processing consensus information
-    </span><span class="kw">pub </span>consensus: FedimintConsensus,
     <span class="doccomment">/// Allows clients to access consensus state
-    </span><span class="kw">pub </span>consensus_api: ConsensusApi,
+    </span><span class="kw">pub </span>db: Database,
+    <span class="kw">pub </span>modules: ServerModuleRegistry,
+    <span class="kw">pub </span>consensus_api: ConsensusApi,
     <span class="doccomment">/// Aleph BFT instance
     </span><span class="kw">pub </span>atomic_broadcast: AtomicBroadcast,
     <span class="doccomment">/// Our configuration
     </span><span class="kw">pub </span>cfg: ServerConfig,
     <span class="doccomment">/// tracks the last session a message was received by peer
     </span><span class="kw">pub </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
-    <span class="doccomment">/// Used for decoding module specific-values
-    </span><span class="kw">pub </span>decoders: ModuleDecoderRegistry,
 }
 
 <span class="kw">impl </span>ConsensusServer {
@@ -591,23 +572,23 @@
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(<span class="number">500</span>)),
         };
 
-        <span class="comment">// Build consensus processor
-        </span><span class="kw">let </span>consensus = FedimintConsensus {
-            cfg: cfg.clone(),
-            modules: modules.clone(),
-            db: db.clone(),
-            client_cfg_hash: consensus_api.client_cfg.consensus_hash(),
-        };
-
-        submit_module_consensus_items(task_group, consensus.clone(), submission_sender).<span class="kw">await</span>;
+        submit_module_consensus_items(
+            task_group,
+            db.clone(),
+            modules.clone(),
+            cfg.clone(),
+            consensus_api.client_cfg.consensus_hash(),
+            submission_sender,
+        )
+        .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(ConsensusServer {
             atomic_broadcast,
-            consensus,
+            db,
             consensus_api,
             cfg: cfg.clone(),
             latest_contribution_by_peer,
-            decoders: modules.decoder_registry(),
+            modules,
         })
     }
 
@@ -625,77 +606,21 @@
 
         confirm_consensus_config_hash(<span class="kw-2">&amp;</span>federation_api, <span class="self">self</span>.cfg.consensus.consensus_hash()).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">while </span>!task_handle.is_shutting_down() {
-            <span class="kw">let </span>(session_index, accepted_indices) = <span class="self">self</span>.consensus.open_session().<span class="kw">await</span>;
-            <span class="kw">let </span>max_index = accepted_indices.iter().max();
+        <span class="comment">// TODO: latest contribution by peer
+        </span><span class="kw">while </span>!task_handle.is_shutting_down() {
+            <span class="kw">let </span>consensus = FedimintConsensus::load_current_session(
+                <span class="self">self</span>.cfg.clone(),
+                <span class="self">self</span>.modules.clone(),
+                <span class="self">self</span>.db.clone(),
+                <span class="self">self</span>.consensus_api.client_cfg.consensus_hash(),
+                <span class="self">self</span>.latest_contribution_by_peer.clone(),
+            );
 
             <span class="kw">let </span>federation_api = WsFederationApi::new(api_endpoints.clone());
 
-            <span class="kw">let </span><span class="kw-2">mut </span>ordered_item_receiver = <span class="self">self
-                </span>.atomic_broadcast
-                .run_session(session_index, federation_api)
-                .<span class="kw">await</span>;
-
-            <span class="kw">while </span>!task_handle.is_shutting_down() {
-                <span class="kw">let </span>ordered_item = ordered_item_receiver
-                    .recv()
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">&quot;Session was interrupted unexpectedly&quot;</span>);
-
-                <span class="kw">match </span>ordered_item {
-                    <span class="prelude-val">Some</span>((item, decision_sender)) =&gt; {
-                        <span class="self">self</span>.latest_contribution_by_peer
-                            .write()
-                            .<span class="kw">await
-                            </span>.insert(item.peer_id, session_index);
-
-                        <span class="comment">// we process all items of higher index than last accepted item, which is
-                        // the last item that changed our state - notice how
-                        // we may call process_item on a ordered item
-                        // a second time after a crash but only if it is discarded both times and
-                        // therefore does not change our state
-                        </span><span class="kw">match </span>max_index {
-                            <span class="prelude-val">Some</span>(max_index) <span class="kw">if </span>max_index &gt;= <span class="kw-2">&amp;</span>AcceptedIndex(item.index) =&gt; {
-                                <span class="kw">if </span>accepted_indices.contains(<span class="kw-2">&amp;</span>AcceptedIndex(item.index)) {
-                                    decision_sender
-                                        .send(Decision::Accept)
-                                        .expect(<span class="string">&quot;This is the only sender&quot;</span>);
-                                } <span class="kw">else </span>{
-                                    decision_sender
-                                        .send(Decision::Discard)
-                                        .expect(<span class="string">&quot;This is the only sender&quot;</span>);
-                                }
-                            }
-                            <span class="kw">_ </span>=&gt; {
-                                <span class="kw">match </span><span class="self">self
-                                    </span>.consensus
-                                    .process_consensus_item(item.item, item.index, item.peer_id)
-                                    .<span class="kw">await
-                                </span>{
-                                    <span class="prelude-val">Ok</span>(()) =&gt; {
-                                        decision_sender
-                                            .send(Decision::Accept)
-                                            .expect(<span class="string">&quot;This is the only sender&quot;</span>);
-                                    }
-                                    <span class="prelude-val">Err</span>(error) =&gt; {
-                                        <span class="macro">debug!</span>(
-                                            target: LOG_CONSENSUS,
-                                            <span class="string">&quot;Discard consensus item: {error}&quot;
-                                        </span>);
-
-                                        decision_sender
-                                            .send(Decision::Discard)
-                                            .expect(<span class="string">&quot;This is the only sender&quot;</span>);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
-                };
-            }
-
-            <span class="self">self</span>.consensus.complete_session().<span class="kw">await</span>;
+            <span class="self">self</span>.atomic_broadcast
+                .run_session(consensus.<span class="kw">await</span>, federation_api)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Session completed&quot;</span>);
         }
@@ -779,25 +704,60 @@
 
 <span class="kw">async fn </span>submit_module_consensus_items(
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-    consensus: FedimintConsensus,
-    submission_sender: Sender&lt;Vec&lt;u8&gt;&gt;,
+    db: Database,
+    modules: ServerModuleRegistry,
+    cfg: ServerConfig,
+    client_cfg_hash: sha256::Hash,
+    submission_sender: Sender&lt;ConsensusItem&gt;,
 ) {
     task_group
-        .spawn(<span class="string">&quot;submit_module_consensus_items&quot;</span>, |task_handle| <span class="kw">async move </span>{
-            <span class="kw">while </span>!task_handle.is_shutting_down() {
-                <span class="kw">for </span>item <span class="kw">in </span>consensus.get_consensus_proposal().<span class="kw">await </span>{
-                    <span class="kw">if </span>submission_sender
-                        .send(item.consensus_encode_to_vec().expect(<span class="string">&quot;Infallible&quot;</span>))
-                        .<span class="kw">await
-                        </span>.is_err()
-                    {
-                        <span class="kw">break</span>;
-                    };
-                }
+        .spawn(
+            <span class="string">&quot;submit_module_consensus_items&quot;</span>,
+            <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
+                <span class="kw">while </span>!task_handle.is_shutting_down() {
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
-                sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-            }
-        })
+                    <span class="comment">// We ignore any writes
+                    </span>dbtx.ignore_uncommitted();
+
+                    <span class="kw">let </span><span class="kw-2">mut </span>consensus_items = Vec::new();
+
+                    <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
+                        <span class="kw">let </span>items = module
+                            .consensus_proposal(
+                                <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance_id),
+                                instance_id,
+                            )
+                            .<span class="kw">await
+                            </span>.into_iter()
+                            .map(ConsensusItem::Module);
+
+                        consensus_items.extend(items);
+                    }
+
+                    <span class="comment">// Add a signature share for the client config hash
+                    </span><span class="kw">let </span>sig = dbtx
+                        .get_isolated()
+                        .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
+                        .<span class="kw">await</span>;
+
+                    <span class="kw">if </span>sig.is_none() {
+                        <span class="kw">let </span>timing = timing::TimeReporter::new(<span class="string">&quot;sign client config&quot;</span>);
+                        <span class="kw">let </span>share = cfg.private.auth_sks.<span class="number">0</span>.sign(client_cfg_hash);
+                        drop(timing);
+                        <span class="kw">let </span>item =
+                            ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
+                        consensus_items.push(item);
+                    }
+
+                    <span class="kw">for </span>item <span class="kw">in </span>consensus_items {
+                        submission_sender.send(item).<span class="kw">await</span>.ok();
+                    }
+
+                    sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+                }
+            },
+        )
         .<span class="kw">await</span>;
 }
 </code></pre></div></section></main></body></html>

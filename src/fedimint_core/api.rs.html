@@ -1156,6 +1156,19 @@
 <a href="#1156" id="1156">1156</a>
 <a href="#1157" id="1157">1157</a>
 <a href="#1158" id="1158">1158</a>
+<a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
+<a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1175,13 +1188,14 @@
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
+<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_BLOCK_ENDPOINT;
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeers, OutPoint,
+    PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_derive::Decodable;
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
@@ -1200,7 +1214,7 @@
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
-<span class="kw">use </span><span class="kw">crate</span>::block::SignedBlock;
+<span class="kw">use </span><span class="kw">crate</span>::block::Block;
 <span class="kw">use </span><span class="kw">crate</span>::core::backup::SignedBackupRequest;
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
@@ -1210,8 +1224,8 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 <span class="kw">use </span><span class="kw">crate</span>::query::{
-    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
-    VerifiableResponse,
+    DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
+    UnionResponsesSingle,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
@@ -1496,7 +1510,11 @@
 </span><span class="kw">pub trait </span>GlobalFederationApi {
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt;;
 
-    <span class="kw">async fn </span>await_signed_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_index: u64) -&gt; FederationResult&lt;SignedBlock&gt;;
+    <span class="kw">async fn </span>await_block(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        block_index: u64,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; anyhow::Result&lt;Block&gt;;
 
     <span class="kw">async fn </span>fetch_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
@@ -1566,13 +1584,19 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>await_signed_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_index: u64) -&gt; FederationResult&lt;SignedBlock&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
+    <span class="kw">async fn </span>await_block(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        block_index: u64,
+        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; anyhow::Result&lt;Block&gt; {
+        <span class="self">self</span>.request_current_consensus::&lt;SerdeModuleEncoding&lt;Block&gt;&gt;(
+            AWAIT_BLOCK_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
         )
-        .<span class="kw">await
-    </span>}
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.try_into_inner(decoders)
+        .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
+    }
 
     <span class="kw">async fn </span>fetch_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_current_consensus(
@@ -1617,12 +1641,14 @@
 
     <span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt; {
         <span class="kw">let </span>id = info.id;
-        <span class="kw">let </span>qs = VerifiableResponse::new(
-            <span class="kw">move </span>|config: <span class="kw-2">&amp;</span>ClientConfigResponse| {
-                <span class="kw">let </span>hash = config.client_config.consensus_hash();
-                id.<span class="number">0</span>.verify(<span class="kw-2">&amp;</span>config.signature.<span class="number">0</span>, hash)
+        <span class="kw">let </span>qs = FilterMap::new(
+            <span class="kw">move </span>|config: ClientConfigResponse| <span class="kw">match </span>id
+                .<span class="number">0
+                </span>.verify(<span class="kw-2">&amp;</span>config.signature.<span class="number">0</span>, config.client_config.consensus_hash())
+            {
+                <span class="bool-val">true </span>=&gt; <span class="prelude-val">Ok</span>(config),
+                <span class="bool-val">false </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid signature&quot;</span>)),
             },
-            <span class="bool-val">false</span>,
             <span class="self">self</span>.all_peers().total(),
         )
         <span class="comment">// downloading a config shouldn&#39;t take too long

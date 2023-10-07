@@ -107,34 +107,25 @@
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
 <a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 
-<span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
-<span class="kw">use </span>bitcoin_hashes_12::{sha256, Hash};
+<span class="kw">use </span>bitcoin_hashes_12::sha256;
 <span class="kw">use </span>fedimint_core::block::{consensus_hash_sha256, SchnorrSignature};
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>tokio::sync::watch;
 
-<span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
 
-<span class="kw">type </span>ConsensusItem = Vec&lt;u8&gt;;
-
-<span class="comment">// This limits the RAM consumption of a Unit to roughly 12kB
-</span><span class="kw">const </span>ITEM_LIMIT: usize = <span class="number">100</span>;
-<span class="kw">const </span>BYTE_LIMIT: usize = <span class="number">10_000</span>;
+<span class="comment">// This limits the RAM consumption of a Unit to roughly 10kB
+</span><span class="kw">const </span>BYTE_LIMIT: usize = <span class="number">10_000</span>;
 
 <span class="attr">#[derive(
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
 )]
 </span><span class="kw">pub enum </span>UnitData {
-    Batch(Vec&lt;ConsensusItem&gt;, SchnorrSignature, aleph_bft::NodeIndex),
-    Signature(SchnorrSignature, aleph_bft::NodeIndex),
+    Batch(Vec&lt;u8&gt;),
+    Signature(SchnorrSignature),
 }
 
 <span class="kw">impl </span>UnitData {
@@ -143,32 +134,24 @@
     </span><span class="kw">pub fn </span>is_valid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="kw">match </span><span class="self">self </span>{
             UnitData::Signature(..) =&gt; <span class="bool-val">true</span>,
-            UnitData::Batch(items, ..) =&gt; {
-                <span class="comment">// the lazy evaluation prevents overflow when summing
-                </span>items.len() &lt;= ITEM_LIMIT
-                    &amp;&amp; items.iter().all(|item| item.len() &lt;= BYTE_LIMIT)
-                    &amp;&amp; items.iter().map(Vec::len).sum::&lt;usize&gt;() &lt;= BYTE_LIMIT
-            }
+            UnitData::Batch(bytes, ..) =&gt; bytes.len() &lt;= BYTE_LIMIT,
         }
     }
 }
 
 <span class="kw">pub struct </span>DataProvider {
-    keychain: Keychain,
     mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
     signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
     submitted_items: BTreeSet&lt;sha256::Hash&gt;,
-    leftover_item: <span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;,
+    leftover_item: <span class="prelude-ty">Option</span>&lt;ConsensusItem&gt;,
 }
 
 <span class="kw">impl </span>DataProvider {
     <span class="kw">pub fn </span>new(
-        keychain: Keychain,
         mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
         signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            keychain,
             mempool_item_receiver,
             signature_receiver,
             submitted_items: BTreeSet::new(),
@@ -182,16 +165,20 @@
     <span class="kw">async fn </span>get_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;UnitData&gt; {
         <span class="comment">// we only attach our signature as no more items can be ordered in this session
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(signature) = <span class="self">self</span>.signature_receiver.borrow().clone() {
-            <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Signature(
-                signature,
-                <span class="self">self</span>.keychain.peer_id().to_usize().into(),
-            ));
+            <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Signature(signature));
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>items = <span class="macro">vec!</span>[];
+        <span class="comment">// an empty vector is encoded in at most 8 bytes
+        </span><span class="kw">let </span><span class="kw-2">mut </span>n_bytes = <span class="number">8</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>items = Vec::new();
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(item) = <span class="self">self</span>.leftover_item.take() {
-            <span class="kw">if </span>item.len() &lt;= BYTE_LIMIT {
+            <span class="kw">let </span>n_bytes_item = item
+                .consensus_encode_to_vec()
+                .expect(<span class="string">&quot;Writing to a vector cant fail&quot;</span>)
+                .len();
+
+            <span class="kw">if </span>n_bytes_item + n_bytes &lt;= BYTE_LIMIT {
                 <span class="kw">if </span><span class="self">self</span>.submitted_items.insert(consensus_hash_sha256(<span class="kw-2">&amp;</span>item)) {
                     items.push(item);
                 }
@@ -203,29 +190,30 @@
         <span class="comment">// if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(item) = <span class="self">self</span>.mempool_item_receiver.try_recv() {
-            <span class="kw">let </span>n_bytes = items.iter().map(Vec::len).sum::&lt;usize&gt;();
+            <span class="kw">let </span>n_bytes_item = item
+                .consensus_encode_to_vec()
+                .expect(<span class="string">&quot;Writing to a vector cant fail&quot;</span>)
+                .len();
 
-            <span class="attr">#[allow(clippy::int_plus_one)]
-            </span><span class="kw">if </span>items.len() + <span class="number">1 </span>&lt;= ITEM_LIMIT &amp;&amp; n_bytes + item.len() &lt;= BYTE_LIMIT {
+            <span class="kw">if </span>n_bytes + n_bytes_item &lt;= BYTE_LIMIT {
                 <span class="kw">if </span><span class="self">self</span>.submitted_items.insert(consensus_hash_sha256(<span class="kw-2">&amp;</span>item)) {
+                    n_bytes += n_bytes_item;
                     items.push(item);
                 }
             } <span class="kw">else </span>{
                 <span class="self">self</span>.leftover_item = <span class="prelude-val">Some</span>(item);
+
                 <span class="kw">break</span>;
             }
         }
 
-        <span class="comment">// enables us to verify which peer has submitted a item
-        </span><span class="kw">let </span>hash = consensus_hash_sha256(<span class="kw-2">&amp;</span>items);
-        <span class="kw">let </span>signature = <span class="self">self</span>.keychain.sign(hash.as_byte_array()).<span class="kw">await</span>;
+        <span class="kw">let </span>bytes = items
+            .consensus_encode_to_vec()
+            .expect(<span class="string">&quot;Writing to a vector cant fail&quot;</span>);
 
-        <span class="kw">let </span>unit_data =
-            UnitData::Batch(items, signature, <span class="self">self</span>.keychain.peer_id().to_usize().into());
+        <span class="macro">assert!</span>(bytes.len() &lt;= BYTE_LIMIT);
 
-        <span class="macro">assert!</span>(unit_data.is_valid());
-
-        <span class="prelude-val">Some</span>(unit_data)
+        <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Batch(bytes));
     }
 }
 </code></pre></div></section></main></body></html>

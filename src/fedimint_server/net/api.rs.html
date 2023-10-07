@@ -729,6 +729,8 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -743,17 +745,17 @@
     ServerStatus, StatusResponse,
 };
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
-<span class="kw">use </span>fedimint_core::block::SignedBlock;
+<span class="kw">use </span>fedimint_core::block::{Block, SignedBlock};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SIGNED_BLOCK_ENDPOINT,
-    BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT, FETCH_BLOCK_COUNT_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
-    WAIT_TRANSACTION_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
+    AWAIT_SIGNED_BLOCK_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
+    FETCH_BLOCK_COUNT_ENDPOINT, GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT,
+    MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
+    VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
@@ -920,7 +922,7 @@
     <span class="doccomment">/// Cached client config
     </span><span class="kw">pub </span>client_cfg: ClientConfig,
     <span class="doccomment">/// For sending API events to consensus such as transactions
-    </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;Vec&lt;u8&gt;&gt;,
+    </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;ConsensusItem&gt;,
     <span class="kw">pub </span>peer_status_channels: PeerStatusChannels,
     <span class="kw">pub </span>latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
     <span class="kw">pub </span>consensus_status_cache: ExpiringCache&lt;ApiResult&lt;FederationStatus&gt;&gt;,
@@ -994,11 +996,7 @@
         funding_verifier.verify_funding()<span class="question-mark">?</span>;
 
         <span class="self">self</span>.submission_sender
-            .send(
-                ConsensusItem::Transaction(transaction)
-                    .consensus_encode_to_vec()
-                    .expect(<span class="string">&quot;Infallible&quot;</span>),
-            )
+            .send(ConsensusItem::Transaction(transaction))
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
@@ -1341,9 +1339,15 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
+            AWAIT_BLOCK_ENDPOINT,
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;Block&gt; {
+                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_block(index).<span class="kw">await</span>.block).into())
+            }
+        },
+        <span class="macro">api_endpoint! </span>{
             AWAIT_SIGNED_BLOCK_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SignedBlock {
-                <span class="prelude-val">Ok</span>(fedimint.await_signed_block(index).<span class="kw">await</span>)
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, index: u64| -&gt; SerdeModuleEncoding&lt;SignedBlock&gt; {
+                <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.await_signed_block(index).<span class="kw">await</span>).into())
             }
         },
         <span class="macro">api_endpoint! </span>{

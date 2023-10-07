@@ -862,19 +862,9 @@
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
 <a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{<span class="self">self</span>, max};
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt;
-<span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::ops::Range;
 
 <span class="kw">use </span>fedimint_client::sm::{OperationId, State, StateTransition};
@@ -1186,26 +1176,18 @@
 
                     <span class="kw">let </span>block = <span class="kw">loop </span>{
                         <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY_MINT, block_idx, <span class="string">&quot;Awaiting signed block&quot;</span>);
-                        <span class="kw">match </span>api.await_signed_block(block_idx).<span class="kw">await </span>{
-                            <span class="prelude-val">Ok</span>(signed_block) =&gt; <span class="kw">break </span>signed_block.block,
+                        <span class="kw">match </span>api.await_block(block_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await </span>{
+                            <span class="prelude-val">Ok</span>(block) =&gt; <span class="kw">break </span>block,
                             <span class="prelude-val">Err</span>(e) =&gt; {
                                 <span class="macro">info!</span>(e = %e, block_idx, <span class="string">&quot;Error trying to fetch signed block&quot;</span>);
                             }
                         }
                     };
 
-                    <span class="macro">assert_eq!</span>(block_idx, block.index);
                     <span class="kw">let </span>consensus_items = block
                         .items
                         .into_iter()
-                        .map(|item| {
-                            <span class="kw">let </span><span class="kw-2">mut </span>item_bytes_cursor = Cursor::new(item.item);
-                            <span class="kw">let </span>ci: ConsensusItem =
-                                Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>item_bytes_cursor, <span class="kw-2">&amp;</span>decoders)
-                                    .expect(<span class="string">&quot;Malicious federation returned non-decodable result&quot;</span>);
-                            <span class="comment">// FIXME: assert cursor fully consumed
-                            </span>(item.peer_id, ci)
-                        })
+                        .map(|accepted_item| (accepted_item.peer, accepted_item.item))
                         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
                     (block_idx, consensus_items)
