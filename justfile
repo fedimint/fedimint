@@ -92,8 +92,12 @@ typos-fix-all:
   just typos -w
 
 # regenerate migration snapshots
+# ex: `just prepare_db_migration_snapshots fedimint-server`
+# ex: `just prepare_db_migration_snapshots fedimint-mint-server`
+# ex: `just prepare_db_migration_snapshots fedimint-ln-server`
+# ex: `just prepare_db_migration_snapshots fedimint-wallet-server`
 prepare_db_migration_snapshots +extra_args:
-  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=1 cargo test ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} prepare_db_migration_snapshots -- {{extra_args}}
+  env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo test ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -p {{extra_args}} prepare_db_migration_snapshots
 
 # run code formatters
 format:
