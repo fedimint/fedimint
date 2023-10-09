@@ -93,7 +93,7 @@ pub trait LightningClientExt {
     async fn pay_bolt11_invoice(
         &self,
         invoice: Bolt11Invoice,
-    ) -> anyhow::Result<(PayType, ContractId)>;
+    ) -> anyhow::Result<(PayType, ContractId, Amount)>;
 
     async fn subscribe_internal_pay(
         &self,
@@ -258,7 +258,7 @@ impl LightningClientExt for Client {
     async fn pay_bolt11_invoice(
         &self,
         invoice: Bolt11Invoice,
-    ) -> anyhow::Result<(PayType, ContractId)> {
+    ) -> anyhow::Result<(PayType, ContractId, Amount)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let payment_hash = invoice.payment_hash();
         let operation_id = OperationId(payment_hash.into_inner());
@@ -325,7 +325,7 @@ impl LightningClientExt for Client {
         )
         .await?;
 
-        Ok((pay_type, contract_id))
+        Ok((pay_type, contract_id, fee))
     }
 
     async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
