@@ -1,13 +1,18 @@
+use bitcoin_hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::LightningGatewayRegistration;
 use serde::Serialize;
 use strum_macros::EnumIter;
+
+use crate::PayType;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     LightningGateway = 0x28,
+    PaymentResult = 0x29,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -31,3 +36,25 @@ impl_db_lookup!(
     key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
 );
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct PaymentResultKey {
+    pub payment_hash: sha256::Hash,
+}
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct PaymentResultPrefix;
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct PaymentResult {
+    pub index: u16,
+    pub completed_payment: Option<(PayType, ContractId)>,
+}
+
+impl_db_record!(
+    key = PaymentResultKey,
+    value = PaymentResult,
+    db_prefix = DbKeyPrefix::PaymentResult,
+);
+
+impl_db_lookup!(key = PaymentResultKey, query_prefix = PaymentResultPrefix);

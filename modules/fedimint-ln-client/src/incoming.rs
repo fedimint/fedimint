@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::LightningClientContext;
+use crate::{set_payment_result, LightningClientContext, PayType};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes a transaction between two users
@@ -63,6 +63,7 @@ pub enum IncomingSmStates {
 pub struct IncomingSmCommon {
     pub operation_id: OperationId,
     pub contract_id: ContractId,
+    pub payment_hash: sha256::Hash,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -262,10 +263,22 @@ impl DecryptingPreimageState {
         ));
 
         match result {
-            Ok(preimage) => IncomingStateMachine {
-                common: old_state.common,
-                state: IncomingSmStates::Preimage(preimage),
-            },
+            Ok(preimage) => {
+                let contract_id = old_state.common.contract_id;
+                let payment_hash = old_state.common.payment_hash;
+                set_payment_result(
+                    &mut dbtx.module_tx(),
+                    payment_hash,
+                    PayType::Internal(old_state.common.operation_id),
+                    contract_id,
+                )
+                .await;
+
+                IncomingStateMachine {
+                    common: old_state.common,
+                    state: IncomingSmStates::Preimage(preimage),
+                }
+            }
             Err(IncomingSmError::InvalidPreimage { contract }) => {
                 Self::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
                     .await

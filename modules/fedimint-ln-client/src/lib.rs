@@ -12,7 +12,7 @@ use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::{sha256, Hash};
-use db::{DbKeyPrefix, LightningGatewayKey};
+use db::{DbKeyPrefix, LightningGatewayKey, PaymentResult, PaymentResultKey};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -24,7 +24,7 @@ use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContex
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::ModuleDatabaseTransaction;
+use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
@@ -62,7 +62,7 @@ use strum::IntoEnumIterator;
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::db::LightningGatewayKeyPrefix;
+use crate::db::{LightningGatewayKeyPrefix, PaymentResultPrefix};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -121,7 +121,7 @@ pub trait LightningClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>>;
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
 pub enum PayType {
     // Payment from this client to another user within the federation
@@ -266,8 +266,18 @@ impl LightningClientExt for Client {
         invoice: Bolt11Invoice,
     ) -> anyhow::Result<(PayType, ContractId, Amount)> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
-        let payment_hash = invoice.payment_hash();
-        let operation_id = OperationId(payment_hash.into_inner());
+        let mut dbtx = instance.db.begin_transaction().await;
+        let prev_payment_result = lightning
+            .get_prev_payment_result(invoice.payment_hash(), &mut dbtx)
+            .await;
+
+        if let Some(completed_payment) = prev_payment_result.completed_payment {
+            return Ok(completed_payment);
+        }
+
+        let operation_id = lightning
+            .get_payment_operation_id(invoice.payment_hash(), prev_payment_result, &mut dbtx)
+            .await;
 
         let is_internal_payment =
             invoice_has_internal_payment_markers(&invoice, self.get_internal_payment_markers()?)
@@ -302,6 +312,18 @@ impl LightningClientExt for Client {
             (PayType::Lightning(operation_id), output, contract_id)
         };
 
+        // Verify that no other outgoing contract exists
+        if lightning
+            .module_api
+            .fetch_contract(contract_id)
+            .await
+            .is_ok()
+        {
+            return Err(anyhow::anyhow!(
+                "Previous payment attempt still in progress"
+            ));
+        }
+
         // TODO: return fee from create_outgoing_output or even let user supply
         // it/bounds for it
         let fee = match &output.output {
@@ -326,6 +348,10 @@ impl LightningClientExt for Client {
             fee,
             change_outpoint,
         };
+
+        // Write the new payment index into the database, fail the payment if the commit
+        // to the database fails.
+        dbtx.commit_tx_result().await?;
 
         self.finalize_and_submit_transaction(
             operation_id,
@@ -610,6 +636,16 @@ impl ExtendsCommonModuleInit for LightningClientGen {
                         "Lightning Gateways"
                     );
                 }
+                DbKeyPrefix::PaymentResult => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PaymentResultPrefix,
+                        PaymentResultKey,
+                        PaymentResult,
+                        ln_client_items,
+                        "Payment Result"
+                    );
+                }
             }
         }
 
@@ -702,6 +738,54 @@ enum PayError {
 }
 
 impl LightningClientModule {
+    async fn get_prev_payment_result(
+        &self,
+        payment_hash: &sha256::Hash,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> PaymentResult {
+        let prev_result = dbtx
+            .get_value(&PaymentResultKey {
+                payment_hash: *payment_hash,
+            })
+            .await;
+        prev_result.unwrap_or(PaymentResult {
+            index: 0,
+            completed_payment: None,
+        })
+    }
+
+    async fn get_payment_operation_id(
+        &self,
+        payment_hash: &sha256::Hash,
+        prev_payment_result: PaymentResult,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> OperationId {
+        let next_index = prev_payment_result.index + 1;
+
+        // Copy the 32 byte payment hash and a 2 byte index to make every payment
+        // attempt have a unique `OperationId`
+        let mut bytes = [0; 34];
+        bytes[0..32].copy_from_slice(&payment_hash.into_inner());
+        bytes[32..34].copy_from_slice(&next_index.to_le_bytes());
+        let hash: sha256::Hash = Hash::hash(&bytes);
+        let operation_id = OperationId(hash.into_inner());
+
+        let new_payment_result = PaymentResult {
+            index: next_index,
+            completed_payment: None,
+        };
+
+        dbtx.insert_entry(
+            &PaymentResultKey {
+                payment_hash: *payment_hash,
+            },
+            &new_payment_result,
+        )
+        .await;
+
+        operation_id
+    }
+
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
@@ -838,6 +922,7 @@ impl LightningClientModule {
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
+                            payment_hash: *invoice.payment_hash(),
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     },
@@ -1162,4 +1247,17 @@ pub async fn create_incoming_contract_output(
     });
 
     Ok((incoming_output, contract_id))
+}
+
+async fn set_payment_result(
+    dbtx: &mut ModuleDatabaseTransaction<'_>,
+    payment_hash: sha256::Hash,
+    payment_type: PayType,
+    contract_id: ContractId,
+) {
+    if let Some(mut payment_result) = dbtx.get_value(&PaymentResultKey { payment_hash }).await {
+        payment_result.completed_payment = Some((payment_type, contract_id));
+        dbtx.insert_entry(&PaymentResultKey { payment_hash }, &payment_result)
+            .await;
+    }
 }
