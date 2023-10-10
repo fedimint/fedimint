@@ -93,7 +93,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
     // Pay the invoice from client2
-    let (pay_type, _) = client2.pay_bolt11_invoice(invoice).await?;
+    let (pay_type, _, _fee) = client2.pay_bolt11_invoice(invoice).await?;
     match pay_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
@@ -137,7 +137,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let (pay_type, _) = client2.pay_bolt11_invoice(invoice).await?;
+    let (pay_type, _, _fee) = client2.pay_bolt11_invoice(invoice).await?;
     match pay_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
@@ -158,7 +158,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let (pay_type, _) = client2.pay_bolt11_invoice(invoice).await?;
+    let (pay_type, _, _fee) = client2.pay_bolt11_invoice(invoice).await?;
     match pay_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();

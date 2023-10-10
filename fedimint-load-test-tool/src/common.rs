@@ -172,7 +172,7 @@ pub async fn gateway_pay_invoice(
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
-    let (pay_type, _) = client.pay_bolt11_invoice(invoice).await?;
+    let (pay_type, _, _fee) = client.pay_bolt11_invoice(invoice).await?;
     let operation_id = match pay_type {
         fedimint_ln_client::PayType::Internal(_) => bail!("Internal payment not expected"),
         fedimint_ln_client::PayType::Lightning(operation_id) => operation_id,

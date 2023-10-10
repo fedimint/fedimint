@@ -231,7 +231,8 @@ pub async fn handle_command(
         ClientCmd::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
 
-            let (pay_type, contract_id) = client.pay_bolt11_invoice(bolt11).await?;
+            let (pay_type, contract_id, fee) = client.pay_bolt11_invoice(bolt11).await?;
+            info!("Gateway fee: {fee}");
 
             match pay_type {
                 PayType::Internal(operation_id) => {
