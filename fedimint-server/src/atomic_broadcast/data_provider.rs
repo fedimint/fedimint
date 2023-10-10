@@ -9,7 +9,7 @@ use tokio::sync::watch;
 use crate::LOG_CONSENSUS;
 
 // This limits the RAM consumption of a Unit to roughly 10kB
-const BYTE_LIMIT: usize = 10_000;
+const BYTE_LIMIT: usize = 100_000;
 
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
