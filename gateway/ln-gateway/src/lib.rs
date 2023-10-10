@@ -992,11 +992,6 @@ impl Gateway {
             .spawn("register clients", move |handle| async move {
                 let registration_loop = async {
                     loop {
-                        // Allow a 15% buffer of the TTL before the re-registering gateway
-                        // with the federations.
-                        let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
-                        sleep(registration_delay).await;
-
                         if let Some(gateway_config) = gateway.get_gateway_configuration().await {
                             let gateway_state = gateway.state.read().await.clone();
                             if let GatewayState::Running { lnrpc, .. } = &gateway_state {
@@ -1031,6 +1026,11 @@ impl Gateway {
                         } else {
                             warn!("Cannot register clients because gateway configuration is not set.");
                         }
+
+                        // Allow a 15% buffer of the TTL before the re-registering gateway
+                        // with the federations.
+                        let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
+                        sleep(registration_delay).await;
                     }
                 };
 
