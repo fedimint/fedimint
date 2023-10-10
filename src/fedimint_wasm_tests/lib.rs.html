@@ -313,7 +313,7 @@
         }
 
         <span class="kw">let </span>bolt11 = faucet::generate_invoice(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(pay_types, _contract_id) = client.pay_bolt11_invoice(bolt11.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(pay_types, _contract_id, _fee) = client.pay_bolt11_invoice(bolt11.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>PayType::Lightning(operation_id) = pay_types <span class="kw">else </span>{
             <span class="macro">unreachable!</span>(<span class="string">&quot;paying invoice over lightning&quot;</span>);
         };

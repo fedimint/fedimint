@@ -1250,7 +1250,7 @@
     </span><span class="kw">async fn </span>pay_bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Bolt11Invoice,
-    ) -&gt; anyhow::Result&lt;(PayType, ContractId)&gt;;
+    ) -&gt; anyhow::Result&lt;(PayType, ContractId, Amount)&gt;;
 
     <span class="kw">async fn </span>subscribe_internal_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1415,7 +1415,7 @@
     <span class="kw">async fn </span>pay_bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Bolt11Invoice,
-    ) -&gt; anyhow::Result&lt;(PayType, ContractId)&gt; {
+    ) -&gt; anyhow::Result&lt;(PayType, ContractId, Amount)&gt; {
         <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>payment_hash = invoice.payment_hash();
         <span class="kw">let </span>operation_id = OperationId(payment_hash.into_inner());
@@ -1482,7 +1482,7 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>((pay_type, contract_id))
+        <span class="prelude-val">Ok</span>((pay_type, contract_id, fee))
     }
 
     <span class="kw">async fn </span>create_bolt11_invoice&lt;M: Serialize + Send + Sync&gt;(
