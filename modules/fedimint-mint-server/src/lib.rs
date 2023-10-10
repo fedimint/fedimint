@@ -499,11 +499,15 @@ impl ServerModule for Mint {
         }
 
         for (amount, note) in input.iter_items() {
-            if dbtx.insert_entry(&NonceKey(note.0), &()).await.is_some() {
+            if dbtx
+                .insert_entry(&NonceKey(note.nonce), &())
+                .await
+                .is_some()
+            {
                 return Err(MintError::SpentCoin).into_module_error_other();
             }
 
-            dbtx.insert_new_entry(&MintAuditItemKey::Redemption(NonceKey(note.0)), &amount)
+            dbtx.insert_new_entry(&MintAuditItemKey::Redemption(NonceKey(note.nonce)), &amount)
                 .await;
         }
 
@@ -852,9 +856,9 @@ mod test {
             bsig_shares,
             server_cfgs.len() - ((server_cfgs.len() - 1) / 3),
         );
-        let sig = tbs::unblind_signature(blinding_key, blind_signature);
+        let signature = tbs::unblind_signature(blinding_key, blind_signature);
 
-        (note_key, Note(nonce, sig))
+        (note_key, Note { nonce, signature })
     }
 
     #[test_log::test(tokio::test)]

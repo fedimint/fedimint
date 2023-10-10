@@ -218,7 +218,7 @@ impl MintOutputStatesCreated {
                         .insert_entry(
                             &NoteKey {
                                 amount,
-                                nonce: note.note.0,
+                                nonce: note.nonce(),
                             },
                             note,
                         )
@@ -315,11 +315,14 @@ impl NoteIssuanceRequest {
         bsig: BlindedSignature,
         mint_pub_key: AggregatePublicKey,
     ) -> std::result::Result<SpendableNote, NoteFinalizationError> {
-        let sig = unblind_signature(self.blinding_key, bsig);
-        let note = Note(self.nonce(), sig);
+        let signature = unblind_signature(self.blinding_key, bsig);
+        let note = Note {
+            nonce: self.nonce(),
+            signature,
+        };
         if note.verify(mint_pub_key) {
             let spendable_note = SpendableNote {
-                note,
+                signature: note.signature,
                 spend_key: self.spend_key,
             };
 

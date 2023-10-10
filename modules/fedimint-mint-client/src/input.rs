@@ -140,13 +140,13 @@ impl MintInputStateCreated {
             _ => panic!("Invalid state transition"),
         };
 
-        let (spend_keys, notes): (Vec<_>, TieredMulti<_>) = notes
+        let (spend_keys, snotes): (Vec<_>, TieredMulti<_>) = notes
             .into_iter_items()
-            .map(|(amt, note)| (note.spend_key, (amt, note.note)))
+            .map(|(amt, snote)| (snote.spend_key, (amt, snote.note())))
             .unzip();
 
         let refund_input = ClientInput::<MintInput, MintClientStateMachines> {
-            input: MintInput(notes),
+            input: MintInput(snotes),
             keys: spend_keys,
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

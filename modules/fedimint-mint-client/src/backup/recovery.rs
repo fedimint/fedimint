@@ -200,7 +200,7 @@ impl MintRestoreInProgressState {
                             for (amount, note) in finalized.spendable_notes {
                                 let key = NoteKey {
                                     amount,
-                                    nonce: note.note.0,
+                                    nonce: note.nonce(),
                                 };
                                 dbtx.insert_new_entry(&key, &note).await;
                             }
@@ -350,7 +350,7 @@ impl MintRestoreInProgressState {
             spendable_note_by_nonce: backup
                 .notes
                 .into_iter()
-                .map(|(amount, note)| (note.note.0, (amount, note)))
+                .map(|(amount, note)| (note.nonce(), (amount, note)))
                 .collect(),
             pending_outputs: backup
                 .pending_notes
@@ -420,7 +420,7 @@ impl MintRestoreInProgressState {
     pub fn handle_input(&mut self, input: &MintInput) {
         // We attempt to delete any nonce we see as spent, simple
         for (_amt, note) in input.0.iter_items() {
-            self.spendable_note_by_nonce.remove(&note.0);
+            self.spendable_note_by_nonce.remove(&note.nonce);
         }
     }
 
