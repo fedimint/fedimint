@@ -32,7 +32,7 @@ use fedimint_client::sm::{
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -83,7 +83,7 @@ pub const LOG_TARGET: &str = "client::module::mint";
 /// out-of-band. Also used for validating and reissuing such out-of-band notes.
 #[derive(Clone, Debug, Decodable, Encodable)]
 pub struct OOBNotes {
-    pub federation_id: FederationId,
+    pub federation_id_prefix: FederationIdPrefix,
     pub notes: TieredMulti<SpendableNote>,
 }
 
@@ -249,7 +249,7 @@ impl MintClientExt for Client {
     ) -> anyhow::Result<OperationId> {
         let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
         let OOBNotes {
-            federation_id,
+            federation_id_prefix,
             notes,
         } = oob_notes;
         ensure!(
@@ -257,7 +257,7 @@ impl MintClientExt for Client {
             "Reissuing zero-amount e-cash isn't supported"
         );
 
-        if federation_id != mint.federation_id {
+        if federation_id_prefix != mint.federation_id.to_prefix() {
             bail!("Federation ID does not match");
         }
 
@@ -360,7 +360,7 @@ impl MintClientExt for Client {
                             )
                             .await?;
                         let oob_notes = OOBNotes {
-                            federation_id: mint.federation_id,
+                            federation_id_prefix: mint.federation_id.to_prefix(),
                             notes,
                         };
 
@@ -403,10 +403,10 @@ impl MintClientExt for Client {
     async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount> {
         let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
         let OOBNotes {
-            federation_id,
+            federation_id_prefix,
             notes,
         } = oob_notes;
-        if federation_id != mint.federation_id {
+        if federation_id_prefix != mint.federation_id.to_prefix() {
             bail!("Federation ID does not match");
         }
 
@@ -1621,7 +1621,8 @@ mod tests {
     #[test]
     fn decoding_empty_oob_notes_fails() {
         let empty_oob_notes = OOBNotes {
-            federation_id: FederationId(threshold_crypto::SecretKey::random().public_key()),
+            federation_id_prefix: FederationId(threshold_crypto::SecretKey::random().public_key())
+                .to_prefix(),
             notes: Default::default(),
         };
         let oob_notes_string = empty_oob_notes.to_string();

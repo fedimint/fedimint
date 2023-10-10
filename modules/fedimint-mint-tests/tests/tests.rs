@@ -72,7 +72,7 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
     let err_msg = client1
         .reissue_external_notes(
             OOBNotes {
-                federation_id: client1.federation_id(),
+                federation_id_prefix: client1.federation_id().to_prefix(),
                 notes: Default::default(),
             },
             (),
