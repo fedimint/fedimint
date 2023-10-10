@@ -15,6 +15,7 @@ use fedimint_ln_common::{LightningClientContext, LightningInput};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::error;
 
 use crate::LightningClientStateMachines;
 
@@ -193,14 +194,17 @@ impl LightningReceiveConfirmedInvoice {
     ) -> Result<IncomingContractAccount, LightningReceiveError> {
         let contract_id = (*invoice.payment_hash()).into();
         loop {
-            if let Ok((incoming_contract_account, preimage)) = global_context
+            match global_context
                 .module_api()
                 .wait_preimage_decrypted(contract_id)
                 .await
             {
-                match preimage {
+                Ok((incoming_contract_account, preimage)) => match preimage {
                     Some(_) => return Ok(incoming_contract_account),
                     None => return Err(LightningReceiveError::InvalidPreimage),
+                },
+                Err(error) => {
+                    error!("External LN payment error waiting for preimage decryption: {error:?}");
                 }
             }
 

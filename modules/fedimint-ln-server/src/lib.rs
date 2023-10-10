@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use anyhow::{bail, Context};
 use bitcoin_hashes::Hash as BitcoinHash;
@@ -22,7 +23,7 @@ use fedimint_core::module::{
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
@@ -970,7 +971,7 @@ impl Lightning {
     }
 
     async fn wait_block_height(&self, block_height: u64, dbtx: &mut ModuleDatabaseTransaction<'_>) {
-        while block_height < self.consensus_block_count(dbtx).await {
+        while block_height >= self.consensus_block_count(dbtx).await {
             sleep(Duration::from_secs(5)).await;
         }
     }
@@ -1043,41 +1044,27 @@ impl Lightning {
         context: &mut ApiEndpointContext<'_>,
         contract_id: ContractId,
     ) -> (IncomingContractAccount, Option<Preimage>) {
-        let decrypt_success = context.wait_value_matches(ContractKey(contract_id), |contract| {
-            match &contract.contract {
-                FundedContract::Incoming(c) => match c.contract.decrypted_preimage {
-                    DecryptedPreimage::Pending => false,
-                    DecryptedPreimage::Some(_) => true,
-                    DecryptedPreimage::Invalid => false,
-                },
-                _ => false,
-            }
-        });
-
-        let decrypt_failure = context.wait_value_matches(ContractKey(contract_id), |contract| {
-            match &contract.contract {
-                FundedContract::Incoming(c) => match c.contract.decrypted_preimage {
-                    DecryptedPreimage::Pending => false,
-                    DecryptedPreimage::Some(_) => false,
-                    DecryptedPreimage::Invalid => true,
-                },
-                _ => false,
-            }
-        });
-
-        tokio::select! {
-            incoming = decrypt_success => {
-                let incoming_contract_account = Self::get_incoming_contract_account(incoming.clone());
-                if let DecryptedPreimage::Some(preimage) = incoming_contract_account.clone().contract.decrypted_preimage {
-                    return (incoming_contract_account, Some(preimage));
+        let future =
+            context.wait_value_matches(ContractKey(contract_id), |contract| {
+                match &contract.contract {
+                    FundedContract::Incoming(c) => match c.contract.decrypted_preimage {
+                        DecryptedPreimage::Pending => false,
+                        DecryptedPreimage::Some(_) => true,
+                        DecryptedPreimage::Invalid => true,
+                    },
+                    _ => false,
                 }
+            });
 
-                (incoming_contract_account, None)
-            }
-            incoming = decrypt_failure => {
-                let incoming_contract_account = Self::get_incoming_contract_account(incoming.clone());
-                (incoming_contract_account, None)
-            }
+        let decrypt_preimage = future.await;
+        let incoming_contract_account = Self::get_incoming_contract_account(decrypt_preimage);
+        match incoming_contract_account
+            .clone()
+            .contract
+            .decrypted_preimage
+        {
+            DecryptedPreimage::Some(preimage) => (incoming_contract_account, Some(preimage)),
+            _ => (incoming_contract_account, None),
         }
     }
 

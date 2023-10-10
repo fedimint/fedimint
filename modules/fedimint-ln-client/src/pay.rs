@@ -386,13 +386,15 @@ impl LightningPayRefundable {
         loop {
             // If we fail to get the contract from the federation, we need to keep retrying
             // until we successfully do.
-            if global_context
+            match global_context
                 .module_api()
                 .wait_outgoing_contract_cancelled(contract_id)
                 .await
-                .is_ok()
             {
-                return;
+                Ok(_) => return,
+                Err(error) => {
+                    error!("Error waiting for outgoing contract to be cancelled: {error:?}");
+                }
             }
 
             sleep(Duration::from_secs(1)).await;
@@ -401,13 +403,13 @@ impl LightningPayRefundable {
 
     async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
         loop {
-            if global_context
+            match global_context
                 .module_api()
                 .wait_block_height(timelock as u64)
                 .await
-                .is_ok()
             {
-                return;
+                Ok(_) => return,
+                Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
             }
 
             sleep(Duration::from_secs(1)).await;

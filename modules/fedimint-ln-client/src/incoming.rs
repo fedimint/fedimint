@@ -226,18 +226,21 @@ impl DecryptingPreimageState {
         contract_id: ContractId,
     ) -> Result<Preimage, IncomingSmError> {
         loop {
-            if let Ok((incoming_contract_account, preimage)) = global_context
+            match global_context
                 .module_api()
                 .wait_preimage_decrypted(contract_id)
                 .await
             {
-                match preimage {
+                Ok((incoming_contract_account, preimage)) => match preimage {
                     Some(preimage) => return Ok(preimage),
                     None => {
                         return Err(IncomingSmError::InvalidPreimage {
                             contract: Box::new(incoming_contract_account),
                         })
                     }
+                },
+                Err(error) => {
+                    error!("Incoming contract error waiting for preimage decryption: {error:?}");
                 }
             }
 
