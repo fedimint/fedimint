@@ -166,7 +166,12 @@ impl ConsensusServer {
             .await?;
 
             let module = init
-                .init(cfg.get_module_config(*module_id)?, isolated_db, task_group)
+                .init(
+                    cfg.get_module_config(*module_id)?,
+                    isolated_db,
+                    task_group,
+                    cfg.local.identity,
+                )
                 .await?;
             modules.insert(*module_id, (kind, module));
         }
