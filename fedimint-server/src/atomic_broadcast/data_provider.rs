@@ -59,8 +59,8 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
             return Some(UnitData::Signature(signature));
         }
 
-        // an empty vector is encoded in at most 8 bytes
-        let mut n_bytes = 8;
+        // the length of a vector is encoded in at most 9 bytes
+        let mut n_bytes = 9;
         let mut items = Vec::new();
 
         if let Some(item) = self.leftover_item.take() {
@@ -70,9 +70,8 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
                 .len();
 
             if n_bytes_item + n_bytes <= BYTE_LIMIT {
-                if self.submitted_items.insert(consensus_hash_sha256(&item)) {
-                    items.push(item);
-                }
+                n_bytes += n_bytes_item;
+                items.push(item);
             } else {
                 tracing::warn!(target: LOG_CONSENSUS,"Consensus item length is over BYTE_LIMIT");
             }
@@ -81,19 +80,20 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         // if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         while let Ok(item) = self.mempool_item_receiver.try_recv() {
+            if !self.submitted_items.insert(consensus_hash_sha256(&item)) {
+                continue;
+            }
+
             let n_bytes_item = item
                 .consensus_encode_to_vec()
                 .expect("Writing to a vector cant fail")
                 .len();
 
             if n_bytes + n_bytes_item <= BYTE_LIMIT {
-                if self.submitted_items.insert(consensus_hash_sha256(&item)) {
-                    n_bytes += n_bytes_item;
-                    items.push(item);
-                }
+                n_bytes += n_bytes_item;
+                items.push(item);
             } else {
                 self.leftover_item = Some(item);
-
                 break;
             }
         }
