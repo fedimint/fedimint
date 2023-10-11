@@ -34,7 +34,7 @@ services:
     platform: linux/amd64
 
   gateway-ui:
-    image: fedimintui/gateway-ui:master
+    image: fedimintui/gateway-ui:v0.1.1
     # image: gateway-ui
     ports:
       - "0.0.0.0:3001:3001"
