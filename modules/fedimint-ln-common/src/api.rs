@@ -2,7 +2,8 @@ use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
+    WAIT_OFFER_ENDPOINT, WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, WAIT_PREIMAGE_DECRYPTION,
 };
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::UnionResponses;
@@ -11,7 +12,7 @@ use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
 
 use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use crate::contracts::outgoing::OutgoingContractAccount;
-use crate::contracts::{ContractId, FundedContract};
+use crate::contracts::{ContractId, FundedContract, Preimage};
 use crate::{ContractAccount, LightningGateway};
 
 #[apply(async_trait_maybe_send!)]
@@ -19,6 +20,15 @@ pub trait LnFederationApi {
     async fn fetch_consensus_block_count(&self) -> FederationResult<Option<u64>>;
     async fn fetch_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount>;
+    async fn wait_block_height(&self, block_height: u64) -> FederationResult<()>;
+    async fn wait_outgoing_contract_cancelled(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<ContractAccount>;
+    async fn wait_preimage_decrypted(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<(IncomingContractAccount, Option<Preimage>)>;
     async fn fetch_offer(
         &self,
         payment_hash: Sha256Hash,
@@ -62,6 +72,36 @@ where
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
         self.request_current_consensus(
             WAIT_ACCOUNT_ENDPOINT.to_string(),
+            ApiRequestErased::new(contract),
+        )
+        .await
+    }
+
+    async fn wait_block_height(&self, block_height: u64) -> FederationResult<()> {
+        self.request_current_consensus(
+            WAIT_BLOCK_HEIGHT_ENDPOINT.to_string(),
+            ApiRequestErased::new(block_height),
+        )
+        .await
+    }
+
+    async fn wait_outgoing_contract_cancelled(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<ContractAccount> {
+        self.request_current_consensus(
+            WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT.to_string(),
+            ApiRequestErased::new(contract),
+        )
+        .await
+    }
+
+    async fn wait_preimage_decrypted(
+        &self,
+        contract: ContractId,
+    ) -> FederationResult<(IncomingContractAccount, Option<Preimage>)> {
+        self.request_current_consensus(
+            WAIT_PREIMAGE_DECRYPTION.to_string(),
             ApiRequestErased::new(contract),
         )
         .await

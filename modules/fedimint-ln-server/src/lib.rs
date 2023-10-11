@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use anyhow::{bail, Context};
 use bitcoin_hashes::Hash as BitcoinHash;
@@ -12,7 +13,8 @@ use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
+    WAIT_OFFER_ENDPOINT, WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, WAIT_PREIMAGE_DECRYPTION,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -21,7 +23,7 @@ use fedimint_core::module::{
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
@@ -30,7 +32,7 @@ use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
 };
-use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
+use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::{
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
     IdentifiableContract, Preimage, PreimageDecryptionShare,
@@ -883,6 +885,25 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
+                WAIT_BLOCK_HEIGHT_ENDPOINT,
+                async |module: &Lightning, context, block_height: u64| -> () {
+                    module.wait_block_height(block_height, &mut context.dbtx()).await;
+                    Ok(())
+                }
+            },
+            api_endpoint! {
+                WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT,
+                async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
+                    Ok(module.wait_outgoing_contract_account_cancelled(context, contract_id).await)
+                }
+            },
+            api_endpoint! {
+                WAIT_PREIMAGE_DECRYPTION,
+                async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, Option<Preimage>) {
+                    Ok(module.wait_preimage_decrypted(context, contract_id).await)
+                }
+            },
+            api_endpoint! {
                 OFFER_ENDPOINT,
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     Ok(module
@@ -949,6 +970,12 @@ impl Lightning {
         counts[peer_count / 2]
     }
 
+    async fn wait_block_height(&self, block_height: u64, dbtx: &mut ModuleDatabaseTransaction<'_>) {
+        while block_height >= self.consensus_block_count(dbtx).await {
+            sleep(Duration::from_secs(5)).await;
+        }
+    }
+
     fn validate_decryption_share(
         &self,
         peer: PeerId,
@@ -995,6 +1022,61 @@ impl Lightning {
         // not using a variable here leads to a !Send error
         let future = context.wait_key_exists(ContractKey(contract_id));
         future.await
+    }
+
+    async fn wait_outgoing_contract_account_cancelled(
+        &self,
+        context: &mut ApiEndpointContext<'_>,
+        contract_id: ContractId,
+    ) -> ContractAccount {
+        let future =
+            context.wait_value_matches(ContractKey(contract_id), |contract| {
+                match &contract.contract {
+                    FundedContract::Outgoing(c) => c.cancelled,
+                    _ => false,
+                }
+            });
+        future.await
+    }
+
+    async fn wait_preimage_decrypted(
+        &self,
+        context: &mut ApiEndpointContext<'_>,
+        contract_id: ContractId,
+    ) -> (IncomingContractAccount, Option<Preimage>) {
+        let future =
+            context.wait_value_matches(ContractKey(contract_id), |contract| {
+                match &contract.contract {
+                    FundedContract::Incoming(c) => match c.contract.decrypted_preimage {
+                        DecryptedPreimage::Pending => false,
+                        DecryptedPreimage::Some(_) => true,
+                        DecryptedPreimage::Invalid => true,
+                    },
+                    _ => false,
+                }
+            });
+
+        let decrypt_preimage = future.await;
+        let incoming_contract_account = Self::get_incoming_contract_account(decrypt_preimage);
+        match incoming_contract_account
+            .clone()
+            .contract
+            .decrypted_preimage
+        {
+            DecryptedPreimage::Some(preimage) => (incoming_contract_account, Some(preimage)),
+            _ => (incoming_contract_account, None),
+        }
+    }
+
+    fn get_incoming_contract_account(contract: ContractAccount) -> IncomingContractAccount {
+        if let FundedContract::Incoming(incoming) = contract.contract {
+            return IncomingContractAccount {
+                amount: contract.amount,
+                contract: incoming.contract,
+            };
+        }
+
+        panic!("Contract is not an IncomingContractAccount");
     }
 
     async fn list_gateways(

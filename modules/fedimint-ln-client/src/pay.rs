@@ -383,38 +383,36 @@ impl LightningPayRefundable {
         contract_id: ContractId,
         global_context: DynGlobalClientContext,
     ) {
-        // TODO: Remove polling
         loop {
-            let contract = global_context
+            // If we fail to get the contract from the federation, we need to keep retrying
+            // until we successfully do.
+            match global_context
                 .module_api()
-                .get_outgoing_contract(contract_id)
-                .await;
-            if let Ok(contract) = contract {
-                if contract.contract.cancelled {
-                    return;
+                .wait_outgoing_contract_cancelled(contract_id)
+                .await
+            {
+                Ok(_) => return,
+                Err(error) => {
+                    error!("Error waiting for outgoing contract to be cancelled: {error:?}");
                 }
             }
 
-            sleep(Duration::from_secs(5)).await;
+            sleep(Duration::from_secs(1)).await;
         }
     }
 
     async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
-        // TODO: Remove polling
         loop {
-            let consensus_block_count = global_context
+            match global_context
                 .module_api()
-                .fetch_consensus_block_count()
+                .wait_block_height(timelock as u64)
                 .await
-                .map_err(|e| anyhow::anyhow!("ApiError: {e:?}"));
-
-            if let Ok(Some(current_block_count)) = consensus_block_count {
-                if (timelock as u64) < current_block_count {
-                    return;
-                }
+            {
+                Ok(_) => return,
+                Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
             }
 
-            sleep(Duration::from_secs(5)).await;
+            sleep(Duration::from_secs(1)).await;
         }
     }
 }
