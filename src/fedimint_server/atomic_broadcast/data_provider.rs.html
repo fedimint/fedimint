@@ -168,8 +168,8 @@
             <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Signature(signature));
         }
 
-        <span class="comment">// an empty vector is encoded in at most 8 bytes
-        </span><span class="kw">let </span><span class="kw-2">mut </span>n_bytes = <span class="number">8</span>;
+        <span class="comment">// the length of a vector is encoded in at most 9 bytes
+        </span><span class="kw">let </span><span class="kw-2">mut </span>n_bytes = <span class="number">9</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>items = Vec::new();
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(item) = <span class="self">self</span>.leftover_item.take() {
@@ -179,9 +179,8 @@
                 .len();
 
             <span class="kw">if </span>n_bytes_item + n_bytes &lt;= BYTE_LIMIT {
-                <span class="kw">if </span><span class="self">self</span>.submitted_items.insert(consensus_hash_sha256(<span class="kw-2">&amp;</span>item)) {
-                    items.push(item);
-                }
+                n_bytes += n_bytes_item;
+                items.push(item);
             } <span class="kw">else </span>{
                 <span class="macro">tracing::warn!</span>(target: LOG_CONSENSUS,<span class="string">&quot;Consensus item length is over BYTE_LIMIT&quot;</span>);
             }
@@ -190,19 +189,20 @@
         <span class="comment">// if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(item) = <span class="self">self</span>.mempool_item_receiver.try_recv() {
+            <span class="kw">if </span>!<span class="self">self</span>.submitted_items.insert(consensus_hash_sha256(<span class="kw-2">&amp;</span>item)) {
+                <span class="kw">continue</span>;
+            }
+
             <span class="kw">let </span>n_bytes_item = item
                 .consensus_encode_to_vec()
                 .expect(<span class="string">&quot;Writing to a vector cant fail&quot;</span>)
                 .len();
 
             <span class="kw">if </span>n_bytes + n_bytes_item &lt;= BYTE_LIMIT {
-                <span class="kw">if </span><span class="self">self</span>.submitted_items.insert(consensus_hash_sha256(<span class="kw-2">&amp;</span>item)) {
-                    n_bytes += n_bytes_item;
-                    items.push(item);
-                }
+                n_bytes += n_bytes_item;
+                items.push(item);
             } <span class="kw">else </span>{
                 <span class="self">self</span>.leftover_item = <span class="prelude-val">Some</span>(item);
-
                 <span class="kw">break</span>;
             }
         }
