@@ -1632,6 +1632,20 @@
 <a href="#1632" id="1632">1632</a>
 <a href="#1633" id="1633">1633</a>
 <a href="#1634" id="1634">1634</a>
+<a href="#1635" id="1635">1635</a>
+<a href="#1636" id="1636">1636</a>
+<a href="#1637" id="1637">1637</a>
+<a href="#1638" id="1638">1638</a>
+<a href="#1639" id="1639">1639</a>
+<a href="#1640" id="1640">1640</a>
+<a href="#1641" id="1641">1641</a>
+<a href="#1642" id="1642">1642</a>
+<a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2046,17 +2060,18 @@
 
         <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span>mint.cfg.tbs_pks;
 
-        <span class="kw">for </span>(idx, (amt, note)) <span class="kw">in </span>notes.iter_items().enumerate() {
+        <span class="kw">for </span>(idx, (amt, snote)) <span class="kw">in </span>notes.iter_items().enumerate() {
             <span class="kw">let </span>key = tbs_pks
                 .get(amt)
                 .ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Note {idx} uses an invalid amount tier {amt}&quot;</span>))<span class="question-mark">?</span>;
 
-            <span class="kw">if </span>!note.note.verify(<span class="kw-2">*</span>key) {
+            <span class="kw">let </span>note = snote.note();
+            <span class="kw">if </span>!note.verify(<span class="kw-2">*</span>key) {
                 <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} has an invalid federation signature&quot;</span>);
             }
 
-            <span class="kw">let </span>expected_nonce = Nonce(note.spend_key.x_only_public_key().<span class="number">0</span>);
-            <span class="kw">if </span>note.note.<span class="number">0 </span>!= expected_nonce {
+            <span class="kw">let </span>expected_nonce = Nonce(snote.spend_key.x_only_public_key().<span class="number">0</span>);
+            <span class="kw">if </span>note.nonce != expected_nonce {
                 <span class="macro">bail!</span>(<span class="string">&quot;Note {idx} cannot be spent using the supplied spend key&quot;</span>);
             }
         }
@@ -2668,7 +2683,7 @@
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>spendable_selected_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
                 amount,
-                nonce: note.note.<span class="number">0</span>,
+                nonce: note.nonce(),
             })
             .<span class="kw">await</span>;
         }
@@ -2687,7 +2702,7 @@
             <span class="kw">let </span><span class="prelude-val">Some</span>(mint_key) = <span class="self">self</span>.cfg.tbs_pks.get(<span class="kw-2">*</span>amt) <span class="kw">else </span>{
                 <span class="kw">return </span><span class="bool-val">true</span>;
             };
-            !note.note.verify(<span class="kw-2">*</span>mint_key)
+            !note.note().verify(<span class="kw-2">*</span>mint_key)
         }) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
                 <span class="string">&quot;Invalid note in input: amt={} note={:?}&quot;</span>,
@@ -2698,7 +2713,7 @@
 
         <span class="kw">let </span>(spend_keys, selected_notes) = notes
             .iter_items()
-            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note)))
+            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note())))
             .unzip();
 
         <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid, input_idx| {
@@ -2747,7 +2762,7 @@
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>spendable_selected_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
                 amount,
-                nonce: note.note.<span class="number">0</span>,
+                nonce: note.nonce(),
             })
             .<span class="kw">await</span>;
         }
@@ -3072,8 +3087,21 @@
 /// it)
 </span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableNote {
-    <span class="kw">pub </span>note: Note,
+    <span class="kw">pub </span>signature: tbs::Signature,
     <span class="kw">pub </span>spend_key: KeyPair,
+}
+
+<span class="kw">impl </span>SpendableNote {
+    <span class="kw">fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
+        Nonce(<span class="self">self</span>.spend_key.x_only_public_key().<span class="number">0</span>)
+    }
+
+    <span class="kw">fn </span>note(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Note {
+        Note {
+            nonce: <span class="self">self</span>.nonce(),
+            signature: <span class="self">self</span>.signature,
+        }
+    }
 }
 
 <span class="doccomment">/// An index used to deterministically derive [`Note`]s

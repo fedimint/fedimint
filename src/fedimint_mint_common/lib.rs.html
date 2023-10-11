@@ -265,6 +265,9 @@
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">pub use </span>common::{BackupRequest, SignedBackupRequest};
@@ -331,7 +334,10 @@
 /// In this form it can only be validated, not spent since for that the
 /// corresponding secret spend key is required.
 </span><span class="attr">#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>Note(<span class="kw">pub </span>Nonce, <span class="kw">pub </span>tbs::Signature);
+</span><span class="kw">pub struct </span>Note {
+    <span class="kw">pub </span>nonce: Nonce,
+    <span class="kw">pub </span>signature: tbs::Signature,
+}
 
 <span class="doccomment">/// Unique ID of a mint note.
 ///
@@ -438,12 +444,12 @@
 <span class="kw">impl </span>Note {
     <span class="doccomment">/// Verify the note&#39;s validity under a mit key `pk`
     </span><span class="kw">pub fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: tbs::AggregatePublicKey) -&gt; bool {
-        tbs::verify(<span class="self">self</span>.<span class="number">0</span>.to_message(), <span class="self">self</span>.<span class="number">1</span>, pk)
+        tbs::verify(<span class="self">self</span>.nonce.to_message(), <span class="self">self</span>.signature, pk)
     }
 
     <span class="doccomment">/// Access the nonce as the public key to the spend key
     </span><span class="kw">pub fn </span>spend_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>secp256k1_zkp::XOnlyPublicKey {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>.<span class="number">0
+        <span class="kw-2">&amp;</span><span class="self">self</span>.nonce.<span class="number">0
     </span>}
 }
 

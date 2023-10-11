@@ -396,13 +396,13 @@
     spendable_notes: TieredMulti&lt;SpendableNote&gt;,
     global_context: DynGlobalClientContext,
 ) -&gt; TransactionId {
-    <span class="kw">let </span>(keys, notes): (Vec&lt;<span class="kw">_</span>&gt;, TieredMulti&lt;<span class="kw">_</span>&gt;) = spendable_notes
+    <span class="kw">let </span>(keys, snotes): (Vec&lt;<span class="kw">_</span>&gt;, TieredMulti&lt;<span class="kw">_</span>&gt;) = spendable_notes
         .iter_items()
-        .map(|(amt, note)| (note.spend_key, (amt, note.note)))
+        .map(|(amt, snote)| (snote.spend_key, (amt, snote.note())))
         .unzip();
 
     <span class="kw">let </span>input = ClientInput {
-        input: MintInput(notes),
+        input: MintInput(snotes),
         keys,
         state_machines: Arc::new(<span class="kw">move </span>|txid, input_idx| {
             <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {

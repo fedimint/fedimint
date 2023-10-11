@@ -1147,6 +1147,10 @@
 <a href="#1147" id="1147">1147</a>
 <a href="#1148" id="1148">1148</a>
 <a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1648,11 +1652,15 @@
         }
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>input.iter_items() {
-            <span class="kw">if </span>dbtx.insert_entry(<span class="kw-2">&amp;</span>NonceKey(note.<span class="number">0</span>), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.is_some() {
+            <span class="kw">if </span>dbtx
+                .insert_entry(<span class="kw-2">&amp;</span>NonceKey(note.nonce), <span class="kw-2">&amp;</span>())
+                .<span class="kw">await
+                </span>.is_some()
+            {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin).into_module_error_other();
             }
 
-            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(NonceKey(note.<span class="number">0</span>)), <span class="kw-2">&amp;</span>amount)
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>MintAuditItemKey::Redemption(NonceKey(note.nonce)), <span class="kw-2">&amp;</span>amount)
                 .<span class="kw">await</span>;
         }
 
@@ -2001,9 +2009,9 @@
             bsig_shares,
             server_cfgs.len() - ((server_cfgs.len() - <span class="number">1</span>) / <span class="number">3</span>),
         );
-        <span class="kw">let </span>sig = tbs::unblind_signature(blinding_key, blind_signature);
+        <span class="kw">let </span>signature = tbs::unblind_signature(blinding_key, blind_signature);
 
-        (note_key, Note(nonce, sig))
+        (note_key, Note { nonce, signature })
     }
 
     <span class="attr">#[test_log::test(tokio::test)]

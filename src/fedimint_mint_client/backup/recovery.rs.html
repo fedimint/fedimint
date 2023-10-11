@@ -1064,7 +1064,7 @@
                             <span class="kw">for </span>(amount, note) <span class="kw">in </span>finalized.spendable_notes {
                                 <span class="kw">let </span>key = NoteKey {
                                     amount,
-                                    nonce: note.note.<span class="number">0</span>,
+                                    nonce: note.nonce(),
                                 };
                                 dbtx.insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>;
                             }
@@ -1214,7 +1214,7 @@
             spendable_note_by_nonce: backup
                 .notes
                 .into_iter()
-                .map(|(amount, note)| (note.note.<span class="number">0</span>, (amount, note)))
+                .map(|(amount, note)| (note.nonce(), (amount, note)))
                 .collect(),
             pending_outputs: backup
                 .pending_notes
@@ -1284,7 +1284,7 @@
     <span class="kw">pub fn </span>handle_input(<span class="kw-2">&amp;mut </span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>MintInput) {
         <span class="comment">// We attempt to delete any nonce we see as spent, simple
         </span><span class="kw">for </span>(_amt, note) <span class="kw">in </span>input.<span class="number">0</span>.iter_items() {
-            <span class="self">self</span>.spendable_note_by_nonce.remove(<span class="kw-2">&amp;</span>note.<span class="number">0</span>);
+            <span class="self">self</span>.spendable_note_by_nonce.remove(<span class="kw-2">&amp;</span>note.nonce);
         }
     }
 
