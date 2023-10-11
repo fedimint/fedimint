@@ -2201,11 +2201,6 @@
             .spawn(<span class="string">&quot;register clients&quot;</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                 <span class="kw">let </span>registration_loop = <span class="kw">async </span>{
                     <span class="kw">loop </span>{
-                        <span class="comment">// Allow a 15% buffer of the TTL before the re-registering gateway
-                        // with the federations.
-                        </span><span class="kw">let </span>registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(<span class="number">0.85</span>);
-                        sleep(registration_delay).<span class="kw">await</span>;
-
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway.get_gateway_configuration().<span class="kw">await </span>{
                             <span class="kw">let </span>gateway_state = gateway.state.read().<span class="kw">await</span>.clone();
                             <span class="kw">if let </span>GatewayState::Running { lnrpc, .. } = <span class="kw-2">&amp;</span>gateway_state {
@@ -2240,6 +2235,11 @@
                         } <span class="kw">else </span>{
                             <span class="macro">warn!</span>(<span class="string">&quot;Cannot register clients because gateway configuration is not set.&quot;</span>);
                         }
+
+                        <span class="comment">// Allow a 15% buffer of the TTL before the re-registering gateway
+                        // with the federations.
+                        </span><span class="kw">let </span>registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(<span class="number">0.85</span>);
+                        sleep(registration_delay).<span class="kw">await</span>;
                     }
                 };
 
