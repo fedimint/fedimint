@@ -554,11 +554,6 @@ impl Gateway {
         self.task_group
             .spawn("register clients", move |handle| async move {
                 while !handle.is_shutting_down() {
-                    // Allow a 15% buffer of the TTL before the re-registering gateway
-                    // with the federations.
-                    let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
-                    sleep(registration_delay).await;
-
                     match Self::fetch_lightning_route_hints(lnrpc.clone(), num_route_hints).await {
                         Ok(route_hints) => {
                             for (federation_id, client) in clients.read().await.iter() {
@@ -582,6 +577,11 @@ impl Gateway {
                             );
                         }
                     }
+
+                    // Allow a 15% buffer of the TTL before the re-registering gateway
+                    // with the federations.
+                    let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
+                    sleep(registration_delay).await;
                 }
             })
             .await;
