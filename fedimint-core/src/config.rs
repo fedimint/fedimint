@@ -208,6 +208,27 @@ pub struct ClientConfigResponse {
 )]
 pub struct FederationId(pub threshold_crypto::PublicKey);
 
+#[derive(
+    Debug,
+    Copy,
+    Serialize,
+    Deserialize,
+    Clone,
+    Eq,
+    Hash,
+    PartialEq,
+    Encodable,
+    Decodable,
+    Ord,
+    PartialOrd,
+)]
+/// Prefix of the [`FederationId`], useful for UX improvements
+///
+/// Intentionally compact to save on the encoding. With 4 billion
+/// combinations real-life non-malicious collisions should never
+/// happen.
+pub struct FederationIdPrefix([u8; 4]);
+
 impl Display for FederationId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         format_hex(&self.0.to_bytes(), f)
@@ -224,6 +245,10 @@ impl FederationId {
 
     fn try_from_bytes(bytes: [u8; 48]) -> Option<Self> {
         Some(Self(threshold_crypto::PublicKey::from_bytes(bytes).ok()?))
+    }
+
+    pub fn to_prefix(&self) -> FederationIdPrefix {
+        FederationIdPrefix(self.0.to_bytes()[..4].try_into().expect("can't fail"))
     }
 
     /// Converts a federation id to a public key to which we know but discard
