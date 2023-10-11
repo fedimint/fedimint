@@ -64,7 +64,10 @@ pub struct MintOutputBlindSignatures(pub TieredMulti<tbs::BlindedSignature>);
 /// In this form it can only be validated, not spent since for that the
 /// corresponding secret spend key is required.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Note(pub Nonce, pub tbs::Signature);
+pub struct Note {
+    pub nonce: Nonce,
+    pub signature: tbs::Signature,
+}
 
 /// Unique ID of a mint note.
 ///
@@ -171,12 +174,12 @@ pub struct MintModuleTypes;
 impl Note {
     /// Verify the note's validity under a mit key `pk`
     pub fn verify(&self, pk: tbs::AggregatePublicKey) -> bool {
-        tbs::verify(self.0.to_message(), self.1, pk)
+        tbs::verify(self.nonce.to_message(), self.signature, pk)
     }
 
     /// Access the nonce as the public key to the spend key
     pub fn spend_key(&self) -> &secp256k1_zkp::XOnlyPublicKey {
-        &self.0 .0
+        &self.nonce.0
     }
 }
 

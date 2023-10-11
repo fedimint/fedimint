@@ -412,17 +412,18 @@ impl MintClientExt for Client {
 
         let tbs_pks = &mint.cfg.tbs_pks;
 
-        for (idx, (amt, note)) in notes.iter_items().enumerate() {
+        for (idx, (amt, snote)) in notes.iter_items().enumerate() {
             let key = tbs_pks
                 .get(amt)
                 .ok_or_else(|| anyhow!("Note {idx} uses an invalid amount tier {amt}"))?;
 
-            if !note.note.verify(*key) {
+            let note = snote.note();
+            if !note.verify(*key) {
                 bail!("Note {idx} has an invalid federation signature");
             }
 
-            let expected_nonce = Nonce(note.spend_key.x_only_public_key().0);
-            if note.note.0 != expected_nonce {
+            let expected_nonce = Nonce(snote.spend_key.x_only_public_key().0);
+            if note.nonce != expected_nonce {
                 bail!("Note {idx} cannot be spent using the supplied spend key");
             }
         }
@@ -1034,7 +1035,7 @@ impl MintClientModule {
         for (amount, note) in spendable_selected_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
                 amount,
-                nonce: note.note.0,
+                nonce: note.nonce(),
             })
             .await;
         }
@@ -1053,7 +1054,7 @@ impl MintClientModule {
             let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {
                 return true;
             };
-            !note.note.verify(*mint_key)
+            !note.note().verify(*mint_key)
         }) {
             return Err(anyhow!(
                 "Invalid note in input: amt={} note={:?}",
@@ -1064,7 +1065,7 @@ impl MintClientModule {
 
         let (spend_keys, selected_notes) = notes
             .iter_items()
-            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note)))
+            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note())))
             .unzip();
 
         let sm_gen = Arc::new(move |txid, input_idx| {
@@ -1113,7 +1114,7 @@ impl MintClientModule {
         for (amount, note) in spendable_selected_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
                 amount,
-                nonce: note.note.0,
+                nonce: note.nonce(),
             })
             .await;
         }
@@ -1438,8 +1439,21 @@ impl State for MintClientStateMachines {
 /// it)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
-    pub note: Note,
+    pub signature: tbs::Signature,
     pub spend_key: KeyPair,
+}
+
+impl SpendableNote {
+    fn nonce(&self) -> Nonce {
+        Nonce(self.spend_key.x_only_public_key().0)
+    }
+
+    fn note(&self) -> Note {
+        Note {
+            nonce: self.nonce(),
+            signature: self.signature,
+        }
+    }
 }
 
 /// An index used to deterministically derive [`Note`]s

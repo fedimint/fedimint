@@ -185,13 +185,13 @@ async fn try_cancel_oob_spend(
     spendable_notes: TieredMulti<SpendableNote>,
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
-    let (keys, notes): (Vec<_>, TieredMulti<_>) = spendable_notes
+    let (keys, snotes): (Vec<_>, TieredMulti<_>) = spendable_notes
         .iter_items()
-        .map(|(amt, note)| (note.spend_key, (amt, note.note)))
+        .map(|(amt, snote)| (snote.spend_key, (amt, snote.note())))
         .unzip();
 
     let input = ClientInput {
-        input: MintInput(notes),
+        input: MintInput(snotes),
         keys,
         state_machines: Arc::new(move |txid, input_idx| {
             vec![MintClientStateMachines::Input(MintInputStateMachine {

@@ -110,7 +110,7 @@ impl MicroMintClient {
         MintInput(TieredMulti::from_iter(
             spendable_notes
                 .into_iter()
-                .map(|(amount, snote)| (amount, snote.note)),
+                .map(|(amount, snote)| (amount, snote.note())),
         ))
     }
 }
@@ -376,7 +376,7 @@ fn sanity_check_recovery_fresh_backup() {
         tracker.spendable_note_by_nonce,
         notes_c1_a
             .iter()
-            .map(|(amount, spendable_note)| (spendable_note.note.0, (*amount, *spendable_note)))
+            .map(|(amount, spendable_note)| (spendable_note.nonce(), (*amount, *spendable_note)))
             .collect()
     );
 
@@ -501,7 +501,7 @@ fn sanity_check_recovery_non_empty_backup() {
     for snote in notes_c1_a1 {
         assert!(tracker
             .spendable_note_by_nonce
-            .contains_key(&snote.1.note.0));
+            .contains_key(&snote.1.nonce()));
     }
 }
 
@@ -712,6 +712,6 @@ fn sanity_check_recovery_bn_reuse_with_valid_amount() {
     for snote in notes_c1_b {
         assert!(tracker
             .spendable_note_by_nonce
-            .contains_key(&snote.1.note.0));
+            .contains_key(&snote.1.nonce()));
     }
 }
