@@ -1631,6 +1631,7 @@
 <a href="#1631" id="1631">1631</a>
 <a href="#1632" id="1632">1632</a>
 <a href="#1633" id="1633">1633</a>
+<a href="#1634" id="1634">1634</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1665,7 +1666,7 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-<span class="kw">use </span>fedimint_core::config::FederationId;
+<span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1716,7 +1717,7 @@
 /// out-of-band. Also used for validating and reissuing such out-of-band notes.
 </span><span class="attr">#[derive(Clone, Debug, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>OOBNotes {
-    <span class="kw">pub </span>federation_id: FederationId,
+    <span class="kw">pub </span>federation_id_prefix: FederationIdPrefix,
     <span class="kw">pub </span>notes: TieredMulti&lt;SpendableNote&gt;,
 }
 
@@ -1882,7 +1883,7 @@
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="kw">let </span>(mint, instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>OOBNotes {
-            federation_id,
+            federation_id_prefix,
             notes,
         } = oob_notes;
         <span class="macro">ensure!</span>(
@@ -1890,7 +1891,7 @@
             <span class="string">&quot;Reissuing zero-amount e-cash isn&#39;t supported&quot;
         </span>);
 
-        <span class="kw">if </span>federation_id != mint.federation_id {
+        <span class="kw">if </span>federation_id_prefix != mint.federation_id.to_prefix() {
             <span class="macro">bail!</span>(<span class="string">&quot;Federation ID does not match&quot;</span>);
         }
 
@@ -1993,7 +1994,7 @@
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">let </span>oob_notes = OOBNotes {
-                            federation_id: mint.federation_id,
+                            federation_id_prefix: mint.federation_id.to_prefix(),
                             notes,
                         };
 
@@ -2036,10 +2037,10 @@
     <span class="kw">async fn </span>validate_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, oob_notes: OOBNotes) -&gt; anyhow::Result&lt;Amount&gt; {
         <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>OOBNotes {
-            federation_id,
+            federation_id_prefix,
             notes,
         } = oob_notes;
-        <span class="kw">if </span>federation_id != mint.federation_id {
+        <span class="kw">if </span>federation_id_prefix != mint.federation_id.to_prefix() {
             <span class="macro">bail!</span>(<span class="string">&quot;Federation ID does not match&quot;</span>);
         }
 
@@ -3254,7 +3255,8 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>decoding_empty_oob_notes_fails() {
         <span class="kw">let </span>empty_oob_notes = OOBNotes {
-            federation_id: FederationId(threshold_crypto::SecretKey::random().public_key()),
+            federation_id_prefix: FederationId(threshold_crypto::SecretKey::random().public_key())
+                .to_prefix(),
             notes: Default::default(),
         };
         <span class="kw">let </span>oob_notes_string = empty_oob_notes.to_string();

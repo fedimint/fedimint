@@ -491,8 +491,6 @@
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -878,38 +876,36 @@
         contract_id: ContractId,
         global_context: DynGlobalClientContext,
     ) {
-        <span class="comment">// TODO: Remove polling
-        </span><span class="kw">loop </span>{
-            <span class="kw">let </span>contract = global_context
+        <span class="kw">loop </span>{
+            <span class="comment">// If we fail to get the contract from the federation, we need to keep retrying
+            // until we successfully do.
+            </span><span class="kw">match </span>global_context
                 .module_api()
-                .get_outgoing_contract(contract_id)
-                .<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(contract) = contract {
-                <span class="kw">if </span>contract.contract.cancelled {
-                    <span class="kw">return</span>;
+                .wait_outgoing_contract_cancelled(contract_id)
+                .<span class="kw">await
+            </span>{
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">return</span>,
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">error!</span>(<span class="string">&quot;Error waiting for outgoing contract to be cancelled: {error:?}&quot;</span>);
                 }
             }
 
-            sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
     }
 
     <span class="kw">async fn </span>await_contract_timeout(global_context: DynGlobalClientContext, timelock: u32) {
-        <span class="comment">// TODO: Remove polling
-        </span><span class="kw">loop </span>{
-            <span class="kw">let </span>consensus_block_count = global_context
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>global_context
                 .module_api()
-                .fetch_consensus_block_count()
+                .wait_block_height(timelock <span class="kw">as </span>u64)
                 .<span class="kw">await
-                </span>.map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;ApiError: {e:?}&quot;</span>));
-
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(current_block_count)) = consensus_block_count {
-                <span class="kw">if </span>(timelock <span class="kw">as </span>u64) &lt; current_block_count {
-                    <span class="kw">return</span>;
-                }
+            </span>{
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">return</span>,
+                <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">error!</span>(<span class="string">&quot;Error waiting for block height: {timelock} {error:?}&quot;</span>),
             }
 
-            sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
     }
 }

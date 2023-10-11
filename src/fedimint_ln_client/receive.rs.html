@@ -323,10 +323,6 @@
 <a href="#323" id="323">323</a>
 <a href="#324" id="324">324</a>
 <a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Add;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -340,11 +336,11 @@
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-<span class="kw">use </span>fedimint_ln_common::contracts::DecryptedPreimage;
 <span class="kw">use </span>fedimint_ln_common::{LightningClientContext, LightningInput};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
 
@@ -521,23 +517,19 @@
         invoice: Bolt11Invoice,
         global_context: DynGlobalClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractAccount, LightningReceiveError&gt; {
-        <span class="comment">// TODO: Get rid of polling
-        </span><span class="kw">loop </span>{
-            <span class="kw">let </span>contract_id = (<span class="kw-2">*</span>invoice.payment_hash()).into();
-            <span class="kw">let </span>contract = global_context
+        <span class="kw">let </span>contract_id = (<span class="kw-2">*</span>invoice.payment_hash()).into();
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>global_context
                 .module_api()
-                .get_incoming_contract(contract_id)
-                .<span class="kw">await</span>;
-
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(contract) = contract {
-                <span class="kw">match </span>contract.contract.decrypted_preimage {
-                    DecryptedPreimage::Pending =&gt; {}
-                    DecryptedPreimage::Some(<span class="kw">_</span>) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(contract);
-                    }
-                    DecryptedPreimage::Invalid =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::InvalidPreimage);
-                    }
+                .wait_preimage_decrypted(contract_id)
+                .<span class="kw">await
+            </span>{
+                <span class="prelude-val">Ok</span>((incoming_contract_account, preimage)) =&gt; <span class="kw">match </span>preimage {
+                    <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(incoming_contract_account),
+                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::InvalidPreimage),
+                },
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">error!</span>(<span class="string">&quot;External LN payment error waiting for preimage decryption: {error:?}&quot;</span>);
                 }
             }
 

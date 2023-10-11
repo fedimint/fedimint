@@ -1642,7 +1642,90 @@
 <a href="#1642" id="1642">1642</a>
 <a href="#1643" id="1643">1643</a>
 <a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
+<a href="#1659" id="1659">1659</a>
+<a href="#1660" id="1660">1660</a>
+<a href="#1661" id="1661">1661</a>
+<a href="#1662" id="1662">1662</a>
+<a href="#1663" id="1663">1663</a>
+<a href="#1664" id="1664">1664</a>
+<a href="#1665" id="1665">1665</a>
+<a href="#1666" id="1666">1666</a>
+<a href="#1667" id="1667">1667</a>
+<a href="#1668" id="1668">1668</a>
+<a href="#1669" id="1669">1669</a>
+<a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
+<a href="#1693" id="1693">1693</a>
+<a href="#1694" id="1694">1694</a>
+<a href="#1695" id="1695">1695</a>
+<a href="#1696" id="1696">1696</a>
+<a href="#1697" id="1697">1697</a>
+<a href="#1698" id="1698">1698</a>
+<a href="#1699" id="1699">1699</a>
+<a href="#1700" id="1700">1700</a>
+<a href="#1701" id="1701">1701</a>
+<a href="#1702" id="1702">1702</a>
+<a href="#1703" id="1703">1703</a>
+<a href="#1704" id="1704">1704</a>
+<a href="#1705" id="1705">1705</a>
+<a href="#1706" id="1706">1706</a>
+<a href="#1707" id="1707">1707</a>
+<a href="#1708" id="1708">1708</a>
+<a href="#1709" id="1709">1709</a>
+<a href="#1710" id="1710">1710</a>
+<a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
@@ -1656,7 +1739,8 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
+    WAIT_OFFER_ENDPOINT, WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, WAIT_PREIMAGE_DECRYPTION,
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
@@ -1665,7 +1749,7 @@
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, NumPeers, OutPoint, PeerId,
     ServerModule,
@@ -1674,7 +1758,7 @@
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
 };
-<span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractOffer;
+<span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::{
     Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
     IdentifiableContract, Preimage, PreimageDecryptionShare,
@@ -2527,6 +2611,25 @@
                 }
             },
             <span class="macro">api_endpoint! </span>{
+                WAIT_BLOCK_HEIGHT_ENDPOINT,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, block_height: u64| -&gt; () {
+                    module.wait_block_height(block_height, <span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>;
+                    <span class="prelude-val">Ok</span>(())
+                }
+            },
+            <span class="macro">api_endpoint! </span>{
+                WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; ContractAccount {
+                    <span class="prelude-val">Ok</span>(module.wait_outgoing_contract_account_cancelled(context, contract_id).<span class="kw">await</span>)
+                }
+            },
+            <span class="macro">api_endpoint! </span>{
+                WAIT_PREIMAGE_DECRYPTION,
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, contract_id: ContractId| -&gt; (IncomingContractAccount, <span class="prelude-ty">Option</span>&lt;Preimage&gt;) {
+                    <span class="prelude-val">Ok</span>(module.wait_preimage_decrypted(context, contract_id).<span class="kw">await</span>)
+                }
+            },
+            <span class="macro">api_endpoint! </span>{
                 OFFER_ENDPOINT,
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
                     <span class="prelude-val">Ok</span>(module
@@ -2593,6 +2696,12 @@
         counts[peer_count / <span class="number">2</span>]
     }
 
+    <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+        <span class="kw">while </span>block_height &gt;= <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
+            sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
+        }
+    }
+
     <span class="kw">fn </span>validate_decryption_share(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peer: PeerId,
@@ -2640,6 +2749,61 @@
         </span><span class="kw">let </span>future = context.wait_key_exists(ContractKey(contract_id));
         future.<span class="kw">await
     </span>}
+
+    <span class="kw">async fn </span>wait_outgoing_contract_account_cancelled(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: <span class="kw-2">&amp;mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+        contract_id: ContractId,
+    ) -&gt; ContractAccount {
+        <span class="kw">let </span>future =
+            context.wait_value_matches(ContractKey(contract_id), |contract| {
+                <span class="kw">match </span><span class="kw-2">&amp;</span>contract.contract {
+                    FundedContract::Outgoing(c) =&gt; c.cancelled,
+                    <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+                }
+            });
+        future.<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>wait_preimage_decrypted(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        context: <span class="kw-2">&amp;mut </span>ApiEndpointContext&lt;<span class="lifetime">&#39;_</span>&gt;,
+        contract_id: ContractId,
+    ) -&gt; (IncomingContractAccount, <span class="prelude-ty">Option</span>&lt;Preimage&gt;) {
+        <span class="kw">let </span>future =
+            context.wait_value_matches(ContractKey(contract_id), |contract| {
+                <span class="kw">match </span><span class="kw-2">&amp;</span>contract.contract {
+                    FundedContract::Incoming(c) =&gt; <span class="kw">match </span>c.contract.decrypted_preimage {
+                        DecryptedPreimage::Pending =&gt; <span class="bool-val">false</span>,
+                        DecryptedPreimage::Some(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                        DecryptedPreimage::Invalid =&gt; <span class="bool-val">true</span>,
+                    },
+                    <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+                }
+            });
+
+        <span class="kw">let </span>decrypt_preimage = future.<span class="kw">await</span>;
+        <span class="kw">let </span>incoming_contract_account = <span class="self">Self</span>::get_incoming_contract_account(decrypt_preimage);
+        <span class="kw">match </span>incoming_contract_account
+            .clone()
+            .contract
+            .decrypted_preimage
+        {
+            DecryptedPreimage::Some(preimage) =&gt; (incoming_contract_account, <span class="prelude-val">Some</span>(preimage)),
+            <span class="kw">_ </span>=&gt; (incoming_contract_account, <span class="prelude-val">None</span>),
+        }
+    }
+
+    <span class="kw">fn </span>get_incoming_contract_account(contract: ContractAccount) -&gt; IncomingContractAccount {
+        <span class="kw">if let </span>FundedContract::Incoming(incoming) = contract.contract {
+            <span class="kw">return </span>IncomingContractAccount {
+                amount: contract.amount,
+                contract: incoming.contract,
+            };
+        }
+
+        <span class="macro">panic!</span>(<span class="string">&quot;Contract is not an IncomingContractAccount&quot;</span>);
+    }
 
     <span class="kw">async fn </span>list_gateways(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

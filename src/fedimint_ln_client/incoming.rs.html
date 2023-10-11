@@ -318,11 +318,6 @@
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
 //!
 //! This shared state machine is used by clients
@@ -345,7 +340,7 @@
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, DecryptedPreimage, Preimage};
+<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_ln_common::{LightningInput, LightningOutputOutcome};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -550,32 +545,27 @@
         global_context: DynGlobalClientContext,
         contract_id: ContractId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, IncomingSmError&gt; {
-        <span class="comment">// TODO: Get rid of polling
-        </span><span class="kw">let </span>preimage = <span class="kw">loop </span>{
-            <span class="kw">let </span>contract = global_context
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>global_context
                 .module_api()
-                .get_incoming_contract(contract_id)
-                .<span class="kw">await</span>;
-
-            <span class="kw">match </span>contract {
-                <span class="prelude-val">Ok</span>(contract) =&gt; <span class="kw">match </span>contract.contract.decrypted_preimage {
-                    DecryptedPreimage::Pending =&gt; {}
-                    DecryptedPreimage::Some(preimage) =&gt; <span class="kw">break </span>preimage,
-                    DecryptedPreimage::Invalid =&gt; {
+                .wait_preimage_decrypted(contract_id)
+                .<span class="kw">await
+            </span>{
+                <span class="prelude-val">Ok</span>((incoming_contract_account, preimage)) =&gt; <span class="kw">match </span>preimage {
+                    <span class="prelude-val">Some</span>(preimage) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage),
+                    <span class="prelude-val">None </span>=&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage {
-                            contract: Box::new(contract),
-                        });
+                            contract: Box::new(incoming_contract_account),
+                        })
                     }
                 },
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">&quot;Failed to fetch contract {e:?}&quot;</span>);
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">error!</span>(<span class="string">&quot;Incoming contract error waiting for preimage decryption: {error:?}&quot;</span>);
                 }
             }
 
             sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-        };
-
-        <span class="prelude-val">Ok</span>(preimage)
+        }
     }
 
     <span class="kw">async fn </span>transition_incoming_contract_funded(
