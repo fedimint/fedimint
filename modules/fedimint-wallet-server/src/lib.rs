@@ -342,10 +342,14 @@ impl ServerModule for Wallet {
             items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
+        let current_fee_rate_vote = dbtx
+            .get_value(&FeeRateVoteKey(self.cfg.local.our_peer_id))
+            .await
+            .unwrap_or(self.cfg.consensus.default_fee);
         // TODO: We should not be panicking
         let fee_rate_proposal = self.get_fee_rate().await.expect("bitcoind rpc failed");
 
-        if fee_rate_proposal != self.consensus_fee_rate(dbtx).await {
+        if fee_rate_proposal != current_fee_rate_vote {
             items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
         }
 
