@@ -1960,6 +1960,9 @@
 <a href="#1960" id="1960">1960</a>
 <a href="#1961" id="1961">1961</a>
 <a href="#1962" id="1962">1962</a>
+<a href="#1963" id="1963">1963</a>
+<a href="#1964" id="1964">1964</a>
+<a href="#1965" id="1965">1965</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2156,6 +2159,7 @@
             args.cfg().to_typed()<span class="question-mark">?</span>,
             args.db().clone(),
             <span class="kw-2">&amp;mut </span>args.task_group().clone(),
+            args.our_peer_id(),
         )
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into())
@@ -2183,7 +2187,6 @@
                         .map(|(peer_id, (<span class="kw">_</span>, pk))| (<span class="kw-2">*</span>peer_id, CompressedPublicKey { key: <span class="kw-2">*</span>pk }))
                         .collect(),
                     <span class="kw-2">*</span>sk,
-                    <span class="kw-2">*</span>id,
                     peers.threshold(),
                     params.consensus.network,
                     params.consensus.finality_delay,
@@ -2219,7 +2222,6 @@
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
-            peers.our_id,
             peers.peer_ids().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
@@ -2294,7 +2296,7 @@
         </span>);
 
         <span class="kw">let </span>current_vote = dbtx
-            .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(<span class="self">self</span>.cfg.local.our_peer_id))
+            .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(<span class="self">self</span>.our_peer_id))
             .<span class="kw">await
             </span>.unwrap_or(<span class="number">0</span>);
 
@@ -2303,7 +2305,7 @@
         }
 
         <span class="kw">let </span>current_fee_rate_vote = dbtx
-            .get_value(<span class="kw-2">&amp;</span>FeeRateVoteKey(<span class="self">self</span>.cfg.local.our_peer_id))
+            .get_value(<span class="kw-2">&amp;</span>FeeRateVoteKey(<span class="self">self</span>.our_peer_id))
             .<span class="kw">await
             </span>.unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee);
         <span class="comment">// TODO: We should not be panicking
@@ -2634,6 +2636,7 @@
     btc_rpc: DynBitcoindRpc,
     <span class="doccomment">/// The result of last successful get_block_count
     </span>block_count_local: std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;u32&gt;&gt;,
+    our_peer_id: PeerId,
 }
 
 <span class="kw">impl </span>Wallet {
@@ -2641,9 +2644,10 @@
         cfg: WalletConfig,
         db: Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        our_peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;Wallet&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(cfg, db, btc_rpc, task_group).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">pub async fn </span>new_with_bitcoind(
@@ -2651,6 +2655,7 @@
         db: Database,
         bitcoind: DynBitcoindRpc,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        our_peer_id: PeerId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletError&gt; {
         <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind.clone();
         <span class="kw">let </span>broadcaster_db = db.clone();
@@ -2678,6 +2683,7 @@
             secp: Default::default(),
             block_count_local: Default::default(),
             btc_rpc: bitcoind_rpc,
+            our_peer_id,
         };
 
         <span class="kw">match </span>wallet.get_block_count().<span class="kw">await </span>{

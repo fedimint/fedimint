@@ -950,6 +950,14 @@
 <a href="#950" id="950">950</a>
 <a href="#951" id="951">951</a>
 <a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 <span class="kw">pub mod </span>version;
@@ -1442,6 +1450,7 @@
         cfg: ServerModuleConfig,
         db: Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        our_peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt;;
 
     <span class="doccomment">/// Retrieves the `MigrationMap` from the module to be applied to the
@@ -1519,6 +1528,7 @@
     cfg: ServerModuleConfig,
     db: Database,
     task_group: TaskGroup,
+    our_peer_id: PeerId,
     <span class="comment">// ClientModuleInitArgs needs a bound because sometimes we need
     // to pass associated-types data, so let&#39;s just put it here right away
     </span>_marker: marker::PhantomData&lt;S&gt;,
@@ -1537,6 +1547,10 @@
 
     <span class="kw">pub fn </span>task_group(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>TaskGroup {
         <span class="kw-2">&amp;</span><span class="self">self</span>.task_group
+    }
+
+    <span class="kw">pub fn </span>our_peer_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PeerId {
+        <span class="self">self</span>.our_peer_id
     }
 }
 <span class="doccomment">/// Module Generation trait with associated types
@@ -1634,6 +1648,7 @@
         cfg: ServerModuleConfig,
         db: Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        our_peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;DynServerModule&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleInit&gt;::init(
             <span class="self">self</span>,
@@ -1641,6 +1656,7 @@
                 cfg,
                 db,
                 task_group: task_group.clone(),
+                our_peer_id,
                 _marker: Default::default(),
             },
         )

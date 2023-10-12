@@ -379,6 +379,11 @@
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -499,7 +504,12 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>module = init
-                .init(cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>, isolated_db, task_group)
+                .init(
+                    cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
+                    isolated_db,
+                    task_group,
+                    cfg.local.identity,
+                )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             modules.insert(<span class="kw-2">*</span>module_id, (kind, module));
