@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["db"],"struct":["Dummy","DummyGen","DummyVerificationCache"]};
+window.SIDEBAR_ITEMS = {"mod":["db"],"struct":["Dummy","DummyGen"]};

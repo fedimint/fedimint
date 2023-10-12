@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["debug","server"],"struct":["FedimintConsensus","FundingVerifier","VerificationCaches"]};
+window.SIDEBAR_ITEMS = {"mod":["debug","server"],"struct":["FedimintConsensus","FundingVerifier"]};
