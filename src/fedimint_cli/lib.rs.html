@@ -781,6 +781,9 @@
 <a href="#781" id="781">781</a>
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -881,6 +884,7 @@
 
 <span class="doccomment">/// Types of error the cli return
 </span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
 </span><span class="kw">enum </span>CliErrorKind {
     NetworkError,
     IOError,
@@ -1211,6 +1215,7 @@ Examples:
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
 </span><span class="kw">struct </span>PayRequest {
     notes: TieredMulti&lt;SpendableNote&gt;,
     invoice: lightning_invoice::Bolt11Invoice,
@@ -1523,6 +1528,7 @@ Examples:
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
 </span><span class="kw">pub struct </span>LnInvoiceResponse {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>invoice: String,
