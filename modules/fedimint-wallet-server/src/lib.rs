@@ -33,7 +33,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
 };
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
 };
@@ -68,7 +68,6 @@ use miniscript::psbt::PsbtExt;
 use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use rand::rngs::OsRng;
 use secp256k1::{Message, Scalar};
-use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -305,7 +304,6 @@ impl ServerModuleInit for WalletGen {
 impl ServerModule for Wallet {
     type Common = WalletModuleTypes;
     type Gen = WalletGen;
-    type VerificationCache = WalletVerificationCache;
 
     async fn consensus_proposal<'a>(
         &'a self,
@@ -456,18 +454,10 @@ impl ServerModule for Wallet {
         Ok(())
     }
 
-    fn build_verification_cache<'a>(
-        &'a self,
-        _inputs: impl Iterator<Item = &'a WalletInput>,
-    ) -> Self::VerificationCache {
-        WalletVerificationCache
-    }
-
     async fn process_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b WalletInput,
-        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
@@ -1169,11 +1159,6 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
         }
     }
 }
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletVerificationCache;
-
-impl fedimint_core::server::VerificationCache for WalletVerificationCache {}
 
 struct StatelessWallet<'a> {
     descriptor: &'a Descriptor<CompressedPublicKey>,

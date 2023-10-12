@@ -33,7 +33,7 @@ use crate::db::{
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
 use crate::net::peers::MuxPeerConnections;
-use crate::server::{DynServerModule, VerificationCache};
+use crate::server::DynServerModule;
 use crate::task::{MaybeSend, TaskGroup};
 use crate::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
@@ -827,7 +827,6 @@ pub trait ServerModule: Debug + Sized {
     type Common: ModuleCommon;
 
     type Gen: ServerModuleInit;
-    type VerificationCache: VerificationCache;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
@@ -860,16 +859,6 @@ pub trait ServerModule: Debug + Sized {
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
 
-    /// Some modules may have slow to verify inputs that would block transaction
-    /// processing. If the slow part of verification can be modeled as a
-    /// pure function not involving any system state we can build a lookup
-    /// table in a hyper-parallelized manner. This function is meant for
-    /// constructing such lookup tables.
-    fn build_verification_cache<'a>(
-        &'a self,
-        inputs: impl Iterator<Item = &'a <Self::Common as ModuleCommon>::Input> + MaybeSend,
-    ) -> Self::VerificationCache;
-
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
@@ -878,7 +867,6 @@ pub trait ServerModule: Debug + Sized {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
-        verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
