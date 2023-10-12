@@ -170,7 +170,7 @@ mod fedimint_migration_tests {
     };
     use crate::core::DynOutput;
     use crate::db::{
-        get_global_database_migrations, AcceptedItem, AcceptedItemKey,
+        get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, ClientConfigDownloadKey,
         ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix, SignedBlockKey,
         SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
@@ -302,7 +302,18 @@ mod fedimint_migration_tests {
 
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {
-                        DbKeyPrefix::AcceptedItem => {},
+                        DbKeyPrefix::AcceptedItem => {
+                            let accepted_items = dbtx
+                                .find_by_prefix(&AcceptedItemPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let accepted_items = accepted_items.len();
+                            ensure!(
+                                    accepted_items > 0,
+                                    "validate_migrations was not able to read any AcceptedItems"
+                                );
+                        },
                         DbKeyPrefix::AcceptedTransaction => {
                                 let accepted_transactions = dbtx
                                     .find_by_prefix(&AcceptedTransactionKeyPrefix)
