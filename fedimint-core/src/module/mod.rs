@@ -5,7 +5,7 @@ pub mod version;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::io::Read;
-use std::marker::PhantomData;
+use std::marker::{self, PhantomData};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -537,6 +537,33 @@ pub trait CommonModuleInit: Debug + Sized {
     fn decoder() -> Decoder;
 }
 
+pub struct ServerModuleInitArgs<S>
+where
+    S: ServerModuleInit,
+{
+    cfg: ServerModuleConfig,
+    db: Database,
+    task_group: TaskGroup,
+    // ClientModuleInitArgs needs a bound because sometimes we need
+    // to pass associated-types data, so let's just put it here right away
+    _marker: marker::PhantomData<S>,
+}
+
+impl<S> ServerModuleInitArgs<S>
+where
+    S: ServerModuleInit,
+{
+    pub fn cfg(&self) -> &ServerModuleConfig {
+        &self.cfg
+    }
+    pub fn db(&self) -> &Database {
+        &self.db
+    }
+
+    pub fn task_group(&self) -> &TaskGroup {
+        &self.task_group
+    }
+}
 /// Module Generation trait with associated types
 ///
 /// Needs to be implemented by module generation type
@@ -576,12 +603,7 @@ pub trait ServerModuleInit: ExtendsCommonModuleInit + Sized {
     }
 
     /// Initialize the [`DynServerModule`] instance from its config
-    async fn init(
-        &self,
-        cfg: ServerModuleConfig,
-        db: Database,
-        task_group: &mut TaskGroup,
-    ) -> anyhow::Result<DynServerModule>;
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule>;
 
     /// Retrieves the `MigrationMap` from the module to be applied to the
     /// database before the module is initialized. The `MigrationMap` is
@@ -644,7 +666,16 @@ where
         db: Database,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<DynServerModule> {
-        <Self as ServerModuleInit>::init(self, cfg, db, task_group).await
+        <Self as ServerModuleInit>::init(
+            self,
+            &ServerModuleInitArgs {
+                cfg,
+                db,
+                task_group: task_group.clone(),
+                _marker: Default::default(),
+            },
+        )
+        .await
     }
 
     fn get_database_migrations(&self) -> MigrationMap {
