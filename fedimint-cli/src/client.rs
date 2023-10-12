@@ -374,6 +374,7 @@ pub async fn handle_command(
         }
         ClientCmd::ListOperations { limit } => {
             #[derive(Serialize)]
+            #[serde(rename_all(serialize = "snake_case"))]
             struct OperationOutput {
                 id: OperationId,
                 creation_time: String,
@@ -491,6 +492,7 @@ async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> 
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
 struct InfoResponse {
     federation_id: FederationId,
     network: Network,
@@ -511,6 +513,7 @@ pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_core::Amount, ParseAmou
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
 struct PayInvoiceResponse {
     operation_id: OperationId,
     contract_id: ContractId,

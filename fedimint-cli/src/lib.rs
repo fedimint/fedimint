@@ -98,6 +98,7 @@ impl fmt::Display for CliOutput {
 
 /// Types of error the cli return
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
 enum CliErrorKind {
     NetworkError,
     IOError,
@@ -428,6 +429,7 @@ Examples:
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
 struct PayRequest {
     notes: TieredMulti<SpendableNote>,
     invoice: lightning_invoice::Bolt11Invoice,
@@ -740,6 +742,7 @@ fn salt_from_file_path(file_path: &Path) -> PathBuf {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all(serialize = "snake_case"))]
 pub struct LnInvoiceResponse {
     pub operation_id: OperationId,
     pub invoice: String,
