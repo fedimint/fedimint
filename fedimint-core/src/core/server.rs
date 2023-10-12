@@ -11,37 +11,10 @@ use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
 use super::*;
 use crate::db::ModuleDatabaseTransaction;
-use crate::maybe_add_send_sync;
 use crate::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ModuleError,
     ServerModule, TransactionItemAmount,
 };
-use crate::task::{MaybeSend, MaybeSync};
-
-pub trait IVerificationCache: Debug {
-    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
-    fn clone(&self) -> DynVerificationCache;
-}
-
-dyn_newtype_define! {
-    pub DynVerificationCache(Box<IVerificationCache>)
-}
-
-// TODO: make macro impl that doesn't force en/decodable
-pub trait VerificationCache: Clone + Debug + MaybeSend + MaybeSync + 'static {}
-
-impl<T> IVerificationCache for T
-where
-    T: VerificationCache + 'static,
-{
-    fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
-        self
-    }
-
-    fn clone(&self) -> DynVerificationCache {
-        <Self as Clone>::clone(self).into()
-    }
-}
 
 /// Backend side module interface
 ///
@@ -70,13 +43,6 @@ pub trait IServerModule: Debug {
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
 
-    /// Some modules may have slow to verify inputs that would block transaction
-    /// processing. If the slow part of verification can be modeled as a
-    /// pure function not involving any system state we can build a lookup
-    /// table in a hyper-parallelized manner. This function is meant for
-    /// constructing such lookup tables.
-    fn build_verification_cache(&self, inputs: &[DynInput]) -> DynVerificationCache;
-
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
@@ -85,7 +51,6 @@ pub trait IServerModule: Debug {
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DynInput,
-        verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -186,23 +151,6 @@ where
         .await
     }
 
-    /// Some modules may have slow to verify inputs that would block transaction
-    /// processing. If the slow part of verification can be modeled as a
-    /// pure function not involving any system state we can build a lookup
-    /// table in a hyper-parallelized manner. This function is meant for
-    /// constructing such lookup tables.
-    fn build_verification_cache<'a>(&self, inputs: &[DynInput]) -> DynVerificationCache {
-        <Self as ServerModule>::build_verification_cache(
-            self,
-            inputs.iter().map(|i| {
-                i.as_any()
-                    .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
-                    .expect("incorrect input type passed to module plugin")
-            }),
-        )
-        .into()
-    }
-
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
@@ -211,7 +159,6 @@ where
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DynInput,
-        verification_cache: &DynVerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         <Self as ServerModule>::process_input(
             self,
@@ -220,10 +167,6 @@ where
                 .as_any()
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
-            verification_cache
-                .as_any()
-                .downcast_ref::<<Self as ServerModule>::VerificationCache>()
-                .expect("incorrect verification cache type passed to module plugin"),
         )
         .await
         .map(Into::into)

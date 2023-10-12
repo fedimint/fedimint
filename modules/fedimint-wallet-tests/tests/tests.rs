@@ -464,11 +464,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     )?));
 
     match wallet
-        .process_input(
-            &mut dbtx.with_module_prefix(module_instance_id),
-            &input,
-            &fedimint_wallet_server::WalletVerificationCache,
-        )
+        .process_input(&mut dbtx.with_module_prefix(module_instance_id), &input)
         .await
     {
         Ok(_) => bail!("Expected peg-in to fail"),
@@ -491,11 +487,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 
     assert_matches!(
         wallet
-            .process_input(
-                &mut dbtx.with_module_prefix(module_instance_id),
-                &input,
-                &fedimint_wallet_server::WalletVerificationCache,
-            )
+            .process_input(&mut dbtx.with_module_prefix(module_instance_id), &input,)
             .await,
         Ok(_)
     );

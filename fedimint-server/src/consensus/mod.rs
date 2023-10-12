@@ -3,22 +3,18 @@
 pub mod debug;
 pub mod server;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::bail;
 use bitcoin_hashes::sha256;
 use fedimint_core::block::{AcceptedItem, Block, SignedBlock};
-use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::epoch::*;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::TransactionItemAmount;
-use fedimint_core::server::DynVerificationCache;
 use fedimint_core::{timing, Amount, OutPoint, PeerId};
 use futures::StreamExt;
-use itertools::Itertools;
 use tokio::sync::RwLock;
 use tracing::debug;
 
@@ -29,7 +25,7 @@ use crate::db::{
     ClientConfigSignatureKey, ClientConfigSignatureShareKey, ClientConfigSignatureSharePrefix,
     SignedBlockKey, SignedBlockPrefix,
 };
-use crate::transaction::{Transaction, TransactionError};
+use crate::transaction::TransactionError;
 
 // TODO: we should make other fields private and get rid of this
 #[non_exhaustive]
@@ -49,19 +45,6 @@ pub struct FedimintConsensus {
     pub session_index: u64,
     /// The index of the next consensus item
     pub item_index: u64,
-}
-
-#[derive(Debug)]
-pub struct VerificationCaches {
-    pub caches: HashMap<ModuleInstanceId, DynVerificationCache>,
-}
-
-impl VerificationCaches {
-    pub(crate) fn get_cache(&self, module_key: ModuleInstanceId) -> &DynVerificationCache {
-        self.caches
-            .get(&module_key)
-            .expect("Verification caches were built for all modules")
-    }
 }
 
 impl FedimintConsensus {
@@ -217,7 +200,6 @@ impl FedimintConsensus {
                 }
 
                 let txid = transaction.tx_hash();
-                let caches = self.build_verification_caches(transaction.clone());
 
                 let mut funding_verifier = FundingVerifier::default();
                 let mut public_keys = Vec::new();
@@ -229,7 +211,6 @@ impl FedimintConsensus {
                         .process_input(
                             &mut dbtx.with_module_prefix(input.module_instance_id()),
                             input,
-                            caches.get_cache(input.module_instance_id()),
                         )
                         .await?;
 
@@ -325,24 +306,6 @@ impl FedimintConsensus {
                 Ok(())
             }
         }
-    }
-
-    fn build_verification_caches(&self, transaction: Transaction) -> VerificationCaches {
-        let _timing /* logs on drop */ = timing::TimeReporter::new("build_verification_caches");
-        let module_inputs = transaction
-            .inputs
-            .into_iter()
-            .into_group_map_by(|input| input.module_instance_id());
-
-        let caches = module_inputs
-            .into_iter()
-            .map(|(module_key, inputs)| {
-                let module = self.modules.get_expect(module_key);
-                (module_key, module.build_verification_cache(&inputs))
-            })
-            .collect();
-
-        VerificationCaches { caches }
     }
 }
 

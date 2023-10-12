@@ -10,7 +10,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
     REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
@@ -57,7 +57,6 @@ use fedimint_metrics::{
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info_span, trace};
 
@@ -365,7 +364,6 @@ pub struct Lightning {
 impl ServerModule for Lightning {
     type Common = LightningModuleTypes;
     type Gen = LightningGen;
-    type VerificationCache = LightningVerificationCache;
 
     async fn consensus_proposal(
         &self,
@@ -541,18 +539,10 @@ impl ServerModule for Lightning {
         Ok(())
     }
 
-    fn build_verification_cache<'a>(
-        &'a self,
-        _inputs: impl Iterator<Item = &'a LightningInput>,
-    ) -> Self::VerificationCache {
-        LightningVerificationCache
-    }
-
     async fn process_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b LightningInput,
-        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let mut account = dbtx
             .get_value(&ContractKey(input.contract_id))
@@ -1138,10 +1128,6 @@ impl Lightning {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct LightningVerificationCache;
-
-impl fedimint_core::server::VerificationCache for LightningVerificationCache {}
 
 #[cfg(test)]
 mod tests {
@@ -1172,7 +1158,7 @@ mod tests {
     use rand::rngs::OsRng;
     use secp256k1::{generate_keypair, XOnlyPublicKey};
 
-    use crate::{Lightning, LightningGen, LightningVerificationCache};
+    use crate::{Lightning, LightningGen};
 
     const MINTS: usize = 4;
 
@@ -1314,11 +1300,7 @@ mod tests {
             .await;
 
         let processed_input_meta = server
-            .process_input(
-                &mut module_dbtx,
-                &lightning_input,
-                &LightningVerificationCache {},
-            )
+            .process_input(&mut module_dbtx, &lightning_input)
             .await
             .expect("should process valid incoming contract");
         let expected_input_meta = InputMeta {
@@ -1379,11 +1361,7 @@ mod tests {
             .await;
 
         let processed_input_meta = server
-            .process_input(
-                &mut module_dbtx,
-                &lightning_input,
-                &LightningVerificationCache {},
-            )
+            .process_input(&mut module_dbtx, &lightning_input)
             .await
             .expect("should process valid outgoing contract");
 

@@ -16,7 +16,6 @@ use fedimint_core::module::{
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::MaybeSend;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeers,
     OutPoint, PeerId, ServerModule, Tiered, TieredMulti, TieredMultiZip,
@@ -323,7 +322,6 @@ pub struct Mint {
 impl ServerModule for Mint {
     type Common = MintModuleTypes;
     type Gen = MintGen;
-    type VerificationCache = VerificationCache;
 
     async fn consensus_proposal(
         &self,
@@ -473,18 +471,10 @@ impl ServerModule for Mint {
         Ok(())
     }
 
-    fn build_verification_cache<'a>(
-        &'a self,
-        _inputs: impl Iterator<Item = &'a MintInput> + MaybeSend,
-    ) -> Self::VerificationCache {
-        VerificationCache
-    }
-
     async fn process_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b MintInput,
-        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let iter = input.iter_items();
 
@@ -770,7 +760,7 @@ mod test {
     use crate::common::config::MintGenParamsConsensus;
     use crate::{
         Mint, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate, MintGen,
-        MintGenParams, VerificationCache,
+        MintGenParams,
     };
 
     const MINTS: usize = 5;
@@ -874,20 +864,12 @@ mod test {
 
         // Double spend in same epoch is detected
         let mut dbtx = db.begin_transaction().await;
-        mint.process_input(
-            &mut dbtx.with_module_prefix(42),
-            &input,
-            &VerificationCache {},
-        )
-        .await
-        .expect("Spend of valid e-cash works");
+        mint.process_input(&mut dbtx.with_module_prefix(42), &input)
+            .await
+            .expect("Spend of valid e-cash works");
         assert_matches!(
-            mint.process_input(
-                &mut dbtx.with_module_prefix(42),
-                &input,
-                &VerificationCache {}
-            )
-            .await,
+            mint.process_input(&mut dbtx.with_module_prefix(42), &input,)
+                .await,
             Err(_)
         );
 
@@ -900,21 +882,12 @@ mod test {
                 .collect(),
         );
         assert_matches!(
-            mint.process_input(
-                &mut dbtx.with_module_prefix(42),
-                &input2,
-                &VerificationCache {}
-            )
-            .await,
+            mint.process_input(&mut dbtx.with_module_prefix(42), &input2,)
+                .await,
             Err(_)
         );
     }
 }
-
-#[derive(Debug, Clone)]
-pub struct VerificationCache;
-
-impl fedimint_core::server::VerificationCache for VerificationCache {}
 
 #[cfg(test)]
 mod fedimint_migration_tests {

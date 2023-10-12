@@ -37,7 +37,6 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
-use itertools::Itertools;
 use jsonrpsee::RpcModule;
 use secp256k1_zkp::SECP256K1;
 use tokio::sync::RwLock;
@@ -48,7 +47,7 @@ use crate::backup::ClientBackupSnapshot;
 use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::consensus::{FundingVerifier, VerificationCaches};
+use crate::consensus::FundingVerifier;
 use crate::db::{
     AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
     ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
@@ -224,8 +223,6 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        let caches = self.build_verification_caches(transaction.clone());
-
         let mut funding_verifier = FundingVerifier::default();
         let mut public_keys = Vec::new();
 
@@ -236,7 +233,6 @@ impl ConsensusApi {
                 .process_input(
                     &mut dbtx.with_module_prefix(input.module_instance_id()),
                     input,
-                    caches.get_cache(input.module_instance_id()),
                 )
                 .await?;
 
@@ -267,23 +263,6 @@ impl ConsensusApi {
             .await?;
 
         Ok(())
-    }
-
-    fn build_verification_caches(&self, transaction: Transaction) -> VerificationCaches {
-        let module_inputs = transaction
-            .inputs
-            .into_iter()
-            .into_group_map_by(|input| input.module_instance_id());
-
-        let caches = module_inputs
-            .into_iter()
-            .map(|(module_key, inputs)| {
-                let module = self.modules.get_expect(module_key);
-                (module_key, module.build_verification_cache(&inputs))
-            })
-            .collect();
-
-        VerificationCaches { caches }
     }
 
     pub async fn await_transaction(

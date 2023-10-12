@@ -237,7 +237,6 @@ impl ServerModule for Dummy {
     /// Define the consensus types
     type Common = DummyModuleTypes;
     type Gen = DummyGen;
-    type VerificationCache = DummyVerificationCache;
 
     async fn consensus_proposal(
         &self,
@@ -323,18 +322,10 @@ impl ServerModule for Dummy {
         Ok(())
     }
 
-    fn build_verification_cache<'a>(
-        &'a self,
-        _inputs: impl Iterator<Item = &'a DummyInput> + Send,
-    ) -> Self::VerificationCache {
-        DummyVerificationCache
-    }
-
     async fn process_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut ModuleDatabaseTransaction<'c>,
         input: &'b DummyInput,
-        _cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
         let current_funds = dbtx
             .get_value(&DummyFundsKeyV1(input.account))
@@ -455,12 +446,6 @@ impl ServerModule for Dummy {
         ]
     }
 }
-
-/// An in-memory cache we could use for faster validation
-#[derive(Debug, Clone)]
-pub struct DummyVerificationCache;
-
-impl fedimint_core::server::VerificationCache for DummyVerificationCache {}
 
 impl Dummy {
     /// Create new module instance
