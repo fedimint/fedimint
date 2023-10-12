@@ -275,9 +275,31 @@ impl LightningClientExt for Client {
             return Ok(completed_payment);
         }
 
-        let operation_id = lightning
-            .get_payment_operation_id(invoice.payment_hash(), prev_payment_result, &mut dbtx)
+        // Verify that no previous payment attempt is still running
+        let prev_operation_id = lightning
+            .get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index)
             .await;
+        if self.has_active_states(prev_operation_id).await {
+            return Err(anyhow::anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
+        }
+
+        let next_index = prev_payment_result.index + 1;
+        let operation_id = lightning
+            .get_payment_operation_id(invoice.payment_hash(), next_index)
+            .await;
+
+        let new_payment_result = PaymentResult {
+            index: next_index,
+            completed_payment: None,
+        };
+
+        dbtx.insert_entry(
+            &PaymentResultKey {
+                payment_hash: *invoice.payment_hash(),
+            },
+            &new_payment_result,
+        )
+        .await;
 
         let is_internal_payment =
             invoice_has_internal_payment_markers(&invoice, self.get_internal_payment_markers()?)
@@ -757,33 +779,15 @@ impl LightningClientModule {
     async fn get_payment_operation_id(
         &self,
         payment_hash: &sha256::Hash,
-        prev_payment_result: PaymentResult,
-        dbtx: &mut DatabaseTransaction<'_>,
+        index: u16,
     ) -> OperationId {
-        let next_index = prev_payment_result.index + 1;
-
         // Copy the 32 byte payment hash and a 2 byte index to make every payment
         // attempt have a unique `OperationId`
         let mut bytes = [0; 34];
         bytes[0..32].copy_from_slice(&payment_hash.into_inner());
-        bytes[32..34].copy_from_slice(&next_index.to_le_bytes());
+        bytes[32..34].copy_from_slice(&index.to_le_bytes());
         let hash: sha256::Hash = Hash::hash(&bytes);
-        let operation_id = OperationId(hash.into_inner());
-
-        let new_payment_result = PaymentResult {
-            index: next_index,
-            completed_payment: None,
-        };
-
-        dbtx.insert_entry(
-            &PaymentResultKey {
-                payment_hash: *payment_hash,
-            },
-            &new_payment_result,
-        )
-        .await;
-
-        operation_id
+        OperationId(hash.into_inner())
     }
 
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
