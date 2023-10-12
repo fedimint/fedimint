@@ -12,18 +12,17 @@ use async_stream::stream;
 use bitcoin::{Address, Network};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::init::ClientModuleInit;
+use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-use fedimint_core::api::{DynGlobalApi, DynModuleApi};
+use fedimint_core::api::DynModuleApi;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
-use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
@@ -436,23 +435,16 @@ impl ClientModuleInit for WalletClientGen {
             .expect("no version conflicts")
     }
 
-    async fn init(
-        &self,
-        _federation_id: FederationId,
-        cfg: WalletClientConfig,
-        _db: Database,
-        _api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
-        _api: DynGlobalApi,
-        module_api: DynModuleApi,
-    ) -> anyhow::Result<Self::Module> {
-        let rpc_config = self.0.clone().unwrap_or(cfg.default_bitcoin_rpc.clone());
+    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        let rpc_config = self
+            .0
+            .clone()
+            .unwrap_or(args.cfg().default_bitcoin_rpc.clone());
         Ok(WalletClientModule {
-            cfg,
-            module_root_secret,
-            module_api,
-            notifier,
+            cfg: args.cfg().clone(),
+            module_root_secret: args.module_root_secret().clone(),
+            module_api: args.module_api().clone(),
+            notifier: args.notifier().clone(),
             rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
             secp: Default::default(),
         })

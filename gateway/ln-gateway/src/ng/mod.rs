@@ -6,18 +6,18 @@ use std::time::Duration;
 
 use async_stream::stream;
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::init::ClientModuleInit;
+use fedimint_client::derivable_secret::ChildId;
+use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
-use fedimint_core::api::{DynGlobalApi, DynModuleApi};
+use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -342,29 +342,20 @@ impl ClientModuleInit for GatewayClientGen {
             .expect("no version conflicts")
     }
 
-    async fn init(
-        &self,
-        _federation_id: FederationId,
-        cfg: LightningClientConfig,
-        _db: Database,
-        _api_version: ApiVersion,
-        module_root_secret: DerivableSecret,
-        notifier: ModuleNotifier<DynGlobalClientContext, <Self::Module as ClientModule>::States>,
-        _api: DynGlobalApi,
-        module_api: DynModuleApi,
-    ) -> anyhow::Result<Self::Module> {
+    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(GatewayClientModule {
             lnrpc: self.lnrpc.clone(),
-            cfg,
-            notifier,
-            redeem_key: module_root_secret
+            cfg: args.cfg().clone(),
+            notifier: args.notifier().clone(),
+            redeem_key: args
+                .module_root_secret()
                 .child_key(ChildId(0))
                 .to_secp_key(&Secp256k1::new()),
+            module_api: args.module_api().clone(),
             node_pub_key: self.node_pub_key,
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
             fees: self.fees,
-            module_api,
         })
     }
 }
