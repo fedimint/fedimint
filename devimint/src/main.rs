@@ -1298,7 +1298,21 @@ async fn handle_command() -> Result<()> {
                     dev_fed.fed.pegin(10_000),
                     dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                     dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
-                    process_mgr.spawn_daemon("faucet", cmd!("faucet")),
+                    async {
+                        let faucet = process_mgr.spawn_daemon("faucet", cmd!("faucet")).await?;
+
+                        poll("waiting for faucet startup", None, || async {
+                            TcpStream::connect(format!(
+                                "127.0.0.1:{}",
+                                process_mgr.globals.FM_PORT_FAUCET
+                            ))
+                            .await
+                            .context("connect to faucet")
+                            .map_err(ControlFlow::Continue)
+                        })
+                        .await?;
+                        Ok(faucet)
+                    },
                 )?;
                 let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
                 Ok::<_, anyhow::Error>((daemons, faucet))
