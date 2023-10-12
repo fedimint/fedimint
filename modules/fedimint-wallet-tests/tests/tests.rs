@@ -422,6 +422,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         db.clone(),
         dyn_bitcoin_rpc.clone(),
         &mut task_group,
+        PeerId::from(0),
     )
     .await?;
 
