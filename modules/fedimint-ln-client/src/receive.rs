@@ -89,6 +89,7 @@ pub struct LightningReceiveSubmittedOffer {
 }
 
 #[derive(Error, Clone, Debug, Serialize, Deserialize, Encodable, Decodable, Eq, PartialEq)]
+#[serde(rename_all(serialize = "snake_case"))]
 pub enum LightningReceiveError {
     #[error("Offer transaction was rejected")]
     Rejected,
