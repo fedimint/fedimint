@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::time::Duration;
+
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::endpoint_constants::{
@@ -9,11 +12,12 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::UnionResponses;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
+use itertools::Itertools;
 
 use crate::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use crate::contracts::outgoing::OutgoingContractAccount;
 use crate::contracts::{ContractId, FundedContract, Preimage};
-use crate::{ContractAccount, LightningGateway};
+use crate::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 
 #[apply(async_trait_maybe_send!)]
 pub trait LnFederationApi {
@@ -33,8 +37,11 @@ pub trait LnFederationApi {
         &self,
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer>;
-    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>>;
-    async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()>;
+    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>>;
+    async fn register_gateway(
+        &self,
+        gateway: &LightningGatewayAnnouncement,
+    ) -> FederationResult<()>;
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
 
     async fn get_incoming_contract(
@@ -121,16 +128,24 @@ where
     /// There is no consensus within Fedimint on the gateways, each guardian
     /// might be aware of different ones, so we just return the union of all
     /// responses and allow client selection.
-    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGateway>> {
-        self.request_with_strategy(
-            UnionResponses::new(self.all_peers().total()),
-            LIST_GATEWAYS_ENDPOINT.to_string(),
-            ApiRequestErased::default(),
-        )
-        .await
+    async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>> {
+        let gateway_announcements: Vec<LightningGatewayAnnouncement> = self
+            .request_with_strategy(
+                UnionResponses::new(self.all_peers().total()),
+                LIST_GATEWAYS_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        // Filter out duplicate gateways so that we don't have to deal with
+        // multiple guardians having different TTLs for the same gateway.
+        Ok(filter_duplicate_gateways(gateway_announcements))
     }
 
-    async fn register_gateway(&self, gateway: &LightningGateway) -> FederationResult<()> {
+    async fn register_gateway(
+        &self,
+        gateway: &LightningGatewayAnnouncement,
+    ) -> FederationResult<()> {
         self.request_current_consensus(
             REGISTER_GATEWAY_ENDPOINT.to_string(),
             ApiRequestErased::new(gateway),
@@ -175,4 +190,47 @@ where
             _ => Err(anyhow::anyhow!("WrongAccountType")),
         }
     }
+}
+
+/// Filter out duplicate gateways. This is necessary because different guardians
+/// may have different TTLs for the same gateway, so two
+/// `LightningGatewayAnnouncement`s representing the same gateway registration
+/// may not be equal.
+fn filter_duplicate_gateways(
+    gateways: Vec<LightningGatewayAnnouncement>,
+) -> Vec<LightningGatewayAnnouncement> {
+    let gateways_by_gateway_id = gateways
+        .into_iter()
+        .map(|announcement| (announcement.info.gateway_id, announcement))
+        .into_group_map();
+
+    // For each gateway, we may have multiple announcements with different settings
+    // and/or TTLs. We want to filter out duplicates in a way that doesn't allow a
+    // malicious guardian to override the caller's view of the gateways by
+    // returning a gateway with a shorter TTL. Instead, if we receive multiple
+    // announcements for the same gateway ID, we only filter out announcements
+    // that have the same settings, keeping the one with the longest TTL.
+    gateways_by_gateway_id
+        .into_values()
+        .flat_map(|announcements| {
+            let mut gateways: HashMap<LightningGateway, Duration> = HashMap::new();
+            for announcement in announcements {
+                let ttl = announcement.ttl;
+                let gateway = announcement.info.clone();
+                // Only insert if the TTL is longer than the one we already have
+                gateways
+                    .entry(gateway)
+                    .and_modify(|t| {
+                        if ttl > *t {
+                            *t = ttl;
+                        }
+                    })
+                    .or_insert(ttl);
+            }
+
+            gateways
+                .into_iter()
+                .map(|(gateway, ttl)| LightningGatewayAnnouncement { info: gateway, ttl })
+        })
+        .collect()
 }

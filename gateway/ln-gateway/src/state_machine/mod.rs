@@ -34,7 +34,7 @@ use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     ln_operation, LightningClientContext, LightningCommonGen, LightningGateway,
-    LightningModuleTypes, LightningOutput, KIND,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, KIND,
 };
 use futures::StreamExt;
 use lightning::routing::gossip::RoutingFees;
@@ -458,32 +458,34 @@ impl GatewayClientModule {
     pub fn to_gateway_registration_info(
         &self,
         route_hints: Vec<RouteHint>,
-        time_to_live: Duration,
+        ttl: Duration,
         api: SafeUrl,
         gateway_id: secp256k1::PublicKey,
-    ) -> LightningGateway {
-        LightningGateway {
-            mint_channel_id: self.mint_channel_id,
-            gateway_redeem_key: self.redeem_key.x_only_public_key().0,
-            node_pub_key: self.node_pub_key,
-            lightning_alias: self.lightning_alias.clone(),
-            api,
-            route_hints,
-            valid_until: fedimint_core::time::now() + time_to_live,
-            fees: self.fees,
-            gateway_id,
+    ) -> LightningGatewayAnnouncement {
+        LightningGatewayAnnouncement {
+            info: LightningGateway {
+                mint_channel_id: self.mint_channel_id,
+                gateway_redeem_key: self.redeem_key.x_only_public_key().0,
+                node_pub_key: self.node_pub_key,
+                lightning_alias: self.lightning_alias.clone(),
+                api,
+                route_hints,
+                fees: self.fees,
+                gateway_id,
+            },
+            ttl,
         }
     }
 
     async fn register_with_federation(
         &self,
         id: FederationId,
-        registration: LightningGateway,
+        registration: LightningGatewayAnnouncement,
     ) -> anyhow::Result<()> {
         self.module_api.register_gateway(&registration).await?;
         info!(
             "Successfully registered gateway {} with federation {}",
-            registration.gateway_id, id
+            registration.info.gateway_id, id
         );
         Ok(())
     }

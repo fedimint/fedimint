@@ -582,7 +582,9 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         )
         .await?;
     let gateways = user_client.fetch_registered_gateways().await?;
-    assert!(gateways.into_iter().any(|gateway| gateway.api == fake_api));
+    assert!(gateways
+        .into_iter()
+        .any(|gateway| gateway.info.api == fake_api));
 
     // Update the URI for the gateway then re-register
     fake_api = SafeUrl::from_str("http://127.0.0.1:8176").unwrap();
@@ -596,7 +598,9 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         )
         .await?;
     let gateways = user_client.fetch_registered_gateways().await?;
-    assert!(gateways.into_iter().any(|gateway| gateway.api == fake_api));
+    assert!(gateways
+        .into_iter()
+        .any(|gateway| gateway.info.api == fake_api));
 
     Ok(())
 }

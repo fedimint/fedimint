@@ -45,7 +45,8 @@ use fedimint_ln_common::contracts::{
 };
 use fedimint_ln_common::{
     ln_operation, ContractOutput, LightningClientContext, LightningCommonGen, LightningGateway,
-    LightningModuleTypes, LightningOutput, KIND,
+    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
+    LightningOutput, KIND,
 };
 use futures::StreamExt;
 use incoming::IncomingSmError;
@@ -87,7 +88,7 @@ pub trait LightningClientExt {
     async fn set_active_gateway(&self, gateway_id: &secp256k1::PublicKey) -> anyhow::Result<()>;
 
     /// Gateways actively registered with the fed
-    async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>>;
+    async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGatewayAnnouncement>>;
 
     /// Pays a LN invoice with our available funds
     async fn pay_bolt11_invoice(
@@ -217,12 +218,12 @@ impl LightningClientExt for Client {
         let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let mut dbtx = instance.db.begin_transaction().await;
         match dbtx.get_value(&LightningGatewayKey).await {
-            Some(active_gateway) => Ok(active_gateway),
+            Some(active_gateway) => Ok(active_gateway.info),
             None => self
                 .fetch_registered_gateways()
                 .await?
                 .into_iter()
-                .filter(|gw| !gw.is_expired())
+                .map(|gw| gw.info)
                 .choose(&mut rand::thread_rng())
                 .ok_or(anyhow::anyhow!("Could not find any gateways")),
         }
@@ -240,17 +241,18 @@ impl LightningClientExt for Client {
         };
         let gateway = gateways
             .into_iter()
-            .find(|g| &g.gateway_id == gateway_id)
+            .find(|g| &g.info.gateway_id == gateway_id)
             .ok_or_else(|| {
                 anyhow::anyhow!("Could not find gateway with gateway id {:?}", gateway_id)
             })?;
 
-        dbtx.insert_entry(&LightningGatewayKey, &gateway).await;
+        dbtx.insert_entry(&LightningGatewayKey, &gateway.anchor())
+            .await;
         dbtx.commit_tx().await;
         Ok(())
     }
 
-    async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGateway>> {
+    async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGatewayAnnouncement>> {
         let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         Ok(instance.api.fetch_gateways().await?)
     }
@@ -268,7 +270,11 @@ impl LightningClientExt for Client {
                 .await
                 || invoice_routes_back_to_federation(
                     &invoice,
-                    self.fetch_registered_gateways().await?,
+                    self.fetch_registered_gateways()
+                        .await?
+                        .into_iter()
+                        .map(|gw| gw.info)
+                        .collect(),
                 )
                 .await;
 
@@ -594,7 +600,7 @@ impl ExtendsCommonModuleInit for LightningClientGen {
                         dbtx,
                         LightningGatewayKeyPrefix,
                         LightningGatewayKey,
-                        LightningGateway,
+                        LightningGatewayRegistration,
                         ln_client_items,
                         "Lightning Gateways"
                     );

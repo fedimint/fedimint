@@ -46,8 +46,9 @@ use fedimint_ln_common::db::{
     OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 use fedimint_ln_common::{
-    ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError, LightningGateway,
-    LightningInput, LightningModuleTypes, LightningOutput, LightningOutputOutcome,
+    ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError,
+    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
+    LightningModuleTypes, LightningOutput, LightningOutputOutcome,
 };
 use fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
@@ -161,7 +162,7 @@ impl ExtendsCommonModuleInit for LightningGen {
                         dbtx,
                         LightningGatewayKeyPrefix,
                         LightningGatewayKey,
-                        LightningGateway,
+                        LightningGatewayRegistration,
                         lightning,
                         "Lightning Gateways"
                     );
@@ -921,13 +922,13 @@ impl ServerModule for Lightning {
             },
             api_endpoint! {
                 LIST_GATEWAYS_ENDPOINT,
-                async |module: &Lightning, context, _v: ()| -> Vec<LightningGateway> {
+                async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
                     Ok(module.list_gateways(&mut context.dbtx()).await)
                 }
             },
             api_endpoint! {
                 REGISTER_GATEWAY_ENDPOINT,
-                async |module: &Lightning, context, gateway: LightningGateway| -> () {
+                async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
                     module.register_gateway(&mut context.dbtx(), gateway).await;
                     Ok(())
                 }
@@ -1082,7 +1083,7 @@ impl Lightning {
     async fn list_gateways(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> Vec<LightningGateway> {
+    ) -> Vec<LightningGatewayAnnouncement> {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
             .filter_map(|(_, gw)| async {
@@ -1092,14 +1093,17 @@ impl Lightning {
                     None
                 }
             })
-            .collect::<Vec<LightningGateway>>()
+            .collect::<Vec<LightningGatewayRegistration>>()
             .await
+            .into_iter()
+            .map(|gw| gw.unanchor())
+            .collect::<Vec<LightningGatewayAnnouncement>>()
     }
 
     async fn register_gateway(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-        gateway: LightningGateway,
+        gateway: LightningGatewayAnnouncement,
     ) {
         // Garbage collect expired gateways (since we're already writing to the DB)
         // Note: A "gotcha" of doing this here is that if two gateways are registered
@@ -1108,8 +1112,11 @@ impl Lightning {
         // succeed and the failed one will just try again.
         self.delete_expired_gateways(dbtx).await;
 
-        dbtx.insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
-            .await;
+        dbtx.insert_entry(
+            &LightningGatewayKey(gateway.info.node_pub_key),
+            &gateway.anchor(),
+        )
+        .await;
     }
 
     async fn delete_expired_gateways(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) {
@@ -1423,7 +1430,7 @@ mod fedimint_migration_tests {
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
-    use fedimint_ln_common::LightningCommonGen;
+    use fedimint_ln_common::{LightningCommonGen, LightningGateway};
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64,
     };
@@ -1437,7 +1444,8 @@ mod fedimint_migration_tests {
     use threshold_crypto::G1Projective;
 
     use crate::{
-        ContractAccount, Lightning, LightningGateway, LightningGen, LightningOutputOutcome,
+        ContractAccount, Lightning, LightningGatewayRegistration, LightningGen,
+        LightningOutputOutcome,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -1523,20 +1531,22 @@ mod fedimint_migration_tests {
         )
         .await;
 
-        let gateway = LightningGateway {
-            mint_channel_id: 100,
-            gateway_redeem_key: pk.x_only_public_key().0,
-            node_pub_key: pk,
-            lightning_alias: "FakeLightningAlias".to_string(),
-            api: SafeUrl::parse("http://example.com")
-                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
-            route_hints: vec![],
-            valid_until: fedimint_core::time::now(),
-            fees: RoutingFees {
-                base_msat: 0,
-                proportional_millionths: 0,
+        let gateway = LightningGatewayRegistration {
+            info: LightningGateway {
+                mint_channel_id: 100,
+                gateway_redeem_key: pk.x_only_public_key().0,
+                node_pub_key: pk,
+                lightning_alias: "FakeLightningAlias".to_string(),
+                api: SafeUrl::parse("http://example.com")
+                    .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+                route_hints: vec![],
+                fees: RoutingFees {
+                    base_msat: 0,
+                    proportional_millionths: 0,
+                },
+                gateway_id: pk,
             },
-            gateway_id: pk,
+            valid_until: fedimint_core::time::now(),
         };
         dbtx.insert_new_entry(&LightningGatewayKey(pk), &gateway)
             .await;

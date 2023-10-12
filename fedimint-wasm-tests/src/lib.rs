@@ -78,10 +78,10 @@ mod tests {
         let gw_api = faucet::gateway_api().await?;
         let lnd_gw = gws
             .into_iter()
-            .find(|x| x.api.to_string() == gw_api)
+            .find(|x| x.info.api.to_string() == gw_api)
             .expect("no gateway with api");
 
-        client.set_active_gateway(&lnd_gw.gateway_id).await?;
+        client.set_active_gateway(&lnd_gw.info.gateway_id).await?;
         Ok(())
     }
 
