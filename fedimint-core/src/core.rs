@@ -23,7 +23,7 @@ use crate::{
     erased_eq_no_instance_id, module_plugin_dyn_newtype_clone_passhthrough,
     module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_display_passthrough,
     module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough,
-    module_plugin_static_trait_define,
+    module_plugin_static_trait_define, module_plugin_static_trait_define_config,
 };
 
 pub mod client;
@@ -216,13 +216,25 @@ pub trait IClientConfig: Debug + Display + DynEncodable {
     fn clone(&self, instance_id: ModuleInstanceId) -> DynClientConfig;
     fn dyn_hash(&self) -> u64;
     fn erased_eq_no_instance_id(&self, other: &DynClientConfig) -> bool;
+    fn to_json(&self) -> Option<serde_json::Value>;
 }
 
-module_plugin_static_trait_define! {
+module_plugin_static_trait_define_config! {
     DynClientConfig, ClientConfig, IClientConfig,
-    { }
+    { },
     {
         erased_eq_no_instance_id!(DynClientConfig);
+
+        fn to_json(&self) -> Option<serde_json::Value> {
+            Some(serde_json::to_value(self.to_owned()).expect("serialization can't fail"))
+        }
+    },
+    {
+        erased_eq_no_instance_id!(DynClientConfig);
+
+        fn to_json(&self) -> Option<serde_json::Value> {
+            None
+        }
     }
 }
 
@@ -251,7 +263,7 @@ pub trait IInput: Debug + Display + DynEncodable {
 
 module_plugin_static_trait_define! {
     DynInput, Input, IInput,
-    { }
+    { },
     {
         erased_eq_no_instance_id!(DynInput);
     }
@@ -286,7 +298,7 @@ module_plugin_dyn_newtype_define! {
 }
 module_plugin_static_trait_define! {
     DynOutput, Output, IOutput,
-    { }
+    { },
     {
         erased_eq_no_instance_id!(DynOutput);
     }
@@ -316,7 +328,7 @@ module_plugin_dyn_newtype_define! {
 }
 module_plugin_static_trait_define! {
     DynOutputOutcome, OutputOutcome, IOutputOutcome,
-    { }
+    { },
     {
         erased_eq_no_instance_id!(DynOutputOutcome);
     }
@@ -340,7 +352,7 @@ module_plugin_dyn_newtype_define! {
 }
 module_plugin_static_trait_define! {
     DynModuleConsensusItem, ModuleConsensusItem, IModuleConsensusItem,
-    { }
+    { },
     {
         erased_eq_no_instance_id!(DynModuleConsensusItem);
     }
