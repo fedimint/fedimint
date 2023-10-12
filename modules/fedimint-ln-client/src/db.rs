@@ -48,7 +48,7 @@ pub struct PaymentResultPrefix;
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct PaymentResult {
     pub index: u16,
-    pub completed_payment: Option<(PayType, ContractId)>,
+    pub completed_payment: Option<(PayType, ContractId, Amount)>,
 }
 
 impl_db_record!(

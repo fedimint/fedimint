@@ -864,6 +864,7 @@ impl LightningClientModule {
                         operation_id,
                         federation_id: fed_id,
                         contract: outgoing_payment.clone(),
+                        gateway_fee: Amount::from_msats(base_fee + margin_fee),
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
                         LightningPayCreatedOutgoingLnContract {
@@ -1258,9 +1259,10 @@ async fn set_payment_result(
     payment_hash: sha256::Hash,
     payment_type: PayType,
     contract_id: ContractId,
+    fee: Amount,
 ) {
     if let Some(mut payment_result) = dbtx.get_value(&PaymentResultKey { payment_hash }).await {
-        payment_result.completed_payment = Some((payment_type, contract_id));
+        payment_result.completed_payment = Some((payment_type, contract_id, fee));
         dbtx.insert_entry(&PaymentResultKey { payment_hash }, &payment_result)
             .await;
     }

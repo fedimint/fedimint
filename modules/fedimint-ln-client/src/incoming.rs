@@ -271,6 +271,7 @@ impl DecryptingPreimageState {
                     payment_hash,
                     PayType::Internal(old_state.common.operation_id),
                     contract_id,
+                    Amount::from_msats(0),
                 )
                 .await;
 

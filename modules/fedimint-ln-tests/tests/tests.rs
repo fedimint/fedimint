@@ -138,7 +138,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let (pay_type, _) = client2.pay_bolt11_invoice(invoice.clone()).await?;
+    let (pay_type, _, _) = client2.pay_bolt11_invoice(invoice.clone()).await?;
     match pay_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
@@ -154,7 +154,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
     let prev_balance = client2.get_balance().await;
-    let (pay_type, _) = client2.pay_bolt11_invoice(invoice).await?;
+    let (pay_type, _, _) = client2.pay_bolt11_invoice(invoice).await?;
     match pay_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
@@ -185,7 +185,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let invoice = cln.invoice(Amount::from_sats(100), None).await?;
 
     // Pay the invoice for the first time
-    let (pay_type, _) = client.pay_bolt11_invoice(invoice.clone()).await?;
+    let (pay_type, _, _) = client.pay_bolt11_invoice(invoice.clone()).await?;
     match pay_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client.subscribe_ln_pay(operation_id).await?.into_stream();
@@ -201,7 +201,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
-    let (pay_type, _) = client.pay_bolt11_invoice(invoice).await?;
+    let (pay_type, _, _) = client.pay_bolt11_invoice(invoice).await?;
     match pay_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client.subscribe_ln_pay(operation_id).await?.into_stream();
