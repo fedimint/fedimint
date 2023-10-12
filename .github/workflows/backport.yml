@@ -3,11 +3,11 @@ on:
   pull_request_target:
     # Run on merge (close) or if label is added after merging
     types: [closed, labeled]
-permissions:
-  contents: write # so it can comment
-  pull-requests: write # so it can create pull requests
 jobs:
   backport:
+    permissions:
+      contents: write # so it can comment
+      pull-requests: write # so it can create pull requests
     name: Backport pull request
     runs-on: ubuntu-latest
     # Don't run on closed unmerged pull requests
@@ -19,6 +19,9 @@ jobs:
         with:
           github_token: ${{ secrets.BACKPORT_TOKEN }}
   open-issue:
+    permissions:
+      contents: read
+      issues: write
     name: Open issue for failed backports
     runs-on: ubuntu-latest
     needs: backport
