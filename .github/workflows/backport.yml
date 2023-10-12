@@ -25,10 +25,11 @@ jobs:
     name: Open issue for failed backports
     runs-on: ubuntu-latest
     needs: backport
+    # Open an issue only if the backport job failed
+    # https://github.com/korthout/backport-action/blob/e53c7b292aa9985d372c178a89d416ef2176c091/README.md#outputs
+    if: ${{ needs.backport.outputs.was_successful }} == 'false'
     steps:
       - uses: actions/checkout@v4
-        # Open an issue only if the backport job failed
-        if: ${{ needs.backport.outputs.was_successful }} == 'false'
       - name: Create issue
         uses: JasonEtco/create-an-issue@v2
         env:
