@@ -93,6 +93,7 @@ impl ServerModuleInit for WalletGen {
             args.cfg().to_typed()?,
             args.db().clone(),
             &mut args.task_group().clone(),
+            args.our_peer_id(),
         )
         .await?
         .into())
@@ -324,22 +325,29 @@ impl ServerModule for Wallet {
 
         let block_count = self.block_count().await;
         let block_count_proposal = block_count.saturating_sub(self.cfg.consensus.finality_delay);
-        let consensus_block_count = self.consensus_block_count(dbtx).await;
 
         debug!(
             ?block_count_proposal,
             ?block_count,
-            ?consensus_block_count,
             "Considering proposing block count"
         );
 
-        if Some(block_count_proposal) != consensus_block_count {
+        let current_vote = dbtx
+            .get_value(&BlockCountVoteKey(self.our_peer_id))
+            .await
+            .unwrap_or(0);
+
+        if current_vote < block_count_proposal {
             items.push(WalletConsensusItem::BlockCount(block_count_proposal));
         }
 
+        let current_fee_rate_vote = dbtx
+            .get_value(&FeeRateVoteKey(self.our_peer_id))
+            .await
+            .unwrap_or(self.cfg.consensus.default_fee);
         let fee_rate_proposal = self.fee_rate().await;
 
-        if fee_rate_proposal != self.consensus_fee_rate(dbtx).await {
+        if fee_rate_proposal != current_fee_rate_vote {
             items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
         }
 
@@ -649,6 +657,7 @@ pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
     btc_rpc: DynBitcoindRpc,
+    our_peer_id: PeerId,
 }
 
 impl Wallet {
@@ -656,9 +665,10 @@ impl Wallet {
         cfg: WalletConfig,
         db: Database,
         task_group: &mut TaskGroup,
+        our_peer_id: PeerId,
     ) -> anyhow::Result<Wallet> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
-        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group).await?)
+        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id).await?)
     }
 
     pub async fn new_with_bitcoind(
@@ -666,6 +676,7 @@ impl Wallet {
         db: Database,
         bitcoind: DynBitcoindRpc,
         task_group: &mut TaskGroup,
+        our_peer_id: PeerId,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
         let broadcaster_db = db.clone();
@@ -707,6 +718,7 @@ impl Wallet {
             cfg,
             secp: Default::default(),
             btc_rpc: bitcoind_rpc,
+            our_peer_id,
         };
 
         Ok(wallet)
