@@ -33,7 +33,7 @@
 <a href="#33" id="33">33</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
-<span class="kw">use </span>fedimint_ln_common::LightningGateway;
+<span class="kw">use </span>fedimint_ln_common::LightningGatewayRegistration;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
 
@@ -57,7 +57,7 @@
 
 <span class="macro">impl_db_record!</span>(
     key = LightningGatewayKey,
-    value = LightningGateway,
+    value = LightningGatewayRegistration,
     db_prefix = DbKeyPrefix::LightningGateway,
 );
 <span class="macro">impl_db_lookup!</span>(

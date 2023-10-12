@@ -1724,6 +1724,16 @@
 <a href="#1724" id="1724">1724</a>
 <a href="#1725" id="1725">1725</a>
 <a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1772,8 +1782,9 @@
     OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 <span class="kw">use </span>fedimint_ln_common::{
-    ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError, LightningGateway,
-    LightningInput, LightningModuleTypes, LightningOutput, LightningOutputOutcome,
+    ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError,
+    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
+    LightningModuleTypes, LightningOutput, LightningOutputOutcome,
 };
 <span class="kw">use </span>fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
@@ -1887,7 +1898,7 @@
                         dbtx,
                         LightningGatewayKeyPrefix,
                         LightningGatewayKey,
-                        LightningGateway,
+                        LightningGatewayRegistration,
                         lightning,
                         <span class="string">&quot;Lightning Gateways&quot;
                     </span>);
@@ -2647,13 +2658,13 @@
             },
             <span class="macro">api_endpoint! </span>{
                 LIST_GATEWAYS_ENDPOINT,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, _v: ()| -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
                     <span class="prelude-val">Ok</span>(module.list_gateways(<span class="kw-2">&amp;mut </span>context.dbtx()).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint! </span>{
                 REGISTER_GATEWAY_ENDPOINT,
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, gateway: LightningGateway| -&gt; () {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, gateway: LightningGatewayAnnouncement| -&gt; () {
                     module.register_gateway(<span class="kw-2">&amp;mut </span>context.dbtx(), gateway).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())
                 }
@@ -2808,7 +2819,7 @@
     <span class="kw">async fn </span>list_gateways(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; Vec&lt;LightningGateway&gt; {
+    ) -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
         <span class="kw">let </span>stream = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
         stream
             .filter_map(|(<span class="kw">_</span>, gw)| <span class="kw">async </span>{
@@ -2818,14 +2829,17 @@
                     <span class="prelude-val">None
                 </span>}
             })
-            .collect::&lt;Vec&lt;LightningGateway&gt;&gt;()
+            .collect::&lt;Vec&lt;LightningGatewayRegistration&gt;&gt;()
             .<span class="kw">await
-    </span>}
+            </span>.into_iter()
+            .map(|gw| gw.unanchor())
+            .collect::&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt;()
+    }
 
     <span class="kw">async fn </span>register_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        gateway: LightningGateway,
+        gateway: LightningGatewayAnnouncement,
     ) {
         <span class="comment">// Garbage collect expired gateways (since we&#39;re already writing to the DB)
         // Note: A &quot;gotcha&quot; of doing this here is that if two gateways are registered
@@ -2834,8 +2848,11 @@
         // succeed and the failed one will just try again.
         </span><span class="self">self</span>.delete_expired_gateways(dbtx).<span class="kw">await</span>;
 
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(gateway.node_pub_key), <span class="kw-2">&amp;</span>gateway)
-            .<span class="kw">await</span>;
+        dbtx.insert_entry(
+            <span class="kw-2">&amp;</span>LightningGatewayKey(gateway.info.node_pub_key),
+            <span class="kw-2">&amp;</span>gateway.anchor(),
+        )
+        .<span class="kw">await</span>;
     }
 
     <span class="kw">async fn </span>delete_expired_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
@@ -3149,7 +3166,7 @@
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
-    <span class="kw">use </span>fedimint_ln_common::LightningCommonGen;
+    <span class="kw">use </span>fedimint_ln_common::{LightningCommonGen, LightningGateway};
     <span class="kw">use </span>fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64,
     };
@@ -3163,7 +3180,8 @@
     <span class="kw">use </span>threshold_crypto::G1Projective;
 
     <span class="kw">use crate</span>::{
-        ContractAccount, Lightning, LightningGateway, LightningGen, LightningOutputOutcome,
+        ContractAccount, Lightning, LightningGatewayRegistration, LightningGen,
+        LightningOutputOutcome,
     };
 
     <span class="doccomment">/// Create a database with version 0 data. The database produced is not
@@ -3249,20 +3267,22 @@
         )
         .<span class="kw">await</span>;
 
-        <span class="kw">let </span>gateway = LightningGateway {
-            mint_channel_id: <span class="number">100</span>,
-            gateway_redeem_key: pk.x_only_public_key().<span class="number">0</span>,
-            node_pub_key: pk,
-            lightning_alias: <span class="string">&quot;FakeLightningAlias&quot;</span>.to_string(),
-            api: SafeUrl::parse(<span class="string">&quot;http://example.com&quot;</span>)
-                .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
-            route_hints: <span class="macro">vec!</span>[],
-            valid_until: fedimint_core::time::now(),
-            fees: RoutingFees {
-                base_msat: <span class="number">0</span>,
-                proportional_millionths: <span class="number">0</span>,
+        <span class="kw">let </span>gateway = LightningGatewayRegistration {
+            info: LightningGateway {
+                mint_channel_id: <span class="number">100</span>,
+                gateway_redeem_key: pk.x_only_public_key().<span class="number">0</span>,
+                node_pub_key: pk,
+                lightning_alias: <span class="string">&quot;FakeLightningAlias&quot;</span>.to_string(),
+                api: SafeUrl::parse(<span class="string">&quot;http://example.com&quot;</span>)
+                    .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
+                route_hints: <span class="macro">vec!</span>[],
+                fees: RoutingFees {
+                    base_msat: <span class="number">0</span>,
+                    proportional_millionths: <span class="number">0</span>,
+                },
+                gateway_id: pk,
             },
-            gateway_id: pk,
+            valid_until: fedimint_core::time::now(),
         };
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(pk), <span class="kw-2">&amp;</span>gateway)
             .<span class="kw">await</span>;

@@ -247,10 +247,10 @@
         <span class="kw">let </span>gw_api = faucet::gateway_api().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_gw = gws
             .into_iter()
-            .find(|x| x.api.to_string() == gw_api)
+            .find(|x| x.info.api.to_string() == gw_api)
             .expect(<span class="string">&quot;no gateway with api&quot;</span>);
 
-        client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.info.gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 

@@ -176,7 +176,68 @@
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::time::Duration;
+
+<span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
@@ -187,11 +248,12 @@
 <span class="kw">use </span>fedimint_core::query::UnionResponses;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers};
+<span class="kw">use </span>itertools::Itertools;
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 <span class="kw">use </span><span class="kw">crate</span>::contracts::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, FundedContract, Preimage};
-<span class="kw">use crate</span>::{ContractAccount, LightningGateway};
+<span class="kw">use crate</span>::{ContractAccount, LightningGateway, LightningGatewayAnnouncement};
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>LnFederationApi {
@@ -211,8 +273,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: Sha256Hash,
     ) -&gt; FederationResult&lt;IncomingContractOffer&gt;;
-    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt;;
-    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FederationResult&lt;()&gt;;
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt;;
+    <span class="kw">async fn </span>register_gateway(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        gateway: <span class="kw-2">&amp;</span>LightningGatewayAnnouncement,
+    ) -&gt; FederationResult&lt;()&gt;;
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt;;
 
     <span class="kw">async fn </span>get_incoming_contract(
@@ -299,16 +364,24 @@
     <span class="doccomment">/// There is no consensus within Fedimint on the gateways, each guardian
     /// might be aware of different ones, so we just return the union of all
     /// responses and allow client selection.
-    </span><span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGateway&gt;&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            UnionResponses::new(<span class="self">self</span>.all_peers().total()),
-            LIST_GATEWAYS_ENDPOINT.to_string(),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await
-    </span>}
+    </span><span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt; {
+        <span class="kw">let </span>gateway_announcements: Vec&lt;LightningGatewayAnnouncement&gt; = <span class="self">self
+            </span>.request_with_strategy(
+                UnionResponses::new(<span class="self">self</span>.all_peers().total()),
+                LIST_GATEWAYS_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; FederationResult&lt;()&gt; {
+        <span class="comment">// Filter out duplicate gateways so that we don&#39;t have to deal with
+        // multiple guardians having different TTLs for the same gateway.
+        </span><span class="prelude-val">Ok</span>(filter_duplicate_gateways(gateway_announcements))
+    }
+
+    <span class="kw">async fn </span>register_gateway(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        gateway: <span class="kw-2">&amp;</span>LightningGatewayAnnouncement,
+    ) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_current_consensus(
             REGISTER_GATEWAY_ENDPOINT.to_string(),
             ApiRequestErased::new(gateway),
@@ -353,5 +426,48 @@
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;WrongAccountType&quot;</span>)),
         }
     }
+}
+
+<span class="doccomment">/// Filter out duplicate gateways. This is necessary because different guardians
+/// may have different TTLs for the same gateway, so two
+/// `LightningGatewayAnnouncement`s representing the same gateway registration
+/// may not be equal.
+</span><span class="kw">fn </span>filter_duplicate_gateways(
+    gateways: Vec&lt;LightningGatewayAnnouncement&gt;,
+) -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
+    <span class="kw">let </span>gateways_by_gateway_id = gateways
+        .into_iter()
+        .map(|announcement| (announcement.info.gateway_id, announcement))
+        .into_group_map();
+
+    <span class="comment">// For each gateway, we may have multiple announcements with different settings
+    // and/or TTLs. We want to filter out duplicates in a way that doesn&#39;t allow a
+    // malicious guardian to override the caller&#39;s view of the gateways by
+    // returning a gateway with a shorter TTL. Instead, if we receive multiple
+    // announcements for the same gateway ID, we only filter out announcements
+    // that have the same settings, keeping the one with the longest TTL.
+    </span>gateways_by_gateway_id
+        .into_values()
+        .flat_map(|announcements| {
+            <span class="kw">let </span><span class="kw-2">mut </span>gateways: HashMap&lt;LightningGateway, Duration&gt; = HashMap::new();
+            <span class="kw">for </span>announcement <span class="kw">in </span>announcements {
+                <span class="kw">let </span>ttl = announcement.ttl;
+                <span class="kw">let </span>gateway = announcement.info.clone();
+                <span class="comment">// Only insert if the TTL is longer than the one we already have
+                </span>gateways
+                    .entry(gateway)
+                    .and_modify(|t| {
+                        <span class="kw">if </span>ttl &gt; <span class="kw-2">*</span>t {
+                            <span class="kw-2">*</span>t = ttl;
+                        }
+                    })
+                    .or_insert(ttl);
+            }
+
+            gateways
+                .into_iter()
+                .map(|(gateway, ttl)| LightningGatewayAnnouncement { info: gateway, ttl })
+        })
+        .collect()
 }
 </code></pre></div></section></main></body></html>

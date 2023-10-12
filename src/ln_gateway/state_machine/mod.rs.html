@@ -627,6 +627,8 @@
 <a href="#627" id="627">627</a>
 <a href="#628" id="628">628</a>
 <a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -663,7 +665,7 @@
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::{
     ln_operation, LightningClientContext, LightningCommonGen, LightningGateway,
-    LightningModuleTypes, LightningOutput, KIND,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, KIND,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
@@ -1087,32 +1089,34 @@
     <span class="kw">pub fn </span>to_gateway_registration_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         route_hints: Vec&lt;RouteHint&gt;,
-        time_to_live: Duration,
+        ttl: Duration,
         api: SafeUrl,
         gateway_id: secp256k1::PublicKey,
-    ) -&gt; LightningGateway {
-        LightningGateway {
-            mint_channel_id: <span class="self">self</span>.mint_channel_id,
-            gateway_redeem_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
-            node_pub_key: <span class="self">self</span>.node_pub_key,
-            lightning_alias: <span class="self">self</span>.lightning_alias.clone(),
-            api,
-            route_hints,
-            valid_until: fedimint_core::time::now() + time_to_live,
-            fees: <span class="self">self</span>.fees,
-            gateway_id,
+    ) -&gt; LightningGatewayAnnouncement {
+        LightningGatewayAnnouncement {
+            info: LightningGateway {
+                mint_channel_id: <span class="self">self</span>.mint_channel_id,
+                gateway_redeem_key: <span class="self">self</span>.redeem_key.x_only_public_key().<span class="number">0</span>,
+                node_pub_key: <span class="self">self</span>.node_pub_key,
+                lightning_alias: <span class="self">self</span>.lightning_alias.clone(),
+                api,
+                route_hints,
+                fees: <span class="self">self</span>.fees,
+                gateway_id,
+            },
+            ttl,
         }
     }
 
     <span class="kw">async fn </span>register_with_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: FederationId,
-        registration: LightningGateway,
+        registration: LightningGatewayAnnouncement,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>.module_api.register_gateway(<span class="kw-2">&amp;</span>registration).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">info!</span>(
             <span class="string">&quot;Successfully registered gateway {} with federation {}&quot;</span>,
-            registration.gateway_id, id
+            registration.info.gateway_id, id
         );
         <span class="prelude-val">Ok</span>(())
     }
