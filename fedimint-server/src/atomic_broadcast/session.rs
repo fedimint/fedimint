@@ -29,7 +29,7 @@ pub async fn run(
     signature_sender: watch::Sender<Option<SchnorrSignature>>,
     keychain: Keychain,
     federation_api: WsFederationApi,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<(FedimintConsensus, SignedBlock)> {
     let mut num_batches = 0;
 
     // we build a block out of the ordered batches until either we have processed
@@ -63,9 +63,7 @@ pub async fn run(
                     assert!(consensus.process_consensus_item(accepted_item.item, accepted_item.peer).await.is_ok());
                 }
 
-                consensus.complete_session(signed_block).await;
-
-                return Ok(());
+                return Ok((consensus, signed_block));
             }
         }
     }
@@ -99,18 +97,12 @@ pub async fn run(
                 // We check that the block we have created agrees with the federations consensus
                 assert!(header == signed_block.block.header(consensus.session_index));
 
-                consensus.complete_session(signed_block).await;
-
-                return Ok(());
+                return Ok((consensus, signed_block));
             }
         }
     }
 
-    consensus
-        .complete_session(SignedBlock { block, signatures })
-        .await;
-
-    Ok(())
+    Ok((consensus, SignedBlock { block, signatures }))
 }
 
 async fn request_signed_block(
