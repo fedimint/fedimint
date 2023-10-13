@@ -748,7 +748,7 @@ where
 
 /// Module associated types required by both client and server
 pub trait ModuleCommon {
-    type ClientConfig: ClientConfig + Serialize;
+    type ClientConfig: ClientConfig;
     type Input: Input;
     type Output: Output;
     type OutputOutcome: OutputOutcome;
