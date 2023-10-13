@@ -1746,6 +1746,12 @@
 <a href="#1746" id="1746">1746</a>
 <a href="#1747" id="1747">1747</a>
 <a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1830,7 +1836,8 @@
     InviteCode, WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{
-    ClientConfig, FederationId, JsonClientConfig, JsonWithKind, ModuleInitRegistry,
+    ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
+    ModuleInitRegistry,
 };
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
@@ -2518,12 +2525,17 @@
         JsonClientConfig {
             global: <span class="self">self</span>.get_config().global.clone(),
             modules: <span class="self">self
-                </span>.inner
+                </span>.get_config()
                 .modules
-                .iter_modules()
-                .map(|(instance_id, kind, module)| {
-                    <span class="kw">let </span>config = JsonWithKind::new(kind.clone(), module.get_config_json());
-                    (instance_id, config)
+                .iter()
+                .map(|(instance_id, ClientModuleConfig { kind, config, .. })| {
+                    (
+                        <span class="kw-2">*</span>instance_id,
+                        JsonWithKind::new(
+                            kind.clone(),
+                            config.clone().expect_decoded().to_json().into(),
+                        ),
+                    )
                 })
                 .collect(),
         }

@@ -1708,7 +1708,7 @@
 
 <span class="doccomment">/// Module associated types required by both client and server
 </span><span class="kw">pub trait </span>ModuleCommon {
-    <span class="kw">type </span>ClientConfig: ClientConfig + Serialize;
+    <span class="kw">type </span>ClientConfig: ClientConfig;
     <span class="kw">type </span>Input: Input;
     <span class="kw">type </span>Output: Output;
     <span class="kw">type </span>OutputOutcome: OutputOutcome;
