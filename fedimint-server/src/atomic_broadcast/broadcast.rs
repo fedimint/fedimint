@@ -127,7 +127,7 @@ impl AtomicBroadcast {
         )
         .expect("some handle on non-wasm");
 
-        session::run(
+        let (consensus, signed_block) = session::run(
             consensus,
             batches_per_session,
             unit_data_receiver,
@@ -139,6 +139,10 @@ impl AtomicBroadcast {
 
         terminator_sender.send(()).ok();
         aleph_handle.await.ok();
+
+        // we can only call complete_session after aleph bft has shut down
+        // to prevent write conflicts when removing the aleph units
+        consensus.complete_session(signed_block).await;
 
         Ok(())
     }
