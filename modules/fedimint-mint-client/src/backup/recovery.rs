@@ -167,7 +167,7 @@ impl MintRestoreInProgressState {
                     .make_progress(
                         global_context.api().clone(),
                         global_context.decoders().clone(),
-                        global_context.client_config().epoch_pk,
+                        global_context.client_config().global.epoch_pk,
                         secret,
                     )
                     .await

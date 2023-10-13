@@ -81,7 +81,10 @@ use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     InviteCode, WsFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
+use fedimint_core::config::{
+    ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
+    ModuleInitRegistry,
+};
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -758,6 +761,31 @@ impl Client {
         &self.inner.config
     }
 
+    /// Returns the config of the client in JSON format.
+    ///
+    /// Compared to the consensus module format where module configs are binary
+    /// encoded this format cannot be cryptographically verified but is easier
+    /// to consume and to some degree human-readable.
+    pub fn get_config_json(&self) -> JsonClientConfig {
+        JsonClientConfig {
+            global: self.get_config().global.clone(),
+            modules: self
+                .get_config()
+                .modules
+                .iter()
+                .map(|(instance_id, ClientModuleConfig { kind, config, .. })| {
+                    (
+                        *instance_id,
+                        JsonWithKind::new(
+                            kind.clone(),
+                            config.clone().expect_decoded().to_json().into(),
+                        ),
+                    )
+                })
+                .collect(),
+        }
+    }
+
     /// Get the primary module
     pub fn primary_module(&self) -> &DynClientModule {
         self.inner
@@ -837,7 +865,7 @@ impl Client {
     ) -> SupportedApiVersionsSummary {
         SupportedApiVersionsSummary {
             core: SupportedCoreApiVersions {
-                core_consensus: config.consensus_version,
+                core_consensus: config.global.consensus_version,
                 api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
                     .expect("must not have conflicting versions"),
             },
@@ -851,7 +879,7 @@ impl Client {
                             (
                                 module_instance_id,
                                 SupportedModuleApiVersions {
-                                    core_consensus: config.consensus_version,
+                                    core_consensus: config.global.consensus_version,
                                     module_consensus: module_config.version,
                                     api: module_init.supported_api_versions(),
                                 },
@@ -1441,7 +1469,7 @@ impl ClientBuilder {
 
                 let module = module_init
                     .init(
-                        config.federation_id,
+                        config.global.federation_id,
                         module_config,
                         db.clone(),
                         module_instance,
@@ -1481,8 +1509,8 @@ impl ClientBuilder {
             config: config.clone(),
             decoders,
             db: db.clone(),
-            federation_id: config.federation_id,
-            federation_meta: config.meta,
+            federation_id: config.global.federation_id,
+            federation_meta: config.global.meta,
             primary_module_instance,
             modules,
             module_inits: self.module_inits.clone(),
@@ -1535,7 +1563,7 @@ async fn get_config(
             let mut dbtx = db.begin_transaction().await;
             dbtx.insert_new_entry(
                 &ClientConfigKey {
-                    id: config.federation_id,
+                    id: config.global.federation_id,
                 },
                 &config,
             )

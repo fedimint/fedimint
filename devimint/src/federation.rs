@@ -233,6 +233,7 @@ impl Federation {
             .unwrap()
             .config()
             .0
+            .global
             .federation_id
             .to_string()
     }

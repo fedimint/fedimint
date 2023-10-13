@@ -364,7 +364,7 @@ macro_rules! module_plugin_dyn_newtype_encode_decode {
 #[macro_export]
 macro_rules! module_plugin_static_trait_define{
     (   $(#[$outer:meta])*
-        $dyn_newtype:ident, $static_trait:ident, $dyn_trait:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
+        $dyn_newtype:ident, $static_trait:ident, $dyn_trait:ident, { $($extra_methods:tt)* }, { $($extra_impls:tt)* }
     ) => {
         pub trait $static_trait:
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance<DynType = $dyn_newtype> + Send + Sync + 'static
@@ -389,6 +389,73 @@ macro_rules! module_plugin_static_trait_define{
             }
 
             $($extra_impls)*
+        }
+
+        impl<T> $dyn_trait for T
+        where
+            T: $static_trait + DynEncodable + 'static + Send + Sync,
+        {
+            fn as_any(&self) -> &(dyn Any + Send + Sync) {
+                self
+            }
+
+            fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $dyn_newtype {
+                $dyn_newtype::from_typed(instance_id, <Self as Clone>::clone(self))
+            }
+
+            fn dyn_hash(&self) -> u64 {
+                let mut s = std::collections::hash_map::DefaultHasher::new();
+                self.hash(&mut s);
+                std::hash::Hasher::finish(&s)
+            }
+
+            $($extra_impls)*
+        }
+
+        impl std::hash::Hash for $dyn_newtype {
+            fn hash<H>(&self, state: &mut H)
+            where
+                H: std::hash::Hasher
+            {
+                self.module_instance_id.hash(state);
+                self.inner.dyn_hash().hash(state);
+            }
+        }
+    };
+}
+
+/// A copy of `module_lugin_static_trait_define` but for `ClientConfig`, which
+/// is a snowflake that requires `: Serialize` and conditional implementation
+/// for `DynUnknown`. The macro is getting gnarly, so seems easier to
+/// copy-paste-modify, than pile up conditional argument.
+#[macro_export]
+macro_rules! module_plugin_static_trait_define_config{
+    (   $(#[$outer:meta])*
+        $dyn_newtype:ident, $static_trait:ident, $dyn_trait:ident, { $($extra_methods:tt)* }, { $($extra_impls:tt)* }, { $($extra_impls_unknown:tt)* }
+    ) => {
+        pub trait $static_trait:
+            std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance<DynType = $dyn_newtype> + Send + Sync + serde::Serialize + serde::de::DeserializeOwned + 'static
+        {
+            $($extra_methods)*
+        }
+
+        impl $dyn_trait for ::fedimint_core::core::DynUnknown {
+            fn as_any(&self) -> &(dyn Any + Send + Sync) {
+                self
+            }
+
+            fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $dyn_newtype {
+                $dyn_newtype::from_typed(instance_id, <Self as Clone>::clone(self))
+            }
+
+            fn dyn_hash(&self) -> u64 {
+                use std::hash::Hash;
+                let mut s = std::collections::hash_map::DefaultHasher::new();
+                self.hash(&mut s);
+                std::hash::Hasher::finish(&s)
+            }
+
+            $($extra_impls_unknown)*
         }
 
         impl<T> $dyn_trait for T
