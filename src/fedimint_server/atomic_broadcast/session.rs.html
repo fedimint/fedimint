@@ -151,14 +151,6 @@
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -190,7 +182,7 @@
     signature_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
     keychain: Keychain,
     federation_api: WsFederationApi,
-) -&gt; anyhow::Result&lt;()&gt; {
+) -&gt; anyhow::Result&lt;(FedimintConsensus, SignedBlock)&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>num_batches = <span class="number">0</span>;
 
     <span class="comment">// we build a block out of the ordered batches until either we have processed
@@ -224,9 +216,7 @@
                     <span class="macro">assert!</span>(consensus.process_consensus_item(accepted_item.item, accepted_item.peer).<span class="kw">await</span>.is_ok());
                 }
 
-                consensus.complete_session(signed_block).<span class="kw">await</span>;
-
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                <span class="kw">return </span><span class="prelude-val">Ok</span>((consensus, signed_block));
             }
         }
     }
@@ -260,18 +250,12 @@
                 <span class="comment">// We check that the block we have created agrees with the federations consensus
                 </span><span class="macro">assert!</span>(header == signed_block.block.header(consensus.session_index));
 
-                consensus.complete_session(signed_block).<span class="kw">await</span>;
-
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                <span class="kw">return </span><span class="prelude-val">Ok</span>((consensus, signed_block));
             }
         }
     }
 
-    consensus
-        .complete_session(SignedBlock { block, signatures })
-        .<span class="kw">await</span>;
-
-    <span class="prelude-val">Ok</span>(())
+    <span class="prelude-val">Ok</span>((consensus, SignedBlock { block, signatures }))
 }
 
 <span class="kw">async fn </span>request_signed_block(
