@@ -82,7 +82,8 @@ use fedimint_core::api::{
     InviteCode, WsFederationApi,
 };
 use fedimint_core::config::{
-    ClientConfig, FederationId, JsonClientConfig, JsonWithKind, ModuleInitRegistry,
+    ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
+    ModuleInitRegistry,
 };
 use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
@@ -770,12 +771,17 @@ impl Client {
         JsonClientConfig {
             global: self.get_config().global.clone(),
             modules: self
-                .inner
+                .get_config()
                 .modules
-                .iter_modules()
-                .map(|(instance_id, kind, module)| {
-                    let config = JsonWithKind::new(kind.clone(), module.get_config_json());
-                    (instance_id, config)
+                .iter()
+                .map(|(instance_id, ClientModuleConfig { kind, config, .. })| {
+                    (
+                        *instance_id,
+                        JsonWithKind::new(
+                            kind.clone(),
+                            config.clone().expect_decoded().to_json().into(),
+                        ),
+                    )
                 })
                 .collect(),
         }
