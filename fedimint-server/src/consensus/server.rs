@@ -11,7 +11,6 @@ use fedimint_core::db::{apply_migrations, Database};
 use fedimint_core::epoch::{ConsensusItem, SerdeSignatureShare};
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::registry::{ModuleRegistry, ServerModuleRegistry};
-use fedimint_core::net::peers::PeerConnections;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::{timing, PeerId};
 use tokio::select;
@@ -158,8 +157,6 @@ impl ConsensusServer {
         )
         .await;
 
-        let connections = connections.into_dyn();
-
         let other_peers: Vec<PeerId> = cfg
             .local
             .p2p_endpoints
@@ -283,7 +280,7 @@ async fn confirm_consensus_config_hash(
 
 async fn relay_messages(
     task_group: &mut TaskGroup,
-    mut connections: PeerConnections<Message>,
+    mut connections: ReconnectPeerConnections<Message>,
     outgoing_receiver: Receiver<(Message, Recipient)>,
     incoming_sender: Sender<Message>,
     other_peers: Vec<PeerId>,
