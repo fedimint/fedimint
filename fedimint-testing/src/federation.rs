@@ -103,7 +103,7 @@ impl FederationTest {
             let decoders = server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
 
-            let server = ConsensusServer::new_with(
+            let (consensus_server, consensus_api) = ConsensusServer::new_with(
                 config.clone(),
                 db.clone(),
                 server_init.clone(),
@@ -114,9 +114,10 @@ impl FederationTest {
             .await
             .expect("Failed to init server");
 
-            let api_handle = FedimintServer::spawn_consensus_api(&server, false).await;
+            let api_handle = FedimintServer::spawn_consensus_api(consensus_api, false).await;
+
             task.spawn("fedimintd", move |handle| async move {
-                server.run_consensus(handle).await.unwrap();
+                consensus_server.run_consensus(handle).await.unwrap();
                 api_handle.stop().await;
             })
             .await;

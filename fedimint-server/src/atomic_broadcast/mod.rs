@@ -78,18 +78,14 @@
 //! session regardless. However, it did so by processing one less ordered item
 //! and without realizing that a double spend had occurred.
 
-mod backup;
-mod broadcast;
-mod conversion;
-mod data_provider;
-mod finalization_handler;
-mod keychain;
-mod network;
-mod session;
-mod spawner;
+pub mod backup;
+pub mod data_provider;
+pub mod finalization_handler;
+pub mod keychain;
+pub mod network;
+pub mod spawner;
 
-/// The atomic broadcast instance run once by every peer.
-pub use broadcast::AtomicBroadcast;
+use aleph_bft::NodeIndex;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 /// This keychain implements naive threshold schnorr signatures over secp256k1.
@@ -111,4 +107,14 @@ pub struct Message(Vec<u8>);
 pub enum Recipient {
     Everyone,
     Peer(PeerId),
+}
+
+pub fn to_peer_id(node_index: NodeIndex) -> PeerId {
+    u16::try_from(usize::from(node_index))
+        .expect("The node index corresponds to a valid PeerId")
+        .into()
+}
+
+pub fn to_node_index(peer_id: PeerId) -> NodeIndex {
+    usize::from(u16::from(peer_id)).into()
 }
