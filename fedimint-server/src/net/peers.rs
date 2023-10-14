@@ -304,12 +304,12 @@ where
         match recipient {
             Recipient::Everyone => {
                 for connection in self.connections.values() {
-                    connection.send(msg.clone()).ok();
+                    connection.send(msg.clone());
                 }
             }
             Recipient::Peer(peer) => {
                 if let Some(connection) = self.connections.get(&peer) {
-                    connection.send(msg.clone()).ok();
+                    connection.send(msg.clone());
                 } else {
                     trace!(target: LOG_NET_PEER,peer = ?peer, "Not sending message to unknown peer (maybe banned)");
                 }
@@ -343,7 +343,7 @@ where
         for peer_id in peers {
             trace!(target: LOG_NET_PEER, ?peer_id, "Sending message to");
             if let Some(peer) = self.connections.get_mut(peer_id) {
-                peer.send(msg.clone())?;
+                peer.send(msg.clone());
             } else {
                 trace!(target: LOG_NET_PEER,peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
             }
@@ -466,7 +466,9 @@ where
                 match message_res {
                     Ok(peer_message) => {
                         if let PeerMessage::Message(msg) = peer_message {
-                            self.incoming.try_send(msg).ok();
+                            if self.incoming.try_send(msg).is_err(){
+                                debug!(target: LOG_NET_PEER, "Could not relay incoming message since the channel is full");
+                            }
                         }
 
                         PeerConnectionState::Connected(connected)
@@ -668,8 +670,10 @@ where
         }
     }
 
-    fn send(&self, msg: M) -> Cancellable<()> {
-        self.outgoing.try_send(msg).map_err(|_e| Cancelled)
+    fn send(&self, msg: M) {
+        if self.outgoing.try_send(msg).is_err() {
+            debug!(target: LOG_NET_PEER, "Could not send outgoing message since the channel is full");
+        }
     }
 
     async fn receive(&mut self) -> Cancellable<M> {
