@@ -52,13 +52,15 @@ pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 /// [`FramedTransport`](crate::net::framed::FramedTransport) connections. For
 /// production deployments the `Connector` has to ensure that connections are
 /// authenticated and encrypted.
+#[derive(Clone)]
 pub struct ReconnectPeerConnections<T> {
     connections: HashMap<PeerId, PeerConnection<T>>,
 }
 
+#[derive(Clone)]
 struct PeerConnection<T> {
-    outgoing: Sender<T>,
-    incoming: Receiver<T>,
+    outgoing: async_channel::Sender<T>,
+    incoming: async_channel::Receiver<T>,
 }
 
 /// Specifies the network configuration for federation-internal communication
@@ -174,8 +176,8 @@ impl DelayCalculator {
 }
 
 struct CommonPeerConnectionState<M> {
-    incoming: Sender<M>,
-    outgoing: Receiver<M>,
+    incoming: async_channel::Sender<M>,
+    outgoing: async_channel::Receiver<M>,
     our_id: PeerId,
     peer_id: PeerId,
     peer_address: SafeUrl,
@@ -429,11 +431,11 @@ where
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
                 match maybe_msg {
-                    Some(msg) => {
+                    Ok(msg) => {
                         self.send_message_connected(connected, PeerMessage::Message(msg))
                             .await
                     },
-                    None => {
+                    Err(_) => {
                         debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
                         return None;
                     },
@@ -636,8 +638,8 @@ where
         status_query_receiver: PeerStatusChannelReceiver,
         task_group: &mut TaskGroup,
     ) -> PeerConnection<M> {
-        let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
-        let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
+        let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
+        let (incoming_sender, incoming_receiver) = async_channel::bounded(1024);
 
         task_group
             .spawn(
@@ -671,14 +673,14 @@ where
     }
 
     async fn receive(&mut self) -> Cancellable<M> {
-        self.incoming.recv().await.ok_or(Cancelled)
+        self.incoming.recv().await.map_err(|_| Cancelled)
     }
 
     #[allow(clippy::too_many_arguments)] // TODO: consider refactoring
     #[instrument(skip_all, fields(peer))]
     async fn run_io_thread(
-        incoming: Sender<M>,
-        outgoing: Receiver<M>,
+        incoming: async_channel::Sender<M>,
+        outgoing: async_channel::Receiver<M>,
         our_id: PeerId,
         peer_id: PeerId,
         peer_address: SafeUrl,
