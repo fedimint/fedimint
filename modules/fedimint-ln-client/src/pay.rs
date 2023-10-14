@@ -209,7 +209,7 @@ pub struct LightningPayFunded {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub enum GatewayPayError {
     #[error("Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}")]
     GatewayInternalError {
@@ -479,7 +479,7 @@ impl LightningPayRefund {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub struct PayInvoicePayload {
     pub federation_id: FederationId,
     pub contract_id: ContractId,

@@ -121,7 +121,7 @@ pub trait LightningClientExt {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub enum PayType {
     // Payment from this client to another user within the federation
     Internal(OperationId),
@@ -132,7 +132,7 @@ pub enum PayType {
 /// The high-level state of an pay operation internal to the federation,
 /// started with [`LightningClientExt::pay_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub enum InternalPayState {
     Funding,
     Preimage(Preimage),
@@ -153,7 +153,7 @@ pub enum InternalPayState {
 /// The high-level state of a pay operation over lightning,
 /// started with [`LightningClientExt::pay_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub enum LnPayState {
     Created,
     Canceled,
@@ -177,7 +177,7 @@ pub enum LnPayState {
 /// The high-level state of a reissue operation started with
 /// [`LightningClientExt::create_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub enum LnReceiveState {
     Created,
     WaitingForPayment { invoice: String, timeout: Duration },
@@ -559,7 +559,7 @@ impl LightningClientExt for Client {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 pub enum LightningOperationMeta {
     Pay {
         out_point: OutPoint,
@@ -687,7 +687,7 @@ impl ClientModule for LightningClientModule {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-#[serde(rename_all(serialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 enum PayError {
     #[error("Lightning payment was canceled")]
     Canceled,
