@@ -32,6 +32,7 @@ use tokio::sync::oneshot;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
+use crate::atomic_broadcast::Recipient;
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 
@@ -293,6 +294,23 @@ where
                     ?peer,
                     "Could not send incoming connection to peer io task (possibly banned)"
                 );
+            }
+        }
+    }
+    #[allow(dead_code)]
+    pub fn send_sync(&mut self, msg: T, recipient: Recipient) {
+        match recipient {
+            Recipient::Everyone => {
+                for connection in self.connections.values_mut() {
+                    connection.send(msg.clone()).ok();
+                }
+            }
+            Recipient::Peer(peer) => {
+                if let Some(connection) = self.connections.get_mut(&peer) {
+                    connection.send(msg.clone()).ok();
+                } else {
+                    trace!(target: LOG_NET_PEER,peer = ?peer, "Not sending message to unknown peer (maybe banned)");
+                }
             }
         }
     }

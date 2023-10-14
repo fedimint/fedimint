@@ -157,22 +157,7 @@ impl ConsensusServer {
         )
         .await;
 
-        let other_peers: Vec<PeerId> = cfg
-            .local
-            .p2p_endpoints
-            .keys()
-            .cloned()
-            .filter(|peer| *peer != cfg.local.identity)
-            .collect();
-
-        relay_messages(
-            task_group,
-            connections,
-            outgoing_receiver,
-            incoming_sender,
-            other_peers,
-        )
-        .await;
+        relay_messages(task_group, connections, outgoing_receiver, incoming_sender).await;
 
         // Build API that can handle requests
         let latest_contribution_by_peer = Default::default();
@@ -283,7 +268,6 @@ async fn relay_messages(
     mut connections: ReconnectPeerConnections<Message>,
     outgoing_receiver: Receiver<(Message, Recipient)>,
     incoming_sender: Sender<Message>,
-    other_peers: Vec<PeerId>,
 ) {
     task_group
         .spawn("relay_messages", |task_handle| async move {
@@ -292,17 +276,7 @@ async fn relay_messages(
                     message = outgoing_receiver.recv() => {
                         match message{
                             Ok((message, recipient))=> {
-                                match recipient {
-                                    Recipient::Everyone => {
-                                        connections.send(
-                                            other_peers.as_slice(),
-                                            message
-                                        ).await.ok();
-                                    }
-                                    Recipient::Peer(peer_id) => {
-                                        connections.send(&[peer_id], message).await.ok();
-                                    }
-                                }
+                                connections.send_sync(message, recipient)
                             },
                             Err(..) => break
                         }
