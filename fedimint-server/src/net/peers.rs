@@ -300,15 +300,15 @@ where
         }
     }
     #[allow(dead_code)]
-    pub fn send_sync(&mut self, msg: T, recipient: Recipient) {
+    pub fn send_sync(&self, msg: T, recipient: Recipient) {
         match recipient {
             Recipient::Everyone => {
-                for connection in self.connections.values_mut() {
+                for connection in self.connections.values() {
                     connection.send(msg.clone()).ok();
                 }
             }
             Recipient::Peer(peer) => {
-                if let Some(connection) = self.connections.get_mut(&peer) {
+                if let Some(connection) = self.connections.get(&peer) {
                     connection.send(msg.clone()).ok();
                 } else {
                     trace!(target: LOG_NET_PEER,peer = ?peer, "Not sending message to unknown peer (maybe banned)");
@@ -668,7 +668,7 @@ where
         }
     }
 
-    fn send(&mut self, msg: M) -> Cancellable<()> {
+    fn send(&self, msg: M) -> Cancellable<()> {
         self.outgoing.try_send(msg).map_err(|_e| Cancelled)
     }
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
-use async_channel::{Receiver, Sender};
+use async_channel::Sender;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::{GlobalFederationApi, WsFederationApi};
 use fedimint_core::config::ServerModuleInitRegistry;
@@ -13,17 +13,15 @@ use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::registry::{ModuleRegistry, ServerModuleRegistry};
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::{timing, PeerId};
-use tokio::select;
 use tracing::{info, warn};
 
-use crate::atomic_broadcast::{AtomicBroadcast, Keychain, Message, Recipient};
+use crate::atomic_broadcast::{AtomicBroadcast, Keychain, Message};
 use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
 use crate::db::{
     get_global_database_migrations, ClientConfigSignatureKey, GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
-use crate::fedimint_core::net::peers::IPeerConnections;
 use crate::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
@@ -137,16 +135,6 @@ impl ConsensusServer {
         );
 
         let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
-        let (incoming_sender, incoming_receiver) = async_channel::bounded(256);
-        let (outgoing_sender, outgoing_receiver) = async_channel::bounded(256);
-
-        let atomic_broadcast = AtomicBroadcast::new(
-            keychain,
-            db.clone(),
-            submission_receiver,
-            incoming_receiver,
-            outgoing_sender,
-        );
 
         // Build P2P connections for the atomic broadcast
         let (connections, peer_status_channels) = ReconnectPeerConnections::new(
@@ -157,7 +145,12 @@ impl ConsensusServer {
         )
         .await;
 
-        relay_messages(task_group, connections, outgoing_receiver, incoming_sender).await;
+        let atomic_broadcast = AtomicBroadcast::new(
+            keychain,
+            db.clone(),
+            connections.clone(),
+            submission_receiver,
+        );
 
         // Build API that can handle requests
         let latest_contribution_by_peer = Default::default();
@@ -261,40 +254,6 @@ async fn confirm_consensus_config_hash(
 
         sleep(Duration::from_millis(100)).await;
     }
-}
-
-async fn relay_messages(
-    task_group: &mut TaskGroup,
-    mut connections: ReconnectPeerConnections<Message>,
-    outgoing_receiver: Receiver<(Message, Recipient)>,
-    incoming_sender: Sender<Message>,
-) {
-    task_group
-        .spawn("relay_messages", |task_handle| async move {
-            while !task_handle.is_shutting_down() {
-                select! {
-                    message = outgoing_receiver.recv() => {
-                        match message{
-                            Ok((message, recipient))=> {
-                                connections.send_sync(message, recipient)
-                            },
-                            Err(..) => break
-                        }
-
-                    }
-                    message = connections.receive() => {
-                        match message {
-                            Ok((.., message)) => {
-                                incoming_sender.send(message).await.ok();
-                            }
-                            Err(..) => break
-                        }
-
-                    }
-                }
-            }
-        })
-        .await;
 }
 
 async fn submit_module_consensus_items(
