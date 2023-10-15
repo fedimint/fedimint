@@ -1532,7 +1532,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn select_notes_avg_test() {
         let max_amount = Amount::from_sats(1000000);
-        let tiers = Tiered::gen_denominations(max_amount);
+        let tiers = Tiered::gen_denominations(2, max_amount);
         let tiered =
             TieredSummary::represent_amount::<()>(max_amount, &Default::default(), &tiers, 3);
 

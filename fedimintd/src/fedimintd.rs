@@ -14,8 +14,8 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::timing;
 use fedimint_core::util::{write_overwrite, SafeUrl};
-use fedimint_core::{timing, Amount};
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
@@ -63,10 +63,6 @@ pub struct ServerOpts {
     /// Our API address for clients to connect to us
     #[arg(long, env = "FM_API_URL", default_value = "ws://127.0.0.1:8174")]
     api_url: SafeUrl,
-    /// Max denomination of notes issued by the federation (in millisats)
-    /// default = 10 BTC
-    #[arg(long, env = "FM_MAX_DENOMINATION", default_value = "1000000000000")]
-    max_denomination: Amount,
     /// The bitcoin network that fedimint will be running on
     #[arg(long, env = "FM_BITCOIN_NETWORK", default_value = "regtest")]
     network: bitcoin::network::constants::Network,
@@ -264,7 +260,6 @@ async fn run(
     attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
         &mut module_inits_params,
-        opts.max_denomination,
         opts.network,
         opts.finality_delay,
     );

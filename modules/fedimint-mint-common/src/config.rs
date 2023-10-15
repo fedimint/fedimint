@@ -18,20 +18,35 @@ pub struct MintGenParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintGenParamsConsensus {
-    pub mint_amounts: Vec<Amount>,
+    denomination_base: u16,
 }
 
-const TEN_BTC_IN_SATS: u64 = 10 * 100_000_000;
+// The maximum size of an E-Cash note
+// Changing this value is considered a breaking change because it is not saved
+// in `MintGenParamsConsensus` but instead is hardcoded here
+const MAX_DENOMINATION_SIZE: Amount = Amount::from_coins(1_000_000);
+
+impl MintGenParamsConsensus {
+    pub fn new(denomination_base: u16) -> Self {
+        Self { denomination_base }
+    }
+
+    pub fn denomination_base(&self) -> u16 {
+        self.denomination_base
+    }
+
+    pub fn gen_denominations(&self) -> Vec<Amount> {
+        Tiered::gen_denominations(self.denomination_base, MAX_DENOMINATION_SIZE)
+            .tiers()
+            .cloned()
+            .collect()
+    }
+}
 
 impl Default for MintGenParams {
     fn default() -> Self {
         MintGenParams {
-            consensus: MintGenParamsConsensus {
-                mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
-                    .tiers()
-                    .cloned()
-                    .collect(),
-            },
+            consensus: MintGenParamsConsensus::new(2),
             local: EmptyGenParams {},
         }
     }
