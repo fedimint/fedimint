@@ -5,24 +5,32 @@ use std::ops::Range;
 
 use fedimint_client::sm::{OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{Amount, NumPeers, PeerId, TransactionId};
+use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti, TransactionId};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 use fedimint_mint_common::{MintConsensusItem, MintInput, MintOutput, Nonce};
 use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use tbs::{
     combine_valid_shares, verify_blind_share, AggregatePublicKey, BlindedMessage, PublicKeyShare,
 };
 use threshold_crypto::G1Affine;
 use tracing::{debug, error, info, trace, warn};
 
-use super::*;
+use super::EcashBackup;
 use crate::client_db::{NextECashNoteIndexKey, NoteKey};
-use crate::output::{MintOutputCommon, MintOutputStatesCreated, NoteIssuanceRequest};
-use crate::MintClientContext;
+use crate::output::{
+    MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, MultiNoteIssuanceRequest,
+    NoteIssuanceRequest,
+};
+use crate::{
+    MintClientContext, MintClientModule, MintClientStateMachines, NoteIndex, SpendableNote,
+};
 
 /// Restore will progress in chunks of a fixed epoch count,
 /// after each the current state is persisted in the database.
