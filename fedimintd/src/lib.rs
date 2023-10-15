@@ -7,7 +7,7 @@ use fedimint_core::core::{
 };
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, Tiered};
+use fedimint_core::Amount;
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
@@ -52,12 +52,7 @@ pub fn attach_default_module_init_params(
             MintGen::kind(),
             MintGenParams {
                 local: Default::default(),
-                consensus: MintGenParamsConsensus {
-                    mint_amounts: Tiered::gen_denominations(2, max_denomination)
-                        .tiers()
-                        .cloned()
-                        .collect(),
-                },
+                consensus: MintGenParamsConsensus::new(2),
             },
         )
         .attach_config_gen_params(

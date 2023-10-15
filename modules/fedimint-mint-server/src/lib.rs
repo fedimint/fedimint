@@ -155,7 +155,7 @@ impl ServerModuleInit for MintGen {
 
         let tbs_keys = params
             .consensus
-            .mint_amounts
+            .gen_denominations()
             .iter()
             .map(|&amount| {
                 let (tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(peers.threshold(), peers.len());
@@ -174,7 +174,7 @@ impl ServerModuleInit for MintGen {
                             .map(|&key_peer| {
                                 let keys = params
                                     .consensus
-                                    .mint_amounts
+                                    .gen_denominations()
                                     .iter()
                                     .map(|amount| {
                                         (*amount, tbs_keys[amount].1[key_peer.to_usize()])
@@ -189,7 +189,7 @@ impl ServerModuleInit for MintGen {
                     private: MintConfigPrivate {
                         tbs_sks: params
                             .consensus
-                            .mint_amounts
+                            .gen_denominations()
                             .iter()
                             .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
                             .collect(),
@@ -213,7 +213,7 @@ impl ServerModuleInit for MintGen {
         let params = self.parse_params(params).unwrap();
 
         let g2 = peers
-            .run_dkg_multi_g2(params.consensus.mint_amounts.to_vec())
+            .run_dkg_multi_g2(params.consensus.gen_denominations())
             .await?;
 
         let amounts_keys = g2
@@ -771,9 +771,7 @@ mod test {
             &peers,
             &ConfigGenModuleParams::from_typed(MintGenParams {
                 local: Default::default(),
-                consensus: MintGenParamsConsensus {
-                    mint_amounts: vec![Amount::from_sats(1)],
-                },
+                consensus: MintGenParamsConsensus::new(2),
             })
             .unwrap(),
         );
@@ -836,7 +834,7 @@ mod test {
                     .private
                     .tbs_sks
                     .get(denomination)
-                    .unwrap();
+                    .expect("Mint cannot issue a note of this denomination");
                 tbs::sign_blinded_msg(blind_msg, sks)
             })
             .enumerate()
@@ -854,13 +852,16 @@ mod test {
     #[test_log::test(tokio::test)]
     async fn test_detect_double_spends() {
         let (mint_server_cfg, _) = build_configs();
+        // TODO - Extract this from the config so we don't assume we're using base-2
+        // denominations
+        let even_denomination_amount = Amount::from_msats(1024);
 
         let mint = Mint::new(mint_server_cfg[0].to_typed().unwrap());
-        let (_, note) = issue_note(&mint_server_cfg, Amount::from_sats(1));
+        let (_, note) = issue_note(&mint_server_cfg, even_denomination_amount);
 
         // Normal spend works
         let db = Database::new(MemDatabase::new(), Default::default());
-        let input = MintInput(vec![(Amount::from_sats(1), note)].into_iter().collect());
+        let input = MintInput(vec![(even_denomination_amount, note)].into_iter().collect());
 
         // Double spend in same epoch is detected
         let mut dbtx = db.begin_transaction().await;
@@ -875,11 +876,14 @@ mod test {
 
         // Double spend in same input is detected
         let mut dbtx = db.begin_transaction().await;
-        let (_, note2) = issue_note(&mint_server_cfg, Amount::from_sats(1));
+        let (_, note2) = issue_note(&mint_server_cfg, even_denomination_amount);
         let input2 = MintInput(
-            vec![(Amount::from_sats(1), note2), (Amount::from_sats(1), note2)]
-                .into_iter()
-                .collect(),
+            vec![
+                (even_denomination_amount, note2),
+                (even_denomination_amount, note2),
+            ]
+            .into_iter()
+            .collect(),
         );
         assert_matches!(
             mint.process_input(&mut dbtx.with_module_prefix(42), &input2,)
