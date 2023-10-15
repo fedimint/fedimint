@@ -1667,6 +1667,9 @@ mod fedimint_migration_tests {
                                 num_gateways > 0,
                                 "validate_migrations was not able to read any LightningGateways"
                             );
+                            for (key, gateway) in gateways {
+                                ensure!(key.0 == gateway.info.node_pub_key, "Gateway key does not match gateway id");
+                            }
                         }
                         DbKeyPrefix::Offer => {
                             let offers = dbtx
