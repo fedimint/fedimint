@@ -16,7 +16,7 @@ use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, PeerId};
+use fedimint_core::PeerId;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
@@ -502,7 +502,6 @@ async fn set_config_gen_params(
     attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()?,
         &mut server_gen_params,
-        Amount::from_sats(100_000_000),
         Network::Regtest,
         10,
     );

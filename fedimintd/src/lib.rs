@@ -7,7 +7,6 @@ use fedimint_core::core::{
 };
 use fedimint_core::module::ServerModuleInit;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::Amount;
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
@@ -26,7 +25,6 @@ pub mod fedimintd;
 pub fn attach_default_module_init_params(
     bitcoin_rpc: BitcoinRpcConfig,
     module_init_params: &mut ServerModuleConfigGenParamsRegistry,
-    max_denomination: Amount,
     network: Network,
     finality_delay: u32,
 ) {
