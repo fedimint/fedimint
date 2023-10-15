@@ -1124,6 +1124,10 @@
 <a href="#1124" id="1124">1124</a>
 <a href="#1125" id="1125">1125</a>
 <a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1281,7 +1285,7 @@
 
         <span class="kw">let </span>tbs_keys = params
             .consensus
-            .mint_amounts
+            .gen_denominations()
             .iter()
             .map(|<span class="kw-2">&amp;</span>amount| {
                 <span class="kw">let </span>(tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(peers.threshold(), peers.len());
@@ -1300,7 +1304,7 @@
                             .map(|<span class="kw-2">&amp;</span>key_peer| {
                                 <span class="kw">let </span>keys = params
                                     .consensus
-                                    .mint_amounts
+                                    .gen_denominations()
                                     .iter()
                                     .map(|amount| {
                                         (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">1</span>[key_peer.to_usize()])
@@ -1315,7 +1319,7 @@
                     private: MintConfigPrivate {
                         tbs_sks: params
                             .consensus
-                            .mint_amounts
+                            .gen_denominations()
                             .iter()
                             .map(|amount| (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">2</span>[peer.to_usize()]))
                             .collect(),
@@ -1339,7 +1343,7 @@
         <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
 
         <span class="kw">let </span>g2 = peers
-            .run_dkg_multi_g2(params.consensus.mint_amounts.to_vec())
+            .run_dkg_multi_g2(params.consensus.gen_denominations())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>amounts_keys = g2
@@ -1897,9 +1901,7 @@
             <span class="kw-2">&amp;</span>peers,
             <span class="kw-2">&amp;</span>ConfigGenModuleParams::from_typed(MintGenParams {
                 local: Default::default(),
-                consensus: MintGenParamsConsensus {
-                    mint_amounts: <span class="macro">vec!</span>[Amount::from_sats(<span class="number">1</span>)],
-                },
+                consensus: MintGenParamsConsensus::new(<span class="number">2</span>),
             })
             .unwrap(),
         );
@@ -1962,7 +1964,7 @@
                     .private
                     .tbs_sks
                     .get(denomination)
-                    .unwrap();
+                    .expect(<span class="string">&quot;Mint cannot issue a note of this denomination&quot;</span>);
                 tbs::sign_blinded_msg(blind_msg, sks)
             })
             .enumerate()
@@ -1980,13 +1982,16 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_detect_double_spends() {
         <span class="kw">let </span>(mint_server_cfg, <span class="kw">_</span>) = build_configs();
+        <span class="comment">// TODO - Extract this from the config so we don&#39;t assume we&#39;re using base-2
+        // denominations
+        </span><span class="kw">let </span>even_denomination_amount = Amount::from_msats(<span class="number">1024</span>);
 
         <span class="kw">let </span>mint = Mint::new(mint_server_cfg[<span class="number">0</span>].to_typed().unwrap());
-        <span class="kw">let </span>(<span class="kw">_</span>, note) = issue_note(<span class="kw-2">&amp;</span>mint_server_cfg, Amount::from_sats(<span class="number">1</span>));
+        <span class="kw">let </span>(<span class="kw">_</span>, note) = issue_note(<span class="kw-2">&amp;</span>mint_server_cfg, even_denomination_amount);
 
         <span class="comment">// Normal spend works
         </span><span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
-        <span class="kw">let </span>input = MintInput(<span class="macro">vec!</span>[(Amount::from_sats(<span class="number">1</span>), note)].into_iter().collect());
+        <span class="kw">let </span>input = MintInput(<span class="macro">vec!</span>[(even_denomination_amount, note)].into_iter().collect());
 
         <span class="comment">// Double spend in same epoch is detected
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
@@ -2001,11 +2006,14 @@
 
         <span class="comment">// Double spend in same input is detected
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>(<span class="kw">_</span>, note2) = issue_note(<span class="kw-2">&amp;</span>mint_server_cfg, Amount::from_sats(<span class="number">1</span>));
+        <span class="kw">let </span>(<span class="kw">_</span>, note2) = issue_note(<span class="kw-2">&amp;</span>mint_server_cfg, even_denomination_amount);
         <span class="kw">let </span>input2 = MintInput(
-            <span class="macro">vec!</span>[(Amount::from_sats(<span class="number">1</span>), note2), (Amount::from_sats(<span class="number">1</span>), note2)]
-                .into_iter()
-                .collect(),
+            <span class="macro">vec!</span>[
+                (even_denomination_amount, note2),
+                (even_denomination_amount, note2),
+            ]
+            .into_iter()
+            .collect(),
         );
         <span class="macro">assert_matches!</span>(
             mint.process_input(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(<span class="number">42</span>), <span class="kw-2">&amp;</span>input2,)

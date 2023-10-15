@@ -109,6 +109,21 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>fedimint_core::config::EmptyGenParams;
@@ -129,20 +144,35 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintGenParamsConsensus {
-    <span class="kw">pub </span>mint_amounts: Vec&lt;Amount&gt;,
+    denomination_base: u16,
 }
 
-<span class="kw">const </span>TEN_BTC_IN_SATS: u64 = <span class="number">10 </span>* <span class="number">100_000_000</span>;
+<span class="comment">// The maximum size of an E-Cash note
+// Changing this value is considered a breaking change because it is not saved
+// in `MintGenParamsConsensus` but instead is hardcoded here
+</span><span class="kw">const </span>MAX_DENOMINATION_SIZE: Amount = Amount::from_coins(<span class="number">1_000_000</span>);
+
+<span class="kw">impl </span>MintGenParamsConsensus {
+    <span class="kw">pub fn </span>new(denomination_base: u16) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ denomination_base }
+    }
+
+    <span class="kw">pub fn </span>denomination_base(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u16 {
+        <span class="self">self</span>.denomination_base
+    }
+
+    <span class="kw">pub fn </span>gen_denominations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;Amount&gt; {
+        Tiered::gen_denominations(<span class="self">self</span>.denomination_base, MAX_DENOMINATION_SIZE)
+            .tiers()
+            .cloned()
+            .collect()
+    }
+}
 
 <span class="kw">impl </span>Default <span class="kw">for </span>MintGenParams {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         MintGenParams {
-            consensus: MintGenParamsConsensus {
-                mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
-                    .tiers()
-                    .cloned()
-                    .collect(),
-            },
+            consensus: MintGenParamsConsensus::new(<span class="number">2</span>),
             local: EmptyGenParams {},
         }
     }

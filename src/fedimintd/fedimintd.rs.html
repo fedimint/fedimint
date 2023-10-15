@@ -319,11 +319,6 @@
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -340,8 +335,8 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::ServerModuleInit;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::timing;
 <span class="kw">use </span>fedimint_core::util::{write_overwrite, SafeUrl};
-<span class="kw">use </span>fedimint_core::{timing, Amount};
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_mint_server::MintGen;
@@ -389,10 +384,6 @@
     <span class="doccomment">/// Our API address for clients to connect to us
     </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_API_URL&quot;</span>, default_value = <span class="string">&quot;ws://127.0.0.1:8174&quot;</span>)]
     </span>api_url: SafeUrl,
-    <span class="doccomment">/// Max denomination of notes issued by the federation (in millisats)
-    /// default = 10 BTC
-    </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_MAX_DENOMINATION&quot;</span>, default_value = <span class="string">&quot;1000000000000&quot;</span>)]
-    </span>max_denomination: Amount,
     <span class="doccomment">/// The bitcoin network that fedimint will be running on
     </span><span class="attr">#[arg(long, env = <span class="string">&quot;FM_BITCOIN_NETWORK&quot;</span>, default_value = <span class="string">&quot;regtest&quot;</span>)]
     </span>network: bitcoin::network::constants::Network,
@@ -590,7 +581,6 @@
     attach_default_module_init_params(
         BitcoinRpcConfig::from_env_vars()<span class="question-mark">?</span>,
         <span class="kw-2">&amp;mut </span>module_inits_params,
-        opts.max_denomination,
         opts.network,
         opts.finality_delay,
     );

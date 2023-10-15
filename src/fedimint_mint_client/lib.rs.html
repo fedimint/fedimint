@@ -3176,7 +3176,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>select_notes_avg_test() {
         <span class="kw">let </span>max_amount = Amount::from_sats(<span class="number">1000000</span>);
-        <span class="kw">let </span>tiers = Tiered::gen_denominations(max_amount);
+        <span class="kw">let </span>tiers = Tiered::gen_denominations(<span class="number">2</span>, max_amount);
         <span class="kw">let </span>tiered =
             TieredSummary::represent_amount::&lt;()&gt;(max_amount, <span class="kw-2">&amp;</span>Default::default(), <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>);
 
