@@ -53,7 +53,7 @@ pub fn attach_default_module_init_params(
             MintGenParams {
                 local: Default::default(),
                 consensus: MintGenParamsConsensus {
-                    mint_amounts: Tiered::gen_denominations(max_denomination)
+                    mint_amounts: Tiered::gen_denominations(2, max_denomination)
                         .tiers()
                         .cloned()
                         .collect(),

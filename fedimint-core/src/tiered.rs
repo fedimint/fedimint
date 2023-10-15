@@ -96,14 +96,14 @@ impl Tiered<SecretKeyShare> {
 }
 
 impl Tiered<()> {
-    /// Generates denominations as powers of 2 up to and including `max`
-    pub fn gen_denominations(max: Amount) -> Tiered<()> {
+    /// Generates denominations of a give base up to and including `max`
+    pub fn gen_denominations(denomination_base: u16, max: Amount) -> Tiered<()> {
         let mut amounts = vec![];
 
         let mut denomination = Amount::from_msats(1);
         while denomination <= max {
             amounts.push((denomination, ()));
-            denomination = denomination * 2;
+            denomination = denomination * denomination_base.into();
         }
 
         amounts.into_iter().collect()
@@ -146,9 +146,18 @@ mod tests {
     #[test]
     fn tier_generation_including_max_amount() {
         let max_amount = Amount::from_msats(16);
-        let denominations = Tiered::gen_denominations(max_amount);
+        let denominations = Tiered::gen_denominations(2, max_amount);
 
         // should produce [1, 2, 4, 8, 16]
+        assert_eq!(denominations.tiers().collect::<Vec<&Amount>>().len(), 5);
+    }
+
+    #[test]
+    fn tier_generation_base_10() {
+        let max_amount = Amount::from_msats(10000);
+        let denominations = Tiered::gen_denominations(10, max_amount);
+
+        // should produce [1, 10, 100, 1000, 10_000]
         assert_eq!(denominations.tiers().collect::<Vec<&Amount>>().len(), 5);
     }
 }

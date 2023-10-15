@@ -27,7 +27,7 @@ impl Default for MintGenParams {
     fn default() -> Self {
         MintGenParams {
             consensus: MintGenParamsConsensus {
-                mint_amounts: Tiered::gen_denominations(Amount::from_sats(TEN_BTC_IN_SATS))
+                mint_amounts: Tiered::gen_denominations(2, Amount::from_sats(TEN_BTC_IN_SATS))
                     .tiers()
                     .cloned()
                     .collect(),
