@@ -109,12 +109,16 @@ pub struct Amount {
 impl Amount {
     pub const ZERO: Self = Self { msats: 0 };
 
-    pub const fn from_msats(msat: u64) -> Amount {
-        Amount { msats: msat }
+    pub const fn from_msats(msats: u64) -> Amount {
+        Amount { msats }
     }
 
-    pub const fn from_sats(sat: u64) -> Amount {
-        Amount { msats: sat * 1000 }
+    pub const fn from_sats(sats: u64) -> Amount {
+        Amount::from_msats(sats * 1000)
+    }
+
+    pub const fn from_coins(coins: u64) -> Amount {
+        Amount::from_sats(coins * 100_000_000)
     }
 
     pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
@@ -143,6 +147,11 @@ pub fn msats(msats: u64) -> Amount {
 /// Shorthand for [`Amount::from_sats`]
 pub fn sats(amount: u64) -> Amount {
     Amount::from_sats(amount)
+}
+
+/// Shorthand for [`Amount::from_coins`]
+pub fn coins(amount: u64) -> Amount {
+    Amount::from_coins(amount)
 }
 
 /// `OutPoint` represents a globally unique output in a transaction
