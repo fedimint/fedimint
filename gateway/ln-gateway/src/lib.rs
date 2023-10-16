@@ -28,7 +28,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
 use client::StandardGatewayClientBuilder;
 use db::{FederationRegistrationKey, GatewayPublicKey};
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
+use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::Client;
 use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::config::FederationId;
@@ -130,19 +130,23 @@ pub struct GatewayOpts {
     pub num_route_hints: Option<usize>,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// ```mermaid
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
-/// graph LR
-/// classDef virtual fill:#fff,stroke-dasharray: 5 5
-///    Initializing -- begin intercepting HTLCs --> Running
+///    Initializing -- begin intercepting HTLCs --> Connected
+///    Initializing -- gateway needs config --> Configuring
+///    Configuring -- configuration set --> Connected
+///    Connected -- load federation clients --> Running
 ///    Running -- disconnected from lightning node --> Disconnected
-///    Disconnected -- re-established lightning connection --> Running
+///    Disconnected -- re-established lightning connection --> Connected
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum GatewayState {
     Initializing,
+    Configuring,
+    Connected,
     Running {
         lnrpc: Arc<dyn ILnRpcClient>,
         lightning_public_key: PublicKey,
@@ -290,7 +294,7 @@ impl Gateway {
     }
 
     async fn start_gateway(mut self, task_group: &mut TaskGroup) -> Result<()> {
-        let mut tg = task_group.make_subgroup().await;
+        let tg = task_group.clone();
         task_group
             .spawn(
                 "Subscribe to intercepted HTLCs in stream",
@@ -300,31 +304,39 @@ impl Gateway {
                             break;
                         }
 
+                        let mut htlc_task_group = tg.make_subgroup().await;
                         let lnrpc_route = self.lightning_builder.build().await;
 
                         // Re-create the HTLC stream if the connection breaks
                         match lnrpc_route
-                            .route_htlcs(&mut tg)
+                            .route_htlcs(&mut htlc_task_group)
                             .await
                         {
                             Ok((stream, ln_client)) => {
+                                // Successful calls to route_htlcs establish a connection
+                                self.set_gateway_state(GatewayState::Connected).await;
                                 info!("Established HTLC stream");
 
                                 match Self::fetch_lightning_node_info(ln_client.clone()).await {
                                     Ok((lightning_public_key, lightning_alias)) => {
-                                        self.register_clients_timer(&mut tg).await;
+                                        self.register_clients_timer(&mut htlc_task_group).await;
+                                        self.load_clients(
+                                            ln_client.clone(),
+                                            lightning_public_key,
+                                        )
+                                        .await
+                                        .expect("Failed to load gateway clients");
+
+                                        info!("Successfully loaded Gateway clients.");
                                         self.set_gateway_state(GatewayState::Running {
                                             lnrpc: ln_client,
                                             lightning_public_key,
                                             lightning_alias,
 
                                         }).await;
-                                        self.load_clients().await.expect("Failed to load gateway clients");
-                                        info!("Successfully loaded Gateway clients.");
 
                                         // Blocks until the connection to the lightning node breaks
                                         self.handle_htlc_stream(stream, handle.clone()).await;
-                                        self.set_gateway_state(GatewayState::Disconnected).await;
                                         warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
                                     }
                                     Err(e) => {
@@ -335,6 +347,11 @@ impl Gateway {
                             Err(e) => {
                                 debug!("Failed to open HTLC stream: {e:?}");
                             }
+                        }
+
+                        self.set_gateway_state(GatewayState::Disconnected).await;
+                        if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
+                            error!("HTLC task group shutdown errors: {}", e);
                         }
 
                         error!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
@@ -666,101 +683,116 @@ impl Gateway {
             )))
     }
 
-    async fn load_clients(&mut self) -> Result<()> {
-        if let GatewayState::Running {
-            lnrpc,
-            lightning_public_key,
-            lightning_alias: _,
-        } = self.state.read().await.clone()
-        {
+    async fn load_clients(
+        &mut self,
+        lnrpc: Arc<dyn ILnRpcClient>,
+        lightning_public_key: PublicKey,
+    ) -> Result<()> {
+        if let GatewayState::Connected = self.state.read().await.clone() {
             let dbtx = self.gateway_db.begin_transaction().await;
-            if let Ok(configs) = self.client_builder.load_configs(dbtx).await {
-                let channel_id_generator = self.channel_id_generator.lock().await;
-                let mut next_channel_id = channel_id_generator.load(Ordering::SeqCst);
+            let configs = self.client_builder.load_configs(dbtx).await?;
+            let channel_id_generator = self.channel_id_generator.lock().await;
+            let mut next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
-                for config in configs {
-                    let federation_id = config.config.global.federation_id;
-                    let old_client = self.clients.read().await.get(&federation_id).cloned();
-                    if let Ok(client) = self
-                        .client_builder
-                        .build(
-                            config.clone(),
-                            lightning_public_key,
-                            lnrpc.clone(),
-                            old_client,
-                        )
+            for config in configs {
+                let federation_id = config.config.global.federation_id;
+                let old_client = self.clients.read().await.get(&federation_id).cloned();
+                if let Ok(client) = self
+                    .client_builder
+                    .build(
+                        config.clone(),
+                        lightning_public_key,
+                        lnrpc.clone(),
+                        old_client,
+                    )
+                    .await
+                {
+                    // Registering each client happens in the background, since we're loading
+                    // the clients for the first time, just add them to
+                    // the in-memory maps
+                    let scid = config.mint_channel_id;
+                    self.clients.write().await.insert(federation_id, client);
+                    self.scid_to_federation
+                        .write()
                         .await
-                    {
-                        // Registering each client happens in the background, since we're loading
-                        // the clients for the first time, just add them to
-                        // the in-memory maps
-                        let scid = config.mint_channel_id;
-                        self.clients.write().await.insert(federation_id, client);
-                        self.scid_to_federation
-                            .write()
-                            .await
-                            .insert(scid, federation_id);
-                    } else {
-                        warn!("Failed to load client for federation: {federation_id}");
-                    }
-
-                    if config.mint_channel_id > next_channel_id {
-                        next_channel_id = config.mint_channel_id + 1;
-                    }
+                        .insert(scid, federation_id);
+                } else {
+                    warn!("Failed to load client for federation: {federation_id}");
                 }
-                channel_id_generator.store(next_channel_id, Ordering::SeqCst);
-            }
-            return Ok(());
-        }
 
-        Err(GatewayError::Disconnected)
+                if config.mint_channel_id > next_channel_id {
+                    next_channel_id = config.mint_channel_id + 1;
+                }
+            }
+            channel_id_generator.store(next_channel_id, Ordering::SeqCst);
+            Ok(())
+        } else {
+            Err(GatewayError::Disconnected)
+        }
     }
 
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
-        if let GatewayState::Running {
-            lnrpc,
-            lightning_public_key: _,
-            lightning_alias: _,
-        } = self.state.read().await.clone()
-        {
-            let clients = self.clients.clone();
-            let api = self.api_addr.clone();
-            let gateway_id = self.gateway_id;
-            let num_route_hints = self.num_route_hints;
-            task_group
-                .spawn("register clients", move |handle| async move {
-                    while !handle.is_shutting_down() {
+        let clients = self.clients.clone();
+        let api = self.api_addr.clone();
+        let gateway_id = self.gateway_id;
+        let num_route_hints = self.num_route_hints;
+        let state = self.state.clone();
+        task_group
+            .spawn("register clients", move |handle| async move {
+                let registration_loop = async {
+                    loop {
                         // Allow a 15% buffer of the TTL before the re-registering gateway
                         // with the federations.
                         let registration_delay = GW_ANNOUNCEMENT_TTL.mul_f32(0.85);
                         sleep(registration_delay).await;
 
-                        match Self::fetch_lightning_route_hints(lnrpc.clone(), num_route_hints).await {
-                            Ok(route_hints) => {
-                                for (federation_id, client) in clients.read().await.iter() {
-                                    if let Err(e) = client
-                                        .register_with_federation(
-                                            api.clone(),
-                                            route_hints.clone(),
-                                            GW_ANNOUNCEMENT_TTL,
-                                            gateway_id,
-                                        )
-                                        .await
-                                    {
-                                        error!("Error registering federation {federation_id}: {e:?}");
+                        let gateway_state = state.read().await.clone();
+                        if let GatewayState::Running { lnrpc, .. } = &gateway_state {
+                            match Self::fetch_lightning_route_hints(lnrpc.clone(), num_route_hints).await {
+                                Ok(route_hints) => {
+                                    for (federation_id, client) in clients.read().await.iter() {
+                                        if let Err(e) = client
+                                            .register_with_federation(
+                                                api.clone(),
+                                                route_hints.clone(),
+                                                GW_ANNOUNCEMENT_TTL,
+                                                gateway_id,
+                                            )
+                                            .await
+                                        {
+                                            error!("Error registering federation {federation_id}: {e:?}");
+                                        }
                                     }
                                 }
+                                Err(e) => {
+                                    error!(
+                                        "Could not retrieve route hints, gateway will not be registered: {e:?}"
+                                    );
+                                }
                             }
-                            Err(e) => {
-                                error!(
-                                    "Could not retrieve route hints, gateway will not be registered: {e:?}"
-                                );
-                            }
+                        } else {
+                            warn!(
+                                "GatewayState must be Running to register with federation. Current state: {:?}",
+                                &gateway_state
+                            );
                         }
                     }
-                })
-                .await;
-        }
+                };
+
+                // The registration loop will sleep for long periods, so we allow shutdown
+                // signals to interrupt waiting for the rest of the loop to finish.
+                //
+                // If the loop is interrupted while in the middle of registering clients,
+                // start_gateway will spawn another task to register clients once a connection
+                // with the LN node is reestablished.
+                tokio::select! {
+                    _ = handle.make_shutdown_rx().await => {
+                        info!("register clients task received shutdown signal")
+                    }
+                    _ = registration_loop => {}
+                }
+            })
+            .await;
     }
 
     async fn fetch_lightning_route_hints_try(
