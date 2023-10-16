@@ -1157,6 +1157,12 @@
 <a href="#1157" id="1157">1157</a>
 <a href="#1158" id="1158">1158</a>
 <a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
+<a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1281,6 +1287,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>PayType {
     <span class="comment">// Payment from this client to another user within the federation
     </span>Internal(OperationId),
@@ -1291,6 +1298,7 @@
 <span class="doccomment">/// The high-level state of an pay operation internal to the federation,
 /// started with [`LightningClientExt::pay_bolt11_invoice`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>InternalPayState {
     Funding,
     Preimage(Preimage),
@@ -1311,6 +1319,7 @@
 <span class="doccomment">/// The high-level state of a pay operation over lightning,
 /// started with [`LightningClientExt::pay_bolt11_invoice`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>LnPayState {
     Created,
     Canceled,
@@ -1334,6 +1343,7 @@
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`LightningClientExt::create_bolt11_invoice`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>LnReceiveState {
     Created,
     WaitingForPayment { invoice: String, timeout: Duration },
@@ -1720,6 +1730,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>LightningOperationMeta {
     Pay {
         out_point: OutPoint,
@@ -1843,6 +1854,7 @@
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">enum </span>PayError {
     <span class="attr">#[error(<span class="string">&quot;Lightning payment was canceled&quot;</span>)]
     </span>Canceled,

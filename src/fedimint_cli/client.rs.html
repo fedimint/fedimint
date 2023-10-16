@@ -895,7 +895,7 @@
         }
         ClientCmd::ListOperations { limit } =&gt; {
             <span class="attr">#[derive(Serialize)]
-            #[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+            #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
             </span><span class="kw">struct </span>OperationOutput {
                 id: OperationId,
                 creation_time: String,
@@ -1013,7 +1013,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">struct </span>InfoResponse {
     federation_id: FederationId,
     network: Network,
@@ -1034,7 +1034,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">struct </span>PayInvoiceResponse {
     operation_id: OperationId,
     contract_id: ContractId,

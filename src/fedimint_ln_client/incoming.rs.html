@@ -318,6 +318,7 @@
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
 //!
 //! This shared state machine is used by clients
@@ -417,6 +418,7 @@
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>IncomingSmError {
     <span class="attr">#[error(<span class="string">&quot;Violated fee policy. Offer amount {offer_amount} Payment amount: {payment_amount}&quot;</span>)]
     </span>ViolatedFeePolicy {

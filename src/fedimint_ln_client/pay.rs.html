@@ -491,6 +491,8 @@
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -702,6 +704,7 @@
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>GatewayPayError {
     <span class="attr">#[error(<span class="string">&quot;Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}&quot;</span>)]
     </span>GatewayInternalError {
@@ -971,6 +974,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub struct </span>PayInvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract_id: ContractId,

@@ -832,7 +832,7 @@
 
 <span class="doccomment">/// Type of output the cli produces
 </span><span class="attr">#[derive(Serialize)]
-#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 #[serde(untagged)]
 </span><span class="kw">enum </span>CliOutput {
     VersionHash {
@@ -884,7 +884,7 @@
 
 <span class="doccomment">/// Types of error the cli return
 </span><span class="attr">#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">enum </span>CliErrorKind {
     NetworkError,
     IOError,
@@ -1215,7 +1215,7 @@ Examples:
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">struct </span>PayRequest {
     notes: TieredMulti&lt;SpendableNote&gt;,
     invoice: lightning_invoice::Bolt11Invoice,
@@ -1528,7 +1528,7 @@ Examples:
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub struct </span>LnInvoiceResponse {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>invoice: String,
