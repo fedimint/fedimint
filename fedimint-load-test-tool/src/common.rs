@@ -14,7 +14,9 @@ use fedimint_core::api::InviteCode;
 use fedimint_core::core::IntoDynInstance;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredSummary};
-use fedimint_ln_client::{LightningClientExt, LightningClientGen, LnPayState};
+use fedimint_ln_client::{
+    LightningClientExt, LightningClientGen, LnPayState, OutgoingLightningPayment,
+};
 use fedimint_mint_client::{
     MintClientExt, MintClientGen, MintClientModule, MintCommonGen, OOBNotes,
 };
@@ -172,8 +174,12 @@ pub async fn gateway_pay_invoice(
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
-    let (pay_type, _, _fee) = client.pay_bolt11_invoice(invoice).await?;
-    let operation_id = match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client.pay_bolt11_invoice(invoice).await?;
+    let operation_id = match payment_type {
         fedimint_ln_client::PayType::Internal(_) => bail!("Internal payment not expected"),
         fedimint_ln_client::PayType::Lightning(operation_id) => operation_id,
     };

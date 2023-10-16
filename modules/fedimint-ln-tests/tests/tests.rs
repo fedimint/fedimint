@@ -9,7 +9,7 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{
     InternalPayState, LightningClientExt, LightningClientGen, LightningOperationMeta, LnPayState,
-    LnReceiveState, PayType,
+    LnReceiveState, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::ln_operation;
@@ -94,8 +94,12 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
     // Pay the invoice from client2
-    let (pay_type, _, _fee) = client2.pay_bolt11_invoice(invoice).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client2.pay_bolt11_invoice(invoice).await?;
+    match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
@@ -138,8 +142,12 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let (pay_type, _, _) = client2.pay_bolt11_invoice(invoice.clone()).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client2.pay_bolt11_invoice(invoice.clone()).await?;
+    match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
@@ -154,8 +162,12 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
     let prev_balance = client2.get_balance().await;
-    let (pay_type, _, _) = client2.pay_bolt11_invoice(invoice).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client2.pay_bolt11_invoice(invoice).await?;
+    match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
@@ -185,8 +197,12 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let invoice = cln.invoice(Amount::from_sats(100), None).await?;
 
     // Pay the invoice for the first time
-    let (pay_type, _, _) = client.pay_bolt11_invoice(invoice.clone()).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client.pay_bolt11_invoice(invoice.clone()).await?;
+    match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client.subscribe_ln_pay(operation_id).await?.into_stream();
 
@@ -201,8 +217,12 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
-    let (pay_type, _, _) = client.pay_bolt11_invoice(invoice).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client.pay_bolt11_invoice(invoice).await?;
+    match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client.subscribe_ln_pay(operation_id).await?.into_stream();
 
@@ -239,8 +259,12 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let (pay_type, _, _fee) = client2.pay_bolt11_invoice(invoice).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client2.pay_bolt11_invoice(invoice).await?;
+    match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
@@ -262,8 +286,12 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
-    let (pay_type, _, _fee) = client2.pay_bolt11_invoice(invoice).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client2.pay_bolt11_invoice(invoice).await?;
+    match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);

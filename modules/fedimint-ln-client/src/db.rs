@@ -1,12 +1,11 @@
 use bitcoin_hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
-use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::LightningGatewayRegistration;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::PayType;
+use crate::OutgoingLightningPayment;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -48,7 +47,7 @@ pub struct PaymentResultPrefix;
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct PaymentResult {
     pub index: u16,
-    pub completed_payment: Option<(PayType, ContractId, Amount)>,
+    pub completed_payment: Option<OutgoingLightningPayment>,
 }
 
 impl_db_record!(

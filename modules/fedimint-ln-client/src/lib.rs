@@ -94,7 +94,7 @@ pub trait LightningClientExt {
     async fn pay_bolt11_invoice(
         &self,
         invoice: Bolt11Invoice,
-    ) -> anyhow::Result<(PayType, ContractId, Amount)>;
+    ) -> anyhow::Result<OutgoingLightningPayment>;
 
     async fn subscribe_internal_pay(
         &self,
@@ -264,7 +264,7 @@ impl LightningClientExt for Client {
     async fn pay_bolt11_invoice(
         &self,
         invoice: Bolt11Invoice,
-    ) -> anyhow::Result<(PayType, ContractId, Amount)> {
+    ) -> anyhow::Result<OutgoingLightningPayment> {
         let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let mut dbtx = instance.db.begin_transaction().await;
         let prev_payment_result = lightning
@@ -334,16 +334,13 @@ impl LightningClientExt for Client {
             (PayType::Lightning(operation_id), output, contract_id)
         };
 
-        // Verify that no other outgoing contract exists
-        if lightning
-            .module_api
-            .fetch_contract(contract_id)
-            .await
-            .is_ok()
-        {
-            return Err(anyhow::anyhow!(
-                "Previous payment attempt still in progress"
-            ));
+        // Verify that no other outgoing contract exists or the value is empty
+        if let Ok(contract) = lightning.module_api.fetch_contract(contract_id).await {
+            if contract.amount.msats != 0 {
+                return Err(anyhow::anyhow!(
+                    "Funded contract already exists. ContractId: {contract_id}"
+                ));
+            }
         }
 
         // TODO: return fee from create_outgoing_output or even let user supply
@@ -383,7 +380,11 @@ impl LightningClientExt for Client {
         )
         .await?;
 
-        Ok((pay_type, contract_id, fee))
+        Ok(OutgoingLightningPayment {
+            payment_type: pay_type,
+            contract_id,
+            fee,
+        })
     }
 
     async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
@@ -1254,6 +1255,13 @@ pub async fn create_incoming_contract_output(
     Ok((incoming_output, contract_id))
 }
 
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct OutgoingLightningPayment {
+    pub payment_type: PayType,
+    pub contract_id: ContractId,
+    pub fee: Amount,
+}
+
 async fn set_payment_result(
     dbtx: &mut ModuleDatabaseTransaction<'_>,
     payment_hash: sha256::Hash,
@@ -1262,7 +1270,11 @@ async fn set_payment_result(
     fee: Amount,
 ) {
     if let Some(mut payment_result) = dbtx.get_value(&PaymentResultKey { payment_hash }).await {
-        payment_result.completed_payment = Some((payment_type, contract_id, fee));
+        payment_result.completed_payment = Some(OutgoingLightningPayment {
+            payment_type,
+            contract_id,
+            fee,
+        });
         dbtx.insert_entry(&PaymentResultKey { payment_hash }, &payment_result)
             .await;
     }
