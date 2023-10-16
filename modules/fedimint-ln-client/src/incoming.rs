@@ -97,6 +97,7 @@ impl State for IncomingStateMachine {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum IncomingSmError {
     #[error("Violated fee policy. Offer amount {offer_amount} Payment amount: {payment_amount}")]
     ViolatedFeePolicy {
