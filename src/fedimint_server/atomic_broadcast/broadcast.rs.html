@@ -142,11 +142,6 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_core::api::WsFederationApi;
@@ -156,20 +151,20 @@
 <span class="kw">use </span>tokio::sync::watch;
 
 <span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
-<span class="kw">use super</span>::{session, Message, Recipient};
+<span class="kw">use super</span>::{session, Message};
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::backup;
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::data_provider::DataProvider;
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::finalization_handler::FinalizationHandler;
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::network::Network;
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::spawner::Spawner;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectPeerConnections;
 
 <span class="kw">pub struct </span>AtomicBroadcast {
     keychain: Keychain,
     db: Database,
+    connections: ReconnectPeerConnections&lt;Message&gt;,
     mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
-    incoming_message_receiver: async_channel::Receiver&lt;Message&gt;,
-    outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
 }
 
 <span class="kw">impl </span>AtomicBroadcast {
@@ -179,16 +174,14 @@
     </span><span class="kw">pub fn </span>new(
         keychain: Keychain,
         db: Database,
+        connections: ReconnectPeerConnections&lt;Message&gt;,
         mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
-        incoming_message_receiver: async_channel::Receiver&lt;Message&gt;,
-        outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             keychain,
             db,
+            connections,
             mempool_item_receiver,
-            incoming_message_receiver,
-            outgoing_message_sender,
         }
     }
 
@@ -265,10 +258,7 @@
                     saver,
                     loader,
                 ),
-                Network::new(
-                    <span class="self">self</span>.incoming_message_receiver.clone(),
-                    <span class="self">self</span>.outgoing_message_sender.clone(),
-                ),
+                Network::new(<span class="self">self</span>.connections.clone()),
                 <span class="self">self</span>.keychain.clone(),
                 Spawner::new(),
                 aleph_bft_types::Terminator::create_root(terminator_receiver, <span class="string">&quot;Terminator&quot;</span>),

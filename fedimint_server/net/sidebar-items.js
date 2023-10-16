@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["api","connect","framed","peers","queue"]};
+window.SIDEBAR_ITEMS = {"mod":["api","connect","framed","peers"]};

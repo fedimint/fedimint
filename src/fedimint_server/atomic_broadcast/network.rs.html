@@ -74,21 +74,17 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>bitcoin_hashes_12::{sha256, Hash};
+<span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode, IoReader};
 
 <span class="kw">use </span><span class="kw">super</span>::conversion::to_peer_id;
 <span class="kw">use </span><span class="kw">super</span>::data_provider::UnitData;
 <span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
 <span class="kw">use super</span>::{Message, Recipient};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::ReconnectPeerConnections;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>Hasher;
@@ -114,19 +110,12 @@
 &gt;;
 
 <span class="kw">pub struct </span>Network {
-    network_data_receiver: async_channel::Receiver&lt;Message&gt;,
-    outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
+    connections: ReconnectPeerConnections&lt;Message&gt;,
 }
 
 <span class="kw">impl </span>Network {
-    <span class="kw">pub fn </span>new(
-        network_data_receiver: async_channel::Receiver&lt;Message&gt;,
-        outgoing_message_sender: async_channel::Sender&lt;(Message, Recipient)&gt;,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            network_data_receiver,
-            outgoing_message_sender,
-        }
+    <span class="kw">pub fn </span>new(connections: ReconnectPeerConnections&lt;Message&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ connections }
     }
 }
 
@@ -142,14 +131,13 @@
         <span class="comment">// since NetworkData does not implement Encodable we use
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
-        </span><span class="self">self</span>.outgoing_message_sender
-            .try_send((Message(network_data.encode()), recipient))
-            .ok();
+        </span><span class="self">self</span>.connections
+            .send_sync(Message(network_data.encode()), recipient);
     }
 
     <span class="kw">async fn </span>next_event(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;NetworkData&gt; {
-        <span class="kw">while let </span><span class="prelude-val">Ok</span>(message) = <span class="self">self</span>.network_data_receiver.recv().<span class="kw">await </span>{
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(network_data) = NetworkData::decode(<span class="kw-2">&amp;mut </span>IoReader(message.<span class="number">0</span>.as_slice())) {
+        <span class="kw">while let </span><span class="prelude-val">Ok</span>(message) = <span class="self">self</span>.connections.receive().<span class="kw">await </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(network_data) = NetworkData::decode(<span class="kw-2">&amp;mut </span>IoReader(message.<span class="number">1 </span>.<span class="number">0</span>.as_slice())) {
                 <span class="comment">// in order to bound the RAM consumption of a session we have to bound an
                 // individual units size, hence the size of its attached unitdata in memory
                 </span><span class="kw">if </span>network_data.included_data().iter().all(UnitData::is_valid) {

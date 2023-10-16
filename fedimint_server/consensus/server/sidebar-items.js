@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["TRANSACTION_BUFFER"],"fn":["confirm_consensus_config_hash","relay_messages","submit_module_consensus_items"],"struct":["ConsensusServer"],"type":["LatestContributionByPeer"]};
+window.SIDEBAR_ITEMS = {"constant":["TRANSACTION_BUFFER"],"fn":["confirm_consensus_config_hash","submit_module_consensus_items"],"struct":["ConsensusServer"],"type":["LatestContributionByPeer"]};

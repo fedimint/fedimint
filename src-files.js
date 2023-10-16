@@ -25,7 +25,7 @@ var srcIndex = JSON.parse('{\
 "fedimint_mint_server":["",[],["lib.rs"]],\
 "fedimint_portalloc":["",[["data",[],["dto.rs"]]],["data.rs","lib.rs","util.rs"]],\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
-"fedimint_server":["",[["atomic_broadcast",[],["backup.rs","broadcast.rs","conversion.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","session.rs","spawner.rs"]],["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug.rs","mod.rs","server.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["db.rs","lib.rs","multiplexed.rs"]],\
+"fedimint_server":["",[["atomic_broadcast",[],["backup.rs","broadcast.rs","conversion.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","session.rs","spawner.rs"]],["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[],["debug.rs","mod.rs","server.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs"]]],["db.rs","lib.rs","multiplexed.rs"]],\
 "fedimint_testing":["",[["btc",[],["mock.rs","mod.rs","real.rs"]],["ln",[],["mock.rs","mod.rs","real.rs"]]],["db.rs","federation.rs","fixtures.rs","gateway.rs","lib.rs"]],\
 "fedimint_wallet_client":["",[],["api.rs","client_db.rs","deposit.rs","lib.rs","withdraw.rs"]],\
 "fedimint_wallet_common":["",[],["config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
