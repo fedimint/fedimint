@@ -7,20 +7,20 @@ use fedimint_core::task::spawn;
 use tokio::sync::watch;
 
 use super::keychain::Keychain;
-use super::{session, Message, Recipient};
+use super::{session, Message};
 use crate::atomic_broadcast::backup;
 use crate::atomic_broadcast::data_provider::DataProvider;
 use crate::atomic_broadcast::finalization_handler::FinalizationHandler;
 use crate::atomic_broadcast::network::Network;
 use crate::atomic_broadcast::spawner::Spawner;
 use crate::consensus::FedimintConsensus;
+use crate::net::peers::ReconnectPeerConnections;
 
 pub struct AtomicBroadcast {
     keychain: Keychain,
     db: Database,
+    connections: ReconnectPeerConnections<Message>,
     mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-    incoming_message_receiver: async_channel::Receiver<Message>,
-    outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
 }
 
 impl AtomicBroadcast {
@@ -30,16 +30,14 @@ impl AtomicBroadcast {
     pub fn new(
         keychain: Keychain,
         db: Database,
+        connections: ReconnectPeerConnections<Message>,
         mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-        incoming_message_receiver: async_channel::Receiver<Message>,
-        outgoing_message_sender: async_channel::Sender<(Message, Recipient)>,
     ) -> Self {
         Self {
             keychain,
             db,
+            connections,
             mempool_item_receiver,
-            incoming_message_receiver,
-            outgoing_message_sender,
         }
     }
 
@@ -116,10 +114,7 @@ impl AtomicBroadcast {
                     saver,
                     loader,
                 ),
-                Network::new(
-                    self.incoming_message_receiver.clone(),
-                    self.outgoing_message_sender.clone(),
-                ),
+                Network::new(self.connections.clone()),
                 self.keychain.clone(),
                 Spawner::new(),
                 aleph_bft_types::Terminator::create_root(terminator_receiver, "Terminator"),
