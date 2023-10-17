@@ -1057,6 +1057,7 @@ dependencies = [
  "fedimint-wallet-client",
  "fedimintd",
  "futures",
+ "ln-gateway",
  "nix",
  "rand",
  "serde",
@@ -1942,6 +1943,7 @@ name = "fedimint-testing"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "bitcoin 0.29.2",
  "bitcoincore-rpc",
@@ -1949,7 +1951,6 @@ dependencies = [
  "cln-rpc",
  "fedimint-bitcoind",
  "fedimint-client",
- "fedimint-client-legacy",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-rocksdb",

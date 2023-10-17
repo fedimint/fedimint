@@ -877,10 +877,9 @@ impl LightningClientModule {
             htlc_minimum_msat: None,
             htlc_maximum_msat: None,
         };
-        let route_hints = if route_hints.is_empty() {
-            vec![RouteHint(vec![route_hint_last_hop])]
-        } else {
-            route_hints
+        let mut final_route_hints = vec![RouteHint(vec![route_hint_last_hop.clone()])];
+        if !route_hints.is_empty() {
+            let mut two_hop_route_hints: Vec<RouteHint> = route_hints
                 .iter()
                 .map(|rh| {
                     RouteHint(
@@ -892,8 +891,9 @@ impl LightningClientModule {
                             .collect(),
                     )
                 })
-                .collect()
-        };
+                .collect();
+            final_route_hints.append(&mut two_hop_route_hints);
+        }
 
         let duration_since_epoch = fedimint_core::time::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -911,7 +911,7 @@ impl LightningClientModule {
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ));
 
-        for rh in route_hints {
+        for rh in final_route_hints {
             invoice_builder = invoice_builder.private_route(rh);
         }
 

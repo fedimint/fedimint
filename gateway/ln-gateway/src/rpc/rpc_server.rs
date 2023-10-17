@@ -21,8 +21,9 @@ use crate::{Gateway, GatewayError};
 pub async fn run_webserver(
     authkey: String,
     bind_addr: SocketAddr,
-    mut gateway: Gateway,
-) -> axum::response::Result<TaskGroup> {
+    gateway: Gateway,
+    task_group: &mut TaskGroup,
+) -> axum::response::Result<()> {
     // Public routes on gateway webserver
     let routes = Router::new().route("/pay_invoice", post(pay_invoice));
 
@@ -43,12 +44,10 @@ pub async fn run_webserver(
         .layer(Extension(gateway.clone()))
         .layer(CorsLayer::permissive());
 
-    let task_group = gateway.task_group.make_subgroup().await;
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx().await;
     let server = axum::Server::bind(&bind_addr).serve(app.into_make_service());
-    gateway
-        .task_group
+    task_group
         .spawn("Gateway Webserver", move |_| async move {
             let graceful = server.with_graceful_shutdown(async {
                 shutdown_rx.await;
@@ -60,7 +59,7 @@ pub async fn run_webserver(
         })
         .await;
 
-    Ok(task_group)
+    Ok(())
 }
 
 /// Display high-level information about the Gateway

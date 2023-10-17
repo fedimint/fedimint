@@ -28,7 +28,7 @@ use fedimint_ln_server::LightningGen;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, LightningNodeName};
+use fedimint_testing::gateway::{GatewayTest, LightningNodeType};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
 use lightning_invoice::Invoice;
@@ -603,11 +603,12 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
     let cln_public_key = PublicKey::from_slice(&pub_key)?;
     let all_keys = vec![lnd_public_key, cln_public_key];
 
-    for gateway_type in vec![LightningNodeName::Cln, LightningNodeName::Lnd] {
+    for gateway_type in vec![LightningNodeType::Cln, LightningNodeType::Lnd] {
         for num_route_hints in 0..=1 {
             let gateway_ln = match gateway_type {
-                LightningNodeName::Cln => fixtures.cln().await,
-                LightningNodeName::Lnd => fixtures.lnd().await,
+                LightningNodeType::Cln => fixtures.cln().await,
+                LightningNodeType::Lnd => fixtures.lnd().await,
+                LightningNodeType::Ldk => unimplemented!("LDK Node is not supported as a gateway"),
             };
 
             let GetNodeInfoResponse { pub_key, alias: _ } = gateway_ln.info().await?;
@@ -652,23 +653,38 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                 }
                 _ => {
                     // If there's more than one route hint, we're expecting the invoice to contain
-                    // `num_route_hints`. Each should have 2 hops.
-                    assert_eq!(route_hints.len(), num_route_hints, "Found {} route hints when {num_route_hints} was expected for {gateway_type} gateway", route_hints.len());
+                    // `num_route_hints` + 1. There should be one single-hop route hint and the rest
+                    // two-hop route hints.
+                    assert_eq!(
+                        route_hints.len(),
+                        num_route_hints + 1,
+                        "Found {} route hints when {} was expected for {gateway_type} gateway",
+                        route_hints.len(),
+                        num_route_hints + 1
+                    );
 
+                    let mut num_one_hops = 0;
                     for route_hint in route_hints {
-                        assert_eq!(
-                            route_hint.0.len(),
-                            2,
-                            "Found {} hops when 2 was expected for {gateway_type} gateway",
-                            route_hint.0.len()
-                        );
-                        for hop in route_hint.0 {
-                            assert!(
-                                all_keys.contains(&hop.src_node_id),
-                                "Public key of route hint hop did not match expected public key"
-                            );
+                        if route_hint.0.len() == 1 {
+                            // If there's only one hop, it should contain the gateway's public key
+                            let route_hint_pub_key = route_hint.0.get(0).unwrap().src_node_id;
+                            assert_eq!(route_hint_pub_key, public_key);
+                            num_one_hops += 1;
+                        } else {
+                            // If there's > 1 hop, it should exist in `all_keys`
+                            for hop in route_hint.0 {
+                                assert!(
+                                    all_keys.contains(&hop.src_node_id),
+                                    "Public key of route hint hop did not match expected public key"
+                                );
+                            }
                         }
                     }
+
+                    assert_eq!(
+                        num_one_hops, 1,
+                        "Found incorrect number of one hop route hints"
+                    );
                 }
             }
         }

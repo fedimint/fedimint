@@ -164,10 +164,7 @@ impl Fixtures {
     /// Returns the CLN lightning node
     pub async fn cln(&self) -> Box<dyn LightningTest> {
         match Fixtures::is_real_test() {
-            true => {
-                let dir = env::var("FM_TEST_DIR").expect("Real tests require FM_TEST_DIR");
-                Box::new(ClnLightningTest::new(&dir).await)
-            }
+            true => Box::new(ClnLightningTest::new().await),
             false => Box::new(FakeLightningTest::new()),
         }
     }
