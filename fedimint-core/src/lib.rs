@@ -117,10 +117,6 @@ impl Amount {
         Amount::from_msats(sats * 1000)
     }
 
-    pub const fn from_coins(coins: u64) -> Amount {
-        Amount::from_sats(coins * 100_000_000)
-    }
-
     pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
         if let Denomination::MilliSatoshi = denom {
             return Self::from_str(s);
@@ -147,11 +143,6 @@ pub fn msats(msats: u64) -> Amount {
 /// Shorthand for [`Amount::from_sats`]
 pub fn sats(amount: u64) -> Amount {
     Amount::from_sats(amount)
-}
-
-/// Shorthand for [`Amount::from_coins`]
-pub fn coins(amount: u64) -> Amount {
-    Amount::from_coins(amount)
 }
 
 /// `OutPoint` represents a globally unique output in a transaction
