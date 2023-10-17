@@ -131,8 +131,6 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 
@@ -141,8 +139,6 @@
 <span class="kw">use </span>fedimint_core::{BitcoinHash, PeerId};
 <span class="kw">use </span>secp256k1_zkp::hashes::sha256;
 <span class="kw">use </span>secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
-
-<span class="kw">use </span><span class="kw">super</span>::conversion;
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>Keychain {
@@ -228,7 +224,7 @@
         signature: <span class="kw-2">&amp;</span><span class="self">Self</span>::Signature,
         node_index: aleph_bft::NodeIndex,
     ) -&gt; bool {
-        <span class="kw">let </span>peer_id = conversion::to_peer_id(node_index);
+        <span class="kw">let </span>peer_id = <span class="kw">super</span>::to_peer_id(node_index);
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(public_key) = <span class="self">self</span>.public_keys.get(<span class="kw-2">&amp;</span>peer_id) {
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(sig) = schnorr::Signature::from_slice(<span class="kw-2">&amp;</span>signature.<span class="number">0</span>) {

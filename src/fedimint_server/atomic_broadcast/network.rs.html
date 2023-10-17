@@ -74,13 +74,13 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>bitcoin_hashes_12::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::net::peers::IPeerConnections;
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode, IoReader};
 
-<span class="kw">use </span><span class="kw">super</span>::conversion::to_peer_id;
 <span class="kw">use </span><span class="kw">super</span>::data_provider::UnitData;
 <span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
 <span class="kw">use super</span>::{Message, Recipient};
@@ -124,7 +124,9 @@
     <span class="kw">fn </span>send(<span class="kw-2">&amp;</span><span class="self">self</span>, network_data: NetworkData, recipient: aleph_bft::Recipient) {
         <span class="comment">// convert from aleph_bft::Recipient to session::Recipient
         </span><span class="kw">let </span>recipient = <span class="kw">match </span>recipient {
-            aleph_bft::Recipient::Node(node_index) =&gt; Recipient::Peer(to_peer_id(node_index)),
+            aleph_bft::Recipient::Node(node_index) =&gt; {
+                Recipient::Peer(<span class="kw">super</span>::to_peer_id(node_index))
+            }
             aleph_bft::Recipient::Everyone =&gt; Recipient::Everyone,
         };
 

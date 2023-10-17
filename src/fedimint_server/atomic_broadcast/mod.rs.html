@@ -112,6 +112,12 @@
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module implements fedimints custom atomic broadcast abstraction. A
 //! such, it is responsible for ordering serialized items in the form of byte
 //! vectors. The Broadcast is able to recover from a crash at any time via a
@@ -192,18 +198,14 @@
 //! session regardless. However, it did so by processing one less ordered item
 //! and without realizing that a double spend had occurred.
 
-</span><span class="kw">mod </span>backup;
-<span class="kw">mod </span>broadcast;
-<span class="kw">mod </span>conversion;
-<span class="kw">mod </span>data_provider;
-<span class="kw">mod </span>finalization_handler;
-<span class="kw">mod </span>keychain;
-<span class="kw">mod </span>network;
-<span class="kw">mod </span>session;
-<span class="kw">mod </span>spawner;
+</span><span class="kw">pub mod </span>backup;
+<span class="kw">pub mod </span>data_provider;
+<span class="kw">pub mod </span>finalization_handler;
+<span class="kw">pub mod </span>keychain;
+<span class="kw">pub mod </span>network;
+<span class="kw">pub mod </span>spawner;
 
-<span class="doccomment">/// The atomic broadcast instance run once by every peer.
-</span><span class="kw">pub use </span>broadcast::AtomicBroadcast;
+<span class="kw">use </span>aleph_bft::NodeIndex;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="doccomment">/// This keychain implements naive threshold schnorr signatures over secp256k1.
@@ -225,5 +227,15 @@
 </span><span class="kw">pub enum </span>Recipient {
     Everyone,
     Peer(PeerId),
+}
+
+<span class="kw">pub fn </span>to_peer_id(node_index: NodeIndex) -&gt; PeerId {
+    u16::try_from(usize::from(node_index))
+        .expect(<span class="string">&quot;The node index corresponds to a valid PeerId&quot;</span>)
+        .into()
+}
+
+<span class="kw">pub fn </span>to_node_index(peer_id: PeerId) -&gt; NodeIndex {
+    usize::from(u16::from(peer_id)).into()
 }
 </code></pre></div></section></main></body></html>

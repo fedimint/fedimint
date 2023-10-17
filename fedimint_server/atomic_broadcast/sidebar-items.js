@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Recipient"],"mod":["backup","broadcast","conversion","data_provider","finalization_handler","keychain","network","session","spawner"],"struct":["AtomicBroadcast","Keychain","Message"]};
+window.SIDEBAR_ITEMS = {"enum":["Recipient"],"fn":["to_node_index","to_peer_id"],"mod":["backup","data_provider","finalization_handler","keychain","network","spawner"],"struct":["Message"]};
