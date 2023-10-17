@@ -27,7 +27,9 @@ pub async fn run_webserver(
 ) -> axum::response::Result<()> {
     let (routes, admin_routes) = if let Some(gateway_config) = config {
         // Public routes on gateway webserver
-        let routes = Router::new().route("/pay_invoice", post(pay_invoice));
+        let routes = Router::new()
+            .route("/pay_invoice", post(pay_invoice))
+            .route("/is_available", post(is_available));
 
         // Authenticated, public routes used for gateway administration
         let admin_routes = Router::new()
@@ -161,5 +163,13 @@ async fn set_configuration(
     Json(payload): Json<SetConfigurationPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_set_configuration_msg(payload).await?;
+    Ok(Json(json!(())))
+}
+
+#[instrument(skip_all, err)]
+async fn is_available(
+    Extension(_): Extension<Gateway>,
+    Json(_): Json<()>,
+) -> Result<impl IntoResponse, GatewayError> {
     Ok(Json(json!(())))
 }

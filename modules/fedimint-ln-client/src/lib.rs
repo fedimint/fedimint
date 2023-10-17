@@ -791,6 +791,31 @@ impl LightningClientModule {
         OperationId(hash.into_inner())
     }
 
+    // Ping gateway endpoint to verify that it is available before locking funds in
+    // OutgoingContract
+    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
+        let response = reqwest::Client::new()
+            .post(
+                gateway
+                    .api
+                    .join("is_available")
+                    .expect("is_available contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .json(&())
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Gateway is not available: {e}"))?;
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Gateway is not available. Returned error code: {}",
+                response.status()
+            ));
+        }
+
+        Ok(())
+    }
+
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
@@ -814,6 +839,10 @@ impl LightningClientModule {
             federation_currency,
             invoice_currency
         );
+
+        // Do not create the funding transaction if the gateway is not currently
+        // available
+        self.verify_gateway_availability(&gateway).await?;
 
         let consensus_count = api
             .fetch_consensus_block_count()
