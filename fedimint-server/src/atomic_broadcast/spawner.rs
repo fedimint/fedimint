@@ -7,6 +7,12 @@ impl Spawner {
     }
 }
 
+impl Default for Spawner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl aleph_bft::SpawnHandle for Spawner {
     fn spawn(&self, name: &str, task: impl futures::Future<Output = ()> + Send + 'static) {
         fedimint_core::task::spawn(name, task);

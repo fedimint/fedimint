@@ -29,7 +29,7 @@ use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::consensus::server::ConsensusServer;
-use crate::net::api::RpcHandlerCtx;
+use crate::net::api::{ConsensusApi, RpcHandlerCtx};
 use crate::net::connect::TlsTcpConnector;
 use crate::net::peers::ReconnectPeerConnections;
 
@@ -85,7 +85,7 @@ impl FedimintServer {
             .run_config_gen(task_group.make_subgroup().await)
             .await?;
 
-        let server = ConsensusServer::new(
+        let (consensus_server, consensus_api) = ConsensusServer::new(
             cfg,
             self.db.clone(),
             self.settings.registry.clone(),
@@ -95,9 +95,13 @@ impl FedimintServer {
         .unwrap();
 
         info!(target: LOG_CONSENSUS, "Starting consensus API");
-        let handler = Self::spawn_consensus_api(&server, true).await;
 
-        server.run_consensus(task_group.make_handle()).await?;
+        let handler = Self::spawn_consensus_api(consensus_api, true).await;
+
+        consensus_server
+            .run_consensus(task_group.make_handle())
+            .await?;
+
         handler.stop().await;
 
         info!(target: LOG_CONSENSUS, "Shutting down tasks");
@@ -146,10 +150,9 @@ impl FedimintServer {
     /// Runs the `ConsensusApi` which serves endpoints while consensus is
     /// running.
     pub async fn spawn_consensus_api(
-        server: &ConsensusServer,
+        api: ConsensusApi,
         force_shutdown: bool,
     ) -> FedimintApiHandler {
-        let api = &server.consensus_api;
         let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);

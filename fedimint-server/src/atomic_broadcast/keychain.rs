@@ -7,8 +7,6 @@ use fedimint_core::{BitcoinHash, PeerId};
 use secp256k1_zkp::hashes::sha256;
 use secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
 
-use super::conversion;
-
 #[derive(Clone, Debug)]
 pub struct Keychain {
     peer_id: PeerId,
@@ -93,7 +91,7 @@ impl aleph_bft::Keychain for Keychain {
         signature: &Self::Signature,
         node_index: aleph_bft::NodeIndex,
     ) -> bool {
-        let peer_id = conversion::to_peer_id(node_index);
+        let peer_id = super::to_peer_id(node_index);
 
         if let Some(public_key) = self.public_keys.get(&peer_id) {
             if let Ok(sig) = schnorr::Signature::from_slice(&signature.0) {
