@@ -70,11 +70,11 @@ async fn peg_in<'a>(
     let sub = client.subscribe_deposit_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, DepositState::WaitingForTransaction);
-    assert_eq!(sub.ok().await?, DepositState::WaitingForConfirmation);
+    assert_matches!(sub.ok().await?, DepositState::WaitingForConfirmation { .. });
 
     bitcoin.mine_blocks(finality_delay).await;
-    assert_eq!(sub.ok().await?, DepositState::Confirmed);
-    assert_eq!(sub.ok().await?, DepositState::Claimed);
+    assert!(matches!(sub.ok().await?, DepositState::Confirmed(_)));
+    assert!(matches!(sub.ok().await?, DepositState::Claimed(_)));
     assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
     info!(?height, ?tx, "Peg-in transaction claimed");

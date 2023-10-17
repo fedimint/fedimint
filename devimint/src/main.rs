@@ -316,7 +316,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap()
         .to_owned();
     assert_eq!(operation["operation_kind"].as_str().unwrap(), "wallet");
-    assert_eq!(operation["outcome"].as_str().unwrap(), "Claimed");
+    assert!(operation["outcome"]["Claimed"].as_object().is_some());
 
     info!("Testing backup&restore");
     // TODO: make sure there are no in-progress operations involved
