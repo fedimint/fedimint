@@ -16,14 +16,12 @@ use fedimint_core::db::Database;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_core::task::TaskGroup;
-pub use fedimint_core::*;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
-use rand::rngs::OsRng;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
 

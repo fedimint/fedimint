@@ -147,7 +147,7 @@ mod fedimint_migration_tests {
     use bitcoin_hashes::Hash;
     use fedimint_core::api::ClientConfigDownloadToken;
     use fedimint_core::block::{Block, SignedBlock};
-    use fedimint_core::core::DynInput;
+    use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{apply_migrations, DatabaseTransaction};
     use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -168,7 +168,6 @@ mod fedimint_migration_tests {
     use super::{
         AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
     };
-    use crate::core::DynOutput;
     use crate::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, ClientConfigDownloadKey,

@@ -1,6 +1,5 @@
 pub mod audit;
 pub mod registry;
-pub mod version;
 
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
@@ -17,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::instrument;
 
+// TODO: Make this module public and remove the wildcard `pub use` below
+mod version;
 pub use self::version::*;
 use crate::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ModuleInitParams, ServerModuleConfig,

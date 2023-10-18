@@ -6,14 +6,13 @@ use async_trait::async_trait;
 use fedimint_core::cancellable::{Cancellable, Cancelled};
 use fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
 use fedimint_core::task::spawn;
+use fedimint_core::PeerId;
 use fedimint_logging::LOG_NET_PEER;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
-
-use crate::PeerId;
 
 /// TODO: Use proper ModuleId after modularization is complete
 pub type ModuleId = String;

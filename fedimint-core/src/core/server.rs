@@ -4,13 +4,16 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use fedimint_core::module::audit::Audit;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
-use super::*;
+use crate::core::{Any, Decoder, DynInput, DynModuleConsensusItem, DynOutput, DynOutputOutcome};
 use crate::db::ModuleDatabaseTransaction;
+use crate::dyn_newtype_define;
+use crate::module::registry::ModuleInstanceId;
 use crate::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ModuleError,
     ServerModule, TransactionItemAmount,
