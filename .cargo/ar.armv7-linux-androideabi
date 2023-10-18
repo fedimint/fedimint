@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-exec "$AR_armv7_linux_androideabi" "$ARFLAGS_armv7_linux_androideabi" "$@"

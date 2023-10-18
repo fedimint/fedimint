@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# Our wrapper over cargo to workaround some limitations:
+#
+# https://github.com/rust-rocksdb/rust-rocksdb/issues/823
+
+
+if [ -z "$CARGO_ORIG_BIN" ]; then
+  >&2 echo "CARGO_ORIG_BIN not set"
+  exit 1
+fi
+
+args=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target)
+      target="${2//-/_}"
+      args+=("$1")
+      args+=("$2")
+      shift
+      ;;
+    *)
+      args+=("$1")
+      ;;
+  esac
+
+  # Move to the next argument
+  shift
+done
+
+# Check if the target value is empty (not provided)
+if [ -n "$target" ]; then
+  rocksdb_lib_dir="ROCKSDB_${target}_LIB_DIR"
+  snappy_lib_dir="SNAPPY_${target}_LIB_DIR"
+  rocksdb_static="ROCKSDB_${target}_STATIC"
+
+  if [ -n "${!rocksdb_lib_dir}" ]; then
+    export ROCKSDB_LIB_DIR="${!rocksdb_lib_dir}"
+  else
+    unset ROCKSDB_LIB_DIR
+  fi
+  if [ -n "${!snappy_lib_dir}" ]; then
+    export SNAPPY_LIB_DIR="${!snappy_lib_dir}"
+  else
+    unset SNAPPY_LIB_DIR
+  fi
+  if [ -n "${!rocksdb_static}" ]; then
+    export ROCKSDB_STATIC="${!rocksdb_static}"
+  else
+    unset ROCKSDB_STATIC
+  fi
+fi
+
+exec "$CARGO_ORIG_BIN" "${args[@]}"

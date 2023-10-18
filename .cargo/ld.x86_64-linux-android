@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-exec "$LD_x86_64_linux_android" $LDFLAGS_x86_64_linux_android "$@"
