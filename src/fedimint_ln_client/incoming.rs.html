@@ -319,6 +319,20 @@
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Incoming State Machine
 //!
 //! This shared state machine is used by clients
@@ -348,7 +362,7 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
-<span class="kw">use </span><span class="kw">crate</span>::LightningClientContext;
+<span class="kw">use crate</span>::{set_payment_result, LightningClientContext, PayType};
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that executes a transaction between two users
@@ -384,6 +398,7 @@
 </span><span class="kw">pub struct </span>IncomingSmCommon {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>contract_id: ContractId,
+    <span class="kw">pub </span>payment_hash: sha256::Hash,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -583,10 +598,23 @@
         ));
 
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(preimage) =&gt; IncomingStateMachine {
-                common: old_state.common,
-                state: IncomingSmStates::Preimage(preimage),
-            },
+            <span class="prelude-val">Ok</span>(preimage) =&gt; {
+                <span class="kw">let </span>contract_id = old_state.common.contract_id;
+                <span class="kw">let </span>payment_hash = old_state.common.payment_hash;
+                set_payment_result(
+                    <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+                    payment_hash,
+                    PayType::Internal(old_state.common.operation_id),
+                    contract_id,
+                    Amount::from_msats(<span class="number">0</span>),
+                )
+                .<span class="kw">await</span>;
+
+                IncomingStateMachine {
+                    common: old_state.common,
+                    state: IncomingSmStates::Preimage(preimage),
+                }
+            }
             <span class="prelude-val">Err</span>(IncomingSmError::InvalidPreimage { contract }) =&gt; {
                 <span class="self">Self</span>::refund_incoming_contract(dbtx, global_context, context, old_state, contract)
                     .<span class="kw">await

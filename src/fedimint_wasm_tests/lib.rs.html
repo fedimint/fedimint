@@ -167,6 +167,12 @@
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
 <span class="kw">use </span>fedimint_core::api::InviteCode;
@@ -230,7 +236,9 @@
 <span class="kw">mod </span>tests {
     <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
     <span class="kw">use </span>fedimint_core::Amount;
-    <span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState, PayType};
+    <span class="kw">use </span>fedimint_ln_client::{
+        LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+    };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>wasm_bindgen_test::wasm_bindgen_test;
 
@@ -313,8 +321,12 @@
         }
 
         <span class="kw">let </span>bolt11 = faucet::generate_invoice(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(pay_types, _contract_id, _fee) = client.pay_bolt11_invoice(bolt11.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>PayType::Lightning(operation_id) = pay_types <span class="kw">else </span>{
+        <span class="kw">let </span>OutgoingLightningPayment {
+            payment_type,
+            contract_id: <span class="kw">_</span>,
+            fee: <span class="kw">_</span>,
+        } = client.pay_bolt11_invoice(bolt11.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>PayType::Lightning(operation_id) = payment_type <span class="kw">else </span>{
             <span class="macro">unreachable!</span>(<span class="string">&quot;paying invoice over lightning&quot;</span>);
         };
 

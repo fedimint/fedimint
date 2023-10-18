@@ -1752,6 +1752,17 @@
 <a href="#1752" id="1752">1752</a>
 <a href="#1753" id="1753">1753</a>
 <a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2711,6 +2722,10 @@
 
         <span class="prelude-val">Ok</span>(common_api_versions)
     }
+
+    <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+        <span class="self">self</span>.inner.has_active_states(operation_id).<span class="kw">await
+    </span>}
 }
 
 <span class="doccomment">/// Resources particular to a module instance
@@ -2959,6 +2974,13 @@
             .await_primary_module_output(operation_id, out_point)
             .<span class="kw">await
     </span>}
+
+    <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+        <span class="kw">let </span>all_active_states = <span class="self">self</span>.executor.get_active_states().<span class="kw">await</span>;
+        all_active_states
+            .into_iter()
+            .any(|context| context.<span class="number">0</span>.operation_id() == operation_id)
+    }
 }
 
 <span class="doccomment">/// See [`Client::transaction_updates`]

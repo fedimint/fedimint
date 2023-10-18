@@ -519,6 +519,11 @@
 <a href="#519" id="519">519</a>
 <a href="#520" id="520">520</a>
 <a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -538,7 +543,8 @@
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
-    InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
+    InternalPayState, LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment,
+    PayType,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
 <span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
@@ -752,10 +758,14 @@
         ClientCmd::LnPay { bolt11 } =&gt; {
             client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>(pay_type, contract_id, fee) = client.pay_bolt11_invoice(bolt11).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>OutgoingLightningPayment {
+                payment_type,
+                contract_id,
+                fee,
+            } = client.pay_bolt11_invoice(bolt11).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Gateway fee: {fee}&quot;</span>);
 
-            <span class="kw">match </span>pay_type {
+            <span class="kw">match </span>payment_type {
                 PayType::Internal(operation_id) =&gt; {
                     <span class="kw">let </span><span class="kw-2">mut </span>updates = client
                         .subscribe_internal_pay(operation_id)
