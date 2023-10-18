@@ -17,7 +17,8 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredSummary};
 use fedimint_ln_client::{
-    InternalPayState, LightningClientExt, LnPayState, LnReceiveState, PayType,
+    InternalPayState, LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment,
+    PayType,
 };
 use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
@@ -231,10 +232,14 @@ pub async fn handle_command(
         ClientCmd::LnPay { bolt11 } => {
             client.select_active_gateway().await?;
 
-            let (pay_type, contract_id, fee) = client.pay_bolt11_invoice(bolt11).await?;
+            let OutgoingLightningPayment {
+                payment_type,
+                contract_id,
+                fee,
+            } = client.pay_bolt11_invoice(bolt11).await?;
             info!("Gateway fee: {fee}");
 
-            match pay_type {
+            match payment_type {
                 PayType::Internal(operation_id) => {
                     let mut updates = client
                         .subscribe_internal_pay(operation_id)

@@ -957,6 +957,10 @@ impl Client {
 
         Ok(common_api_versions)
     }
+
+    pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
+        self.inner.has_active_states(operation_id).await
+    }
 }
 
 /// Resources particular to a module instance
@@ -1204,6 +1208,13 @@ impl ClientInner {
         self.primary_module()
             .await_primary_module_output(operation_id, out_point)
             .await
+    }
+
+    pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
+        let all_active_states = self.executor.get_active_states().await;
+        all_active_states
+            .into_iter()
+            .any(|context| context.0.operation_id() == operation_id)
     }
 }
 

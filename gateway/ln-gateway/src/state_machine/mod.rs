@@ -513,6 +513,7 @@ impl GatewayClientModule {
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
+                            payment_hash: htlc.payment_hash,
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     }),

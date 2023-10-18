@@ -21,7 +21,7 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{
     LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
-    LightningOperationMeta, LnPayState, PayType,
+    LightningOperationMeta, LnPayState, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningGenParams;
@@ -139,8 +139,12 @@ async fn pay_valid_invoice(
     gateway: &Client,
 ) -> anyhow::Result<()> {
     // User client pays test invoice
-    let (pay_type, contract_id, _fee) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
-    match pay_type {
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id,
+        fee: _,
+    } = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+    match payment_type {
         PayType::Lightning(pay_op) => {
             let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
             assert_eq!(pay_sub.ok().await?, LnPayState::Created);
@@ -242,7 +246,11 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 
             // Fund outgoing contract that the user client expects the gateway to pay
             let invoice = other_lightning_client.invoice(sats(250), None).await?;
-            let (_, contract_id, _fee) = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+            let OutgoingLightningPayment {
+                payment_type: _,
+                contract_id,
+                fee: _,
+            } = user_client.pay_bolt11_invoice(invoice.clone()).await?;
 
             // Try to directly claim the outgoing contract with an invalid preimage
             let (gateway_module, instance) =
@@ -308,9 +316,12 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                 .unwrap();
 
             // User client pays test invoice
-            let (pay_type, contract_id, _fee) =
-                user_client.pay_bolt11_invoice(invoice.clone()).await?;
-            match pay_type {
+            let OutgoingLightningPayment {
+                payment_type,
+                contract_id,
+                fee: _,
+            } = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+            match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
                     assert_eq!(pay_sub.ok().await?, LnPayState::Created);
@@ -625,9 +636,12 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             assert_eq!(user_client.get_balance().await, sats(2000));
 
             // User client pays test invoice
-            let (pay_type, contract_id, _fee) =
-                user_client.pay_bolt11_invoice(invoice.clone()).await?;
-            match pay_type {
+            let OutgoingLightningPayment {
+                payment_type,
+                contract_id,
+                fee: _,
+            } = user_client.pay_bolt11_invoice(invoice.clone()).await?;
+            match payment_type {
                 PayType::Lightning(pay_op) => {
                     let mut pay_sub = user_client.subscribe_ln_pay(pay_op).await?.into_stream();
                     assert_eq!(pay_sub.ok().await?, LnPayState::Created);

@@ -61,7 +61,9 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 mod tests {
     use fedimint_client::derivable_secret::DerivableSecret;
     use fedimint_core::Amount;
-    use fedimint_ln_client::{LightningClientExt, LnPayState, LnReceiveState, PayType};
+    use fedimint_ln_client::{
+        LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+    };
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -144,8 +146,12 @@ mod tests {
         }
 
         let bolt11 = faucet::generate_invoice(11).await?;
-        let (pay_types, _contract_id, _fee) = client.pay_bolt11_invoice(bolt11.parse()?).await?;
-        let PayType::Lightning(operation_id) = pay_types else {
+        let OutgoingLightningPayment {
+            payment_type,
+            contract_id: _,
+            fee: _,
+        } = client.pay_bolt11_invoice(bolt11.parse()?).await?;
+        let PayType::Lightning(operation_id) = payment_type else {
             unreachable!("paying invoice over lightning");
         };
 

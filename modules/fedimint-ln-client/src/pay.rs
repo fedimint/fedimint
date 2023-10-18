@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -9,7 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::Decoder;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::ContractId;
@@ -20,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 
-use crate::LightningClientStateMachines;
+use crate::{set_payment_result, LightningClientStateMachines, PayType};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that requests the lightning gateway to pay an invoice on
@@ -56,6 +57,7 @@ pub struct LightningPayCommon {
     pub operation_id: OperationId,
     pub federation_id: FederationId,
     pub contract: OutgoingContractData,
+    pub gateway_fee: Amount,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -80,7 +82,7 @@ impl State for LightningPayStateMachine {
             LightningPayStates::Canceled => {
                 vec![]
             }
-            LightningPayStates::Funded(funded) => funded.transitions(),
+            LightningPayStates::Funded(funded) => funded.transitions(self.common.clone()),
             LightningPayStates::Success(_) => {
                 vec![]
             }
@@ -187,6 +189,12 @@ impl LightningPayCreatedOutgoingLnContract {
                         payload,
                         gateway,
                         timelock,
+                        payment_hash: *common
+                            .contract
+                            .contract_account
+                            .contract
+                            .invoice
+                            .payment_hash(),
                     }),
                 }
             }
@@ -206,6 +214,7 @@ pub struct LightningPayFunded {
     payload: PayInvoicePayload,
     gateway: LightningGateway,
     timelock: u32,
+    payment_hash: sha256::Hash,
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -221,19 +230,26 @@ pub enum GatewayPayError {
 }
 
 impl LightningPayFunded {
-    fn transitions(&self) -> Vec<StateTransition<LightningPayStateMachine>> {
+    fn transitions(
+        &self,
+        common: LightningPayCommon,
+    ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let gateway = self.gateway.clone();
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timelock = self.timelock;
+        let payment_hash = self.payment_hash;
         vec![StateTransition::new(
             Self::gateway_pay_invoice(gateway, payload),
-            move |_dbtx, result, old_state| {
+            move |dbtx, result, old_state| {
                 Box::pin(Self::transition_outgoing_contract_execution(
                     result,
                     old_state,
                     contract_id,
                     timelock,
+                    dbtx,
+                    payment_hash,
+                    common.clone(),
                 ))
             },
         )]
@@ -286,12 +302,25 @@ impl LightningPayFunded {
         old_state: LightningPayStateMachine,
         contract_id: ContractId,
         timelock: u32,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        payment_hash: sha256::Hash,
+        common: LightningPayCommon,
     ) -> LightningPayStateMachine {
         match result {
-            Ok(preimage) => LightningPayStateMachine {
-                common: old_state.common,
-                state: LightningPayStates::Success(preimage),
-            },
+            Ok(preimage) => {
+                set_payment_result(
+                    &mut dbtx.module_tx(),
+                    payment_hash,
+                    PayType::Lightning(old_state.common.operation_id),
+                    contract_id,
+                    common.gateway_fee,
+                )
+                .await;
+                LightningPayStateMachine {
+                    common: old_state.common,
+                    state: LightningPayStates::Success(preimage),
+                }
+            }
             Err(e) => LightningPayStateMachine {
                 common: old_state.common,
                 state: LightningPayStates::Refundable(LightningPayRefundable {
