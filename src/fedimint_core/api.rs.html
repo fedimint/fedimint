@@ -1169,6 +1169,7 @@
 <a href="#1169" id="1169">1169</a>
 <a href="#1170" id="1170">1170</a>
 <a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1259,6 +1260,7 @@
                 </span>JsonRpcError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
                 JsonRpcError::MaxSlotsExceeded =&gt; <span class="bool-val">true</span>,
                 JsonRpcError::RequestTimeout =&gt; <span class="bool-val">true</span>,
+                JsonRpcError::RestartNeeded(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
                 JsonRpcError::Call(e) =&gt; e.code() == <span class="number">404</span>,
                 <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
             },
