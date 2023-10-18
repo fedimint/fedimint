@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["FM_BITCOIND_COOKIE_FILE_VAR_NAME","FM_BITCOIN_RPC_KIND","FM_BITCOIN_RPC_URL"],"struct":["BitcoinRpcConfig"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["write_new","write_new_async","write_overwrite","write_overwrite_async"],"mod":["broadcaststream"],"struct":["SafeUrl"],"trait":["NextOrPending"],"type":["BoxFuture","BoxStream"]};

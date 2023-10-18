@@ -274,7 +274,6 @@
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, VecDeque};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -283,14 +282,13 @@
 <span class="kw">use </span>fedimint_core::cancellable::{Cancellable, Cancelled};
 <span class="kw">use </span>fedimint_core::net::peers::{IMuxPeerConnections, PeerConnections};
 <span class="kw">use </span>fedimint_core::task::spawn;
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::mpsc::{channel, Receiver, Sender};
 <span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tracing::{debug, warn};
-
-<span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="doccomment">/// TODO: Use proper ModuleId after modularization is complete
 </span><span class="kw">pub type </span>ModuleId = String;

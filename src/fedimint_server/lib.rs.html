@@ -302,8 +302,6 @@
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -322,14 +320,12 @@
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>jsonrpsee::server::{ServerBuilder, ServerHandle};
 <span class="kw">use </span>jsonrpsee::types::error::CallError;
 <span class="kw">use </span>jsonrpsee::types::ErrorObject;
 <span class="kw">use </span>jsonrpsee::RpcModule;
-<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>tokio::runtime::Runtime;
 <span class="kw">use </span>tracing::{error, info};
 

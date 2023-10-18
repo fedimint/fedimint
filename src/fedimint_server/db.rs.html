@@ -394,7 +394,6 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::api::ClientConfigDownloadToken;
@@ -544,7 +543,7 @@
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::api::ClientConfigDownloadToken;
     <span class="kw">use </span>fedimint_core::block::{Block, SignedBlock};
-    <span class="kw">use </span>fedimint_core::core::DynInput;
+    <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
     <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
     <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -565,7 +564,6 @@
     <span class="kw">use super</span>::{
         AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
     };
-    <span class="kw">use </span><span class="kw">crate</span>::core::DynOutput;
     <span class="kw">use </span><span class="kw">crate</span>::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, ClientConfigDownloadKey,

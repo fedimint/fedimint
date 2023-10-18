@@ -5,13 +5,13 @@ backup that it maintains in the servers <a href="../../fedimint_core/db/struct.D
 Addition, it stores the history of accepted items in the form of
 signed blocks in the database as well in order to catch up fellow guardians
 which have been offline for a prolonged period of time.</p>
-<p>Though the broadcast depends on <a href="../../fedimint_core/index.html" title="mod fedimint_core">fedimint_core</a> for <a href="../struct.PeerId.html" title="struct fedimint_server::PeerId">fedimint_core::PeerId</a>,
-<a href="../encoding/trait.Encodable.html" title="trait fedimint_server::encoding::Encodable">fedimint_core::encoding::Encodable</a> and <a href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">fedimint_core::db::Database</a>
+<p>Though the broadcast depends on <a href="../../fedimint_core/index.html" title="mod fedimint_core">fedimint_core</a> for <a href="../../fedimint_core/struct.PeerId.html" title="struct fedimint_core::PeerId">fedimint_core::PeerId</a>,
+<a href="../../fedimint_core/encoding/trait.Encodable.html" title="trait fedimint_core::encoding::Encodable">fedimint_core::encoding::Encodable</a> and <a href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">fedimint_core::db::Database</a>
 it implements no consensus logic specific to Fedimint, to which we will
 refer as Fedimint Consensus going forward. To the broadcast a consensus item
 is merely a vector of bytes without any further structure.</p>
 <h2 id="the-journey-of-a-consensusitem"><a href="#the-journey-of-a-consensusitem">The journey of a ConsensusItem</a></h2>
-<p>Let us sketch the journey of an <a href="../epoch/enum.ConsensusItem.html" title="enum fedimint_server::epoch::ConsensusItem">fedimint_core::epoch::ConsensusItem</a> into a
+<p>Let us sketch the journey of an <a href="../../fedimint_core/epoch/enum.ConsensusItem.html" title="enum fedimint_core::epoch::ConsensusItem">fedimint_core::epoch::ConsensusItem</a> into a
 signed block.</p>
 <ul>
 <li>The node which wants to order the item calls consensus_encode to serialize

@@ -563,7 +563,6 @@
 <a href="#563" id="563">563</a>
 <a href="#564" id="564">564</a>
 <a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::hash::Hash;
@@ -578,17 +577,16 @@
 <span class="kw">use </span>fedimint_core::module::PeerHandle;
 <span class="kw">use </span>fedimint_core::net::peers::MuxPeerConnections;
 <span class="kw">use </span>fedimint_core::task::spawn;
-<span class="kw">use </span>fedimint_core::{BitcoinHash, PeerId};
+<span class="kw">use </span>fedimint_core::{BitcoinHash, NumPeers, PeerId};
 <span class="kw">use </span>hbbft::crypto::poly::Commitment;
 <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
+<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tbs::hash::hash_bytes_to_curve;
 <span class="kw">use </span>tbs::poly::Poly;
 <span class="kw">use </span>tbs::Scalar;
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
-
-<span class="kw">use crate</span>::<span class="kw-2">*</span>;
 
 <span class="kw">struct </span>Dkg&lt;G&gt; {
     gen_g: G,
@@ -989,12 +987,12 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::{HashMap, VecDeque};
 
+    <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>hbbft::crypto::group::Curve;
     <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective};
     <span class="kw">use </span>rand::rngs::OsRng;
 
     <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::{scalar, Dkg, DkgGroup, DkgKeys, DkgStep, ThresholdKeys};
-    <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_dkg() {

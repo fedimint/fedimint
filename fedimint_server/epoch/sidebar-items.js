@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ConsensusItem"],"fn":["combine_sigs"],"struct":["SerdeSignature","SerdeSignatureShare","UnzipConsensusItem"],"trait":["IterUnzipConsensusItem"]};

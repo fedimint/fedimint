@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["ClientBackupKey","ClientBackupKeyPrefix","ClientBackupSnapshot"]};

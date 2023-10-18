@@ -247,19 +247,25 @@
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
 <a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
-</span><span class="kw">use </span>std::sync::Arc;
+</span><span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
-<span class="kw">use super</span>::<span class="kw-2">*</span>;
+<span class="kw">use </span><span class="kw">crate</span>::core::{Any, Decoder, DynInput, DynModuleConsensusItem, DynOutput, DynOutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::db::ModuleDatabaseTransaction;
+<span class="kw">use </span><span class="kw">crate</span>::dyn_newtype_define;
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleInstanceId;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ModuleError,
     ServerModule, TransactionItemAmount,

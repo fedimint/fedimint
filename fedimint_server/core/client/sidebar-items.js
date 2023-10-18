@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["DynClientModule"],"trait":["ClientModule","IClientModule"]};

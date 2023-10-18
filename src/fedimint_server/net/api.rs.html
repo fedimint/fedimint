@@ -708,8 +708,6 @@
 <a href="#708" id="708">708</a>
 <a href="#709" id="709">709</a>
 <a href="#710" id="710">710</a>
-<a href="#711" id="711">711</a>
-<a href="#712" id="712">712</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -723,7 +721,7 @@
     ClientConfigDownloadToken, FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus,
     ServerStatus, StatusResponse,
 };
-<span class="kw">use </span>fedimint_core::backup::ClientBackupKey;
+<span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 <span class="kw">use </span>fedimint_core::block::{Block, SignedBlock};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
@@ -745,7 +743,7 @@
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::transaction::Transaction;
+<span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction};
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::StreamExt;
@@ -755,7 +753,6 @@
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">super</span>::peers::PeerStatusChannels;
-<span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
 <span class="kw">use </span><span class="kw">crate</span>::config::api::get_verification_hashes;
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
@@ -765,7 +762,6 @@
     ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::SerdeTransaction;
 <span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
 
 <span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;DynOutputOutcome&gt;;

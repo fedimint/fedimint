@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["TransactionError"],"fn":["agg_keys","agg_sign"],"struct":["Transaction"],"type":["SerdeTransaction"]};

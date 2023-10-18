@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["QueryStep"],"struct":["AllOrDeadline","DiscoverApiVersionSet","FilterMap","QueryStrategyWithRequestTimeout","ThresholdConsensus","UnionResponses","UnionResponsesSingle"],"trait":["QueryStrategy"]};

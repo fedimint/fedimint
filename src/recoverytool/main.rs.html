@@ -461,6 +461,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
+<span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::ServerModule;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonGen;
 <span class="kw">use </span>fedimint_ln_server::Lightning;
@@ -469,7 +470,6 @@
 <span class="kw">use </span>fedimint_mint_server::Mint;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
-<span class="kw">use </span>fedimint_server::transaction::Transaction;
 <span class="kw">use </span>fedimint_wallet_server::common::config::WalletConfig;
 <span class="kw">use </span>fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 <span class="kw">use </span>fedimint_wallet_server::common::keys::CompressedPublicKey;

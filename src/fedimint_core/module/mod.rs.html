@@ -958,9 +958,9 @@
 <a href="#958" id="958">958</a>
 <a href="#959" id="959">959</a>
 <a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
-<span class="kw">pub mod </span>version;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -977,6 +977,8 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::instrument;
 
+<span class="comment">// TODO: Make this module public and remove the wildcard `pub use` below
+</span><span class="kw">mod </span>version;
 <span class="kw">pub use </span><span class="self">self</span>::version::<span class="kw-2">*</span>;
 <span class="kw">use </span><span class="kw">crate</span>::config::{
     ClientModuleConfig, ConfigGenModuleParams, DkgPeerMsg, ModuleInitParams, ServerModuleConfig,

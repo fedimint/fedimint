@@ -862,6 +862,14 @@
 <a href="#862" id="862">862</a>
 <a href="#863" id="863">863</a>
 <a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::{<span class="self">self</span>, max};
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt;
@@ -869,24 +877,32 @@
 
 <span class="kw">use </span>fedimint_client::sm::{OperationId, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::{Amount, NumPeers, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
 <span class="kw">use </span>fedimint_mint_common::{MintConsensusItem, MintInput, MintOutput, Nonce};
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{
     combine_valid_shares, verify_blind_share, AggregatePublicKey, BlindedMessage, PublicKeyShare,
 };
 <span class="kw">use </span>threshold_crypto::G1Affine;
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
-<span class="kw">use super</span>::<span class="kw-2">*</span>;
+<span class="kw">use </span><span class="kw">super</span>::EcashBackup;
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{NextECashNoteIndexKey, NoteKey};
-<span class="kw">use </span><span class="kw">crate</span>::output::{MintOutputCommon, MintOutputStatesCreated, NoteIssuanceRequest};
-<span class="kw">use </span><span class="kw">crate</span>::MintClientContext;
+<span class="kw">use </span><span class="kw">crate</span>::output::{
+    MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, MultiNoteIssuanceRequest,
+    NoteIssuanceRequest,
+};
+<span class="kw">use crate</span>::{
+    MintClientContext, MintClientModule, MintClientStateMachines, NoteIndex, SpendableNote,
+};
 
 <span class="doccomment">/// Restore will progress in chunks of a fixed epoch count,
 /// after each the current state is persisted in the database.
