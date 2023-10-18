@@ -1101,11 +1101,7 @@ impl MintClientModule {
 
         let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
 
-        let operation_id = OperationId(
-            spendable_selected_notes
-                .consensus_hash::<sha256t::Hash<OOBSpendTag>>()
-                .into_inner(),
-        );
+        let operation_id = spendable_notes_to_operation_id(&spendable_selected_notes);
 
         for (amount, note) in spendable_selected_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
@@ -1277,6 +1273,16 @@ impl MintClientModule {
         let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(&self.secp, secret)
     }
+}
+
+pub fn spendable_notes_to_operation_id(
+    spendable_selected_notes: &TieredMulti<SpendableNote>,
+) -> OperationId {
+    OperationId(
+        spendable_selected_notes
+            .consensus_hash::<sha256t::Hash<OOBSpendTag>>()
+            .into_inner(),
+    )
 }
 
 pub struct SpendOOBRefund {
