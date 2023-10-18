@@ -5,6 +5,7 @@ mod receive;
 
 use std::collections::BTreeMap;
 use std::iter::once;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -56,6 +57,7 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
+use secp256k1::PublicKey;
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -795,21 +797,28 @@ impl LightningClientModule {
     // OutgoingContract
     async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
         let response = reqwest::Client::new()
-            .post(
+            .get(
                 gateway
                     .api
-                    .join("is_available")
-                    .expect("is_available contains no invalid characters for a URL")
+                    .join("id")
+                    .expect("id contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&())
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Gateway is not available: {e}"))?;
+            .context("Gateway is not available")?;
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
                 "Gateway is not available. Returned error code: {}",
                 response.status()
+            ));
+        }
+
+        let text_gateway_id = response.text().await?;
+        let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
+        if gateway_id != gateway.gateway_id {
+            return Err(anyhow::anyhow!(
+                "Unexpected gateway id returned: {gateway_id}"
             ));
         }
 

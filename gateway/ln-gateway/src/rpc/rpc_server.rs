@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use axum::response::IntoResponse;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
 use bitcoin_hashes::hex::ToHex;
@@ -29,7 +29,7 @@ pub async fn run_webserver(
         // Public routes on gateway webserver
         let routes = Router::new()
             .route("/pay_invoice", post(pay_invoice))
-            .route("/is_available", post(is_available));
+            .route("/id", get(get_gateway_id));
 
         // Authenticated, public routes used for gateway administration
         let admin_routes = Router::new()
@@ -167,9 +167,8 @@ async fn set_configuration(
 }
 
 #[instrument(skip_all, err)]
-async fn is_available(
-    Extension(_): Extension<Gateway>,
-    Json(_): Json<()>,
+async fn get_gateway_id(
+    Extension(gateway): Extension<Gateway>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    Ok(Json(json!(())))
+    Ok(Json(json!(gateway.gateway_id)))
 }
