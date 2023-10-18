@@ -646,9 +646,9 @@
     </span>tweak_key: KeyPair,
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it&#39;s evicted from the mempool.
-    </span>btc_transaction: bitcoin::Transaction,
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) btc_transaction: bitcoin::Transaction,
     <span class="doccomment">/// Index of the deposit output
-    </span>out_idx: u32,
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) out_idx: u32,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
