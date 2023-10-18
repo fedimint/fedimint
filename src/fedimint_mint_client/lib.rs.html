@@ -1642,6 +1642,12 @@
 <a href="#1642" id="1642">1642</a>
 <a href="#1643" id="1643">1643</a>
 <a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2745,11 +2751,7 @@
 
         <span class="kw">let </span>spendable_selected_notes = <span class="self">Self</span>::select_notes(dbtx, min_amount).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>operation_id = OperationId(
-            spendable_selected_notes
-                .consensus_hash::&lt;sha256t::Hash&lt;OOBSpendTag&gt;&gt;()
-                .into_inner(),
-        );
+        <span class="kw">let </span>operation_id = spendable_notes_to_operation_id(<span class="kw-2">&amp;</span>spendable_selected_notes);
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>spendable_selected_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
@@ -2921,6 +2923,16 @@
         <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(amount, dbtx).<span class="kw">await</span>;
         NoteIssuanceRequest::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, secret)
     }
+}
+
+<span class="kw">pub fn </span>spendable_notes_to_operation_id(
+    spendable_selected_notes: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;,
+) -&gt; OperationId {
+    OperationId(
+        spendable_selected_notes
+            .consensus_hash::&lt;sha256t::Hash&lt;OOBSpendTag&gt;&gt;()
+            .into_inner(),
+    )
 }
 
 <span class="kw">pub struct </span>SpendOOBRefund {
