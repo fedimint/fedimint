@@ -276,9 +276,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             };
 
             let tx = TransactionBuilder::new().with_input(client_input.into_dyn(instance.id));
-            let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Pay {};
+            let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Pay {};
             let operation_id = OperationId(invoice.payment_hash().into_inner());
-            let txid = gateway
+            let (txid, _) = gateway
                 .finalize_and_submit_transaction(
                     operation_id,
                     fedimint_ln_common::KIND.as_str(),
@@ -515,7 +515,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     .expect("Failed to serialize string into json"),
             };
             let operation_id = OperationId(invoice.payment_hash().into_inner());
-            let txid = user_client
+            let (txid, _) = user_client
                 .finalize_and_submit_transaction(
                     operation_id,
                     fedimint_ln_common::KIND.as_str(),

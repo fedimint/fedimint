@@ -285,14 +285,19 @@ impl MintClientExt for Client {
             extra_meta: extra_meta.clone(),
         };
 
-        self.finalize_and_submit_transaction(
-            operation_id,
-            MintCommonGen::KIND.as_str(),
-            operation_meta_gen,
-            tx,
-        )
-        .await
-        .context("We already reissued these notes")?;
+        let change = self
+            .finalize_and_submit_transaction(
+                operation_id,
+                MintCommonGen::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .await
+            .context("We already reissued these notes")?
+            .1;
+
+        self.await_primary_module_outputs(operation_id, change)
+            .await?;
 
         Ok(operation_id)
     }
@@ -864,7 +869,7 @@ impl ClientModule for MintClientModule {
         amount: Amount,
     ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
         // FIXME: don't hardcode notes per denomination
-        vec![self.create_output(dbtx, operation_id, 2, amount).await]
+        self.create_output(dbtx, operation_id, 2, amount).await
     }
 
     async fn await_primary_module_output(
@@ -942,47 +947,53 @@ impl MintClientModule {
         operation_id: OperationId,
         notes_per_denomination: u16,
         amount: Amount,
-    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
-        let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
-            Vec::new();
+    ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
         let denominations = TieredSummary::represent_amount(
             amount,
             &self.get_wallet_summary(dbtx).await,
             &self.cfg.tbs_pks,
             notes_per_denomination,
         );
+
+        let mut outputs = Vec::new();
+
         for (amt, num) in denominations.iter() {
             for _ in 0..num {
                 let (request, blind_nonce) = self.new_ecash_note(amt, dbtx).await;
-                amount_requests.push(((amt, request), (amt, blind_nonce)));
+                // amount_requests.push(((amt, request), (amt, blind_nonce)));
+
+                let note_issuance = TieredMulti::from_iter([(amt, request)]);
+                let sig_req = TieredMulti::from_iter([(amt, blind_nonce)]);
+
+                let state_generator = Arc::new(move |txid, out_idx| {
+                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                        common: MintOutputCommon {
+                            operation_id,
+                            out_point: OutPoint { txid, out_idx },
+                        },
+                        state: MintOutputStates::Created(MintOutputStatesCreated {
+                            note_issuance: MultiNoteIssuanceRequest {
+                                notes: note_issuance.clone(),
+                            },
+                        }),
+                    })]
+                });
+
+                debug!(
+                    %amount,
+                    notes = %sig_req.count_items(),
+                    tiers = ?sig_req.iter_tiers().collect::<Vec<_>>(),
+                    "Generated issuance request"
+                );
+
+                outputs.push(ClientOutput {
+                    output: MintOutput(sig_req),
+                    state_machines: state_generator,
+                });
             }
         }
-        let (note_issuance, sig_req): (MultiNoteIssuanceRequest, MintOutput) =
-            amount_requests.into_iter().unzip();
 
-        let state_generator = Arc::new(move |txid, out_idx| {
-            vec![MintClientStateMachines::Output(MintOutputStateMachine {
-                common: MintOutputCommon {
-                    operation_id,
-                    out_point: OutPoint { txid, out_idx },
-                },
-                state: MintOutputStates::Created(MintOutputStatesCreated {
-                    note_issuance: note_issuance.clone(),
-                }),
-            })]
-        });
-
-        debug!(
-            %amount,
-            notes = %sig_req.0.count_items(),
-            tiers = ?sig_req.0.iter_tiers().collect::<Vec<_>>(),
-            "Generated issuance request"
-        );
-
-        ClientOutput {
-            output: sig_req,
-            state_machines: state_generator,
-        }
+        outputs
     }
 
     /// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -1056,9 +1067,9 @@ impl MintClientModule {
                 .cfg
                 .tbs_pks
                 .get(amount)
-                .ok_or_else(|| anyhow!("Invalid amount tier: {amount}"))?;
+                .ok_or(anyhow!("Invalid amount tier: {amount}"))?;
 
-            if !spendable_note.note.verify(*key) {
+            if !spendable_note.note().verify(*key) {
                 bail!("Invalid note");
             }
 
@@ -1066,7 +1077,7 @@ impl MintClientModule {
             let selected_notes = notes
                 .clone()
                 .into_iter()
-                .map(|(amount, note)| (amount, note.note))
+                .map(|(amount, note)| (amount, note.note()))
                 .collect();
 
             let sm_gen = Arc::new(move |txid, input_idx| {

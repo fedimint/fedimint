@@ -96,16 +96,16 @@ impl DummyClientExt for Client {
         // Will output to our primary client module
         let tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
-        let txid = self
+        let (_, change) = self
             .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
             .await?;
 
         // Wait for the output of the primary module
-        self.await_primary_module_output(op_id, OutPoint { txid, out_idx: 0 })
+        self.await_primary_module_outputs(op_id, change.clone())
             .await
             .context("Waiting for the output of print_using_account")?;
 
-        Ok((op_id, OutPoint { txid, out_idx: 0 }))
+        Ok((op_id, change[0]))
     }
 
     async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
@@ -153,7 +153,7 @@ impl DummyClientExt for Client {
             .with_output(output.into_dyn(instance.id));
 
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
-        let txid = self
+        let (txid, _) = self
             .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
             .await?;
 

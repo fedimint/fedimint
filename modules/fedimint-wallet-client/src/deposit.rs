@@ -325,7 +325,7 @@ pub struct WaitingForConfirmationsDepositState {
 pub struct ClaimingDepositState {
     /// Fedimint transaction id in which the deposit is being claimed.
     pub(crate) transaction_id: TransactionId,
-    pub(crate) change: Option<OutPoint>,
+    pub(crate) change: Vec<OutPoint>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
