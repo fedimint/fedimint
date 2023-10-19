@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This file downloads the mutinynet docker-compose files for the LN gateway and fedimintd
+# This file downloads the mutinynet docker-compose files for the LN gateway, fedimintd plus some useful tools
 # Important: This version uses TLS certificates, so you must have a domain under your control that you can change the DNS records for
 # You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/tls-download-mutinynet.sh | bash
 
@@ -49,7 +49,6 @@ if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 2000000 ]; then
 fi
 
 
-
 resolve_host() {
   local host=$1
   if [ -x "$(command -v host)" ]; then
@@ -85,7 +84,7 @@ count_dots() {
 
 EXTERNAL_IP=$(curl -sSL ifconfig.me)
 
-SERVICES="fedimintd guardian-ui gatewayd gateway-ui rtl"
+SERVICES="fedimintd guardian-ui gatewayd gateway-ui rtl xmpp"
 
 echo
 echo "Welcome to the fedimint setup script with TLS certificates by Let's Encrypt"
@@ -233,4 +232,3 @@ echo "You can access the fedimint dashboard at https://guardian-ui.${host_name[*
 echo "The LN gateway at https://gateway-ui.${host_name[*]}"
 echo "And the node management interface RTL at https://rtl.${host_name[*]}"
 echo "Note: by default you should open ports 8173 and 9735 for external access on your router/firewall, plus 443 as mentioned before"
-
