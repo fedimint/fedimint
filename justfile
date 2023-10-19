@@ -26,7 +26,7 @@ check-ulimit:
 
 # run tests
 test: build check-ulimit
-  cargo test
+  cargo nexttest run
 
 # run tests against real services (like bitcoind)
 test-real: check-ulimit
@@ -57,6 +57,7 @@ udeps:
 
 # run all checks recommended before opening a PR
 final-check: lint
+  # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
   cargo test --doc
   just check-wasm
   just test
