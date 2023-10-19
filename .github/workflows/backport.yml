@@ -12,9 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     # Don't run on closed unmerged pull requests
     if: github.event.pull_request.merged
+    # Save the output from the create-pr step so it can be used in downstream jobs
+    # https://github.com/korthout/backport-action/blob/e53c7b292aa9985d372c178a89d416ef2176c091/README.md#outputs
+    outputs:
+      was_successful: ${{ steps.create-pr.outputs.was_successful }}
     steps:
       - uses: actions/checkout@v4
-      - name: Create backport pull requests
+      - id: create-pr
+        name: Create backport pull requests
         uses: korthout/backport-action@v1
         with:
           github_token: ${{ secrets.BACKPORT_TOKEN }}
@@ -26,7 +31,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: backport
     # Open an issue only if the backport job failed
-    # https://github.com/korthout/backport-action/blob/e53c7b292aa9985d372c178a89d416ef2176c091/README.md#outputs
     if: ${{ needs.backport.outputs.was_successful == 'false' }}
     steps:
       - uses: actions/checkout@v4
