@@ -1,7 +1,7 @@
 use std::io::{Error, Read, Write};
 use std::marker::PhantomData;
 
-use fedimint_core::api::ApiVersionSet;
+use fedimint_core::api::{ApiVersionSet, InviteCode};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -22,6 +22,7 @@ pub enum DbKeyPrefix {
     ChronologicalOperationLog = 0x2d,
     CommonApiVersionCache = 0x2e,
     ClientConfig = 0x2f,
+    ClientInviteCode = 0x30,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -123,3 +124,20 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = ClientConfigKey, query_prefix = ClientConfigKeyPrefix);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ClientInviteCodeKey;
+
+#[derive(Debug, Encodable)]
+pub struct ClientInviteCodeKeyPrefix;
+
+impl_db_record!(
+    key = ClientInviteCodeKey,
+    value = InviteCode,
+    db_prefix = DbKeyPrefix::ClientInviteCode
+);
+
+impl_db_lookup!(
+    key = ClientInviteCodeKey,
+    query_prefix = ClientInviteCodeKeyPrefix
+);
