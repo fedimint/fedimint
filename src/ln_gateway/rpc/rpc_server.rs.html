@@ -163,10 +163,19 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::response::IntoResponse;
-<span class="kw">use </span>axum::routing::post;
+<span class="kw">use </span>axum::routing::{get, post};
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
@@ -192,7 +201,9 @@
 ) -&gt; axum::response::Result&lt;()&gt; {
     <span class="kw">let </span>(routes, admin_routes) = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = config {
         <span class="comment">// Public routes on gateway webserver
-        </span><span class="kw">let </span>routes = Router::new().route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice));
+        </span><span class="kw">let </span>routes = Router::new()
+            .route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice))
+            .route(<span class="string">&quot;/id&quot;</span>, get(get_gateway_id));
 
         <span class="comment">// Authenticated, public routes used for gateway administration
         </span><span class="kw">let </span>admin_routes = Router::new()
@@ -327,5 +338,12 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     gateway.handle_set_configuration_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
+}
+
+<span class="attr">#[instrument(skip_all, err)]
+</span><span class="kw">async fn </span>get_gateway_id(
+    Extension(gateway): Extension&lt;Gateway&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.gateway_id)))
 }
 </code></pre></div></section></main></body></html>
