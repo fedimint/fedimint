@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs?rev=5e4c2ada4fcd54b99d56d7bd62f384511a7e2593"; #ref=nixos-unstable
     nixpkgs-kitman.url = "github:jkitman/nixpkgs/add-esplora-pkg";
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
@@ -209,32 +209,31 @@
                 ];
 
                 shellHook = ''
+                  # workaround https://github.com/rust-lang/cargo/issues/11020
+                  cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
+                  if (( ''${#cargo_cmd_bins[@]} != 0 )); then
+                    >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
+                    >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
+                  fi
 
-                    # workaround https://github.com/rust-lang/cargo/issues/11020
-                    cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
-                    if (( ''${#cargo_cmd_bins[@]} != 0 )); then
-                      >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
-                      >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
+                  # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
+                  if [ -n "$TMUX" ]; then
+                    # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
+                    if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
+                      echo
+                      >&2 echo "⚠️  tmux's 'default-command' not set"
+                      >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
                     fi
+                  fi
 
-                    # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
-                    if [ -n "$TMUX" ]; then
-                      # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
-                      if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
-                        echo
-                        >&2 echo "⚠️  tmux's 'default-command' not set"
-                        >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
-                      fi
-                    fi
+                  if [ ''${#TMPDIR} -ge 40 ]; then
+                      >&2 echo "⚠️  TMPDIR too long. This might lead to problems running tests and regtest fed. Are you nesting 'nix develop' invocations?"
+                  fi
 
-                    if [ ''${#TMPDIR} -ge 40 ]; then
-                        >&2 echo "⚠️  TMPDIR too long. This might lead to problems running tests and regtest fed. Are you nesting 'nix develop' invocations?"
-                    fi
-
-                    if [ "$(ulimit -Sn)" -lt "1024" ]; then
-                        >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
-                    fi
-                  '';
+                  if [ "$(ulimit -Sn)" -lt "1024" ]; then
+                      >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
+                  fi
+                '';
               };
             in
             {
@@ -277,7 +276,6 @@
                   pkg-config
                   openssl
                 ];
-                LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
               };
 
               bootstrap = pkgs.mkShell {

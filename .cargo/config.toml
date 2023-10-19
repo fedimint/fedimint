@@ -2,34 +2,16 @@
 rustflags = ["--cfg", "tokio_unstable"]
 
 [target.x86_64-unknown-linux-gnu]
-linker = "clang"
 rustflags = ["-C", "link-arg=-fuse-ld=mold", "-C", "link-arg=-Wl,--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
 
-# mold is currently broken on MacOS
-# [target.aarch64-apple-darwin]
-# linker = "clang"
-# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
-
-# uncommend this to use zld for faster linking for MacOs, don't forget to put this file (.cargo/config.toml) in your .git/info/exclude
-#[target.aarch64-apple-darwin]
-#rustflags = ["-C", "link-arg=-fuse-ld=zld"]
-
-#[target.x86_64-apple-darwin]
-#rustflags = ["-C", "link-arg=-fuse-ld=zld"]
-
 [target.armv7-linux-androideabi]
-linker = "./.cargo/ld.armv7-linux-androideabi"
-ar = "./.cargo/ar.armv7-linux-androideabi"
+rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
 
 [target.aarch64-linux-android]
-linker = "./.cargo/ld.aarch64-linux-android"
-ar = "./.cargo/ar.aarch64-linux-android"
+rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
 
 [target.x86_64-linux-android]
-linker = "./.cargo/ld.x86_64-linux-android"
-ar = "./.cargo/ar.x86_64-linux-android"
+rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]
 
 [target.i686-linux-android]
-linker = "./.cargo/ld.i686-linux-android"
-ar = "./.cargo/ar.i686-linux-android"
-
+rustflags = ["-C", "link-arg=--compress-debug-sections=zlib", "--cfg", "tokio_unstable"]

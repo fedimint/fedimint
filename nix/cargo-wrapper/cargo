@@ -34,6 +34,7 @@ if [ -n "$target" ]; then
   rocksdb_lib_dir="ROCKSDB_${target}_LIB_DIR"
   snappy_lib_dir="SNAPPY_${target}_LIB_DIR"
   rocksdb_static="ROCKSDB_${target}_STATIC"
+  snappy_static="SNAPPY_${target}_STATIC"
 
   if [ -n "${!rocksdb_lib_dir}" ]; then
     export ROCKSDB_LIB_DIR="${!rocksdb_lib_dir}"
@@ -49,6 +50,11 @@ if [ -n "$target" ]; then
     export ROCKSDB_STATIC="${!rocksdb_static}"
   else
     unset ROCKSDB_STATIC
+  fi
+  if [ -n "${!snappy_static}" ]; then
+    export SNAPPY_STATIC="${!snappy_static}"
+  else
+    unset SNAPPY_STATIC
   fi
 fi
 
