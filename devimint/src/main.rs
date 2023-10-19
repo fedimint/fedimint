@@ -891,6 +891,8 @@ async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
         esplora,
     } = dev_fed;
 
+    fed.pegin(10000).await?;
+
     // Query current gateway infos
     let mut cln_cmd = cmd!(gw_cln, "info");
     let mut lnd_cmd = cmd!(gw_lnd, "info");
@@ -900,7 +902,29 @@ async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
     drop(gw_cln);
     drop(gw_lnd);
 
+    // Verify that making a payment while the gateways are down does not result in
+    // funds being stuck
+    info!("Making payment while gateway is down");
+    let initial_client_balance = fed.client_balance().await?;
+    let add_invoice = lnd
+        .client_lock()
+        .await?
+        .add_invoice(tonic_lnd::lnrpc::Invoice {
+            value_msat: 3000,
+            ..Default::default()
+        })
+        .await?
+        .into_inner();
+    let invoice = add_invoice.payment_request;
+    cmd!(fed, "ln-pay", invoice)
+        .run()
+        .await
+        .expect_err("Expected ln-pay to return error because the gateway is not online");
+    let new_client_balance = fed.client_balance().await?;
+    anyhow::ensure!(initial_client_balance == new_client_balance);
+
     // Reboot gateways with the same Lightning node instances
+    info!("Rebooting gateways...");
     let (new_gw_cln, new_gw_lnd) = tokio::try_join!(
         Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
         Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))

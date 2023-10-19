@@ -5,6 +5,7 @@ mod receive;
 
 use std::collections::BTreeMap;
 use std::iter::once;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -56,6 +57,7 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
+use secp256k1::PublicKey;
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -791,6 +793,38 @@ impl LightningClientModule {
         OperationId(hash.into_inner())
     }
 
+    // Ping gateway endpoint to verify that it is available before locking funds in
+    // OutgoingContract
+    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
+        let response = reqwest::Client::new()
+            .get(
+                gateway
+                    .api
+                    .join("id")
+                    .expect("id contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .send()
+            .await
+            .context("Gateway is not available")?;
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "Gateway is not available. Returned error code: {}",
+                response.status()
+            ));
+        }
+
+        let text_gateway_id = response.text().await?;
+        let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
+        if gateway_id != gateway.gateway_id {
+            return Err(anyhow::anyhow!(
+                "Unexpected gateway id returned: {gateway_id}"
+            ));
+        }
+
+        Ok(())
+    }
+
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
@@ -814,6 +848,10 @@ impl LightningClientModule {
             federation_currency,
             invoice_currency
         );
+
+        // Do not create the funding transaction if the gateway is not currently
+        // available
+        self.verify_gateway_availability(&gateway).await?;
 
         let consensus_count = api
             .fetch_consensus_block_count()
