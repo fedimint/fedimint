@@ -284,6 +284,7 @@ impl GatewayClientModule {
                 gateway_id,
             },
             ttl,
+            vetted: false,
         }
     }
 

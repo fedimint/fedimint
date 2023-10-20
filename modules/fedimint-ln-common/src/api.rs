@@ -236,7 +236,11 @@ fn filter_duplicate_gateways(
 
             gateways
                 .into_iter()
-                .map(|(gateway, ttl)| LightningGatewayAnnouncement { info: gateway, ttl })
+                .map(|(gateway, ttl)| LightningGatewayAnnouncement {
+                    info: gateway,
+                    ttl,
+                    vetted: false,
+                })
         })
         .collect()
 }

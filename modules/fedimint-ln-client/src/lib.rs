@@ -21,9 +21,11 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext, FederationInfo};
 use fedimint_core::api::DynModuleApi;
-use fedimint_core::config::FederationId;
+use fedimint_core::config::{
+    ClientConfig, FederationId, META_OVERRIDE_URL_KEY, META_VETTED_GATEWAYS_KEY,
+};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
@@ -834,11 +836,94 @@ impl LightningClientModule {
         Ok(())
     }
 
+    async fn fetch_meta_overrides(&self, config: ClientConfig) -> anyhow::Result<String> {
+        let federation_id = config.global.federation_id();
+        let override_src = FederationInfo::from_config(config)
+            .await?
+            .meta::<String>(META_OVERRIDE_URL_KEY)?
+            .ok_or(anyhow::anyhow!("No meta override source configured"))?;
+        debug!("Fetching meta overrides from {}", override_src);
+
+        let response = reqwest::Client::new()
+            .get(override_src.as_str())
+            .send()
+            .await
+            .context("Meta override request failed")?;
+        debug!("Meta override source returned status: {:?}", response);
+
+        let federation_meta = match response.status() {
+            reqwest::StatusCode::OK => {
+                let txt = response.text().await.context(format!(
+                    "Meta override source returned invalid body: {}",
+                    override_src
+                ))?;
+                let m: serde_json::Value = serde_json::from_str(&txt).map_err(|_| {
+                    anyhow::anyhow!("Meta override source returned invalid json: {}", txt)
+                })?;
+                if !m.is_object() {
+                    return Err(anyhow::anyhow!("Meta override is not valid"));
+                }
+
+                m.get(&federation_id.to_string())
+                    .ok_or(anyhow::anyhow!(
+                        "No meta overrides for federation id: {}",
+                        federation_id
+                    ))?
+                    .to_string()
+            }
+            _ => Err(anyhow::anyhow!(
+                "Meta override source returned error code: {}",
+                response.status()
+            ))?,
+        };
+
+        Ok(federation_meta)
+    }
+
     /// Gateways actively registered with the fed
     pub async fn fetch_registered_gateways(
         &self,
     ) -> anyhow::Result<Vec<LightningGatewayAnnouncement>> {
-        Ok(self.module_api.fetch_gateways().await?)
+        let mut gateways = self.module_api.fetch_gateways().await?;
+
+        if !gateways.is_empty() {
+            debug!("Fetching meta overrides from remote source/cache");
+            let config = self.client_ctx.get_config().clone();
+            let federation_meta = match self.fetch_meta_overrides(config).await {
+                Ok(meta) => meta,
+                Err(e) => {
+                    error!("Error fetching meta overrides: {}", e);
+                    return Ok(gateways);
+                }
+            };
+
+            debug!("Applying vetted meta field to registered gateways");
+            let meta: BTreeMap<String, serde_json::Value> = serde_json::from_str(&federation_meta)
+                .context(format!(
+                    "Meta override source returned invalid json: {}",
+                    federation_meta
+                ))?;
+            let vetted_gids = match meta
+                .get(META_VETTED_GATEWAYS_KEY)
+                .and_then(|vetted| serde_json::from_value::<Vec<String>>(vetted.clone()).ok())
+            {
+                Some(vetted) => {
+                    debug!("Found the following vetted gateways: {:?}", vetted);
+                    vetted
+                        .into_iter()
+                        .map(|pk| PublicKey::from_str(&pk).map_err(anyhow::Error::from))
+                        .collect::<Result<Vec<_>, _>>()?
+                }
+                None => Vec::new(),
+            };
+            debug!("Vetted gateways: {:?}", vetted_gids);
+
+            for gateway in gateways.iter_mut() {
+                gateway.vetted = vetted_gids.contains(&gateway.info.gateway_id);
+            }
+        }
+
+        Ok(gateways)
     }
 
     /// Pays a LN invoice with our available funds
