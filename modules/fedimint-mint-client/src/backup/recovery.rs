@@ -234,7 +234,7 @@ impl MintRestoreInProgressState {
                         );
 
                         for (out_point, note_issuance) in finalized.unconfirmed_notes {
-                            for (amount, request) in note_issuance.notes.iter_items() {
+                            for (amount, issuance_request) in note_issuance.notes {
                                 global_context
                                     .add_state_machine(
                                         dbtx,
@@ -245,11 +245,8 @@ impl MintRestoreInProgressState {
                                             },
                                             state: crate::output::MintOutputStates::Created(
                                                 MintOutputStatesCreated {
-                                                    note_issuance: MultiNoteIssuanceRequest {
-                                                        notes: TieredMulti::from_iter([(
-                                                            amount, *request,
-                                                        )]),
-                                                    },
+                                                    amount,
+                                                    issuance_request,
                                                 },
                                             ),
                                         }),

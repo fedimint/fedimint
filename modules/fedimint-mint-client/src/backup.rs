@@ -68,7 +68,9 @@ impl MintClientModule {
                 match state {
                     MintClientStateMachines::Output(MintOutputStateMachine { common, state }) => {
                         match state {
-                            crate::output::MintOutputStates::Created(state) => Some((common.out_point, state.note_issuance)),
+                            crate::output::MintOutputStates::Created(state) => Some((common.out_point, MultiNoteIssuanceRequest{
+                                notes: TieredMulti::from_iter([(state.amount, state.issuance_request)])
+                            })),
                             crate::output::MintOutputStates::Succeeded(_) => None /* we back these via get_all_spendable_notes */,
                             _ => None,
                         }

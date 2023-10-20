@@ -101,7 +101,8 @@ impl State for MintOutputStateMachine {
 /// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintOutputStatesCreated {
-    pub(crate) note_issuance: MultiNoteIssuanceRequest,
+    pub(crate) amount: Amount,
+    pub(crate) issuance_request: NoteIssuanceRequest,
 }
 
 impl MintOutputStatesCreated {
@@ -200,41 +201,45 @@ impl MintOutputStatesCreated {
         old_state: MintOutputStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,
     ) -> MintOutputStateMachine {
-        let issuance = match old_state.state {
-            MintOutputStates::Created(created) => created.note_issuance,
+        let (amount, issuance_request) = match old_state.state {
+            MintOutputStates::Created(created) => (created.amount, created.issuance_request),
             _ => panic!("Unexpected prior state"),
         };
-        let notes_res = bsig_res.and_then(|bsigs| {
-            issuance
-                .finalize(bsigs, &mint_keys)
-                .map_err(|e| e.to_string())
-        });
 
-        match notes_res {
-            Ok(notes) => {
-                for (amount, note) in notes.iter_items() {
-                    let replaced = dbtx
-                        .module_tx()
-                        .insert_entry(
-                            &NoteKey {
-                                amount,
-                                nonce: note.nonce(),
-                            },
-                            note,
-                        )
-                        .await;
-                    if let Some(note) = replaced {
-                        error!(
-                            ?note,
-                            "E-cash note was replaced in DB, this should never happen!"
-                        )
-                    }
+        let note_res = match mint_keys.tier(&amount) {
+            Ok(amount_key) => bsig_res.and_then(|bsigs| {
+                assert_eq!(bsigs.0.count_items(), 1);
+                let bsig = bsigs.0.into_iter().next().unwrap().1;
+
+                issuance_request
+                    .finalize(bsig, *amount_key)
+                    .map_err(|e| e.to_string())
+            }),
+            Err(error) => Err(NoteFinalizationError::InvalidAmountTier(error.0).to_string()),
+        };
+
+        match note_res {
+            Ok(note) => {
+                let replaced = dbtx
+                    .module_tx()
+                    .insert_entry(
+                        &NoteKey {
+                            amount,
+                            nonce: note.nonce(),
+                        },
+                        &note,
+                    )
+                    .await;
+                if let Some(note) = replaced {
+                    error!(
+                        ?note,
+                        "E-cash note was replaced in DB, this should never happen!"
+                    )
                 }
+
                 MintOutputStateMachine {
                     common: old_state.common,
-                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
-                        amount: notes.total_amount(),
-                    }),
+                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded { amount }),
                 }
             }
             Err(error) => MintOutputStateMachine {
@@ -348,6 +353,7 @@ impl MultiNoteIssuanceRequest {
     /// the mint containing the blind signatures for all notes in this
     /// `IssuanceRequest`. It also takes the mint's [`AggregatePublicKey`]
     /// to validate the supplied blind signatures.
+    #[allow(dead_code)]
     pub fn finalize(
         &self,
         bsigs: MintOutputBlindSignatures,

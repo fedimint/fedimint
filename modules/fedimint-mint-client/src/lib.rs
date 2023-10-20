@@ -67,7 +67,7 @@ use crate::input::{
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreated};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
-    MultiNoteIssuanceRequest, NoteIssuanceRequest,
+    NoteIssuanceRequest,
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
@@ -959,10 +959,8 @@ impl MintClientModule {
 
         for (amt, num) in denominations.iter() {
             for _ in 0..num {
-                let (request, blind_nonce) = self.new_ecash_note(amt, dbtx).await;
-                // amount_requests.push(((amt, request), (amt, blind_nonce)));
+                let (issuance_request, blind_nonce) = self.new_ecash_note(amt, dbtx).await;
 
-                let note_issuance = TieredMulti::from_iter([(amt, request)]);
                 let sig_req = TieredMulti::from_iter([(amt, blind_nonce)]);
 
                 let state_generator = Arc::new(move |txid, out_idx| {
@@ -972,9 +970,8 @@ impl MintClientModule {
                             out_point: OutPoint { txid, out_idx },
                         },
                         state: MintOutputStates::Created(MintOutputStatesCreated {
-                            note_issuance: MultiNoteIssuanceRequest {
-                                notes: note_issuance.clone(),
-                            },
+                            amount: amt,
+                            issuance_request,
                         }),
                     })]
                 });
