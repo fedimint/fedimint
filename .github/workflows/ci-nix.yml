@@ -28,6 +28,7 @@ jobs:
         uses: DeterminateSystems/flake-checker-action@v5
         with:
           fail-mode: true
+          nixpkgs-keys: nixpkgs,nixpkgs-unstable
 
   lint:
     name: "Lint"
