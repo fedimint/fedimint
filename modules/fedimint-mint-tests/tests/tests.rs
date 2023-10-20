@@ -42,6 +42,27 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_fed().await;
+    let client = fed.new_client().await;
+    let (op, outpoint) = client.print_money(sats(1000)).await?;
+    client.await_primary_module_output(op, outpoint).await?;
+
+    // Spend from client1 to client2
+    let (op, _) = client.spend_notes(sats(750), TIMEOUT, ()).await?;
+    let sub1 = &mut client.subscribe_spend_notes(op).await?.into_stream();
+    assert_eq!(sub1.ok().await?, SpendOOBState::Created);
+
+    client.try_cancel_spend_notes(op).await;
+    assert_eq!(sub1.ok().await?, SpendOOBState::UserCanceledProcessing);
+    assert_eq!(sub1.ok().await?, SpendOOBState::UserCanceledSuccess);
+
+    assert_eq!(client.get_balance().await, sats(1000));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_fed().await;
