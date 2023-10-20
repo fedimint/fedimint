@@ -10,6 +10,7 @@ The following meta fields have been defined as part of the core Fedimint protoco
 * [`federation_name`](federation_name.md): The human-readable name of the federation
 * [`meta_override_url`](meta_override_url.md): A URL to a file containing overrides for meta fields (will be deprecated in the future)
 * [`welcome_message`](welcome_message.md): A welcome message for new users joining the federation
+* [`vetted_gateways`](vetted_gateways.md): A list of gateway identifiers vetted by the federation
 
 ## Defining new meta fields
 To define a new meta field:
