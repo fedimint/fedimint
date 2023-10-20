@@ -311,9 +311,9 @@ pub struct WaitingForConfirmationsDepositState {
     tweak_key: KeyPair,
     /// The bitcoin transaction is saved as soon as we see it so the transaction
     /// can be re-transmitted if it's evicted from the mempool.
-    btc_transaction: bitcoin::Transaction,
+    pub(crate) btc_transaction: bitcoin::Transaction,
     /// Index of the deposit output
-    out_idx: u32,
+    pub(crate) out_idx: u32,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
