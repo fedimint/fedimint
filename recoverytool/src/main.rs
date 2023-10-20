@@ -319,8 +319,10 @@ enum Key {
 
 impl PartialOrd for Key {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.to_compressed_public_key()
-            .partial_cmp(&other.to_compressed_public_key())
+        Some(
+            self.to_compressed_public_key()
+                .cmp(&other.to_compressed_public_key()),
+        )
     }
 }
 

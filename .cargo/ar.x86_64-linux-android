@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-exec "$AR_x86_64_linux_android" "$ARFLAGS_x86_64_linux_android" "$@"

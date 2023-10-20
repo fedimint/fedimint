@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-
-set -eu
-
-if [ -z "${IN_NIX_SHELL:-}" ]; then
-  >&2 echo "Workaround: restart in 'nix develop' shell"
-  exec nix develop .#lint --command "$0" "$@"
-fi
-
 # Sanitize file first, by removing leading lines that are empty or start with a hash,
 # as `convco` currently does not do it automatically (but git will)
 # TODO: next release of convco should be able to do it automatically
@@ -25,6 +17,7 @@ MESSAGE="$(
 # convco fails on fixup!, so remove fixup! prefix
 MESSAGE="${MESSAGE#fixup! }"
 if ! convco check --from-stdin <<<"$MESSAGE" ; then
-   >&2 echo "⛔ ERROR: Your commit message does not follow conventional commit rules (https://www.conventionalcommits.org)"
+   >&2 echo "Please follow conventional commits(https://www.conventionalcommits.org)"
+   >&2 echo "Use git recommit <args> to fix your commit"
   exit 1
 fi

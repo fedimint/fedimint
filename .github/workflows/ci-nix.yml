@@ -56,7 +56,7 @@ jobs:
         run: nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
 
       - name: Check udeps
-        run: nix build -L .#ci.workspaceCargoUdeps
+        run: nix build -L .#nightly.test.workspaceCargoUdeps
 
   build:
     if: github.repository == 'fedimint/fedimint'
@@ -116,11 +116,11 @@ jobs:
       - name: Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
         run: |
-          nix build -L .#ci.test.all --keep-failed
+          nix build -L .#ci.ciTestAll --keep-failed
 
       - name: Wasm Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
-        run: nix build -L .#ci.wasm-test --keep-failed
+        run: nix build -L .#wasm32-unknown.ci.wasmTest --keep-failed
 
       - name: Prepare failed test build dirs
         if: always()
@@ -200,19 +200,18 @@ jobs:
           files: result/lcov.info
 
   cross:
-    name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.target}}"
+    name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.toolchain }}"
 
     strategy:
       matrix:
         host:
           - linux
           - macos
-        target:
-          - aarch64-linux-android
-          - armv7-linux-androideabi
-          - x86_64-linux-android
-          - i686-linux-android
-          - wasm32-unknown-unknown
+        toolchain:
+          - aarch64-android
+          - armv7-android
+          - x86_64-android
+          - wasm32-unknown
         include:
           - host: linux
             runs-on: ubuntu-22.04
@@ -224,15 +223,12 @@ jobs:
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             timeout: 60
         exclude:
-            # there's not enough macos runners available for our CI, so test only the more important cross-compilation targets
+            # there's not enough macos runners available for our CI, so test only the more important cross-compilation toolchains
             # if they work, rest probably works as well
           - host: macos
-            target: armv7-linux-androideabi
+            toolchain: armv7-linux-androideabi
           - host: macos
-            target: i686-linux-android
-          - host: macos
-            target: x86_64-linux-android
-
+            toolchain: x86_64-linux-android
 
 
     runs-on: ${{ matrix.runs-on }}
@@ -254,9 +250,9 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
-      - name: Build client packages for ${{ matrix.target }}
+      - name: Build client packages for ${{ matrix.toolchain }}
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix build -L .#cross.${{ matrix.target }}.client-pkgs
+        run: nix build -L .#${{ matrix.toolchain }}.ci.client-pkgs
 
   containers:
     if: github.repository == 'fedimint/fedimint'

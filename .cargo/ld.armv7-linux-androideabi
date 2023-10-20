@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-exec "$LD_armv7_linux_androideabi" $LDFLAGS_armv7_linux_androideabi "$@"
