@@ -93,14 +93,40 @@ pub trait WalletClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<WithdrawState>>;
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct BitcoinTransactionData {
+    /// The bitcoin transaction is saved as soon as we see it so the transaction
+    /// can be re-transmitted if it's evicted from the mempool.
+    pub btc_transaction: bitcoin::Transaction,
+    /// Index of the deposit output
+    pub out_idx: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum DepositState {
     WaitingForTransaction,
-    WaitingForConfirmation,
-    Confirmed,
-    // TODO: add amount
-    Claimed,
+    WaitingForConfirmation(BitcoinTransactionData),
+    Confirmed(BitcoinTransactionData),
+    #[serde(rename = "Claimed")]
+    ClaimedOld,
+    #[serde(rename = "Claimed2")]
+    Claimed(BitcoinTransactionData),
     Failed(String),
+}
+
+#[cfg(test)]
+#[test]
+// Only outcomes are stored in database as json.
+// Failed and Claimed are outcomes here.
+// Failed is not changed. this is test for Claimed deserialization.
+fn deposit_state_is_backward_compatible() {
+    use fedimint_core::module::__reexports::serde_json;
+
+    let old_json = "\"Claimed\"";
+    assert_eq!(
+        serde_json::from_str::<DepositState>(old_json).unwrap(),
+        DepositState::ClaimedOld
+    );
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -211,9 +237,11 @@ impl WalletClientExt for Client {
                         None => return,
                     }
 
-                    match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::WaitingForConfirmations(_)) => {
-                            yield DepositState::WaitingForConfirmation;
+                    let tx_data = match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::WaitingForConfirmations(inner)) => {
+                            let tx_data = BitcoinTransactionData { btc_transaction: inner.btc_transaction, out_idx: inner.out_idx };
+                            yield DepositState::WaitingForConfirmation(tx_data.clone());
+                            tx_data
                         },
                         Some(DepositStates::TimedOut(_)) => {
                             yield DepositState::Failed("Deposit timed out".to_string());
@@ -223,7 +251,7 @@ impl WalletClientExt for Client {
                             panic!("Unexpected state {s:?}")
                         },
                         None => return,
-                    }
+                    };
 
                     let claiming = match next_deposit_state(&mut operation_stream).await {
                         Some(DepositStates::Claiming(claiming)) => claiming,
@@ -232,7 +260,7 @@ impl WalletClientExt for Client {
                         },
                         None => return,
                     };
-                    yield DepositState::Confirmed;
+                    yield DepositState::Confirmed(tx_data.clone());
 
                     if let Err(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).await {
                         yield DepositState::Failed(format!("Failed to claim: {e:?}"));
@@ -244,7 +272,7 @@ impl WalletClientExt for Client {
                             .await
                             .expect("Cannot fail if tx was accepted and federation is honest");
                     }
-                    yield DepositState::Claimed;
+                    yield DepositState::Claimed(tx_data.clone());
                 }
             }),
         )
