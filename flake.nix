@@ -133,13 +133,12 @@
           #
           # To avoid impurity, we use a git hash placeholder when building binaries
           # and then replace them with the real git hash in the binaries themselves.
-          replaceGitHash = { package, name, placeholder }:
+          replaceGitHash =
             let
               # the hash we will set if the tree is dirty;
               dirty-hash = "0000000000000000000000000000000000000000";
-              # git hash to set (passed by Nix if the tree is clean, or `dirty-hash` when dirty)
-              git-hash = if (self ? rev) then self.rev else dirty-hash;
             in
+            { package, name, placeholder, gitHash ? if (self ? rev) then self.rev else dirty-hash }:
             stdenv.mkDerivation {
               inherit system;
               inherit name;
@@ -151,7 +150,7 @@
                 cp -a ${package} $out
                 for path in `find $out -type f -executable`; do
                   # need to use a temporary file not to overwrite source as we are reading it
-                  bbe -e 's/${placeholder}/${git-hash}/' $path -o ./tmp || exit 1
+                  bbe -e 's/${placeholder}/${gitHash}/' $path -o ./tmp || exit 1
                   chmod +w $path
                   # use cat to keep all the original permissions etc as they were
                   cat ./tmp > "$path"
