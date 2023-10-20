@@ -53,6 +53,7 @@ use crate::lnrpc_client::ILnRpcClient;
 use crate::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
+use crate::{FederationToClientMap, ScidToFederationMap};
 
 pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 pub const INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(15);
@@ -114,7 +115,7 @@ pub trait GatewayClientExt {
         contract_id: ContractId,
     ) -> anyhow::Result<OperationId>;
 
-    /// Subscribe to update to lightning payment
+    /// Subscribe to updates when the gateway is paying an invoice
     async fn gateway_subscribe_ln_pay(
         &self,
         operation_id: OperationId,
@@ -132,7 +133,16 @@ pub trait GatewayClientExt {
     /// Attempt fulfill HTLC by buying preimage from the federation
     async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId>;
 
-    /// Subscribe to updates when the gateway is handling an intercepted HTLC
+    /// Attempt buying preimage from this federation in order to fulfill a pay
+    /// request in another federation served by this gateway. In direct swap
+    /// scenario, the gateway DOES NOT send payment over the lightning network
+    async fn gateway_handle_direct_swap(
+        &self,
+        swap_params: SwapParameters,
+    ) -> anyhow::Result<OperationId>;
+
+    /// Subscribe to updates when the gateway is handling an intercepted HTLC,
+    /// or direct swap between federations
     async fn gateway_subscribe_ln_receive(
         &self,
         operation_id: OperationId,
@@ -271,7 +281,7 @@ impl GatewayClientExt for Client {
     async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
         let (operation_id, output) = gateway
-            .create_funding_incoming_contract_output(htlc)
+            .create_funding_incoming_contract_output_from_htlc(htlc)
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
         let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Receive;
@@ -317,11 +327,29 @@ impl GatewayClientExt for Client {
             }
         }))
     }
+
+    /// Handles a direct swap request by buying a preimage from the federation
+    async fn gateway_handle_direct_swap(
+        &self,
+        swap_params: SwapParameters,
+    ) -> anyhow::Result<OperationId> {
+        let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let (operation_id, output) = gateway
+            .create_funding_incoming_contract_output_from_swap(swap_params)
+            .await?;
+        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Receive;
+        self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .await?;
+        Ok(operation_id)
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientGen {
     pub lnrpc: Arc<dyn ILnRpcClient>,
+    pub all_clients: FederationToClientMap,
+    pub all_scids: ScidToFederationMap,
     pub node_pub_key: secp256k1::PublicKey,
     pub lightning_alias: String,
     pub timelock_delta: u64,
@@ -354,6 +382,8 @@ impl ClientModuleInit for GatewayClientGen {
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(GatewayClientModule {
             lnrpc: self.lnrpc.clone(),
+            all_clients: self.all_clients.clone(),
+            all_scids: self.all_scids.clone(),
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             redeem_key: args
@@ -373,6 +403,8 @@ impl ClientModuleInit for GatewayClientGen {
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
     lnrpc: Arc<dyn ILnRpcClient>,
+    all_clients: FederationToClientMap,
+    all_scids: ScidToFederationMap,
     redeem_key: bitcoin::KeyPair,
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
@@ -395,6 +427,8 @@ impl From<&GatewayClientContext> for LightningClientContext {
 pub struct GatewayClientModule {
     lnrpc: Arc<dyn ILnRpcClient>,
     cfg: LightningClientConfig,
+    all_clients: FederationToClientMap,
+    all_scids: ScidToFederationMap,
     pub notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
     node_pub_key: PublicKey,
@@ -413,6 +447,8 @@ impl ClientModule for GatewayClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
             lnrpc: self.lnrpc.clone(),
+            all_clients: self.all_clients.clone(),
+            all_scids: self.all_scids.clone(),
             redeem_key: self.redeem_key,
             timelock_delta: self.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),
@@ -486,7 +522,7 @@ impl GatewayClientModule {
         Ok(())
     }
 
-    async fn create_funding_incoming_contract_output(
+    async fn create_funding_incoming_contract_output_from_htlc(
         &self,
         htlc: Htlc,
     ) -> Result<
@@ -526,6 +562,42 @@ impl GatewayClientModule {
                         state: GatewayCompleteStates::WaitForPreimage(WaitForPreimageState),
                     }),
                 ]
+            }),
+        };
+        Ok((operation_id, client_output))
+    }
+
+    async fn create_funding_incoming_contract_output_from_swap(
+        &self,
+        swap: SwapParameters,
+    ) -> Result<
+        (
+            OperationId,
+            ClientOutput<LightningOutput, GatewayClientStateMachines>,
+        ),
+        IncomingSmError,
+    > {
+        let payment_hash = swap.payment_hash;
+        let operation_id = OperationId(payment_hash.into_inner());
+        let (incoming_output, contract_id) = create_incoming_contract_output(
+            &self.module_api,
+            payment_hash,
+            swap.amount_msat,
+            self.redeem_key,
+        )
+        .await?;
+
+        let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
+            output: incoming_output,
+            state_machines: Arc::new(move |txid, _| {
+                vec![GatewayClientStateMachines::Receive(IncomingStateMachine {
+                    common: IncomingSmCommon {
+                        operation_id,
+                        contract_id,
+                        payment_hash,
+                    },
+                    state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
+                })]
             }),
         };
         Ok((operation_id, client_output))
@@ -623,6 +695,28 @@ impl TryFrom<InterceptHtlcRequest> for Htlc {
             short_channel_id: s.short_channel_id,
             incoming_chan_id: s.incoming_chan_id,
             htlc_id: s.htlc_id,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct SwapParameters {
+    payment_hash: sha256::Hash,
+    amount_msat: Amount,
+}
+
+impl TryFrom<lightning_invoice::Bolt11Invoice> for SwapParameters {
+    type Error = anyhow::Error;
+
+    fn try_from(s: lightning_invoice::Bolt11Invoice) -> Result<Self, Self::Error> {
+        let payment_hash = *s.payment_hash();
+        let amount_msat = s
+            .amount_milli_satoshis()
+            .map(Amount::from_msats)
+            .ok_or_else(|| anyhow::anyhow!("Amountless invoice cannot be used in direct swap"))?;
+        Ok(Self {
+            payment_hash,
+            amount_msat,
         })
     }
 }
