@@ -1062,23 +1062,18 @@ impl MintClientModule {
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
         let mut inputs = Vec::new();
 
-        for (amount, spendable_note) in notes.iter_items() {
+        for (amount, spendable_note) in notes.into_iter() {
             let key = self
                 .cfg
                 .tbs_pks
                 .get(amount)
                 .ok_or(anyhow!("Invalid amount tier: {amount}"))?;
 
-            if !spendable_note.note().verify(*key) {
+            let note = spendable_note.note();
+
+            if !note.verify(*key) {
                 bail!("Invalid note");
             }
-
-            let notes = TieredMulti::from_iter([(amount, *spendable_note)]);
-            let selected_notes = notes
-                .clone()
-                .into_iter()
-                .map(|(amount, note)| (amount, note.note()))
-                .collect();
 
             let sm_gen = Arc::new(move |txid, input_idx| {
                 vec![MintClientStateMachines::Input(MintInputStateMachine {
@@ -1088,13 +1083,14 @@ impl MintClientModule {
                         input_idx,
                     },
                     state: MintInputStates::Created(MintInputStateCreated {
-                        notes: notes.clone(),
+                        amount,
+                        spendable_note,
                     }),
                 })]
             });
 
             inputs.push(ClientInput {
-                input: MintInput(selected_notes),
+                input: MintInput(TieredMulti::from_iter([(amount, note)])),
                 keys: vec![spendable_note.spend_key],
                 state_machines: sm_gen,
             });
@@ -1130,13 +1126,18 @@ impl MintClientModule {
             .await;
         }
 
-        let state_machines = vec![MintClientStateMachines::OOB(MintOOBStateMachine {
-            operation_id,
-            state: MintOOBStates::Created(MintOOBStatesCreated {
-                notes: spendable_selected_notes.clone(),
-                timeout: fedimint_core::time::now() + try_cancel_after,
-            }),
-        })];
+        let mut state_machines = Vec::new();
+
+        for (amount, spendable_note) in spendable_selected_notes.clone() {
+            state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
+                operation_id,
+                state: MintOOBStates::Created(MintOOBStatesCreated {
+                    amount,
+                    spendable_note,
+                    timeout: fedimint_core::time::now() + try_cancel_after,
+                }),
+            }));
+        }
 
         Ok((operation_id, state_machines, spendable_selected_notes))
     }

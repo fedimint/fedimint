@@ -234,21 +234,29 @@ impl MintRestoreInProgressState {
                         );
 
                         for (out_point, note_issuance) in finalized.unconfirmed_notes {
-                            global_context
-                                .add_state_machine(
-                                    dbtx,
-                                    MintClientStateMachines::Output(MintOutputStateMachine {
-                                        common: MintOutputCommon {
-                                            operation_id,
-                                            out_point,
-                                        },
-                                        state: crate::output::MintOutputStates::Created(
-                                            MintOutputStatesCreated { note_issuance },
-                                        ),
-                                    }),
-                                )
-                                .await
-                                .expect("Adding state machine can't fail")
+                            for (amount, request) in note_issuance.notes.iter_items() {
+                                global_context
+                                    .add_state_machine(
+                                        dbtx,
+                                        MintClientStateMachines::Output(MintOutputStateMachine {
+                                            common: MintOutputCommon {
+                                                operation_id,
+                                                out_point,
+                                            },
+                                            state: crate::output::MintOutputStates::Created(
+                                                MintOutputStatesCreated {
+                                                    note_issuance: MultiNoteIssuanceRequest {
+                                                        notes: TieredMulti::from_iter([(
+                                                            amount, *request,
+                                                        )]),
+                                                    },
+                                                },
+                                            ),
+                                        }),
+                                    )
+                                    .await
+                                    .expect("Adding state machine can't fail")
+                            }
                         }
 
                         MintRestoreStateMachine {
