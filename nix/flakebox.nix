@@ -61,18 +61,18 @@ let
     let
       target_underscores = lib.strings.replaceStrings [ "-" ] [ "_" ] pkgs.stdenv.buildPlatform.config;
     in
-    # FIXME: These should be working on MacOS just fine, but for some reason they
-      # rocksdb can't find static library of snappy, which must have built OK, if
-      # it didn't fail when building...
-    lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+    {
       ROCKSDB_STATIC = "true";
-      SNAPPY_STATIC = "true";
       ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib/";
       SNAPPY_LIB_DIR = "${pkgs.pkgsStatic.snappy}/lib/";
+
       "ROCKSDB_${target_underscores}_STATIC" = "true";
-      "SNAPPY_${target_underscores}_STATIC" = "true";
       "ROCKSDB_${target_underscores}_LIB_DIR" = "${pkgs.rocksdb}/lib/";
       "SNAPPY_${target_underscores}_LIB_DIR" = "${pkgs.pkgsStatic.snappy}/lib/";
+    } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+      # macos can't static libraries
+      SNAPPY_STATIC = "true";
+      "SNAPPY_${target_underscores}_STATIC" = "true";
     };
 
   commonEnvsShellRocksdbLinkCross = commonEnvsShellRocksdbLink // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
