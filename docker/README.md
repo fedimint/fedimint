@@ -21,6 +21,7 @@ sed -i 's/127.0.0.1/111.222.333.444/g' docker-compose.yaml
 (or edit `docker-compose.yaml` with your favorite editor)
 
 Then spin up fedmintd + guardian-ui with `docker-compose`:
+(Note: you can use the `docker-compose` command or on recent docker versions use `docker compose` instead)
 
 ```bash
 docker-compose up

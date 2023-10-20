@@ -3,7 +3,10 @@
 # This file downloads the mutinynet docker-compose files for the LN gateway and fedimintd
 # You can download and run it with: curl -sSL https://raw.githubusercontent.com/fedimint/fedimint/master/docker/download-mutinynet.sh | bash
 
-if ! [ -x "$(command -v docker-compose)" ]; then
+DOCKER_COMPOSE=docker-compose
+if docker compose version|grep 'Docker Compose' >& /dev/null; then
+  DOCKER_COMPOSE="docker compose"
+elif ! [ -x "$(command -v docker-compose)" ]; then
   # check if we are running as root
   if [ "$EUID" -ne 0 ]; then
     echo 'Error: docker-compose is not installed and we can not install it for you.' >&2
@@ -78,16 +81,16 @@ if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
 fi
 
 if [[ ${fedimintd_install[*]} =~ ^[Yy]?$ ]]; then
-  echo "Running 'docker-compose -f $FEDIMINTD_DIR/docker-compose.yaml up -d' to start fedimintd"
-  docker-compose -f $FEDIMINTD_DIR/docker-compose.yaml up -d
-  echo "Optionally run 'docker-compose -f $FEDIMINTD_DIR/docker-compose.yaml logs -f' to see the logs"
+  echo "Running '$DOCKER_COMPOSE -f $FEDIMINTD_DIR/docker-compose.yaml up -d' to start fedimintd"
+  $DOCKER_COMPOSE -f $FEDIMINTD_DIR/docker-compose.yaml up -d
+  echo "Optionally run '$DOCKER_COMPOSE -f $FEDIMINTD_DIR/docker-compose.yaml logs -f' to see the logs"
   echo
 fi
 
 if [[ ${gateway_install[*]} =~ ^[Yy]?$ ]]; then
-  echo "Running 'docker-compose -f $GATEWAY_DIR/docker-compose.yaml up -d' to start the LN gateway"
-  docker-compose -f $GATEWAY_DIR/docker-compose.yaml up -d
-  echo "Optionally run 'docker-compose -f $GATEWAY_DIR/docker-compose.yaml logs -f' to see the logs"
+  echo "Running '$DOCKER_COMPOSE -f $GATEWAY_DIR/docker-compose.yaml up -d' to start the LN gateway"
+  $DOCKER_COMPOSE -f $GATEWAY_DIR/docker-compose.yaml up -d
+  echo "Optionally run '$DOCKER_COMPOSE -f $GATEWAY_DIR/docker-compose.yaml logs -f' to see the logs"
   echo
 fi
 

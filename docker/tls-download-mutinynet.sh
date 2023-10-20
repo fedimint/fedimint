@@ -6,7 +6,10 @@
 
 DOCKER_COMPOSE_FILE=https://raw.githubusercontent.com/fedimint/fedimint/master/docker/full-tls-mutinynet/docker-compose.yaml
 
-if ! [ -x "$(command -v docker-compose)" ]; then
+DOCKER_COMPOSE=docker-compose
+if docker compose version|grep 'Docker Compose' >& /dev/null; then
+  DOCKER_COMPOSE="docker compose"
+elif ! [ -x "$(command -v docker-compose)" ]; then
   # check if we are running as root
   if [ "$EUID" -ne 0 ]; then
     echo 'Error: docker-compose is not installed and we can not install it for you.' >&2
@@ -191,8 +194,8 @@ fi
 sed -i "s/$DEFAULT_GATEWAY_PASSWORD/$gateway_password/g" ./docker-compose.yaml
 
 echo
-echo "Running 'docker-compose up -d' to start the services"
-docker-compose up -d
+echo "Running '$DOCKER_COMPOSE up -d' to start the services"
+$DOCKER_COMPOSE up -d
 
 echo -n "Waiting for fedimintd to be ready. Don't do anything yet..."
 
@@ -213,7 +216,7 @@ wait_fedimintd_ready() {
 wait_fedimintd_ready --insecure
 
 echo "Looks good. Now will check if certificate is okay."
-echo "You may take a look at 'docker-compose logs -f traefik' it this takes too long"
+echo "You may take a look at '$DOCKER_COMPOSE logs -f traefik' it this takes too long"
 echo "But before doing that, please wait at least 5 minutes, as it may take a while to get the certificate. Be patient."
 echo -n "Checking, please wait..."
 
@@ -222,10 +225,10 @@ wait_fedimintd_ready
 echo "Good!"
 echo "Restarting to make sure all services will read the updated certificate"
 
-docker-compose restart
+$DOCKER_COMPOSE restart
 
 echo
-echo "Optionally run 'docker-compose logs -f' to see the logs"
+echo "Optionally run '$DOCKER_COMPOSE logs -f' to see the logs"
 echo "You can access the fedimint dashboard at https://guardian-ui.${host_name[*]}"
 echo "The LN gateway at https://gateway-ui.${host_name[*]}"
 echo "And the node management interface RTL at https://rtl.${host_name[*]}"
