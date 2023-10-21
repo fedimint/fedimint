@@ -6,7 +6,7 @@ use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
+use fedimint_core::{Amount, OutPoint, Tiered, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_mint_common::{BlindNonce, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note};
 use secp256k1::{KeyPair, Secp256k1, Signing};
@@ -335,61 +335,6 @@ impl NoteIssuanceRequest {
         } else {
             Err(NoteFinalizationError::InvalidSignature)
         }
-    }
-}
-
-/// Multiple [`Note`] issuance requests
-///
-/// Keeps all the data to generate [`SpendableNote`]s once the
-/// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MultiNoteIssuanceRequest {
-    /// Finalization data for all note outputs in this request
-    pub notes: TieredMulti<NoteIssuanceRequest>,
-}
-
-impl MultiNoteIssuanceRequest {
-    /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from
-    /// the mint containing the blind signatures for all notes in this
-    /// `IssuanceRequest`. It also takes the mint's [`AggregatePublicKey`]
-    /// to validate the supplied blind signatures.
-    #[allow(dead_code)]
-    pub fn finalize(
-        &self,
-        bsigs: MintOutputBlindSignatures,
-        mint_pub_key: &Tiered<AggregatePublicKey>,
-    ) -> std::result::Result<TieredMulti<SpendableNote>, NoteFinalizationError> {
-        if !self.notes.structural_eq(&bsigs.0) {
-            return Err(NoteFinalizationError::WrongMintAnswer);
-        }
-
-        self.notes
-            .iter_items()
-            .zip(bsigs.0)
-            .enumerate()
-            .map(|(idx, ((amt, note_req), (_amt, bsig)))| {
-                Ok((
-                    amt,
-                    match note_req.finalize(
-                        bsig,
-                        *mint_pub_key
-                            .tier(&amt)
-                            .map_err(|e| NoteFinalizationError::InvalidAmountTier(e.0))?,
-                    ) {
-                        Err(NoteFinalizationError::InvalidSignature) => {
-                            Err(NoteFinalizationError::InvalidSignatureAtIdx(idx))
-                        }
-                        other => other,
-                    }?,
-                ))
-            })
-            .collect()
-    }
-}
-
-impl Extend<(Amount, NoteIssuanceRequest)> for MultiNoteIssuanceRequest {
-    fn extend<T: IntoIterator<Item = (Amount, NoteIssuanceRequest)>>(&mut self, iter: T) {
-        self.notes.extend(iter)
     }
 }
 
