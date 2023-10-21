@@ -19,7 +19,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    erased_eq_no_instance_id, module_plugin_dyn_newtype_clone_passhthrough,
+    erased_eq_no_instance_id, module_plugin_dyn_newtype_clone_passthrough,
     module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_display_passthrough,
     module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough,
     module_plugin_static_trait_define, module_plugin_static_trait_define_config,
@@ -243,7 +243,7 @@ module_plugin_dyn_newtype_define! {
 }
 module_plugin_dyn_newtype_encode_decode!(DynClientConfig);
 
-module_plugin_dyn_newtype_clone_passhthrough!(DynClientConfig);
+module_plugin_dyn_newtype_clone_passthrough!(DynClientConfig);
 
 module_plugin_dyn_newtype_eq_passthrough!(DynClientConfig);
 
@@ -274,7 +274,7 @@ module_plugin_dyn_newtype_define! {
 }
 module_plugin_dyn_newtype_encode_decode!(DynInput);
 
-module_plugin_dyn_newtype_clone_passhthrough!(DynInput);
+module_plugin_dyn_newtype_clone_passthrough!(DynInput);
 
 module_plugin_dyn_newtype_eq_passthrough!(DynInput);
 
@@ -304,7 +304,7 @@ module_plugin_static_trait_define! {
 }
 module_plugin_dyn_newtype_encode_decode!(DynOutput);
 
-module_plugin_dyn_newtype_clone_passhthrough!(DynOutput);
+module_plugin_dyn_newtype_clone_passthrough!(DynOutput);
 
 module_plugin_dyn_newtype_eq_passthrough!(DynOutput);
 
@@ -333,7 +333,7 @@ module_plugin_static_trait_define! {
     }
 }
 module_plugin_dyn_newtype_encode_decode!(DynOutputOutcome);
-module_plugin_dyn_newtype_clone_passhthrough!(DynOutputOutcome);
+module_plugin_dyn_newtype_clone_passthrough!(DynOutputOutcome);
 module_plugin_dyn_newtype_eq_passthrough!(DynOutputOutcome);
 module_plugin_dyn_newtype_display_passthrough!(DynOutputOutcome);
 
@@ -358,7 +358,7 @@ module_plugin_static_trait_define! {
 }
 module_plugin_dyn_newtype_encode_decode!(DynModuleConsensusItem);
 
-module_plugin_dyn_newtype_clone_passhthrough!(DynModuleConsensusItem);
+module_plugin_dyn_newtype_clone_passthrough!(DynModuleConsensusItem);
 
 module_plugin_dyn_newtype_eq_passthrough!(DynModuleConsensusItem);
 

@@ -259,7 +259,7 @@ macro_rules! _dyn_newtype_impl_deref_mut {
 /// to just use standard `#[derive(Clone)]` to clone
 /// the `Arc` itself.
 #[macro_export]
-macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
+macro_rules! dyn_newtype_impl_dyn_clone_passthrough {
     ($name:ident) => {
         impl Clone for $name {
             fn clone(&self) -> Self {
@@ -270,7 +270,7 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
 }
 
 #[macro_export]
-macro_rules! module_plugin_dyn_newtype_clone_passhthrough {
+macro_rules! module_plugin_dyn_newtype_clone_passthrough {
     ($name:ident) => {
         impl Clone for $name {
             fn clone(&self) -> Self {
