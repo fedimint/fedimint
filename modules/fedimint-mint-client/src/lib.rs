@@ -194,7 +194,7 @@ pub trait MintClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>>;
 
     /// Awaits the backup restoration to complete
-    async fn await_restore_finished(&self) -> anyhow::Result<()>;
+    async fn await_restore_finished(&self) -> anyhow::Result<Amount>;
 }
 
 /// The high-level state of a reissue operation started with
@@ -506,7 +506,7 @@ impl MintClientExt for Client {
     }
 
     /// Waits for the mint backup restoration to finish
-    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+    async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
         let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
         mint.await_restore_finished().await
     }
@@ -909,7 +909,7 @@ impl ClientModule for MintClientModule {
                         // showing incremental progress. Ideally the balance isn't shown to them
                         // during recovery anyway.
                         MintClientStateMachines::Restore(MintRestoreStateMachine {
-                            state: MintRestoreStates::Success,
+                            state: MintRestoreStates::Success(_),
                             ..
                         }) => Some(()),
                         _ => None,
@@ -1166,7 +1166,7 @@ impl MintClientModule {
         .await
     }
 
-    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+    async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
         let mut restore_stream = self
             .notifier
             .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
@@ -1174,10 +1174,10 @@ impl MintClientModule {
         while let Some(restore_step) = restore_stream.next().await {
             match restore_step {
                 MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Success,
+                    state: MintRestoreStates::Success(amount),
                     ..
                 }) => {
-                    return Ok(());
+                    return Ok(amount);
                 }
                 MintClientStateMachines::Restore(MintRestoreStateMachine {
                     state: MintRestoreStates::Failed(error),

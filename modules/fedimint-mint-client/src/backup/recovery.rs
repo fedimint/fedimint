@@ -156,6 +156,13 @@ impl MintRestoreInProgressState {
 
                         let finalized = new_state.finalize();
 
+                        let restored_amount = finalized
+                            .unconfirmed_notes
+                            .iter()
+                            .map(|entry| entry.1)
+                            .sum::<Amount>()
+                            + finalized.spendable_notes.total_amount();
+
                         {
                             let mut dbtx = dbtx.module_tx();
 
@@ -216,7 +223,7 @@ impl MintRestoreInProgressState {
 
                         MintRestoreStateMachine {
                             operation_id: old_state_machine.operation_id,
-                            state: MintRestoreStates::Success,
+                            state: MintRestoreStates::Success(restored_amount),
                         }
                     } else {
                         debug!(
@@ -554,7 +561,7 @@ impl State for MintRestoreStateMachine {
                 state.transitions(self.operation_id, context, global_context)
             }
             MintRestoreStates::Failed(_) => vec![],
-            MintRestoreStates::Success => vec![],
+            MintRestoreStates::Success(_) => vec![],
         }
     }
 
@@ -577,7 +584,7 @@ pub(crate) enum MintRestoreStates {
     /// The restore has been started and is processing
     InProgress(MintRestoreInProgressState),
     /// Done
-    Success,
+    Success(Amount),
     /// Something went wrong, and restore failed
     Failed(MintRestoreFailedState),
 }
