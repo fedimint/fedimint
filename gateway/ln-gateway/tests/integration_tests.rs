@@ -8,11 +8,10 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
-use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::Client;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::IntoDynInstance;
+use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{NextOrPending, SafeUrl};
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};

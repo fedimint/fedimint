@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::ops::Range;
 
-use fedimint_client::sm::{OperationId, State, StateTransition};
+use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
+use fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;

@@ -7,11 +7,10 @@ use bitcoin::secp256k1;
 use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::PlainRootSecretStrategy;
-use fedimint_client::sm::OperationId;
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::api::InviteCode;
-use fedimint_core::core::IntoDynInstance;
+use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{

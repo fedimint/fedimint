@@ -1,5 +1,6 @@
-use fedimint_client::sm::{OperationId, State, StateTransition};
+use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_ln_client::incoming::IncomingSmStates;
 use fedimint_ln_common::contracts::Preimage;
@@ -74,7 +75,7 @@ impl State for GatewayCompleteStateMachine {
         }
     }
 
-    fn operation_id(&self) -> fedimint_client::sm::OperationId {
+    fn operation_id(&self) -> fedimint_core::core::OperationId {
         self.common.operation_id
     }
 }

@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{task, TieredMulti, TransactionId};
 use fedimint_mint_common::MintInput;

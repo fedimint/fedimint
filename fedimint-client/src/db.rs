@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 
 use fedimint_core::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record};
@@ -11,7 +12,6 @@ use strum_macros::EnumIter;
 
 use crate::oplog::OperationLogEntry;
 use crate::secret::RootSecretStrategy;
-use crate::sm::OperationId;
 use crate::ClientSecret;
 
 #[repr(u8)]

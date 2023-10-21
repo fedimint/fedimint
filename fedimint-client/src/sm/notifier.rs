@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::util::broadcaststream::BroadcastStream;
 use fedimint_core::util::BoxStream;
@@ -11,7 +11,7 @@ use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
     InactiveStateKey,
 };
-use crate::sm::{ActiveState, DynState, GlobalContext, InactiveState, OperationId, State};
+use crate::sm::{ActiveState, DynState, GlobalContext, InactiveState, State};
 
 /// State transition notifier owned by the modularized client used to inform
 /// modules of state transitions.

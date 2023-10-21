@@ -3,6 +3,7 @@ use std::future;
 use std::io::{Read, Write};
 
 use async_stream::stream;
+use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -17,7 +18,6 @@ use tracing::{error, instrument, warn};
 use crate::db::{
     ChronologicalOperationLogKey, ChronologicalOperationLogKeyPrefix, OperationLogKey,
 };
-use crate::sm::OperationId;
 
 #[derive(Debug, Clone)]
 pub struct OperationLog {
@@ -337,6 +337,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use fedimint_core::core::OperationId;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use futures::stream::StreamExt;
@@ -345,7 +346,6 @@ mod tests {
     use super::UpdateStreamOrOutcome;
     use crate::db::ChronologicalOperationLogKey;
     use crate::oplog::{OperationLog, OperationLogEntry};
-    use crate::sm::OperationId;
 
     #[test]
     fn test_operation_log_entry_serde() {

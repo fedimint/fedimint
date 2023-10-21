@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
-use fedimint_core::core::Decoder;
+use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};

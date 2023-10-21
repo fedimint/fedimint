@@ -85,7 +85,9 @@ use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
 };
-use fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{
+    DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -125,7 +127,7 @@ use crate::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
 use crate::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
+    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier,
     OperationState, State,
 };
 use crate::transaction::{

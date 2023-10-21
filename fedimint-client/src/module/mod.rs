@@ -4,7 +4,9 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use fedimint_core::api::DynGlobalApi;
-use fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{
+    Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, OperationId,
+};
 use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
@@ -15,7 +17,7 @@ use fedimint_core::{
     TransactionId,
 };
 
-use crate::sm::{Context, DynContext, DynState, Executor, OperationId, State};
+use crate::sm::{Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput};
 use crate::{Client, DynGlobalClientContext};
 

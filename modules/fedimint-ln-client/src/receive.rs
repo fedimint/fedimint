@@ -3,9 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::util::key::KeyPair;
-use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
@@ -76,7 +77,7 @@ impl State for LightningReceiveStateMachine {
         }
     }
 
-    fn operation_id(&self) -> fedimint_client::sm::OperationId {
+    fn operation_id(&self) -> fedimint_core::core::OperationId {
         self.operation_id
     }
 }

@@ -10,10 +10,9 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
 use fedimint_client::secret::PlainRootSecretStrategy;
-use fedimint_client::sm::OperationId;
 use fedimint_client::Client;
 use fedimint_core::config::{ClientConfig, FederationId};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredSummary};
 use fedimint_ln_client::{

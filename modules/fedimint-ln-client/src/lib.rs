@@ -19,12 +19,12 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
+use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
