@@ -2,6 +2,7 @@
 extern crate self as fedimint_core;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
 use std::io::Error;
 use std::num::ParseIntError;
 use std::str::FromStr;

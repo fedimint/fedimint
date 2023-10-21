@@ -49,6 +49,9 @@ impl GlobalContext for () {}
 /// transaction related to it, it should be generated randomly. Since it is a
 /// 256bit value collisions are impossible for all intents and purposes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+#[deprecated(
+    note = "`OperationId` is broadly used all over the project, therefore it's not ideal to have it here on `fedimint-client` crate. Users should use the one from `fedimint-core` instead."
+)]
 pub struct OperationId(pub [u8; 32]);
 
 impl OperationId {
