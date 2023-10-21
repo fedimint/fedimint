@@ -5,7 +5,7 @@ use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::{MintOutputBlindSignatures, MintOutputSignatureShare, Nonce};
+use crate::{MintOutputBlindSignature, MintOutputSignatureShare, Nonce};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -82,7 +82,7 @@ pub struct OutputOutcomeKeyPrefix;
 
 impl_db_record!(
     key = OutputOutcomeKey,
-    value = MintOutputBlindSignatures,
+    value = MintOutputBlindSignature,
     db_prefix = DbKeyPrefix::OutputOutcome,
 );
 impl_db_lookup!(

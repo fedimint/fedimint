@@ -357,9 +357,7 @@ impl MintRestoreInProgressState {
 
     pub fn handle_input(&mut self, input: &MintInput) {
         // We attempt to delete any nonce we see as spent, simple
-        for (_amt, note) in input.0.iter_items() {
-            self.pending_outputs.remove(&note.nonce);
-        }
+        self.pending_outputs.remove(&input.note.nonce);
     }
 
     pub fn handle_output(
@@ -382,35 +380,40 @@ impl MintRestoreInProgressState {
         // greedy no matter what and take what we can, and just report
         // anything suspicious.
 
-        for (amount_from_output, nonce) in output.0.clone() {
-            if let Some((issuance_request, note_idx, pending_amount)) =
-                self.pending_nonces.get(&nonce.0.into()).cloned()
-            {
-                // the moment we see our blind nonce in the epoch history, correctly or
-                // incorrectly used, we know that we must have used
-                // already
-                self.observe_nonce_idx_being_used(pending_amount, note_idx, secret);
+        if let Some((issuance_request, note_idx, pending_amount)) = self
+            .pending_nonces
+            .get(&output.blind_nonce.0.into())
+            .cloned()
+        {
+            // the moment we see our blind nonce in the epoch history, correctly or
+            // incorrectly used, we know that we must have used
+            // already
+            self.observe_nonce_idx_being_used(pending_amount, note_idx, secret);
 
-                if pending_amount == amount_from_output {
-                    assert!(self.pending_nonces.remove(&nonce.0.into()).is_some());
+            if pending_amount == output.amount {
+                assert!(self
+                    .pending_nonces
+                    .remove(&output.blind_nonce.0.into())
+                    .is_some());
 
-                    self.pending_outputs.insert(
-                        issuance_request.nonce(),
-                        (out_point, amount_from_output, issuance_request),
-                    );
-                } else {
-                    // put it back, incorrect amount
-                    self.pending_nonces
-                        .insert(nonce.0.into(), (issuance_request, note_idx, pending_amount));
+                self.pending_outputs.insert(
+                    issuance_request.nonce(),
+                    (out_point, output.amount, issuance_request),
+                );
+            } else {
+                // put it back, incorrect amount
+                self.pending_nonces.insert(
+                    output.blind_nonce.0.into(),
+                    (issuance_request, note_idx, pending_amount),
+                );
 
-                    warn!(
-                        output = ?out_point,
-                        blind_nonce = ?nonce.0,
-                        expected_amount = %pending_amount,
-                        found_amount = %amount_from_output,
-                        "Transaction output contains blind nonce that looks like ours but is of the wrong amount. Ignoring."
-                    );
-                }
+                warn!(
+                    output = ?out_point,
+                    blind_nonce = ?output.blind_nonce.0,
+                    expected_amount = %pending_amount,
+                    found_amount = %output.amount,
+                    "Transaction output contains blind nonce that looks like ours but is of the wrong amount. Ignoring."
+                );
             }
         }
     }

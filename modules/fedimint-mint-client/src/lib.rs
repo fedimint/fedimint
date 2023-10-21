@@ -685,9 +685,8 @@ impl ClientModule for MintClientModule {
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
-            amount: input.0.total_amount(),
-            // FIXME: prevent overflows
-            fee: self.cfg.fee_consensus.note_spend_abs * (input.0.count_items() as u64),
+            amount: input.amount,
+            fee: self.cfg.fee_consensus.note_spend_abs,
         }
     }
 
@@ -696,8 +695,8 @@ impl ClientModule for MintClientModule {
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
-            amount: output.0.total_amount(),
-            fee: self.cfg.fee_consensus.note_issuance_abs * (output.0.count_items() as u64),
+            amount: output.amount,
+            fee: self.cfg.fee_consensus.note_issuance_abs,
         }
     }
 
@@ -946,10 +945,15 @@ impl MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         notes_per_denomination: u16,
-        amount: Amount,
+        exact_amount: Amount,
     ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
+        assert!(
+            exact_amount > Amount::ZERO,
+            "zero-amount outputs are not supported"
+        );
+
         let denominations = TieredSummary::represent_amount(
-            amount,
+            exact_amount,
             &self.get_wallet_summary(dbtx).await,
             &self.cfg.tbs_pks,
             notes_per_denomination,
@@ -957,11 +961,9 @@ impl MintClientModule {
 
         let mut outputs = Vec::new();
 
-        for (amt, num) in denominations.iter() {
+        for (amount, num) in denominations.iter() {
             for _ in 0..num {
-                let (issuance_request, blind_nonce) = self.new_ecash_note(amt, dbtx).await;
-
-                let sig_req = TieredMulti::from_iter([(amt, blind_nonce)]);
+                let (issuance_request, blind_nonce) = self.new_ecash_note(amount, dbtx).await;
 
                 let state_generator = Arc::new(move |txid, out_idx| {
                     vec![MintClientStateMachines::Output(MintOutputStateMachine {
@@ -970,7 +972,7 @@ impl MintClientModule {
                             out_point: OutPoint { txid, out_idx },
                         },
                         state: MintOutputStates::Created(MintOutputStatesCreated {
-                            amount: amt,
+                            amount,
                             issuance_request,
                         }),
                     })]
@@ -978,13 +980,14 @@ impl MintClientModule {
 
                 debug!(
                     %amount,
-                    notes = %sig_req.count_items(),
-                    tiers = ?sig_req.iter_tiers().collect::<Vec<_>>(),
                     "Generated issuance request"
                 );
 
                 outputs.push(ClientOutput {
-                    output: MintOutput(sig_req),
+                    output: MintOutput {
+                        amount,
+                        blind_nonce,
+                    },
                     state_machines: state_generator,
                 });
             }
@@ -1037,6 +1040,11 @@ impl MintClientModule {
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+        assert!(
+            min_amount > Amount::ZERO,
+            "zero-amount inputs are not supported"
+        );
+
         let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
 
         for (amount, note) in spendable_selected_notes.iter_items() {
@@ -1087,7 +1095,7 @@ impl MintClientModule {
             });
 
             inputs.push(ClientInput {
-                input: MintInput(TieredMulti::from_iter([(amount, note)])),
+                input: MintInput { amount, note },
                 keys: vec![spendable_note.spend_key],
                 state_machines: sm_gen,
             });

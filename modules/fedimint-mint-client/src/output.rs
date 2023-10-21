@@ -8,7 +8,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, Tiered, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_mint_common::{BlindNonce, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note};
+use fedimint_mint_common::{BlindNonce, MintOutputBlindSignature, MintOutputOutcome, Nonce, Note};
 use secp256k1::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
@@ -127,10 +127,10 @@ impl MintOutputStatesCreated {
                     common,
                     context.mint_decoder.clone(),
                 ),
-                move |dbtx, bsigs, old_state| {
+                move |dbtx, bsig, old_state| {
                     Box::pin(Self::transition_outcome_ready(
                         dbtx,
-                        bsigs,
+                        bsig,
                         old_state,
                         // TODO: avoid clone of whole object
                         mint_keys.clone(),
@@ -166,14 +166,22 @@ impl MintOutputStatesCreated {
         global_context: DynGlobalClientContext,
         common: MintOutputCommon,
         module_decoder: Decoder,
-    ) -> Result<MintOutputBlindSignatures, String> {
+    ) -> Result<MintOutputBlindSignature, String> {
         loop {
-            let outcome: MintOutputOutcome = match global_context
+            match global_context
                 .api()
-                .await_output_outcome(common.out_point, Duration::MAX, &module_decoder)
+                .await_output_outcome::<MintOutputOutcome>(
+                    common.out_point,
+                    Duration::MAX,
+                    &module_decoder,
+                )
                 .await
             {
-                Ok(outcome) => outcome,
+                Ok(outcome) => {
+                    if let Some(bsig) = outcome.0 {
+                        return Ok(bsig);
+                    }
+                }
                 Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
                     trace!(
                         "Awaiting outcome to become ready failed, retrying in {}s: {e}",
@@ -184,20 +192,12 @@ impl MintOutputStatesCreated {
                 }
                 Err(e) => return Err(e.to_string()),
             };
-
-            match outcome.0 {
-                Some(bsigs) => return Ok(bsigs),
-                None => {
-                    // FIXME: hack since we can't await outpoints yet?! may return non-final outcome
-                    sleep(RETRY_DELAY).await;
-                }
-            }
         }
     }
 
     async fn transition_outcome_ready(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        bsig_res: Result<MintOutputBlindSignatures, String>,
+        bsig_res: Result<MintOutputBlindSignature, String>,
         old_state: MintOutputStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,
     ) -> MintOutputStateMachine {
@@ -207,12 +207,9 @@ impl MintOutputStatesCreated {
         };
 
         let note_res = match mint_keys.tier(&amount) {
-            Ok(amount_key) => bsig_res.and_then(|bsigs| {
-                assert_eq!(bsigs.0.count_items(), 1);
-                let bsig = bsigs.0.into_iter().next().unwrap().1;
-
+            Ok(amount_key) => bsig_res.and_then(|bsig| {
                 issuance_request
-                    .finalize(bsig, *amount_key)
+                    .finalize(bsig.0, *amount_key)
                     .map_err(|e| e.to_string())
             }),
             Err(error) => Err(NoteFinalizationError::InvalidAmountTier(error.0).to_string()),

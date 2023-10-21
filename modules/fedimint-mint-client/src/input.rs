@@ -5,7 +5,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{Amount, TieredMulti, TransactionId};
+use fedimint_core::{Amount, TransactionId};
 use fedimint_mint_common::MintInput;
 
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
@@ -143,7 +143,10 @@ impl MintInputStateCreated {
         };
 
         let refund_input = ClientInput::<MintInput, MintClientStateMachines> {
-            input: MintInput(TieredMulti::from_iter([(amount, spendable_note.note())])),
+            input: MintInput {
+                amount,
+                note: spendable_note.note(),
+            },
             keys: vec![spendable_note.spend_key],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

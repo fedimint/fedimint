@@ -1131,7 +1131,7 @@ impl ClientInner {
         if let TransactionBuilderBalance::Overfunded(excess_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let outputs = self
+            let change_outputs = self
                 .primary_module()
                 .create_exact_output(
                     self.primary_module_instance,
@@ -1140,8 +1140,9 @@ impl ClientInner {
                     excess_amount,
                 )
                 .await;
-            change_range.end += outputs.len() as u64;
-            partial_transaction.outputs.extend(outputs);
+
+            change_range.end += change_outputs.len() as u64;
+            partial_transaction.outputs.extend(change_outputs);
         }
 
         assert!(

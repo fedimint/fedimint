@@ -6,7 +6,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{task, Amount, TieredMulti, TransactionId};
+use fedimint_core::{task, Amount, TransactionId};
 use fedimint_mint_common::MintInput;
 
 use crate::input::{
@@ -191,7 +191,10 @@ async fn try_cancel_oob_spend(
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
     let input = ClientInput {
-        input: MintInput(TieredMulti::from_iter([(amount, spendable_note.note())])),
+        input: MintInput {
+            amount,
+            note: spendable_note.note(),
+        },
         keys: vec![spendable_note.spend_key],
         state_machines: Arc::new(move |txid, input_idx| {
             vec![MintClientStateMachines::Input(MintInputStateMachine {
