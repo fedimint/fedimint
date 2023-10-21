@@ -338,7 +338,7 @@ impl GatewayClientExt for Client {
             .create_funding_incoming_contract_output_from_swap(swap_params)
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Receive;
+        let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
         Ok(operation_id)
