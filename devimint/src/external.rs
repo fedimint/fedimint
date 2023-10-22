@@ -81,6 +81,7 @@ impl Bitcoind {
                 .get_blockchain_info()
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?;
+
             if info.blocks > 100 {
                 Ok(())
             } else {
