@@ -194,6 +194,7 @@ in
 rec {
   inherit commonArgs;
   inherit commonEnvsShell;
+  inherit commonEnvsShellRocksdbLink;
   inherit commonEnvsShellRocksdbLinkCross;
   inherit gitHashPlaceholderValue;
   commonArgsBase = commonArgs;
