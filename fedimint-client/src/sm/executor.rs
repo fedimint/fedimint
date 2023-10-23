@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
@@ -23,7 +23,7 @@ use tracing::{debug, error, info, trace, warn};
 use super::state::StateTransitionFunction;
 use crate::sm::notifier::Notifier;
 use crate::sm::state::{DynContext, DynState};
-use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId, State, StateTransition};
+use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
 
 /// After how many attempts a DB transaction is aborted with an error
 const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
@@ -928,7 +928,9 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind};
+    use fedimint_core::core::{
+        Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+    };
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
@@ -938,7 +940,7 @@ mod tests {
     use tracing::{info, trace};
 
     use crate::sm::state::{Context, DynContext, DynState};
-    use crate::sm::{Executor, Notifier, OperationId, State, StateTransition};
+    use crate::sm::{Executor, Notifier, State, StateTransition};
 
     #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
     enum MockStateMachine {

@@ -16,7 +16,6 @@ use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::PlainRootSecretStrategy;
-use fedimint_client::sm::OperationId;
 use fedimint_client::{ClientBuilder, ClientSecret};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
@@ -24,6 +23,7 @@ use fedimint_core::api::{
     IFederationApi, InviteCode, WsFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseValue;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};

@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
+use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
@@ -110,7 +111,7 @@ impl State for GatewayPayStateMachine {
         }
     }
 
-    fn operation_id(&self) -> fedimint_client::sm::OperationId {
+    fn operation_id(&self) -> fedimint_core::core::OperationId {
         self.common.operation_id
     }
 }

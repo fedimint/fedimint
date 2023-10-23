@@ -5,14 +5,14 @@ use std::io::{Error, Read, Write};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send, maybe_add_send_sync, module_plugin_dyn_newtype_define};
 
-use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, OperationId};
+use crate::sm::{ClientSMDatabaseTransaction, GlobalContext};
 
 /// Implementors act as state machines that can be executed
 pub trait State:

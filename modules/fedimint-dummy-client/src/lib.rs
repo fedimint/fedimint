@@ -7,11 +7,11 @@ use common::broken_fed_key_pair;
 use db::DbKeyPrefix;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
-use fedimint_client::sm::{Context, ModuleNotifier, OperationId};
+use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{Client, DynGlobalClientContext};
 use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair};
+use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
 use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,

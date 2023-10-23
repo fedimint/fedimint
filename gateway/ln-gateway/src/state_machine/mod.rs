@@ -11,12 +11,12 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, ModuleNotifier, OperationId, State};
+use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -651,7 +651,7 @@ impl State for GatewayClientStateMachines {
         }
     }
 
-    fn operation_id(&self) -> fedimint_client::sm::OperationId {
+    fn operation_id(&self) -> fedimint_core::core::OperationId {
         match self {
             GatewayClientStateMachines::Pay(pay_state) => pay_state.operation_id(),
             GatewayClientStateMachines::Receive(receive_state) => receive_state.operation_id(),

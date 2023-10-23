@@ -3,7 +3,7 @@
 use std::time::{Duration, SystemTime};
 
 use fedimint_core::api::GlobalFederationApi;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::time::now;
@@ -11,7 +11,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
 use tracing::warn;
 
-use crate::sm::{Context, DynContext, OperationId, OperationState, State, StateTransition};
+use crate::sm::{Context, DynContext, OperationState, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState};
 
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
@@ -212,7 +212,7 @@ mod tests {
         DynGlobalApi, DynModuleApi, IFederationApi, IGlobalFederationApi, JsonRpcResult,
     };
     use fedimint_core::config::ClientConfig;
-    use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
+    use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::endpoint_constants::{TRANSACTION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT};
@@ -228,7 +228,7 @@ mod tests {
     use tokio::sync::Mutex;
     use tokio::time::timeout;
 
-    use crate::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationId, OperationState};
+    use crate::sm::{ClientSMDatabaseTransaction, Executor, Notifier, OperationState};
     use crate::transaction::{
         tx_submission_sm_decoder, TransactionBuilder, TxSubmissionContext, TxSubmissionStates,
         TRANSACTION_SUBMISSION_MODULE_INSTANCE,
