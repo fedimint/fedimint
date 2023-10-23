@@ -6,7 +6,7 @@ use std::iter::once;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{bail, ensure, format_err};
+use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::Hash;
@@ -48,6 +48,7 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
+use reqwest::StatusCode;
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -617,18 +618,18 @@ impl LightningClientModule {
     // OutgoingContract
     async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
         let response = reqwest::Client::new()
-            .post(
+            .get(
                 gateway
                     .api
-                    .join("is_available")
-                    .expect("is_available contains no invalid characters for a URL")
+                    .join("id")
+                    .expect("id contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&())
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Gateway is not available: {e}"))?;
-        if !response.status().is_success() {
+            .context("Gateway is not available")?;
+        tracing::info!("StatusCode: {}", response.status());
+        if response.status() == StatusCode::NOT_FOUND {
             return Err(anyhow::anyhow!(
                 "Gateway is not available. Returned error code: {}",
                 response.status()
