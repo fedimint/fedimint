@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -136,24 +137,28 @@ pub enum OutgoingContractError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
-pub enum OutgoingPaymentError {
+pub enum OutgoingPaymentErrorType {
     #[error("OutgoingContract does not exist {contract_id}")]
     OutgoingContractDoesNotExist { contract_id: ContractId },
     #[error("An error occurred while paying the lightning invoice.")]
-    LightningPayError {
-        contract: OutgoingContractAccount,
-        lightning_error: LightningRpcError,
-    },
+    LightningPayError { lightning_error: LightningRpcError },
     #[error("An invalid contract was specified.")]
-    InvalidOutgoingContract {
-        error: OutgoingContractError,
-        contract: OutgoingContractAccount,
-    },
+    InvalidOutgoingContract { error: OutgoingContractError },
     #[error("An error occurred while attempting direct swap between federations.")]
-    SwapFailed {
-        contract: OutgoingContractAccount,
-        swap_error: String,
-    },
+    SwapFailed { swap_error: String },
+}
+
+#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
+pub struct OutgoingPaymentError {
+    error_type: OutgoingPaymentErrorType,
+    contract_id: ContractId,
+    contract: Option<OutgoingContractAccount>,
+}
+
+impl Display for OutgoingPaymentError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OutgoingContractError: {}", self.error_type)
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -189,7 +194,11 @@ impl GatewayPayInvoice {
             .module_api()
             .wait_contract(contract_id)
             .await
-            .map_err(|_| OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id })?;
+            .map_err(|_| OutgoingPaymentError {
+                contract_id,
+                contract: None,
+                error_type: OutgoingPaymentErrorType::OutgoingContractDoesNotExist { contract_id },
+            })?;
 
         if let FundedContract::Outgoing(contract) = account.contract {
             let outgoing_contract_account = OutgoingContractAccount {
@@ -201,15 +210,21 @@ impl GatewayPayInvoice {
                 .module_api()
                 .fetch_consensus_block_count()
                 .await
-                .map_err(|_| OutgoingPaymentError::InvalidOutgoingContract {
-                    error: OutgoingContractError::TimeoutTooClose,
-                    contract: outgoing_contract_account.clone(),
+                .map_err(|_| OutgoingPaymentError {
+                    contract_id,
+                    contract: Some(outgoing_contract_account.clone()),
+                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                        error: OutgoingContractError::TimeoutTooClose,
+                    },
                 })?;
 
             if consensus_block_count.is_none() {
-                return Err(OutgoingPaymentError::InvalidOutgoingContract {
-                    error: OutgoingContractError::MissingContractData,
-                    contract: outgoing_contract_account.clone(),
+                return Err(OutgoingPaymentError {
+                    contract_id,
+                    contract: Some(outgoing_contract_account.clone()),
+                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                        error: OutgoingContractError::MissingContractData,
+                    },
                 });
             }
 
@@ -220,22 +235,28 @@ impl GatewayPayInvoice {
                 consensus_block_count.unwrap(),
             )
             .await
-            .map_err(|e| OutgoingPaymentError::InvalidOutgoingContract {
-                error: e,
-                contract: outgoing_contract_account.clone(),
+            .map_err(|e| OutgoingPaymentError {
+                contract_id,
+                contract: Some(outgoing_contract_account.clone()),
+                error_type: OutgoingPaymentErrorType::InvalidOutgoingContract { error: e },
             })?;
 
             return Ok((outgoing_contract_account, payment_parameters));
         }
 
-        Err(OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id })
+        Err(OutgoingPaymentError {
+            contract_id,
+            contract: None,
+            error_type: OutgoingPaymentErrorType::OutgoingContractDoesNotExist { contract_id },
+        })
     }
 
     async fn buy_preimage_over_lightning(
         context: GatewayClientContext,
         buy_preimage: PaymentParameters,
         contract: OutgoingContractAccount,
-    ) -> Result<Preimage, OutgoingPaymentError> {
+        common: GatewayPayCommon,
+    ) -> GatewayPayStateMachine {
         let invoice = buy_preimage.invoice.clone();
         let max_delay = buy_preimage.max_delay;
         let max_fee_msat = buy_preimage.max_send_amount.msats;
@@ -251,12 +272,32 @@ impl GatewayPayInvoice {
         {
             Ok(PayInvoiceResponse { preimage, .. }) => {
                 let slice: [u8; 32] = preimage.try_into().expect("Failed to parse preimage");
-                Ok(Preimage(slice))
+                GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::ClaimOutgoingContract(Box::new(
+                        GatewayPayClaimOutgoingContract {
+                            contract,
+                            preimage: Preimage(slice),
+                        },
+                    )),
+                }
             }
-            Err(error) => Err(OutgoingPaymentError::LightningPayError {
-                contract,
-                lightning_error: error,
-            }),
+            Err(error) => {
+                let outgoing_error = OutgoingPaymentError {
+                    contract_id: contract.contract.contract_id(),
+                    contract: Some(contract.clone()),
+                    error_type: OutgoingPaymentErrorType::LightningPayError {
+                        lightning_error: error,
+                    },
+                };
+                GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                        contract,
+                        error: outgoing_error,
+                    })),
+                }
+            }
         }
     }
 
@@ -264,23 +305,56 @@ impl GatewayPayInvoice {
         client: Client,
         invoice: Bolt11Invoice,
         contract: OutgoingContractAccount,
-    ) -> Result<(FederationId, OperationId), OutgoingPaymentError> {
-        let swap_params = invoice
-            .try_into()
-            .map_err(|e| OutgoingPaymentError::SwapFailed {
-                contract: contract.clone(),
-                swap_error: format!("Failed to parse invoice into swap parameters: {}", e),
-            })?;
-
-        let operation_id = client
-            .gateway_handle_direct_swap(swap_params)
-            .await
-            .map_err(|e| OutgoingPaymentError::SwapFailed {
-                contract: contract.clone(),
-                swap_error: format!("Failed to initiate direct swap: {}", e),
-            })?;
-
-        Ok((client.federation_id(), operation_id))
+        common: GatewayPayCommon,
+    ) -> GatewayPayStateMachine {
+        match invoice.try_into() {
+            Ok(swap_params) => match client.gateway_handle_direct_swap(swap_params).await {
+                Ok(operation_id) => GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::WaitForSwapPreimage(Box::new(
+                        GatewayPayWaitForSwapPreimage {
+                            contract,
+                            federation_id: client.federation_id(),
+                            operation_id,
+                        },
+                    )),
+                },
+                Err(e) => {
+                    let outgoing_payment_error = OutgoingPaymentError {
+                        contract_id: contract.contract.contract_id(),
+                        contract: Some(contract.clone()),
+                        error_type: OutgoingPaymentErrorType::SwapFailed {
+                            swap_error: format!("Failed to initiate direct swap: {}", e),
+                        },
+                    };
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract: contract.clone(),
+                                error: outgoing_payment_error,
+                            },
+                        )),
+                    }
+                }
+            },
+            Err(e) => {
+                let outgoing_payment_error = OutgoingPaymentError {
+                    contract_id: contract.contract.contract_id(),
+                    contract: Some(contract.clone()),
+                    error_type: OutgoingPaymentErrorType::SwapFailed {
+                        swap_error: format!("Failed to initiate direct swap: {}", e),
+                    },
+                };
+                GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                        contract: contract.clone(),
+                        error: outgoing_payment_error,
+                    })),
+                }
+            }
+        }
     }
 
     async fn transition_buy_preimage(
@@ -296,89 +370,36 @@ impl GatewayPayInvoice {
                 )
                 .await
                 {
-                    return match Self::buy_preimage_via_direct_swap(
+                    return Self::buy_preimage_via_direct_swap(
                         client,
                         payment_parameters.invoice.clone(),
                         contract.clone(),
+                        common.clone(),
                     )
-                    .await
-                    {
-                        Ok((federation_id, operation_id)) => GatewayPayStateMachine {
-                            common,
-                            state: GatewayPayStates::WaitForSwapPreimage(Box::new(
-                                GatewayPayWaitForSwapPreimage {
-                                    contract,
-                                    federation_id,
-                                    operation_id,
-                                },
-                            )),
-                        },
-                        Err(e) => GatewayPayStateMachine {
-                            common,
-                            state: GatewayPayStates::CancelContract(Box::new(
-                                GatewayPayCancelContract { contract, error: e },
-                            )),
-                        },
-                    };
+                    .await;
                 }
 
-                match Self::buy_preimage_over_lightning(
+                Self::buy_preimage_over_lightning(
                     context,
                     payment_parameters,
                     contract.clone(),
+                    common.clone(),
                 )
                 .await
-                {
-                    Ok(preimage) => GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::ClaimOutgoingContract(Box::new(
-                            GatewayPayClaimOutgoingContract { contract, preimage },
-                        )),
-                    },
-                    Err(e) => GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::CancelContract(Box::new(
-                            GatewayPayCancelContract { contract, error: e },
-                        )),
-                    },
-                }
             }
-            Err(e) => {
-                match e.clone() {
-                    OutgoingPaymentError::InvalidOutgoingContract { error: _, contract } => {
-                        GatewayPayStateMachine {
-                            common,
-                            state: GatewayPayStates::CancelContract(Box::new(
-                                GatewayPayCancelContract { contract, error: e },
-                            )),
-                        }
-                    }
-                    OutgoingPaymentError::LightningPayError {
+            Err(e) => match e.contract.clone() {
+                Some(contract) => GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
                         contract,
-                        lightning_error: _,
-                    } => GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::CancelContract(Box::new(
-                            GatewayPayCancelContract { contract, error: e },
-                        )),
-                    },
-                    OutgoingPaymentError::SwapFailed {
-                        contract,
-                        swap_error: _,
-                    } => GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::CancelContract(Box::new(
-                            GatewayPayCancelContract { contract, error: e },
-                        )),
-                    },
-                    OutgoingPaymentError::OutgoingContractDoesNotExist { contract_id } => {
-                        GatewayPayStateMachine {
-                            common,
-                            state: GatewayPayStates::OfferDoesNotExist(contract_id),
-                        }
-                    }
-                }
-            }
+                        error: e,
+                    })),
+                },
+                None => GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                },
+            },
         }
     }
 
@@ -565,17 +586,23 @@ impl GatewayPayWaitForSwapPreimage {
             .await
             .get(&federation_id)
             .cloned()
-            .ok_or(OutgoingPaymentError::SwapFailed {
-                contract: contract.clone(),
-                swap_error: "Federation client not found".to_string(),
+            .ok_or(OutgoingPaymentError {
+                contract_id: contract.contract.contract_id(),
+                contract: Some(contract.clone()),
+                error_type: OutgoingPaymentErrorType::SwapFailed {
+                    swap_error: "Federation client not found".to_string(),
+                },
             })?;
 
         let mut stream = client
             .gateway_subscribe_ln_receive(operation_id)
             .await
-            .map_err(|e| OutgoingPaymentError::SwapFailed {
-                contract: contract.clone(),
-                swap_error: format!("Failed to subscribe to ln receive of direct swap: {}", e),
+            .map_err(|e| OutgoingPaymentError {
+                contract_id: contract.contract.contract_id(),
+                contract: Some(contract.clone()),
+                error_type: OutgoingPaymentErrorType::SwapFailed {
+                    swap_error: format!("Failed to subscribe to ln receive of direct swap: {}", e),
+                },
             })?
             .into_stream();
 
@@ -589,9 +616,12 @@ impl GatewayPayWaitForSwapPreimage {
                         return Ok(preimage);
                     }
                     _ => {
-                        return Err(OutgoingPaymentError::SwapFailed {
-                            contract,
-                            swap_error: "Failed to receive preimage".to_string(),
+                        return Err(OutgoingPaymentError {
+                            contract_id: contract.contract.contract_id(),
+                            contract: Some(contract),
+                            error_type: OutgoingPaymentErrorType::SwapFailed {
+                                swap_error: "Failed to receive preimage".to_string(),
+                            },
                         });
                     }
                 }
