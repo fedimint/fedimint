@@ -1,18 +1,16 @@
 use std::time::SystemTime;
 
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::{MintOutputBlindSignature, MintOutputSignatureShare, Nonce};
+use crate::{MintOutputOutcome, Nonce};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     NoteNonce = 0x10,
-    ProposedPartialSig = 0x11,
-    ReceivedPartialSig = 0x12,
     OutputOutcome = 0x13,
     MintAuditItem = 0x14,
     EcashBackup = 0x15,
@@ -37,57 +35,21 @@ impl_db_record!(
 );
 impl_db_lookup!(key = NonceKey, query_prefix = NonceKeyPrefix);
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ProposedPartialSignatureKey(pub OutPoint);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct ProposedPartialSignaturesKeyPrefix;
-
-impl_db_record!(
-    key = ProposedPartialSignatureKey,
-    value = MintOutputSignatureShare,
-    db_prefix = DbKeyPrefix::ProposedPartialSig,
-);
-impl_db_lookup!(
-    key = ProposedPartialSignatureKey,
-    query_prefix = ProposedPartialSignaturesKeyPrefix
-);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ReceivedPartialSignatureKey(pub OutPoint, pub PeerId);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct ReceivedPartialSignaturesKeyPrefix;
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct ReceivedPartialSignatureKeyOutputPrefix(pub OutPoint);
-
-impl_db_record!(
-    key = ReceivedPartialSignatureKey,
-    value = MintOutputSignatureShare,
-    db_prefix = DbKeyPrefix::ReceivedPartialSig,
-);
-impl_db_lookup!(
-    key = ReceivedPartialSignatureKey,
-    query_prefix = ReceivedPartialSignaturesKeyPrefix,
-    query_prefix = ReceivedPartialSignatureKeyOutputPrefix
-);
-
 /// Transaction id and output index identifying an output outcome
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
-pub struct OutputOutcomeKey(pub OutPoint);
+pub struct MintOutputOutcomeKey(pub OutPoint);
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct OutputOutcomeKeyPrefix;
+pub struct MintOutputOutcomePrefix;
 
 impl_db_record!(
-    key = OutputOutcomeKey,
-    value = MintOutputBlindSignature,
+    key = MintOutputOutcomeKey,
+    value = MintOutputOutcome,
     db_prefix = DbKeyPrefix::OutputOutcome,
 );
 impl_db_lookup!(
-    key = OutputOutcomeKey,
-    query_prefix = OutputOutcomeKeyPrefix
+    key = MintOutputOutcomeKey,
+    query_prefix = MintOutputOutcomePrefix
 );
 
 /// Represents the amounts of issued (signed) and redeemed (verified) notes for

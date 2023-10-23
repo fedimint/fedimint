@@ -1,17 +1,25 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 
+use anyhow::{anyhow, bail};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
+use fedimint_core::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+use fedimint_core::module::ApiRequestErased;
+use fedimint_core::query::FilterMapThreshold;
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, OutPoint, Tiered, TransactionId};
+use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_mint_common::{BlindNonce, MintOutputBlindSignature, MintOutputOutcome, Nonce, Note};
+use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce, Note};
 use secp256k1::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
-use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
+use tbs::{
+    blind_message, combine_valid_shares, unblind_signature, AggregatePublicKey, BlindedSignature,
+    BlindingKey, PublicKeyShare,
+};
 use thiserror::Error;
 use tracing::{error, trace};
 
@@ -113,7 +121,7 @@ impl MintOutputStatesCreated {
         global_context: &DynGlobalClientContext,
         common: MintOutputCommon,
     ) -> Vec<StateTransition<MintOutputStateMachine>> {
-        let mint_keys = context.mint_keys.clone();
+        let tbs_pks = context.tbs_pks.clone();
         vec![
             // Check if transaction was rejected
             StateTransition::new(
@@ -126,14 +134,17 @@ impl MintOutputStatesCreated {
                     global_context.clone(),
                     common,
                     context.mint_decoder.clone(),
+                    self.amount,
+                    self.issuance_request,
+                    context.peer_tbs_pks.clone(),
                 ),
-                move |dbtx, bsig, old_state| {
+                move |dbtx, output_outcomes, old_state| {
                     Box::pin(Self::transition_outcome_ready(
                         dbtx,
-                        bsig,
+                        output_outcomes,
                         old_state,
                         // TODO: avoid clone of whole object
-                        mint_keys.clone(),
+                        tbs_pks.clone(),
                     ))
                 },
             ),
@@ -166,38 +177,49 @@ impl MintOutputStatesCreated {
         global_context: DynGlobalClientContext,
         common: MintOutputCommon,
         module_decoder: Decoder,
-    ) -> Result<MintOutputBlindSignature, String> {
+        amount: Amount,
+        request: NoteIssuanceRequest,
+        peer_tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    ) -> Result<BTreeMap<PeerId, MintOutputOutcome>, String> {
         loop {
+            let decoder = module_decoder.clone();
+            let pks = peer_tbs_pks.clone();
+
             match global_context
                 .api()
-                .await_output_outcome::<MintOutputOutcome>(
-                    common.out_point,
-                    Duration::MAX,
-                    &module_decoder,
+                .request_with_strategy(
+                    // this query collects a threshold of 2f + 1 valid blind signature shares
+                    FilterMapThreshold::new(
+                        move |peer, outcome| {
+                            verify_blind_share(peer, outcome, amount, &request, &decoder, &pks)
+                        },
+                        global_context.api().all_peers().total(),
+                    ),
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(common.out_point),
                 )
                 .await
             {
-                Ok(outcome) => {
-                    if let Some(bsig) = outcome.0 {
-                        return Ok(bsig);
+                Ok(outcome) => return Ok(outcome),
+                Err(error) => {
+                    if !error.is_retryable() {
+                        return Err(error.to_string());
                     }
-                }
-                Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+
                     trace!(
-                        "Awaiting outcome to become ready failed, retrying in {}s: {e}",
+                        "Awaiting outcome to become ready failed, retrying in {}s: {error}",
                         RETRY_DELAY.as_secs()
                     );
+
                     sleep(RETRY_DELAY).await;
-                    continue;
                 }
-                Err(e) => return Err(e.to_string()),
             };
         }
     }
 
     async fn transition_outcome_ready(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        bsig_res: Result<MintOutputBlindSignature, String>,
+        output_outcomes_result: Result<BTreeMap<PeerId, MintOutputOutcome>, String>,
         old_state: MintOutputStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,
     ) -> MintOutputStateMachine {
@@ -206,18 +228,29 @@ impl MintOutputStatesCreated {
             _ => panic!("Unexpected prior state"),
         };
 
-        let note_res = match mint_keys.tier(&amount) {
-            Ok(amount_key) => bsig_res.and_then(|bsig| {
-                issuance_request
-                    .finalize(bsig.0, *amount_key)
-                    .map_err(|e| e.to_string())
-            }),
-            Err(error) => Err(NoteFinalizationError::InvalidAmountTier(error.0).to_string()),
-        };
+        // if the query obtained a threshold of valid blind signature shares, we combine
+        // the shares, finalize the issuance request with the blind signature
+        // and store the resulting note in the database
+        let note_res = output_outcomes_result.and_then(|blind_signature_shares| {
+            match mint_keys.tier(&amount) {
+                Ok(amount_key) => issuance_request
+                    .finalize(
+                        combine_valid_shares(
+                            blind_signature_shares
+                                .iter()
+                                .map(|(peer, share)| (peer.to_usize(), share.0)),
+                            blind_signature_shares.len(),
+                        ),
+                        *amount_key,
+                    )
+                    .map_err(|e| e.to_string()),
+                Err(error) => Err(NoteFinalizationError::InvalidAmountTier(error.0).to_string()),
+            }
+        });
 
         match note_res {
             Ok(note) => {
-                let replaced = dbtx
+                if let Some(note) = dbtx
                     .module_tx()
                     .insert_entry(
                         &NoteKey {
@@ -226,8 +259,8 @@ impl MintOutputStatesCreated {
                         },
                         &note,
                     )
-                    .await;
-                if let Some(note) = replaced {
+                    .await
+                {
                     error!(
                         ?note,
                         "E-cash note was replaced in DB, this should never happen!"
@@ -245,6 +278,29 @@ impl MintOutputStatesCreated {
             },
         }
     }
+}
+
+pub fn verify_blind_share(
+    peer: PeerId,
+    outcome: SerdeOutputOutcome,
+    amount: Amount,
+    request: &NoteIssuanceRequest,
+    decoder: &Decoder,
+    peer_tbs_pks: &BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+) -> anyhow::Result<MintOutputOutcome> {
+    let outcome: MintOutputOutcome = deserialize_outcome(outcome.clone(), decoder)?;
+
+    let blinded_message = blind_message(request.nonce().to_message(), request.blinding_key);
+
+    let amount_key = peer_tbs_pks[&peer]
+        .tier(&amount)
+        .map_err(|_| anyhow!("Invalid Amount Tier"))?;
+
+    if !tbs::verify_blind_share(blinded_message, outcome.0, *amount_key) {
+        bail!("Invalid blind signature")
+    }
+
+    Ok(outcome)
 }
 
 /// See [`MintOutputStates`]

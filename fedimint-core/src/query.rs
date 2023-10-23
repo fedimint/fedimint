@@ -4,6 +4,7 @@ use std::mem;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, format_err};
+use fedimint_core::api::PeerResult;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
@@ -154,7 +155,7 @@ impl<R, T> FilterMap<R, T> {
 }
 
 impl<R: Debug + Eq + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
-    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<T> {
+    fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<T> {
         match result {
             Ok(response) => match (self.filter_map)(response) {
                 Ok(value) => QueryStep::Success(value),

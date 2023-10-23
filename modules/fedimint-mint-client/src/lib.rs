@@ -41,8 +41,8 @@ use fedimint_core::module::{
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, Tiered, TieredMulti,
-    TieredSummary, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
+    TieredMulti, TieredSummary, TransactionId,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_mint_common as common;
@@ -655,7 +655,8 @@ pub struct MintClientModule {
 #[derive(Debug, Clone)]
 pub struct MintClientContext {
     pub mint_decoder: Decoder,
-    pub mint_keys: Tiered<AggregatePublicKey>,
+    pub tbs_pks: Tiered<AggregatePublicKey>,
+    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
     pub secret: DerivableSecret,
     pub cancel_oob_payment_bc: tokio::sync::broadcast::Sender<OperationId>,
 }
@@ -677,7 +678,8 @@ impl ClientModule for MintClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         MintClientContext {
             mint_decoder: self.decoder(),
-            mint_keys: self.cfg.tbs_pks.clone(),
+            tbs_pks: self.cfg.tbs_pks.clone(),
+            peer_tbs_pks: self.cfg.peer_tbs_pks.clone(),
             secret: self.secret.clone(),
             cancel_oob_payment_bc: self.cancel_oob_payment_bc.clone(),
         }

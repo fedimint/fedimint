@@ -379,7 +379,7 @@ pub trait GlobalFederationApi {
     ) -> FederationResult<ApiVersionSet>;
 }
 
-fn deserialize_outcome<R>(
+pub fn deserialize_outcome<R>(
     outcome: SerdeOutputOutcome,
     module_decoder: &Decoder,
 ) -> OutputOutcomeResult<R>
