@@ -25,7 +25,6 @@ use crate::{
     module_plugin_static_trait_define, module_plugin_static_trait_define_config,
 };
 
-pub mod client;
 pub mod server;
 
 pub mod backup;
