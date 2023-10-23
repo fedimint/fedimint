@@ -1123,6 +1123,9 @@ impl ClientInner {
             partial_transaction.inputs.extend(inputs);
         }
 
+        // This is the range of mint outputs that will be added to the transaction
+        // in order to balance it. Notice that it may stay empty in case the transaction
+        // is already balanced.
         let mut change_range = Range {
             start: partial_transaction.outputs.len() as u64,
             end: partial_transaction.outputs.len() as u64,
@@ -1141,6 +1144,7 @@ impl ClientInner {
                 )
                 .await;
 
+            // We add our new mint outputs to the change range
             change_range.end += change_outputs.len() as u64;
             partial_transaction.outputs.extend(change_outputs);
         }
