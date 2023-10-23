@@ -76,6 +76,22 @@ impl TransactionBuilder {
         self
     }
 
+    pub fn with_inputs(mut self, inputs: Vec<ClientInput>) -> Self {
+        for input in inputs {
+            self.inputs.push(input);
+        }
+
+        self
+    }
+
+    pub fn with_outputs(mut self, outputs: Vec<ClientOutput>) -> Self {
+        for output in outputs {
+            self.outputs.push(output);
+        }
+
+        self
+    }
+
     pub fn build<C, R: RngCore + CryptoRng>(
         self,
         secp_ctx: &Secp256k1<C>,

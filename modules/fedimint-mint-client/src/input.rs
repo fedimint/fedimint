@@ -5,7 +5,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{TieredMulti, TransactionId};
+use fedimint_core::{Amount, TransactionId};
 use fedimint_mint_common::MintInput;
 
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
@@ -76,7 +76,8 @@ impl State for MintInputStateMachine {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintInputStateCreated {
-    pub(crate) notes: TieredMulti<SpendableNote>,
+    pub(crate) amount: Amount,
+    pub(crate) spendable_note: SpendableNote,
 }
 
 impl MintInputStateCreated {
@@ -136,19 +137,17 @@ impl MintInputStateCreated {
         old_state: MintInputStateMachine,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
-        let notes = match old_state.state {
-            MintInputStates::Created(created) => created.notes,
+        let (amount, spendable_note) = match old_state.state {
+            MintInputStates::Created(created) => (created.amount, created.spendable_note),
             _ => panic!("Invalid state transition"),
         };
 
-        let (spend_keys, snotes): (Vec<_>, TieredMulti<_>) = notes
-            .into_iter_items()
-            .map(|(amt, snote)| (snote.spend_key, (amt, snote.note())))
-            .unzip();
-
         let refund_input = ClientInput::<MintInput, MintClientStateMachines> {
-            input: MintInput(snotes),
-            keys: spend_keys,
+            input: MintInput {
+                amount,
+                note: spendable_note.note(),
+            },
+            keys: vec![spendable_note.spend_key],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created
             state_machines: Arc::new(|_, _| vec![]),

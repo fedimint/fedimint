@@ -157,12 +157,10 @@ async fn pay_valid_invoice(
                 .into_stream();
             assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
             assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
-            if let GatewayExtPayStates::Success {
-                preimage: _,
-                outpoint: gw_outpoint,
-            } = gw_pay_sub.ok().await?
-            {
-                gateway.receive_money(gw_outpoint).await?;
+            if let GatewayExtPayStates::Success { out_points, .. } = gw_pay_sub.ok().await? {
+                for outpoint in out_points {
+                    gateway.receive_money(outpoint).await?;
+                }
             } else {
                 panic!("Gateway pay state machine was not successful");
             }
@@ -276,9 +274,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             };
 
             let tx = TransactionBuilder::new().with_input(client_input.into_dyn(instance.id));
-            let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Pay {};
+            let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Pay {};
             let operation_id = OperationId(invoice.payment_hash().into_inner());
-            let txid = gateway
+            let (txid, _) = gateway
                 .finalize_and_submit_transaction(
                     operation_id,
                     fedimint_ln_common::KIND.as_str(),
@@ -515,7 +513,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     .expect("Failed to serialize string into json"),
             };
             let operation_id = OperationId(invoice.payment_hash().into_inner());
-            let txid = user_client
+            let (txid, _) = user_client
                 .finalize_and_submit_transaction(
                     operation_id,
                     fedimint_ln_common::KIND.as_str(),
@@ -550,11 +548,14 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             match intercept_sub.ok().await? {
                 GatewayExtReceiveStates::RefundSuccess {
-                    outpoint: refund_outpoint,
+                    out_points,
                     error: _,
                 } => {
                     // Assert that the gateway got it's refund
-                    gateway.receive_money(refund_outpoint).await?;
+                    for outpoint in out_points {
+                        gateway.receive_money(outpoint).await?;
+                    }
+
                     assert_eq!(initial_gateway_balance, gateway.get_balance().await);
                 }
                 unexpected_state => panic!(

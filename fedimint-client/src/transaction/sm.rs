@@ -369,7 +369,7 @@ mod tests {
             &self,
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             _input: InstancelessDynClientInput,
-        ) -> (TransactionId, Option<OutPoint>) {
+        ) -> (TransactionId, Vec<OutPoint>) {
             unimplemented!()
         }
 
@@ -377,7 +377,7 @@ mod tests {
             &self,
             _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
             _output: InstancelessDynClientOutput,
-        ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
+        ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
             unimplemented!()
         }
 

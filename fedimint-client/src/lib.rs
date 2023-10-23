@@ -53,7 +53,7 @@
 //! module and its smart contracts are only used to incentivize LN payments, not
 //! to hold money. The mint module on the other hand holds e-cash note and can
 //! thus be used to fund transactions and to absorb change. Module clients with
-//! this ability should implement [`ClientModule::supports_being_primary`] and
+//! this ability should implement [`ClientModule::  supports_being_primary`] and
 //! related methods.
 //!
 //! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
@@ -70,6 +70,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
+use std::ops::Range;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -188,7 +189,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> (TransactionId, Option<OutPoint>);
+    ) -> (TransactionId, Vec<OutPoint>);
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -198,7 +199,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: InstancelessDynClientOutput,
-    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)>;
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
 
     /// Adds a state machine to the executor.
     async fn add_state_machine_dyn(
@@ -255,7 +256,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: ClientInput<I, S>,
-    ) -> (TransactionId, Option<OutPoint>)
+    ) -> (TransactionId, Vec<OutPoint>)
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
@@ -283,7 +284,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: ClientOutput<O, S>,
-    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)>
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         O: IOutput + MaybeSend + MaybeSync + 'static,
         S: IState<DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
@@ -385,7 +386,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> (TransactionId, Option<OutPoint>) {
+    ) -> (TransactionId, Vec<OutPoint>) {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
@@ -406,7 +407,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         output: InstancelessDynClientOutput,
-    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         let instance_output = ClientOutput {
             output: DynOutput::from_parts(self.module_instance_id, output.output),
             state_machines: states_add_instance(self.module_instance_id, output.state_machines),
@@ -600,9 +601,9 @@ impl Client {
         operation_type: &str,
         operation_meta: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<TransactionId>
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
-        F: Fn(TransactionId, Option<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
+        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
         let operation_type = operation_type.to_owned();
@@ -620,7 +621,7 @@ impl Client {
                             bail!("There already exists an operation with id {operation_id:?}")
                         }
 
-                        let (txid, change_outpoint) = self
+                        let (txid, change) = self
                             .inner
                             .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
                             .await?;
@@ -630,11 +631,11 @@ impl Client {
                                 dbtx,
                                 operation_id,
                                 &operation_type,
-                                operation_meta(txid, change_outpoint),
+                                operation_meta(txid, change.clone()),
                             )
                             .await;
 
-                        Ok(txid)
+                        Ok((txid, change))
                     })
                 },
                 Some(100), // TODO: handle what happens after 100 retries
@@ -758,6 +759,25 @@ impl Client {
         self.inner
             .await_primary_module_output(operation_id, out_point)
             .await
+    }
+
+    /// Waits for outputs from the primary module to reach its final
+    /// state.
+    pub async fn await_primary_module_outputs(
+        &self,
+        operation_id: OperationId,
+        outputs: Vec<OutPoint>,
+    ) -> anyhow::Result<Amount> {
+        let mut amount = Amount::ZERO;
+
+        for out_point in outputs {
+            amount += self
+                .inner
+                .await_primary_module_output(operation_id, out_point)
+                .await?;
+        }
+
+        Ok(amount)
     }
 
     /// Returns the config with which the client was initialized.
@@ -1086,12 +1106,12 @@ impl ClientInner {
     ) -> anyhow::Result<(
         Transaction,
         Vec<DynState<DynGlobalClientContext>>,
-        Option<u64>,
+        Range<u64>,
     )> {
         if let TransactionBuilderBalance::Underfunded(missing_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let input = self
+            let inputs = self
                 .primary_module()
                 .create_sufficient_input(
                     self.primary_module_instance,
@@ -1100,14 +1120,21 @@ impl ClientInner {
                     missing_amount,
                 )
                 .await?;
-            partial_transaction.inputs.push(input);
+            partial_transaction.inputs.extend(inputs);
         }
 
-        let mut change_idx: Option<u64> = None;
+        // This is the range of mint outputs that will be added to the transaction
+        // in order to balance it. Notice that it may stay empty in case the transaction
+        // is already balanced.
+        let mut change_range = Range {
+            start: partial_transaction.outputs.len() as u64,
+            end: partial_transaction.outputs.len() as u64,
+        };
+
         if let TransactionBuilderBalance::Overfunded(excess_amount) =
             self.transaction_builder_balance(&partial_transaction)
         {
-            let output = self
+            let change_outputs = self
                 .primary_module()
                 .create_exact_output(
                     self.primary_module_instance,
@@ -1116,8 +1143,10 @@ impl ClientInner {
                     excess_amount,
                 )
                 .await;
-            change_idx = Some(partial_transaction.outputs.len() as u64);
-            partial_transaction.outputs.push(output);
+
+            // We add our new mint outputs to the change range
+            change_range.end += change_outputs.len() as u64;
+            partial_transaction.outputs.extend(change_outputs);
         }
 
         assert!(
@@ -1130,7 +1159,7 @@ impl ClientInner {
 
         let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
 
-        Ok((tx, states, change_idx))
+        Ok((tx, states, change_range))
     }
 
     async fn finalize_and_submit_transaction(
@@ -1138,12 +1167,15 @@ impl ClientInner {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<(TransactionId, Option<OutPoint>)> {
-        let (transaction, mut states, change_idx) = self
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
+        let (transaction, mut states, change_range) = self
             .finalize_transaction(dbtx, operation_id, tx_builder)
             .await?;
         let txid = transaction.tx_hash();
-        let change_outpoint = change_idx.map(|out_idx| OutPoint { txid, out_idx });
+        let change_outpoints = change_range
+            .into_iter()
+            .map(|out_idx| OutPoint { txid, out_idx })
+            .collect();
 
         let tx_submission_sm = DynState::from_typed(
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -1160,7 +1192,7 @@ impl ClientInner {
 
         self.executor.add_state_machines_dbtx(dbtx, states).await?;
 
-        Ok((txid, change_outpoint))
+        Ok((txid, change_outpoints))
     }
 
     async fn transaction_update_stream(

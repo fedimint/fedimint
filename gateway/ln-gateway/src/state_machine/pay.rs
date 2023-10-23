@@ -49,7 +49,7 @@ use crate::lnrpc_client::LightningRpcError;
 pub enum GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
     CancelContract(Box<GatewayPayCancelContract>),
-    Preimage(OutPoint, Preimage),
+    Preimage(Vec<OutPoint>, Preimage),
     OfferDoesNotExist(ContractId),
     Canceled {
         txid: TransactionId,
@@ -538,10 +538,11 @@ impl GatewayPayClaimOutgoingContract {
             keys: vec![context.redeem_key],
         };
 
-        let (txid, _) = global_context.claim_input(dbtx, client_input).await;
+        let out_points = global_context.claim_input(dbtx, client_input).await.1;
+
         GatewayPayStateMachine {
             common,
-            state: GatewayPayStates::Preimage(OutPoint { txid, out_idx: 0 }, preimage),
+            state: GatewayPayStates::Preimage(out_points, preimage),
         }
     }
 }

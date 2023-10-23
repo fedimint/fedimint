@@ -6,7 +6,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{task, TieredMulti, TransactionId};
+use fedimint_core::{task, Amount, TransactionId};
 use fedimint_mint_common::MintInput;
 
 use crate::input::{
@@ -44,7 +44,8 @@ pub struct MintOOBStateMachine {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintOOBStatesCreated {
-    pub(crate) notes: TieredMulti<SpendableNote>,
+    pub(crate) amount: Amount,
+    pub(crate) spendable_note: SpendableNote,
     pub(crate) timeout: SystemTime,
 }
 
@@ -133,15 +134,16 @@ async fn transition_user_cancel(
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     global_context: DynGlobalClientContext,
 ) -> MintOOBStateMachine {
-    let spendable_notes = match prev_state.state {
-        MintOOBStates::Created(created) => created.notes,
+    let (amount, spendable_note) = match prev_state.state {
+        MintOOBStates::Created(created) => (created.amount, created.spendable_note),
         _ => panic!("Invalid previous state: {prev_state:?}"),
     };
 
     let refund_txid = try_cancel_oob_spend(
         dbtx,
         prev_state.operation_id,
-        spendable_notes,
+        amount,
+        spendable_note,
         global_context,
     )
     .await;
@@ -162,15 +164,16 @@ async fn transition_timeout_cancel(
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     global_context: DynGlobalClientContext,
 ) -> MintOOBStateMachine {
-    let spendable_notes = match prev_state.state {
-        MintOOBStates::Created(created) => created.notes,
+    let (amount, spendable_note) = match prev_state.state {
+        MintOOBStates::Created(created) => (created.amount, created.spendable_note),
         _ => panic!("Invalid previous state: {prev_state:?}"),
     };
 
     let refund_txid = try_cancel_oob_spend(
         dbtx,
         prev_state.operation_id,
-        spendable_notes,
+        amount,
+        spendable_note,
         global_context,
     )
     .await;
@@ -183,17 +186,16 @@ async fn transition_timeout_cancel(
 async fn try_cancel_oob_spend(
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     operation_id: OperationId,
-    spendable_notes: TieredMulti<SpendableNote>,
+    amount: Amount,
+    spendable_note: SpendableNote,
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
-    let (keys, snotes): (Vec<_>, TieredMulti<_>) = spendable_notes
-        .iter_items()
-        .map(|(amt, snote)| (snote.spend_key, (amt, snote.note())))
-        .unzip();
-
     let input = ClientInput {
-        input: MintInput(snotes),
-        keys,
+        input: MintInput {
+            amount,
+            note: spendable_note.note(),
+        },
+        keys: vec![spendable_note.spend_key],
         state_machines: Arc::new(move |txid, input_idx| {
             vec![MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {
@@ -202,7 +204,8 @@ async fn try_cancel_oob_spend(
                     input_idx,
                 },
                 state: MintInputStates::Created(MintInputStateCreated {
-                    notes: spendable_notes.clone(),
+                    amount,
+                    spendable_note,
                 }),
             })]
         }),

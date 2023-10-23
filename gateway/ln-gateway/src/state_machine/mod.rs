@@ -68,7 +68,7 @@ pub enum GatewayExtPayStates {
     },
     Success {
         preimage: Preimage,
-        outpoint: OutPoint,
+        out_points: Vec<OutPoint>,
     },
     Canceled {
         error: OutgoingPaymentError,
@@ -89,7 +89,7 @@ pub enum GatewayExtReceiveStates {
     Funding,
     Preimage(Preimage),
     RefundSuccess {
-        outpoint: OutPoint,
+        out_points: Vec<OutPoint>,
         error: IncomingSmError,
     },
     RefundError {
@@ -221,11 +221,11 @@ impl GatewayClientExt for Client {
                 loop {
                     if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
                         match state.state {
-                            GatewayPayStates::Preimage(outpoint, preimage) => {
+                            GatewayPayStates::Preimage(out_points, preimage) => {
                                 yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
-                                if client.await_primary_module_output(operation_id, outpoint).await.is_ok() {
-                                    yield GatewayExtPayStates::Success{ preimage: preimage.clone(), outpoint };
+                                if client.await_primary_module_outputs(operation_id, out_points.clone()).await.is_ok() {
+                                    yield GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
                                     return;
                                 }
                             }
@@ -284,7 +284,7 @@ impl GatewayClientExt for Client {
             .create_funding_incoming_contract_output_from_htlc(htlc)
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Receive;
+        let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
         Ok(operation_id)
@@ -311,10 +311,9 @@ impl GatewayClientExt for Client {
                     if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted{ txid, error } => {
-                                let out_point = OutPoint { txid, out_idx: 0};
-                                match client.await_primary_module_output(operation_id, out_point).await {
-                                    Ok(_) => break GatewayExtReceiveStates::RefundSuccess{ outpoint: out_point, error },
+                            IncomingSmStates::RefundSubmitted{ out_points, error } => {
+                                match client.await_primary_module_outputs(operation_id, out_points.clone()).await {
+                                    Ok(_) => break GatewayExtReceiveStates::RefundSuccess{ out_points, error },
                                     Err(e) => break GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
@@ -338,7 +337,7 @@ impl GatewayClientExt for Client {
             .create_funding_incoming_contract_output_from_swap(swap_params)
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |_: TransactionId, _: Option<OutPoint>| GatewayMeta::Receive;
+        let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
         Ok(operation_id)

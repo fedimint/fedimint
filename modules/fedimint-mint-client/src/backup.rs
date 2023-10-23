@@ -4,11 +4,11 @@ use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{OutPoint, Tiered, TieredMulti};
+use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
 use serde::{Deserialize, Serialize};
 
 use super::MintClientModule;
-use crate::output::{MintOutputStateMachine, MultiNoteIssuanceRequest};
+use crate::output::{MintOutputStateMachine, NoteIssuanceRequest};
 use crate::{MintClientStateMachines, NoteIndex, SpendableNote};
 
 pub mod recovery;
@@ -19,8 +19,8 @@ pub mod recovery;
 /// by avoiding scanning the whole history.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct EcashBackup {
-    notes: TieredMulti<SpendableNote>,
-    pending_notes: Vec<(OutPoint, MultiNoteIssuanceRequest)>,
+    spendable_notes: TieredMulti<SpendableNote>,
+    pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
     epoch_count: u64,
     next_note_idx: Tiered<NoteIndex>,
 }
@@ -29,7 +29,7 @@ impl EcashBackup {
     /// An empty backup with, like a one created by a newly created client.
     pub fn new_empty() -> Self {
         Self {
-            notes: TieredMulti::default(),
+            spendable_notes: TieredMulti::default(),
             pending_notes: vec![],
             epoch_count: 0,
             next_note_idx: Tiered::default(),
@@ -50,7 +50,7 @@ impl MintClientModule {
 
         let notes = Self::get_all_spendable_notes(dbtx).await;
 
-        let pending_notes: Vec<(OutPoint, MultiNoteIssuanceRequest)> = executor
+        let pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)> = executor
             .get_active_states()
             .await
             .into_iter()
@@ -68,7 +68,7 @@ impl MintClientModule {
                 match state {
                     MintClientStateMachines::Output(MintOutputStateMachine { common, state }) => {
                         match state {
-                            crate::output::MintOutputStates::Created(state) => Some((common.out_point, state.note_issuance)),
+                            crate::output::MintOutputStates::Created(state) => Some((common.out_point, state.amount, state.issuance_request)),
                             crate::output::MintOutputStates::Succeeded(_) => None /* we back these via get_all_spendable_notes */,
                             _ => None,
                         }
@@ -85,7 +85,7 @@ impl MintClientModule {
         let next_note_idx = Tiered::from_iter(idxes);
 
         Ok(EcashBackup {
-            notes,
+            spendable_notes: notes,
             pending_notes,
             next_note_idx,
             epoch_count: fedimint_block_count,

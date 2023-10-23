@@ -140,7 +140,7 @@ pub enum InternalPayState {
     Funding,
     Preimage(Preimage),
     RefundSuccess {
-        outpoint: OutPoint,
+        out_points: Vec<OutPoint>,
         error: IncomingSmError,
     },
     RefundError {
@@ -363,11 +363,11 @@ impl LightningClientExt for Client {
             _ => unreachable!("User client will only create contract outputs on spend"),
         };
         let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        let operation_meta_gen = |txid, change_outpoint| LightningOperationMeta::Pay {
+        let operation_meta_gen = |txid, change| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: 0 },
             invoice: invoice.clone(),
             fee,
-            change_outpoint,
+            change,
         };
 
         // Write the new payment index into the database, fail the payment if the commit
@@ -429,7 +429,7 @@ impl LightningClientExt for Client {
             invoice: invoice.clone(),
             extra_meta: extra_meta.clone(),
         };
-        let txid = self
+        let (txid, _) = self
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonGen::KIND.as_str(),
@@ -488,10 +488,10 @@ impl LightningClientExt for Client {
                     Ok(()) => {
                         yield LnReceiveState::Funded;
 
-                        if let Ok(txid) = lightning.await_claim_acceptance(operation_id).await {
+                        if let Ok(out_points) = lightning.await_claim_acceptance(operation_id).await {
                             yield LnReceiveState::AwaitingFunds;
 
-                            if client.await_primary_module_output(operation_id, OutPoint{ txid, out_idx: 0}).await.is_ok() {
+                            if client.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
                                 yield LnReceiveState::Claimed;
                                 return;
                             }
@@ -512,13 +512,13 @@ impl LightningClientExt for Client {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
         let operation = ln_operation(self, operation_id).await?;
-        let (out_point, _, change_outpoint) = match operation.meta::<LightningOperationMeta>() {
+        let (out_point, _, change) = match operation.meta::<LightningOperationMeta>() {
             LightningOperationMeta::Pay {
                 out_point,
                 invoice,
-                change_outpoint,
+                change,
                 ..
-            } => (out_point, invoice, change_outpoint),
+            } => (out_point, invoice, change),
             _ => bail!("Operation is not a lightning payment"),
         };
 
@@ -544,9 +544,9 @@ impl LightningClientExt for Client {
 
                 match lightning.await_lightning_payment_success(operation_id).await {
                     Ok(preimage) => {
-                        if let Some(change) = change_outpoint {
+                        if !change.is_empty() {
                             yield LnPayState::AwaitingChange;
-                            match client.await_primary_module_output(operation_id, change).await {
+                            match client.await_primary_module_outputs(operation_id, change).await {
                                 Ok(_) => {}
                                 Err(_) => {
                                     yield LnPayState::UnexpectedError { error_message: "Error occurred while waiting for the primary module's output".to_string() };
@@ -561,9 +561,9 @@ impl LightningClientExt for Client {
                     Err(PayError::Refundable(block_height, error)) => {
                         yield LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
 
-                        if let Ok(refund_txid) = lightning.await_refund(operation_id).await {
+                        if let Ok(out_points) = lightning.await_refund(operation_id).await {
                             // need to await primary module to get refund
-                            if client.await_primary_module_output(operation_id, OutPoint{ txid: refund_txid, out_idx: 0}).await.is_ok() {
+                            if client.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
                                 yield LnPayState::Refunded { gateway_error: error };
                                 return;
                             }
@@ -595,10 +595,9 @@ impl LightningClientExt for Client {
                     if let Some(LightningClientStateMachines::InternalPay(state)) = stream.next().await {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) => break InternalPayState::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted{ txid, error } => {
-                                let out_point = OutPoint { txid, out_idx: 0};
-                                match client.await_primary_module_output(operation_id, out_point).await {
-                                    Ok(_) => break InternalPayState::RefundSuccess { outpoint: out_point, error },
+                            IncomingSmStates::RefundSubmitted{ out_points, error } => {
+                                match client.await_primary_module_outputs(operation_id, out_points.clone()).await {
+                                    Ok(_) => break InternalPayState::RefundSuccess { out_points, error },
                                     Err(e) => break InternalPayState::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
@@ -622,7 +621,7 @@ pub enum LightningOperationMeta {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
         fee: Amount,
-        change_outpoint: Option<OutPoint>,
+        change: Vec<OutPoint>,
     },
     Receive {
         out_point: OutPoint,
@@ -1000,12 +999,12 @@ impl LightningClientModule {
     async fn await_claim_acceptance(
         &self,
         operation_id: OperationId,
-    ) -> Result<TransactionId, LightningReceiveError> {
+    ) -> Result<Vec<OutPoint>, LightningReceiveError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
             match stream.next().await {
                 Some(LightningClientStateMachines::Receive(state)) => match state.state {
-                    LightningReceiveStates::Success(txid) => return Ok(txid),
+                    LightningReceiveStates::Success(out_points) => return Ok(out_points),
                     LightningReceiveStates::Canceled(e) => {
                         return Err(e);
                     }
@@ -1043,13 +1042,13 @@ impl LightningClientModule {
         }
     }
 
-    async fn await_refund(&self, operation_id: OperationId) -> Result<TransactionId, PayError> {
+    async fn await_refund(&self, operation_id: OperationId) -> Result<Vec<OutPoint>, PayError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         loop {
             match stream.next().await {
                 Some(LightningClientStateMachines::LightningPay(state)) => match state.state {
-                    LightningPayStates::Refunded(refund_txid) => {
-                        return Ok(refund_txid);
+                    LightningPayStates::Refunded(out_points) => {
+                        return Ok(out_points);
                     }
                     LightningPayStates::Failure(reason) => return Err(PayError::Failed(reason)),
                     _ => {}

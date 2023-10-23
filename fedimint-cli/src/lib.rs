@@ -512,7 +512,7 @@ impl FedimintCli {
                 hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             }),
             Command::Client(ClientCmd::Restore { secret }) => {
-                let (client, metadata) = cli
+                let client = cli
                     .build_client_builder(&self.module_inits, None)
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
@@ -520,16 +520,20 @@ impl FedimintCli {
                         secret,
                     ))
                     .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
+                    .0;
 
                 info!("Waiting for restore to complete");
-                client
+                let restored_amount = client
                     .await_restore_finished()
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
+
                 debug!("Restore complete");
 
-                Ok(CliOutput::Raw(serde_json::to_value(metadata).unwrap()))
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(restored_amount.msats).unwrap(),
+                ))
             }
             Command::Client(command) => {
                 let client = cli

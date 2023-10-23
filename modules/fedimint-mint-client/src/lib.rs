@@ -67,7 +67,7 @@ use crate::input::{
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreated};
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
-    MultiNoteIssuanceRequest, NoteIssuanceRequest,
+    NoteIssuanceRequest,
 };
 
 const MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(0);
@@ -194,7 +194,7 @@ pub trait MintClientExt {
     ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>>;
 
     /// Awaits the backup restoration to complete
-    async fn await_restore_finished(&self) -> anyhow::Result<()>;
+    async fn await_restore_finished(&self) -> anyhow::Result<Amount>;
 }
 
 /// The high-level state of a reissue operation started with
@@ -266,9 +266,14 @@ impl MintClientExt for Client {
         );
 
         let amount = notes.total_amount();
-        let mint_input = mint.create_input_from_notes(operation_id, notes).await?;
+        let mint_input = mint
+            .create_input_from_notes(operation_id, notes)
+            .await?
+            .into_iter()
+            .map(|input| input.into_dyn(instance.id))
+            .collect();
 
-        let tx = TransactionBuilder::new().with_input(mint_input.into_dyn(instance.id));
+        let tx = TransactionBuilder::new().with_inputs(mint_input);
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::reissue_external_notes extra_meta is serializable");
@@ -280,14 +285,19 @@ impl MintClientExt for Client {
             extra_meta: extra_meta.clone(),
         };
 
-        self.finalize_and_submit_transaction(
-            operation_id,
-            MintCommonGen::KIND.as_str(),
-            operation_meta_gen,
-            tx,
-        )
-        .await
-        .context("We already reissued these notes")?;
+        let change = self
+            .finalize_and_submit_transaction(
+                operation_id,
+                MintCommonGen::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .await
+            .context("We already reissued these notes")?
+            .1;
+
+        self.await_primary_module_outputs(operation_id, change)
+            .await?;
 
         Ok(operation_id)
     }
@@ -496,7 +506,7 @@ impl MintClientExt for Client {
     }
 
     /// Waits for the mint backup restoration to finish
-    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+    async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
         let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
         mint.await_restore_finished().await
     }
@@ -675,9 +685,8 @@ impl ClientModule for MintClientModule {
 
     fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
         TransactionItemAmount {
-            amount: input.0.total_amount(),
-            // FIXME: prevent overflows
-            fee: self.cfg.fee_consensus.note_spend_abs * (input.0.count_items() as u64),
+            amount: input.amount,
+            fee: self.cfg.fee_consensus.note_spend_abs,
         }
     }
 
@@ -686,8 +695,8 @@ impl ClientModule for MintClientModule {
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> TransactionItemAmount {
         TransactionItemAmount {
-            amount: output.0.total_amount(),
-            fee: self.cfg.fee_consensus.note_issuance_abs * (output.0.count_items() as u64),
+            amount: output.amount,
+            fee: self.cfg.fee_consensus.note_issuance_abs,
         }
     }
 
@@ -848,7 +857,7 @@ impl ClientModule for MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
+    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
         self.create_input(dbtx, operation_id, min_amount).await
     }
 
@@ -857,7 +866,7 @@ impl ClientModule for MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         amount: Amount,
-    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
+    ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
         // FIXME: don't hardcode notes per denomination
         self.create_output(dbtx, operation_id, 2, amount).await
     }
@@ -899,7 +908,7 @@ impl ClientModule for MintClientModule {
                         // showing incremental progress. Ideally the balance isn't shown to them
                         // during recovery anyway.
                         MintClientStateMachines::Restore(MintRestoreStateMachine {
-                            state: MintRestoreStates::Success,
+                            state: MintRestoreStates::Success(_),
                             ..
                         }) => Some(()),
                         _ => None,
@@ -936,48 +945,55 @@ impl MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         notes_per_denomination: u16,
-        amount: Amount,
-    ) -> ClientOutput<MintOutput, MintClientStateMachines> {
-        let mut amount_requests: Vec<((Amount, NoteIssuanceRequest), (Amount, BlindNonce))> =
-            Vec::new();
+        exact_amount: Amount,
+    ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
+        assert!(
+            exact_amount > Amount::ZERO,
+            "zero-amount outputs are not supported"
+        );
+
         let denominations = TieredSummary::represent_amount(
-            amount,
+            exact_amount,
             &self.get_wallet_summary(dbtx).await,
             &self.cfg.tbs_pks,
             notes_per_denomination,
         );
-        for (amt, num) in denominations.iter() {
+
+        let mut outputs = Vec::new();
+
+        for (amount, num) in denominations.iter() {
             for _ in 0..num {
-                let (request, blind_nonce) = self.new_ecash_note(amt, dbtx).await;
-                amount_requests.push(((amt, request), (amt, blind_nonce)));
+                let (issuance_request, blind_nonce) = self.new_ecash_note(amount, dbtx).await;
+
+                let state_generator = Arc::new(move |txid, out_idx| {
+                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                        common: MintOutputCommon {
+                            operation_id,
+                            out_point: OutPoint { txid, out_idx },
+                        },
+                        state: MintOutputStates::Created(MintOutputStatesCreated {
+                            amount,
+                            issuance_request,
+                        }),
+                    })]
+                });
+
+                debug!(
+                    %amount,
+                    "Generated issuance request"
+                );
+
+                outputs.push(ClientOutput {
+                    output: MintOutput {
+                        amount,
+                        blind_nonce,
+                    },
+                    state_machines: state_generator,
+                });
             }
         }
-        let (note_issuance, sig_req): (MultiNoteIssuanceRequest, MintOutput) =
-            amount_requests.into_iter().unzip();
 
-        let state_generator = Arc::new(move |txid, out_idx| {
-            vec![MintClientStateMachines::Output(MintOutputStateMachine {
-                common: MintOutputCommon {
-                    operation_id,
-                    out_point: OutPoint { txid, out_idx },
-                },
-                state: MintOutputStates::Created(MintOutputStatesCreated {
-                    note_issuance: note_issuance.clone(),
-                }),
-            })]
-        });
-
-        debug!(
-            %amount,
-            notes = %sig_req.0.count_items(),
-            tiers = ?sig_req.0.iter_tiers().collect::<Vec<_>>(),
-            "Generated issuance request"
-        );
-
-        ClientOutput {
-            output: sig_req,
-            state_machines: state_generator,
-        }
+        outputs
     }
 
     /// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -1023,7 +1039,12 @@ impl MintClientModule {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
+    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+        assert!(
+            min_amount > Amount::ZERO,
+            "zero-amount inputs are not supported"
+        );
+
         let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
 
         for (amount, note) in spendable_selected_notes.iter_items() {
@@ -1043,43 +1064,44 @@ impl MintClientModule {
         &self,
         operation_id: OperationId,
         notes: TieredMulti<SpendableNote>,
-    ) -> anyhow::Result<ClientInput<MintInput, MintClientStateMachines>> {
-        if let Some((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
-            let Some(mint_key) = self.cfg.tbs_pks.get(*amt) else {
-                return true;
-            };
-            !note.note().verify(*mint_key)
-        }) {
-            return Err(anyhow!(
-                "Invalid note in input: amt={} note={:?}",
-                amt,
-                invalid_note
-            ));
+    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+        let mut inputs = Vec::new();
+
+        for (amount, spendable_note) in notes.into_iter() {
+            let key = self
+                .cfg
+                .tbs_pks
+                .get(amount)
+                .ok_or(anyhow!("Invalid amount tier: {amount}"))?;
+
+            let note = spendable_note.note();
+
+            if !note.verify(*key) {
+                bail!("Invalid note");
+            }
+
+            let sm_gen = Arc::new(move |txid, input_idx| {
+                vec![MintClientStateMachines::Input(MintInputStateMachine {
+                    common: MintInputCommon {
+                        operation_id,
+                        txid,
+                        input_idx,
+                    },
+                    state: MintInputStates::Created(MintInputStateCreated {
+                        amount,
+                        spendable_note,
+                    }),
+                })]
+            });
+
+            inputs.push(ClientInput {
+                input: MintInput { amount, note },
+                keys: vec![spendable_note.spend_key],
+                state_machines: sm_gen,
+            });
         }
 
-        let (spend_keys, selected_notes) = notes
-            .iter_items()
-            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note())))
-            .unzip();
-
-        let sm_gen = Arc::new(move |txid, input_idx| {
-            vec![MintClientStateMachines::Input(MintInputStateMachine {
-                common: MintInputCommon {
-                    operation_id,
-                    txid,
-                    input_idx,
-                },
-                state: MintInputStates::Created(MintInputStateCreated {
-                    notes: notes.clone(),
-                }),
-            })]
-        });
-
-        Ok(ClientInput {
-            input: MintInput(selected_notes),
-            keys: spend_keys,
-            state_machines: sm_gen,
-        })
+        Ok(inputs)
     }
 
     async fn spend_notes_oob(
@@ -1109,13 +1131,18 @@ impl MintClientModule {
             .await;
         }
 
-        let state_machines = vec![MintClientStateMachines::OOB(MintOOBStateMachine {
-            operation_id,
-            state: MintOOBStates::Created(MintOOBStatesCreated {
-                notes: spendable_selected_notes.clone(),
-                timeout: fedimint_core::time::now() + try_cancel_after,
-            }),
-        })];
+        let mut state_machines = Vec::new();
+
+        for (amount, spendable_note) in spendable_selected_notes.clone() {
+            state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
+                operation_id,
+                state: MintOOBStates::Created(MintOOBStatesCreated {
+                    amount,
+                    spendable_note,
+                    timeout: fedimint_core::time::now() + try_cancel_after,
+                }),
+            }));
+        }
 
         Ok((operation_id, state_machines, spendable_selected_notes))
     }
@@ -1147,7 +1174,7 @@ impl MintClientModule {
         .await
     }
 
-    async fn await_restore_finished(&self) -> anyhow::Result<()> {
+    async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
         let mut restore_stream = self
             .notifier
             .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
@@ -1155,10 +1182,10 @@ impl MintClientModule {
         while let Some(restore_step) = restore_stream.next().await {
             match restore_step {
                 MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Success,
+                    state: MintRestoreStates::Success(amount),
                     ..
                 }) => {
-                    return Ok(());
+                    return Ok(amount);
                 }
                 MintClientStateMachines::Restore(MintRestoreStateMachine {
                     state: MintRestoreStates::Failed(error),

@@ -6,8 +6,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{plugin_types_trait_impl_common, Amount, OutPoint, PeerId, TieredMulti};
-use impl_tools::autoimpl;
+use fedimint_core::{plugin_types_trait_impl_common, Amount, OutPoint, PeerId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -33,22 +32,24 @@ pub struct MintConsensusItem {
     /// `BlindNonce`s the signatures` are for
     pub out_point: OutPoint,
     /// (Partial) signatures
-    pub signatures: MintOutputSignatureShare,
+    pub signature_share: MintOutputSignatureShare,
 }
 
 // FIXME: optimize out blinded msg by making the mint remember it
 /// Blind signature share from one Federation peer for a single [`MintOutput`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputSignatureShare(
-    pub TieredMulti<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>,
-);
+pub struct MintOutputSignatureShare {
+    pub amount: Amount,
+    pub message: tbs::BlindedMessage,
+    pub signature_share: tbs::BlindedSignatureShare,
+}
 
 /// Result of Federation members confirming [`MintOutput`] by contributing
 /// partial signatures via [`MintConsensusItem`]
 ///
 /// A set of full blinded signatures.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputBlindSignatures(pub TieredMulti<tbs::BlindedSignature>);
+pub struct MintOutputBlindSignature(pub tbs::BlindedSignature);
 
 /// An verifiable one time use IOU from the mint.
 ///
@@ -117,44 +118,36 @@ impl CommonModuleInit for MintCommonGen {
     }
 }
 
-#[autoimpl(Deref, DerefMut using self.0)]
-#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-)]
-pub struct MintInput(pub TieredMulti<Note>);
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct MintInput {
+    pub amount: Amount,
+    pub note: Note,
+}
 
 impl std::fmt::Display for MintInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mint Notes {}", self.0.total_amount())
+        write!(f, "Mint Note {}", self.amount)
     }
 }
 
-#[autoimpl(Deref, DerefMut using self.0)]
-#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable, Default,
-)]
-pub struct MintOutput(pub TieredMulti<BlindNonce>);
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct MintOutput {
+    pub amount: Amount,
+    pub blind_nonce: BlindNonce,
+}
 
 impl std::fmt::Display for MintOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Mint Notes {}", self.0.total_amount())
+        write!(f, "Mint Note {}", self.amount)
     }
 }
 
-#[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputOutcome(pub Option<MintOutputBlindSignatures>);
+pub struct MintOutputOutcome(pub Option<MintOutputBlindSignature>);
 
 impl std::fmt::Display for MintOutputOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Some(sigs) => {
-                write!(f, "Minted notes of value {}", sigs.0.total_amount())
-            }
-            None => {
-                write!(f, "To-be-minted notes")
-            }
-        }
+        write!(f, "Minted note")
     }
 }
 
@@ -163,8 +156,7 @@ impl std::fmt::Display for MintConsensusItem {
         write!(
             f,
             "Mint Blind Signature Shares worth {} for {}",
-            self.signatures.0.total_amount(),
-            self.out_point
+            self.signature_share.amount, self.out_point
         )
     }
 }
@@ -197,18 +189,6 @@ impl Nonce {
 
     pub fn to_message(&self) -> tbs::Message {
         tbs::Message::from_bytes(&self.0.serialize()[..])
-    }
-}
-
-impl From<MintOutput> for TieredMulti<BlindNonce> {
-    fn from(sig_req: MintOutput) -> Self {
-        sig_req.0
-    }
-}
-
-impl Extend<(Amount, BlindNonce)> for MintOutput {
-    fn extend<T: IntoIterator<Item = (Amount, BlindNonce)>>(&mut self, iter: T) {
-        self.0.extend(iter)
     }
 }
 

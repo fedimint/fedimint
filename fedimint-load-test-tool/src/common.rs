@@ -257,14 +257,18 @@ pub async fn remint_denomination(
     let mut tx = TransactionBuilder::new();
     let operation_id = OperationId::new_random();
     for _ in 0..quantity {
-        let output = mint_client
+        let outputs = mint_client
             .create_output(&mut module_transaction, operation_id, 1, denomination)
-            .await;
-        tx = tx.with_output(output.into_dyn(client_module_instance.id));
+            .await
+            .into_iter()
+            .map(|output| output.into_dyn(client_module_instance.id))
+            .collect();
+
+        tx = tx.with_outputs(outputs);
     }
     drop(module_transaction);
     let operation_meta_gen = |_txid, _outpoint| ();
-    let txid = client
+    let (txid, _) = client
         .finalize_and_submit_transaction(
             operation_id,
             MintCommonGen::KIND.as_str(),

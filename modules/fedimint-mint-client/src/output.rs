@@ -6,9 +6,9 @@ use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
+use fedimint_core::{Amount, OutPoint, Tiered, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_mint_common::{BlindNonce, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note};
+use fedimint_mint_common::{BlindNonce, MintOutputBlindSignature, MintOutputOutcome, Nonce, Note};
 use secp256k1::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
@@ -101,7 +101,8 @@ impl State for MintOutputStateMachine {
 /// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintOutputStatesCreated {
-    pub(crate) note_issuance: MultiNoteIssuanceRequest,
+    pub(crate) amount: Amount,
+    pub(crate) issuance_request: NoteIssuanceRequest,
 }
 
 impl MintOutputStatesCreated {
@@ -126,10 +127,10 @@ impl MintOutputStatesCreated {
                     common,
                     context.mint_decoder.clone(),
                 ),
-                move |dbtx, bsigs, old_state| {
+                move |dbtx, bsig, old_state| {
                     Box::pin(Self::transition_outcome_ready(
                         dbtx,
-                        bsigs,
+                        bsig,
                         old_state,
                         // TODO: avoid clone of whole object
                         mint_keys.clone(),
@@ -165,14 +166,22 @@ impl MintOutputStatesCreated {
         global_context: DynGlobalClientContext,
         common: MintOutputCommon,
         module_decoder: Decoder,
-    ) -> Result<MintOutputBlindSignatures, String> {
+    ) -> Result<MintOutputBlindSignature, String> {
         loop {
-            let outcome: MintOutputOutcome = match global_context
+            match global_context
                 .api()
-                .await_output_outcome(common.out_point, Duration::MAX, &module_decoder)
+                .await_output_outcome::<MintOutputOutcome>(
+                    common.out_point,
+                    Duration::MAX,
+                    &module_decoder,
+                )
                 .await
             {
-                Ok(outcome) => outcome,
+                Ok(outcome) => {
+                    if let Some(bsig) = outcome.0 {
+                        return Ok(bsig);
+                    }
+                }
                 Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
                     trace!(
                         "Awaiting outcome to become ready failed, retrying in {}s: {e}",
@@ -183,58 +192,51 @@ impl MintOutputStatesCreated {
                 }
                 Err(e) => return Err(e.to_string()),
             };
-
-            match outcome.0 {
-                Some(bsigs) => return Ok(bsigs),
-                None => {
-                    // FIXME: hack since we can't await outpoints yet?! may return non-final outcome
-                    sleep(RETRY_DELAY).await;
-                }
-            }
         }
     }
 
     async fn transition_outcome_ready(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        bsig_res: Result<MintOutputBlindSignatures, String>,
+        bsig_res: Result<MintOutputBlindSignature, String>,
         old_state: MintOutputStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,
     ) -> MintOutputStateMachine {
-        let issuance = match old_state.state {
-            MintOutputStates::Created(created) => created.note_issuance,
+        let (amount, issuance_request) = match old_state.state {
+            MintOutputStates::Created(created) => (created.amount, created.issuance_request),
             _ => panic!("Unexpected prior state"),
         };
-        let notes_res = bsig_res.and_then(|bsigs| {
-            issuance
-                .finalize(bsigs, &mint_keys)
-                .map_err(|e| e.to_string())
-        });
 
-        match notes_res {
-            Ok(notes) => {
-                for (amount, note) in notes.iter_items() {
-                    let replaced = dbtx
-                        .module_tx()
-                        .insert_entry(
-                            &NoteKey {
-                                amount,
-                                nonce: note.nonce(),
-                            },
-                            note,
-                        )
-                        .await;
-                    if let Some(note) = replaced {
-                        error!(
-                            ?note,
-                            "E-cash note was replaced in DB, this should never happen!"
-                        )
-                    }
+        let note_res = match mint_keys.tier(&amount) {
+            Ok(amount_key) => bsig_res.and_then(|bsig| {
+                issuance_request
+                    .finalize(bsig.0, *amount_key)
+                    .map_err(|e| e.to_string())
+            }),
+            Err(error) => Err(NoteFinalizationError::InvalidAmountTier(error.0).to_string()),
+        };
+
+        match note_res {
+            Ok(note) => {
+                let replaced = dbtx
+                    .module_tx()
+                    .insert_entry(
+                        &NoteKey {
+                            amount,
+                            nonce: note.nonce(),
+                        },
+                        &note,
+                    )
+                    .await;
+                if let Some(note) = replaced {
+                    error!(
+                        ?note,
+                        "E-cash note was replaced in DB, this should never happen!"
+                    )
                 }
+
                 MintOutputStateMachine {
                     common: old_state.common,
-                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
-                        amount: notes.total_amount(),
-                    }),
+                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded { amount }),
                 }
             }
             Err(error) => MintOutputStateMachine {
@@ -330,60 +332,6 @@ impl NoteIssuanceRequest {
         } else {
             Err(NoteFinalizationError::InvalidSignature)
         }
-    }
-}
-
-/// Multiple [`Note`] issuance requests
-///
-/// Keeps all the data to generate [`SpendableNote`]s once the
-/// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MultiNoteIssuanceRequest {
-    /// Finalization data for all note outputs in this request
-    pub notes: TieredMulti<NoteIssuanceRequest>,
-}
-
-impl MultiNoteIssuanceRequest {
-    /// Finalize the issuance request using a [`MintOutputBlindSignatures`] from
-    /// the mint containing the blind signatures for all notes in this
-    /// `IssuanceRequest`. It also takes the mint's [`AggregatePublicKey`]
-    /// to validate the supplied blind signatures.
-    pub fn finalize(
-        &self,
-        bsigs: MintOutputBlindSignatures,
-        mint_pub_key: &Tiered<AggregatePublicKey>,
-    ) -> std::result::Result<TieredMulti<SpendableNote>, NoteFinalizationError> {
-        if !self.notes.structural_eq(&bsigs.0) {
-            return Err(NoteFinalizationError::WrongMintAnswer);
-        }
-
-        self.notes
-            .iter_items()
-            .zip(bsigs.0)
-            .enumerate()
-            .map(|(idx, ((amt, note_req), (_amt, bsig)))| {
-                Ok((
-                    amt,
-                    match note_req.finalize(
-                        bsig,
-                        *mint_pub_key
-                            .tier(&amt)
-                            .map_err(|e| NoteFinalizationError::InvalidAmountTier(e.0))?,
-                    ) {
-                        Err(NoteFinalizationError::InvalidSignature) => {
-                            Err(NoteFinalizationError::InvalidSignatureAtIdx(idx))
-                        }
-                        other => other,
-                    }?,
-                ))
-            })
-            .collect()
-    }
-}
-
-impl Extend<(Amount, NoteIssuanceRequest)> for MultiNoteIssuanceRequest {
-    fn extend<T: IntoIterator<Item = (Amount, NoteIssuanceRequest)>>(&mut self, iter: T) {
-        self.notes.extend(iter)
     }
 }
 

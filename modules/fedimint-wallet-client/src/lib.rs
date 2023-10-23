@@ -252,11 +252,11 @@ impl WalletClientExt for Client {
                         return;
                     }
 
-                    if let Some(out_point) = claiming.change.as_ref() {
-                        client.await_primary_module_output(operation_id, *out_point)
+
+                        client.await_primary_module_outputs(operation_id, claiming.change)
                             .await
                             .expect("Cannot fail if tx was accepted and federation is honest");
-                    }
+
                     yield DepositState::Claimed(tx_data.clone());
                 }
             }),
@@ -375,13 +375,13 @@ impl WalletClientExt for Client {
                     }
 
                     // TODO: get rid of awaiting change here, there has to be a better way to make tests deterministic
-                    if let Some(change_out_point) = change {
+
                         // Swallowing potential errors since the transaction failing  is handled by
                         // output outcome fetching already
                         let _ = client
-                            .await_primary_module_output(operation_id, change_out_point)
+                            .await_primary_module_outputs(operation_id, change)
                             .await;
-                    }
+
 
                     match next_withdraw_state(&mut operation_stream).await {
                         Some(WithdrawStates::Aborted(inner)) => {
@@ -501,12 +501,12 @@ pub enum WalletOperationMeta {
         #[serde(with = "bitcoin::util::amount::serde::as_sat")]
         amount: bitcoin::Amount,
         fee: PegOutFees,
-        change: Option<OutPoint>,
+        change: Vec<OutPoint>,
     },
 
     RbfWithdraw {
         rbf: Rbf,
-        change: Option<OutPoint>,
+        change: Vec<OutPoint>,
     },
 }
 
