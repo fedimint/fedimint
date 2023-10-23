@@ -918,6 +918,29 @@ impl ClientModule for MintClientModule {
                 }),
         )
     }
+
+    async fn leave(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor<DynGlobalClientContext>,
+        _api: DynGlobalApi,
+    ) -> anyhow::Result<()> {
+        let balance = ClientModule::get_balance(self, dbtx).await;
+        if Amount::from_sats(0) < balance {
+            bail!("Outstanding balance: {balance}");
+        }
+
+        if executor
+            .get_active_states()
+            .await
+            .into_iter()
+            .any(|s| s.0.module_instance_id() == module_instance_id)
+        {
+            bail!("Pending operations")
+        }
+        Ok(())
+    }
 }
 
 impl MintClientModule {
