@@ -3,6 +3,7 @@ use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use anyhow::bail;
 use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, OperationId,
@@ -183,6 +184,71 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// it changes.
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
         unimplemented!()
+    }
+
+    /// Leave the federation
+    ///
+    /// While technically there's nothing stopping the client from just
+    /// abandoning Federation at any point by deleting all the related
+    /// local data, it is useful to make sure it's safe beforehand.
+    ///
+    /// This call indicates the desire of the caller client code
+    /// to orderly and safely leave the Federation by this module instance.
+    /// The goal of the implementations is to fulfil that wish,
+    /// giving prompt and informative feedback if it's not yet possible.
+    ///
+    /// The client module implementation should handle the request
+    /// and return as fast as possible avoiding blocking for longer than
+    /// necessary. This would usually involve some combination of:
+    ///
+    /// * recording the state of being in process of leaving the Federation to
+    ///   prevent initiating new conditions that could delay its completion;
+    /// * performing any fast to complete cleanup/exit logic;
+    /// * initiating any time-consuming logic (e.g. canceling outstanding
+    ///   contracts), as background jobs, tasks machines, etc.
+    /// * checking for any conditions indicating it might not be safe to leave
+    ///   at the moment.
+    ///
+    /// This function should return `Ok` only if from the perspective
+    /// of this module instance, it is safe to delete client data and
+    /// stop using it, with no further actions (like background jobs) required
+    /// to complete.
+    ///
+    /// This function should return an error if it's not currently possible
+    /// to safely (e.g. without loosing funds) leave the Federation.
+    /// It should avoid running indefinitely trying to complete any cleanup
+    /// actions necessary to reach a clean state, preferring spawning new
+    /// state machines and returning an informative error about cleanup
+    /// still in progress.
+    ///
+    /// If any internal task needs to complete, any user action is required,
+    /// or even external condition needs to be met this function
+    /// should return a `Err`.
+    ///
+    /// Notably modules should not disable interaction that might be necessary
+    /// for the user (possibly through other modules) to leave the Federation.
+    /// In particular a Mint module should retain ability to create new notes,
+    /// and LN module should retain ability to send funds out.
+    ///
+    /// Calling code must NOT assume that a module that once returned `Ok`,
+    /// will not return `Err` at later point. E.g. a Mint module might have
+    /// no outstanding balance at first, but other modules winding down
+    /// might "cash-out" to Ecash.
+    ///
+    /// Before leaving the Federation and deleting any state the calling code
+    /// must collect a full round of `Ok` from all the modules.
+    ///
+    /// Calling code should allow the user to override and ignore any
+    /// outstanding errors, after sufficient amount of warnings. Ideally,
+    /// this should be done on per-module basis, to avoid mistakes.
+    async fn leave(
+        &self,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor<DynGlobalClientContext>,
+        _api: DynGlobalApi,
+    ) -> anyhow::Result<()> {
+        bail!("Unable to determine if safe to leave the federation: Not implemented")
     }
 }
 
