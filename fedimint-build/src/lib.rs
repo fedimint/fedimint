@@ -45,7 +45,27 @@ fn set_code_version_inner() -> Result<(), String> {
         }
     }
 
-    let output = match Command::new("git").args(["rev-parse", "HEAD"]).output() {
+    let hash = call_cmd("git", &["rev-parse", "HEAD"])?;
+
+    let dirty = !call_cmd("git", &["status", "--porcelain"])?.is_empty();
+
+    let hash = if dirty {
+        // Since our hash needs to be constant, mark the dirty
+        // state by replacing the middle with 0s. This should
+        // be noticeable enough, while letting find out the
+        // root commit anyway.
+        format!("{}00000000{}", &hash[0..16], &hash[26..40])
+    } else {
+        hash
+    };
+
+    println!("cargo:rustc-env={GIT_HASH_ENV}={hash}");
+
+    Ok(())
+}
+
+fn call_cmd(cmd: &str, args: &[&str]) -> Result<String, String> {
+    let output = match Command::new(cmd).args(args).output() {
         Ok(output) => output,
         Err(e) => {
             return Err(format!("Failed to execute `git` command: {e}"));
@@ -60,16 +80,12 @@ fn set_code_version_inner() -> Result<(), String> {
         ));
     }
 
-    let hash = match String::from_utf8(output.stdout) {
-        Ok(hash) => hash.trim().to_string(),
+    Ok(match String::from_utf8(output.stdout) {
+        Ok(o) => o.trim().to_string(),
         Err(e) => {
             return Err(format!("Invalid UTF-8 sequence detected: {e}"));
         }
-    };
-
-    println!("cargo:rustc-env={GIT_HASH_ENV}={hash}");
-
-    Ok(())
+    })
 }
 
 pub fn set_code_version() {
