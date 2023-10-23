@@ -51,7 +51,7 @@ pub enum IncomingSmStates {
     DecryptingPreimage(DecryptingPreimageState),
     Preimage(Preimage),
     RefundSubmitted {
-        txid: TransactionId,
+        out_points: Vec<OutPoint>,
         error: IncomingSmError,
     },
     FundingFailed {
@@ -308,12 +308,12 @@ impl DecryptingPreimageState {
             keys: vec![context.redeem_key],
         };
 
-        let (refund_txid, _) = global_context.claim_input(dbtx, client_input).await;
+        let out_points = global_context.claim_input(dbtx, client_input).await.1;
 
         IncomingStateMachine {
             common: old_state.common,
             state: IncomingSmStates::RefundSubmitted {
-                txid: refund_txid,
+                out_points,
                 error: IncomingSmError::InvalidPreimage { contract },
             },
         }

@@ -108,7 +108,7 @@ impl WaitForPreimageState {
                     IncomingSmStates::Preimage(preimage) => {
                         return Ok(preimage);
                     }
-                    IncomingSmStates::RefundSubmitted { txid: _, error: _ } => {
+                    IncomingSmStates::RefundSubmitted { .. } => {
                         return Err(CompleteHtlcError::IncomingContractNotFunded);
                     }
                     IncomingSmStates::FundingFailed { error: _ } => {

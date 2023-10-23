@@ -255,9 +255,9 @@ pub async fn handle_command(
                                 })
                                 .unwrap());
                             }
-                            InternalPayState::RefundSuccess { outpoint, error } => {
+                            InternalPayState::RefundSuccess { out_points, error } => {
                                 let e = format!(
-                                    "Internal payment failed. A refund was issued to {outpoint} Error: {error}"
+                                    "Internal payment failed. A refund was issued to {:?} Error: {error}", out_points
                                 );
                                 return Err(anyhow!(e));
                             }

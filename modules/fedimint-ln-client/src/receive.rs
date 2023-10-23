@@ -40,7 +40,7 @@ pub enum LightningReceiveStates {
     Canceled(LightningReceiveError),
     ConfirmedInvoice(LightningReceiveConfirmedInvoice),
     Funded(LightningReceiveFunded),
-    Success(TransactionId),
+    Success(Vec<OutPoint>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -223,11 +223,14 @@ impl LightningReceiveConfirmedInvoice {
     ) -> LightningReceiveStateMachine {
         match result {
             Ok(contract) => {
-                let outpoint =
+                let (txid, out_points) =
                     Self::claim_incoming_contract(dbtx, contract, keypair, global_context).await;
                 LightningReceiveStateMachine {
                     operation_id: old_state.operation_id,
-                    state: LightningReceiveStates::Funded(LightningReceiveFunded { outpoint }),
+                    state: LightningReceiveStates::Funded(LightningReceiveFunded {
+                        txid,
+                        out_points,
+                    }),
                 }
             }
             Err(e) => LightningReceiveStateMachine {
@@ -242,7 +245,7 @@ impl LightningReceiveConfirmedInvoice {
         contract: IncomingContractAccount,
         keypair: KeyPair,
         global_context: DynGlobalClientContext,
-    ) -> OutPoint {
+    ) -> (TransactionId, Vec<OutPoint>) {
         let input = contract.claim();
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
@@ -252,8 +255,7 @@ impl LightningReceiveConfirmedInvoice {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let (txid, _) = global_context.claim_input(dbtx, client_input).await;
-        OutPoint { txid, out_idx: 0 }
+        global_context.claim_input(dbtx, client_input).await
     }
 
     async fn await_payment_timeout(timeout: Duration) {
@@ -276,7 +278,8 @@ impl LightningReceiveConfirmedInvoice {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct LightningReceiveFunded {
-    outpoint: OutPoint,
+    txid: TransactionId,
+    out_points: Vec<OutPoint>,
 }
 
 impl LightningReceiveFunded {
@@ -285,11 +288,14 @@ impl LightningReceiveFunded {
         operation_id: OperationId,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
-        let txid = self.outpoint.txid;
+        let out_points = self.out_points.clone();
         vec![StateTransition::new(
-            Self::await_claim_success(operation_id, global_context.clone(), txid),
+            Self::await_claim_success(operation_id, global_context.clone(), self.txid),
             move |_dbtx, result, old_state| {
-                Box::pin(Self::transition_claim_success(result, old_state, txid))
+                let out_points = out_points.clone();
+                Box::pin(Self::transition_claim_success(
+                    result, old_state, out_points,
+                ))
             },
         )]
     }
@@ -305,14 +311,14 @@ impl LightningReceiveFunded {
     async fn transition_claim_success(
         result: Result<(), String>,
         old_state: LightningReceiveStateMachine,
-        txid: TransactionId,
+        out_points: Vec<OutPoint>,
     ) -> LightningReceiveStateMachine {
         match result {
             Ok(_) => {
                 // Claim successful
                 LightningReceiveStateMachine {
                     operation_id: old_state.operation_id,
-                    state: LightningReceiveStates::Success(txid),
+                    state: LightningReceiveStates::Success(out_points),
                 }
             }
             Err(_) => {

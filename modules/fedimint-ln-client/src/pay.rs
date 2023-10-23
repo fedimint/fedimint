@@ -48,7 +48,7 @@ pub enum LightningPayStates {
     Success(String),
     Refundable(LightningPayRefundable),
     Refund(LightningPayRefund),
-    Refunded(TransactionId),
+    Refunded(Vec<OutPoint>),
     Failure(String),
 }
 
@@ -401,11 +401,11 @@ impl LightningPayRefundable {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let (refund_txid, _) = global_context.claim_input(dbtx, refund_client_input).await;
+        let (txid, out_points) = global_context.claim_input(dbtx, refund_client_input).await;
 
         LightningPayStateMachine {
             common: old_state.common,
-            state: LightningPayStates::Refund(LightningPayRefund { refund_txid }),
+            state: LightningPayStates::Refund(LightningPayRefund { txid, out_points }),
         }
     }
 
@@ -449,7 +449,8 @@ impl LightningPayRefundable {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct LightningPayRefund {
-    refund_txid: TransactionId,
+    txid: TransactionId,
+    out_points: Vec<OutPoint>,
 }
 
 impl LightningPayRefund {
@@ -458,14 +459,15 @@ impl LightningPayRefund {
         common: &LightningPayCommon,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
-        let refund_txid = self.refund_txid;
+        let refund_out_points = self.out_points.clone();
         vec![StateTransition::new(
-            Self::await_refund_success(common.clone(), global_context.clone(), refund_txid),
+            Self::await_refund_success(common.clone(), global_context.clone(), self.txid),
             move |_dbtx, result, old_state| {
+                let refund_out_points = refund_out_points.clone();
                 Box::pin(Self::transition_refund_success(
                     result,
                     old_state,
-                    refund_txid,
+                    refund_out_points,
                 ))
             },
         )]
@@ -484,23 +486,23 @@ impl LightningPayRefund {
     async fn transition_refund_success(
         result: Result<(), String>,
         old_state: LightningPayStateMachine,
-        refund_txid: TransactionId,
+        refund_out_points: Vec<OutPoint>,
     ) -> LightningPayStateMachine {
         match result {
             Ok(_) => {
                 // Refund successful
                 LightningPayStateMachine {
                     common: old_state.common,
-                    state: LightningPayStates::Refunded(refund_txid),
+                    state: LightningPayStates::Refunded(refund_out_points),
                 }
             }
             Err(_) => {
                 // Refund failure
                 LightningPayStateMachine {
                     common: old_state.common,
-                    state: LightningPayStates::Failure(format!(
-                        "Refund Transaction was rejected. Txid: {refund_txid}"
-                    )),
+                    state: LightningPayStates::Failure(
+                        "Refund Transaction was rejected.".to_string(),
+                    ),
                 }
             }
         }

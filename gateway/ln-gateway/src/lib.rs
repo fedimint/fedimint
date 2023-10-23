@@ -695,10 +695,7 @@ impl Gateway {
 
             while let Some(update) = updates.next().await {
                 match update {
-                    GatewayExtPayStates::Success {
-                        preimage,
-                        outpoint: _,
-                    } => return Ok(preimage),
+                    GatewayExtPayStates::Success { preimage, .. } => return Ok(preimage),
                     GatewayExtPayStates::Fail {
                         error,
                         error_message,
