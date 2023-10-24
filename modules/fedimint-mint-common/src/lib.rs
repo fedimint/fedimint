@@ -6,7 +6,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{plugin_types_trait_impl_common, Amount, OutPoint, PeerId};
+use fedimint_core::{plugin_types_trait_impl_common, Amount, PeerId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -24,24 +24,13 @@ pub const DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = 3;
 
 /// Data structures taking into account different amount tiers
 
-/// A consenus item from one of the federation members contributing partials
-/// signatures to blind nonces submitted in it
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct MintConsensusItem {
-    /// Reference to a Federation Transaction containing an [`MintOutput`] with
-    /// `BlindNonce`s the signatures` are for
-    pub out_point: OutPoint,
-    /// (Partial) signatures
-    pub signature_share: MintOutputSignatureShare,
-}
+pub struct MintConsensusItem;
 
-// FIXME: optimize out blinded msg by making the mint remember it
-/// Blind signature share from one Federation peer for a single [`MintOutput`]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputSignatureShare {
-    pub amount: Amount,
-    pub message: tbs::BlindedMessage,
-    pub signature_share: tbs::BlindedSignatureShare,
+impl std::fmt::Display for MintConsensusItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MintConsensusItem")
+    }
 }
 
 /// Result of Federation members confirming [`MintOutput`] by contributing
@@ -143,21 +132,11 @@ impl std::fmt::Display for MintOutput {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputOutcome(pub Option<MintOutputBlindSignature>);
+pub struct MintOutputOutcome(pub tbs::BlindedSignatureShare);
 
 impl std::fmt::Display for MintOutputOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Minted note")
-    }
-}
-
-impl std::fmt::Display for MintConsensusItem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Mint Blind Signature Shares worth {} for {}",
-            self.signature_share.amount, self.out_point
-        )
+        write!(f, "MintOutputOutcome")
     }
 }
 

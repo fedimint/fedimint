@@ -4,6 +4,7 @@ use std::mem;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, format_err};
+use fedimint_core::api::PeerResult;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, PeerId};
@@ -129,7 +130,9 @@ impl ErrorStrategy {
     }
 }
 
-/// Returns first response with a valid signature
+/// Returns the first valid response. The response of a peer is
+/// assumed to be final, hence this query strategy does not implement retry
+/// logic.
 pub struct FilterMap<R, T> {
     filter_map: Box<maybe_add_send_sync!(dyn Fn(R) -> anyhow::Result<T>)>,
     error_strategy: ErrorStrategy,
@@ -152,10 +155,59 @@ impl<R, T> FilterMap<R, T> {
 }
 
 impl<R: Debug + Eq + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
-    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<T> {
+    fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<T> {
         match result {
             Ok(response) => match (self.filter_map)(response) {
                 Ok(value) => QueryStep::Success(value),
+                Err(error) => self
+                    .error_strategy
+                    .process(peer, PeerError::InvalidResponse(error.to_string())),
+            },
+            Err(error) => self.error_strategy.process(peer, error),
+        }
+    }
+}
+
+/// Returns when a threshold of valid responses. The response of a peer is
+/// assumed to be final, hence this query strategy does not implement retry
+/// logic.
+pub struct FilterMapThreshold<R, T> {
+    filter_map: Box<maybe_add_send_sync!(dyn Fn(PeerId, R) -> anyhow::Result<T>)>,
+    error_strategy: ErrorStrategy,
+    filtered_responses: BTreeMap<PeerId, T>,
+    threshold: usize,
+}
+
+impl<R, T> FilterMapThreshold<R, T> {
+    pub fn new(
+        verifier: impl Fn(PeerId, R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
+        total_peers: usize,
+    ) -> Self {
+        let max_evil = (total_peers - 1) / 3;
+        let threshold = total_peers - max_evil;
+
+        Self {
+            filter_map: Box::new(verifier),
+            error_strategy: ErrorStrategy::new(max_evil + 1),
+            filtered_responses: BTreeMap::new(),
+            threshold,
+        }
+    }
+}
+
+impl<R: Eq + Clone + Debug, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterMapThreshold<R, T> {
+    fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<BTreeMap<PeerId, T>> {
+        match result {
+            Ok(response) => match (self.filter_map)(peer, response) {
+                Ok(response) => {
+                    self.filtered_responses.insert(peer, response);
+
+                    if self.filtered_responses.len() == self.threshold {
+                        QueryStep::Success(mem::take(&mut self.filtered_responses))
+                    } else {
+                        QueryStep::Continue
+                    }
+                }
                 Err(error) => self
                     .error_strategy
                     .process(peer, PeerError::InvalidResponse(error.to_string())),

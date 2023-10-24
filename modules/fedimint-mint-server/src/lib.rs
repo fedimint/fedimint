@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 
-use anyhow::{bail, Context};
+use anyhow::bail;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -27,15 +27,13 @@ use fedimint_mint_common::config::{
 };
 use fedimint_mint_common::db::{
     DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix, MintAuditItemKey,
-    MintAuditItemKeyPrefix, NonceKey, NonceKeyPrefix, OutputOutcomeKey, OutputOutcomeKeyPrefix,
-    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
-    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
+    MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey,
+    NonceKeyPrefix,
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
     MintCommonGen, MintConsensusItem, MintError, MintInput, MintModuleTypes, MintOutput,
-    MintOutputBlindSignature, MintOutputOutcome, MintOutputSignatureShare,
-    DEFAULT_MAX_NOTES_PER_DENOMINATION,
+    MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
 };
 use fedimint_server::config::distributedgen::{scalar, PeerHandleOps};
 use futures::StreamExt;
@@ -43,8 +41,8 @@ use itertools::Itertools;
 use secp256k1_zkp::SECP256K1;
 use strum::IntoEnumIterator;
 use tbs::{
-    combine_valid_shares, dealer_keygen, sign_blinded_msg, verify_blind_share, Aggregatable,
-    AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare,
+    dealer_keygen, sign_blinded_msg, Aggregatable, AggregatePublicKey, PublicKeyShare,
+    SecretKeyShare,
 };
 use threshold_crypto::group::Curve;
 use tracing::{debug, info};
@@ -83,31 +81,11 @@ impl ExtendsCommonModuleInit for MintGen {
                 DbKeyPrefix::OutputOutcome => {
                     push_db_pair_items!(
                         dbtx,
-                        OutputOutcomeKeyPrefix,
+                        MintOutputOutcomePrefix,
                         OutputOutcomeKey,
-                        MintOutputBlindSignature,
+                        MintOutputOutcome,
                         mint,
                         "Output Outcomes"
-                    );
-                }
-                DbKeyPrefix::ProposedPartialSig => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ProposedPartialSignaturesKeyPrefix,
-                        ProposedPartialSignatureKey,
-                        MintOutputSignatureShare,
-                        mint,
-                        "Proposed Signature Shares"
-                    );
-                }
-                DbKeyPrefix::ReceivedPartialSig => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ReceivedPartialSignaturesKeyPrefix,
-                        ReceivedPartialSignatureKey,
-                        MintOutputSignatureShare,
-                        mint,
-                        "Received Signature Shares"
                     );
                 }
                 DbKeyPrefix::EcashBackup => {
@@ -313,7 +291,6 @@ impl ServerModuleInit for MintGen {
 pub struct Mint {
     cfg: MintConfig,
     sec_key: Tiered<SecretKeyShare>,
-    pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
 }
 #[apply(async_trait_maybe_send!)]
@@ -323,135 +300,18 @@ impl ServerModule for Mint {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _dbtx: &mut ModuleDatabaseTransaction<'_>,
     ) -> Vec<MintConsensusItem> {
-        dbtx.find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
-            .await
-            .map(|(key, signature_share)| MintConsensusItem {
-                out_point: key.0,
-                signature_share,
-            })
-            .collect::<Vec<MintConsensusItem>>()
-            .await
+        Vec::new()
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
-        consensus_item: MintConsensusItem,
-        peer_id: PeerId,
+        _dbtx: &mut ModuleDatabaseTransaction<'b>,
+        _consensus_item: MintConsensusItem,
+        _peer_id: PeerId,
     ) -> anyhow::Result<()> {
-        if dbtx
-            .get_value(&OutputOutcomeKey(consensus_item.out_point))
-            .await
-            .is_some()
-        {
-            bail!("Already obtained a threshold of blind signature shares")
-        }
-
-        if dbtx
-            .get_value(&ReceivedPartialSignatureKey(
-                consensus_item.out_point,
-                peer_id,
-            ))
-            .await
-            .is_some()
-        {
-            bail!("Already received a valid signature share by this peer");
-        }
-
-        // check if we are collecting signature shares for this out_point
-        let our_contribution = dbtx
-            .get_value(&ProposedPartialSignatureKey(consensus_item.out_point))
-            .await
-            .context("Out point for this signature share does not exist")?;
-
-        let amount_key_share = self.pub_key_shares[&peer_id]
-            .get(consensus_item.signature_share.amount)
-            .ok_or(MintError::InvalidAmountTier(
-                consensus_item.signature_share.amount,
-            ))
-            .into_module_error_other()?;
-
-        // check if the received signatures are valid for the reference_messages
-        if !verify_blind_share(
-            our_contribution.message,
-            consensus_item.signature_share.signature_share,
-            *amount_key_share,
-        ) {
-            bail!("Signature share signature is invalid")
-        }
-
-        // we save the first valid signature share by this peer
-        dbtx.insert_new_entry(
-            &ReceivedPartialSignatureKey(consensus_item.out_point, peer_id),
-            &consensus_item.signature_share,
-        )
-        .await;
-
-        // retrieve all valid signature shares previously received for this out point
-        let signature_shares: Vec<(usize, BlindedSignatureShare)> = dbtx
-            .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix(
-                consensus_item.out_point,
-            ))
-            .await
-            .map(|(key, signature_share)| (key.1.to_usize(), signature_share.signature_share))
-            .collect()
-            .await;
-
-        // check if we have enough signature shares to combine
-        if signature_shares.len() < self.cfg.consensus.peer_tbs_pks.threshold() {
-            return Ok(());
-        }
-
-        let blind_signature = combine_valid_shares(
-            signature_shares,
-            self.cfg.consensus.peer_tbs_pks.threshold(),
-        );
-
-        dbtx.remove_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix(
-            consensus_item.out_point,
-        ))
-        .await;
-
-        dbtx.remove_entry(&ProposedPartialSignatureKey(consensus_item.out_point))
-            .await;
-
-        dbtx.insert_entry(
-            &OutputOutcomeKey(consensus_item.out_point),
-            &MintOutputBlindSignature(blind_signature),
-        )
-        .await;
-
-        // TODO: move the db compaction somewhere more appropriate, possibly in the
-        // audit method?
-        let mut redemptions = Amount::from_sats(0);
-        let mut issuances = Amount::from_sats(0);
-        let remove_audit_keys = dbtx
-            .find_by_prefix(&MintAuditItemKeyPrefix)
-            .await
-            .map(|(key, amount)| {
-                match key {
-                    MintAuditItemKey::Issuance(_) => issuances += amount,
-                    MintAuditItemKey::IssuanceTotal => issuances += amount,
-                    MintAuditItemKey::Redemption(_) => redemptions += amount,
-                    MintAuditItemKey::RedemptionTotal => redemptions += amount,
-                }
-                key
-            })
-            .collect::<Vec<_>>()
-            .await;
-
-        for key in remove_audit_keys {
-            dbtx.remove_entry(&key).await;
-        }
-
-        dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
-            .await;
-        dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
-            .await;
-
-        Ok(())
+        bail!("Mint does not process consensus items");
     }
 
     async fn process_input<'a, 'b, 'c>(
@@ -504,15 +364,9 @@ impl ServerModule for Mint {
             .ok_or(MintError::InvalidAmountTier(output.amount))
             .into_module_error_other()?;
 
-        let signature_share = sign_blinded_msg(output.blind_nonce.0, *amount_key);
-
         dbtx.insert_new_entry(
-            &ProposedPartialSignatureKey(out_point),
-            &MintOutputSignatureShare {
-                amount: output.amount,
-                message: output.blind_nonce.0,
-                signature_share,
-            },
+            &MintOutputOutcomeKey(out_point),
+            &MintOutputOutcome(sign_blinded_msg(output.blind_nonce.0, *amount_key)),
         )
         .await;
 
@@ -530,26 +384,7 @@ impl ServerModule for Mint {
         dbtx: &mut ModuleDatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<MintOutputOutcome> {
-        let we_proposed = dbtx
-            .get_value(&ProposedPartialSignatureKey(out_point))
-            .await
-            .is_some();
-        let was_consensus_outcome = dbtx
-            .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix(out_point))
-            .await
-            .collect::<Vec<_>>()
-            .await
-            .is_empty();
-
-        let final_sig = dbtx.get_value(&OutputOutcomeKey(out_point)).await;
-
-        if final_sig.is_some() {
-            Some(MintOutputOutcome(final_sig))
-        } else if we_proposed || was_consensus_outcome {
-            Some(MintOutputOutcome(None))
-        } else {
-            None
-        }
+        dbtx.get_value(&MintOutputOutcomeKey(out_point)).await
     }
 
     async fn audit(
@@ -558,6 +393,32 @@ impl ServerModule for Mint {
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
+        let mut redemptions = Amount::from_sats(0);
+        let mut issuances = Amount::from_sats(0);
+        let remove_audit_keys = dbtx
+            .find_by_prefix(&MintAuditItemKeyPrefix)
+            .await
+            .map(|(key, amount)| {
+                match key {
+                    MintAuditItemKey::Issuance(_) => issuances += amount,
+                    MintAuditItemKey::IssuanceTotal => issuances += amount,
+                    MintAuditItemKey::Redemption(_) => redemptions += amount,
+                    MintAuditItemKey::RedemptionTotal => redemptions += amount,
+                }
+                key
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        for key in remove_audit_keys {
+            dbtx.remove_entry(&key).await;
+        }
+
+        dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
+            .await;
+        dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
+            .await;
+
         audit
             .add_items(
                 dbtx,
@@ -690,7 +551,6 @@ impl Mint {
         Mint {
             cfg: cfg.clone(),
             sec_key: cfg.private.tbs_sks,
-            pub_key_shares: cfg.consensus.peer_tbs_pks.into_iter().collect(),
             pub_key: aggregate_pub_keys,
         }
     }
@@ -846,13 +706,10 @@ mod fedimint_migration_tests {
     use fedimint_core::{Amount, OutPoint, ServerModule, TransactionId};
     use fedimint_mint_common::db::{
         DbKeyPrefix, ECashUserBackupSnapshot, EcashBackupKey, EcashBackupKeyPrefix,
-        MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, NonceKeyPrefix, OutputOutcomeKey,
-        OutputOutcomeKeyPrefix, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
-        ReceivedPartialSignatureKey, ReceivedPartialSignaturesKeyPrefix,
+        MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
+        NonceKey, NonceKeyPrefix,
     };
-    use fedimint_mint_common::{
-        MintCommonGen, MintOutputBlindSignature, MintOutputSignatureShare, Nonce,
-    };
+    use fedimint_mint_common::{MintCommonGen, MintOutputOutcome, Nonce};
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
     };
@@ -860,8 +717,7 @@ mod fedimint_migration_tests {
     use rand::rngs::OsRng;
     use strum::IntoEnumIterator;
     use tbs::{
-        blind_message, combine_valid_shares, sign_blinded_msg, BlindingKey, FromRandom, Message,
-        Scalar, SecretKeyShare,
+        blind_message, sign_blinded_msg, BlindingKey, FromRandom, Message, Scalar, SecretKeyShare,
     };
 
     use crate::{Mint, MintGen};
@@ -887,33 +743,9 @@ mod fedimint_migration_tests {
         let blinded_message = blind_message(message, blinding_key);
         let secret_key_share = SecretKeyShare(Scalar::from_random(&mut OsRng));
         let blind_signature_share = sign_blinded_msg(blinded_message, secret_key_share);
-
         dbtx.insert_new_entry(
-            &ProposedPartialSignatureKey(out_point),
-            &MintOutputSignatureShare {
-                amount: Amount::from_sats(1000),
-                message: blinded_message,
-                signature_share: blind_signature_share,
-            },
-        )
-        .await;
-
-        dbtx.insert_new_entry(
-            &ReceivedPartialSignatureKey(out_point, 1.into()),
-            &MintOutputSignatureShare {
-                amount: Amount::from_sats(1000),
-                message: blinded_message,
-                signature_share: blind_signature_share,
-            },
-        )
-        .await;
-
-        let shares = vec![(0, blind_signature_share)].into_iter();
-        let blind_sig = combine_valid_shares(shares, 1);
-
-        dbtx.insert_new_entry(
-            &OutputOutcomeKey(out_point),
-            &MintOutputBlindSignature(blind_sig),
+            &MintOutputOutcomeKey(out_point),
+            &MintOutputOutcome(blind_signature_share),
         )
         .await;
 
@@ -971,8 +803,8 @@ mod fedimint_migration_tests {
                     module.database_version(),
                     module.get_database_migrations(),
                 )
-                    .await
-                    .context("Error applying migrations to temp database")?;
+                .await
+                .context("Error applying migrations to temp database")?;
 
                 // Verify that all of the data from the mint namespace can be read. If a
                 // database migration failed or was not properly supplied,
@@ -993,33 +825,9 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any NoteNonces"
                             );
                         }
-                        DbKeyPrefix::ProposedPartialSig => {
-                            let proposed_partial_sigs = dbtx
-                                .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_sigs = proposed_partial_sigs.len();
-                            ensure!(
-                                num_sigs > 0,
-                                "validate_migrations was not able to read any ProposedPartialSignatures"
-                            );
-                        }
-                        DbKeyPrefix::ReceivedPartialSig => {
-                            let received_partial_sigs = dbtx
-                                .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_sigs = received_partial_sigs.len();
-                            ensure!(
-                                num_sigs > 0,
-                                "validate_migrations was not able to read any ReceivedPartialSignatures"
-                            );
-                        }
                         DbKeyPrefix::OutputOutcome => {
                             let outcomes = dbtx
-                                .find_by_prefix(&OutputOutcomeKeyPrefix)
+                                .find_by_prefix(&MintOutputOutcomePrefix)
                                 .await
                                 .collect::<Vec<_>>()
                                 .await;
@@ -1063,6 +871,8 @@ mod fedimint_migration_tests {
                 <Mint as ServerModule>::decoder(),
             )]),
         )
-            .await.context("Migration validation").unwrap();
+        .await
+        .context("Migration validation")
+        .unwrap();
     }
 }
