@@ -1,4 +1,5 @@
 mod client;
+mod nostr_subcommands;
 mod utils;
 
 use core::fmt;

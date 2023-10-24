@@ -32,7 +32,7 @@ use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
 use tracing::info;
 
-use crate::{metadata_from_clap_cli, LnInvoiceResponse, Opts};
+use crate::{metadata_from_clap_cli, nostr_subcommands, LnInvoiceResponse, Opts};
 
 #[derive(Debug, Clone)]
 pub enum ModuleSelector {
@@ -152,6 +152,10 @@ pub enum ClientCmd {
 
         #[clap(long)]
         peer_id: PeerId,
+    },
+    Nostr {
+        #[clap(subcommand)]
+        nostr_command: NostrCommands,
     },
     ListNoteRequests,
     SignNote {
@@ -513,6 +517,205 @@ pub async fn handle_command(
             let note_id = format!("{}", unsigned_event.id);
             Ok(json!(note_id))
         }
+        ClientCmd::Nostr { nostr_command } => {
+            match &nostr_command {
+                NostrCommands::UpdateMetadata(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::update_metadata::update_metadata(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::TextNote(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::text_note::broadcast_textnote(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::RecommendRelay(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::recommend_relay::recommend_relay(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::PublishContactListCsv(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::publish_contactlist_csv::publish_contact_list_from_csv_file(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::SendDirectMessage(sub_command_args) => {
+                    todo!()
+                    //     nostr_subcommands::dm::send(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::DeleteEvent(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::delete_event::delete(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::React(sub_command_args) => {
+                    todo!()
+                    //     nostr_subcommands::react::react_to_event(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::ListEvents(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::list_events::list_events(args.relays,
+                    // sub_command_args)
+                }
+                NostrCommands::GenerateKeypair(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::generate_keypair::get_new_keypair(sub_command_args)
+                }
+                NostrCommands::ConvertKey(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::convert_key::convert_key(sub_command_args)
+                }
+                NostrCommands::Nprofile(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::nprofile::nprofile(sub_command_args)
+                }
+                NostrCommands::Vanity(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::vanity::vanity(sub_command_args)
+                }
+                NostrCommands::CreatePublicChannel(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::create_public_channel::create_public_channel(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::SetChannelMetadata(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::set_channel_metadata::set_channel_metadata(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::SendChannelMessage(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::send_channel_message::send_channel_message(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::HidePublicChannelMessage(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::hide_public_channel_message::hide_public_channel_message(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::MutePublicKey(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::mute_publickey::mute_publickey(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::BroadcastEvents(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::broadcast_events::broadcast_events(args.relays, sub_command_args)
+                }
+                NostrCommands::CreateZapRequest(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::zap_request::create_zap_request(
+                    //     args.private_key,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::CreateZapReceipt(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::zap_receipt::send_zap_receipt(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::CreateBadge(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::create_badge::create_badge(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::AwardBadge(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::award_badge::award_badge(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::ProfileBadges(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::profile_badges::set_profile_badges(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::CustomEvent(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::custom_event::create_custom_event(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+                NostrCommands::SetUserStatus(sub_command_args) => {
+                    todo!()
+                    // nostr_subcommands::user_status::set_user_status(
+                    //     args.private_key,
+                    //     args.relays,
+                    //     args.difficulty_target,
+                    //     sub_command_args,
+                    // )
+                }
+            }
+        }
         ClientCmd::ListNoteRequests => {
             let note_requests = client.list_note_requests().await?;
             Ok(json!(note_requests))
@@ -534,6 +737,65 @@ pub async fn handle_command(
             Ok(json!(npub))
         }
     }
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum NostrCommands {
+    /// Update metadata
+    UpdateMetadata(nostr_subcommands::update_metadata::UpdateMetadataSubCommand),
+    /// Send text note
+    TextNote(nostr_subcommands::text_note::TextNoteSubCommand),
+    /// Recommend a relay
+    RecommendRelay(nostr_subcommands::recommend_relay::RecommendRelaySubCommand),
+    /// Publish contacts from a CSV file
+    PublishContactListCsv(
+        nostr_subcommands::publish_contactlist_csv::PublishContactListCsvSubCommand,
+    ),
+    /// Send a direct message
+    SendDirectMessage(nostr_subcommands::dm::SendDirectMessageSubCommand),
+    /// Delete an event
+    DeleteEvent(nostr_subcommands::delete_event::DeleteEventSubCommand),
+    /// React to an event
+    React(nostr_subcommands::react::ReactionSubCommand),
+    /// Get all events
+    ListEvents(nostr_subcommands::list_events::ListEventsSubCommand),
+    /// Generate a new keypair
+    GenerateKeypair(nostr_subcommands::generate_keypair::GenerateKeypairSubCommand),
+    /// Convert key from bech32 to hex or hex to bech32
+    ConvertKey(nostr_subcommands::convert_key::ConvertKeySubCommand),
+    /// Vanity public key mining
+    Vanity(nostr_subcommands::vanity::VanitySubCommand),
+    /// Create a new public channel
+    CreatePublicChannel(nostr_subcommands::create_public_channel::CreatePublicChannelSubCommand),
+    /// Update channel metadata
+    SetChannelMetadata(nostr_subcommands::set_channel_metadata::SetChannelMetadataSubCommand),
+    /// Send a message to a public channel
+    SendChannelMessage(nostr_subcommands::send_channel_message::SendChannelMessageSubCommand),
+    /// Hide a message in a public chat room
+    HidePublicChannelMessage(
+        nostr_subcommands::hide_public_channel_message::HidePublicChannelMessageSubCommand,
+    ),
+    /// Mute a public key
+    MutePublicKey(nostr_subcommands::mute_publickey::MutePublickeySubCommand),
+    /// Encode/Decode a nprofile string (bech32 encoded)
+    Nprofile(nostr_subcommands::nprofile::NprofileSubCommand),
+    /// Broadcast events from file
+    BroadcastEvents(nostr_subcommands::broadcast_events::BroadcastEventsSubCommand),
+    /// Create a zap request. Currently just prints the json to console, you
+    /// need to send the HTTP request yourself.
+    CreateZapRequest(nostr_subcommands::zap_request::CreateZapRequestCommand),
+    /// Send a zap receipt note.
+    CreateZapReceipt(nostr_subcommands::zap_receipt::SendZapSubCommand),
+    /// Create a new badge
+    CreateBadge(nostr_subcommands::create_badge::CreateBadgeSubCommand),
+    /// Publish award badge event
+    AwardBadge(nostr_subcommands::award_badge::AwardBadgeSubCommand),
+    /// Set profile badges
+    ProfileBadges(nostr_subcommands::profile_badges::ProfileBadgesSubCommand),
+    /// Create custom event
+    CustomEvent(nostr_subcommands::custom_event::CustomEventCommand),
+    /// Create a user status event
+    SetUserStatus(nostr_subcommands::user_status::UserStatusSubCommand),
 }
 
 async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> {
