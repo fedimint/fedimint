@@ -296,7 +296,10 @@
           # purposes (like `nix build`).
           legacyPackages = craneMultiBuild;
 
-          packages = { };
+          packages = {
+            inherit (craneMultiBuild) gatewayd gateway-cli fedimint-cli fedimintd fedimint-load-test-tool;
+            inherit (craneMultiBuild) client-pkgs gateway-pkgs fedimint-pkgs;
+          };
 
           lib = {
             inherit replaceGitHash devShells;
