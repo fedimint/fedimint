@@ -17,6 +17,7 @@ use rand::thread_rng;
 use tracing::info;
 
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
+use crate::gateway_module_v2::GatewayClientInitV2;
 use crate::state_machine::GatewayClientInit;
 use crate::{Gateway, GatewayError, Result};
 
@@ -56,11 +57,13 @@ impl GatewayClientBuilder {
         let federation_id = invite_code.federation_id();
 
         let mut registry = self.registry.clone();
+
         registry.attach(GatewayClientInit {
             timelock_delta,
             mint_channel_id,
-            gateway,
+            gateway: gateway.clone(),
         });
+        registry.attach(GatewayClientInitV2 { gateway });
 
         let db_path = self.work_dir.join(format!("{federation_id}.db"));
 

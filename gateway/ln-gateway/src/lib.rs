@@ -1,6 +1,7 @@
 pub mod client;
 mod db;
 pub mod envs;
+pub mod gateway_module_v2;
 pub mod lightning;
 pub mod rpc;
 pub mod state_machine;
@@ -24,6 +25,7 @@ use std::time::Duration;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Network, Txid};
+use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
@@ -39,25 +41,30 @@ use fedimint_core::bitcoin_migration::{
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    ModuleInstanceId, ModuleKind, OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{
     apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
+use fedimint_core::encoding::Encodable;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
-use fedimint_core::time::now;
+use fedimint_core::time::{duration_since_epoch, now};
 use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{
-    fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll,
+    fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll, BitcoinHash,
 };
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
+use fedimint_lnv2_client::api::LnFederationApi;
+use fedimint_lnv2_client::{
+    CreateInvoicePayload, PaymentFee, PaymentFees, PaymentInfo, SendPaymentPayload,
+};
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -67,13 +74,14 @@ use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
-use lightning_invoice::RoutingFees;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
     FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
     V1_API_ENDPOINT,
 };
+use secp256k1::schnorr::Signature;
 use secp256k1::PublicKey;
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -82,8 +90,13 @@ use thiserror::Error;
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
-use crate::db::{get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix};
+use crate::db::{
+    get_gatewayd_database_migrations, CreateInvoicePayloadKey, FederationConfig,
+    FederationIdKeyPrefix,
+};
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
+use crate::gateway_lnrpc::CreateInvoiceRequest;
+use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::lightning::cln::RouteHtlcStream;
 use crate::lightning::GatewayLightningBuilder;
 use crate::rpc::rpc_server::{hash_password, run_webserver};
@@ -92,7 +105,6 @@ use crate::rpc::{
     WithdrawPayload,
 };
 use crate::state_machine::GatewayExtPayStates;
-
 /// This initial SCID is considered invalid by LND HTLC interceptor,
 /// So we should always increment the value before assigning a new SCID.
 const INITIAL_SCID: u64 = 0;
@@ -112,6 +124,8 @@ pub const DEFAULT_FEES: RoutingFees = RoutingFees {
     // In other words, 10000 is 1%. The default is 10000 (1%).
     proportional_millionths: 10000,
 };
+
+const OUTGOING_CLTV_DELTA_V2: u64 = 144;
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
 
@@ -593,6 +607,7 @@ impl Gateway {
                     if handle.is_shutting_down() {
                         break;
                     }
+
                     let scid_to_feds = self.scid_to_federation.read().await;
                     let federation_id = scid_to_feds.get(&htlc_request.short_channel_id);
                     // Just forward the HTLC if we do not have a federation that
@@ -1545,6 +1560,236 @@ pub(crate) async fn fetch_lightning_node_info(
     Ok((node_pub_key, alias, network))
 }
 
+impl Gateway {
+    async fn public_key_v2(&self, federation_id: &FederationId) -> Option<PublicKey> {
+        self.clients.read().await.get(federation_id).map(|client| {
+            client
+                .value()
+                .get_first_module::<GatewayClientModuleV2>()
+                .keypair
+                .public_key()
+        })
+    }
+
+    pub async fn payment_info_v2(&self, federation_id: &FederationId) -> Option<PaymentInfo> {
+        Some(PaymentInfo {
+            public_key: self.public_key_v2(federation_id).await?,
+            payment_fees: self.payment_fees_v2(),
+            outgoing_cltv_delta: OUTGOING_CLTV_DELTA_V2,
+        })
+    }
+
+    pub fn payment_fees_v2(&self) -> PaymentFees {
+        PaymentFees {
+            // we take a fee of one percent for outgoing contracts
+            send: PaymentFee::default(),
+            // we take a fee of one percent for incoming contracts
+            receive: PaymentFee::default(),
+        }
+    }
+
+    async fn send_payment_v2(
+        &self,
+        payload: SendPaymentPayload,
+    ) -> std::result::Result<std::result::Result<[u8; 32], Signature>, SendPaymentErrorV2> {
+        let clients = self.clients.read().await;
+
+        let client = clients
+            .get(&payload.federation_id)
+            .ok_or(SendPaymentErrorV2::UnknownFederationId)?
+            .value();
+
+        let operation_id = OperationId(payload.contract.contract_id().0.into_inner());
+
+        let module = client.get_first_module::<GatewayClientModuleV2>();
+
+        if client.operation_exists(operation_id).await {
+            return Ok(module.subscribe_send(operation_id, payload.contract).await);
+        }
+
+        if payload.contract.claim_pk != module.keypair.public_key() {
+            return Err(SendPaymentErrorV2::NotOurKey);
+        }
+
+        if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
+            return Err(SendPaymentErrorV2::InvalidInvoiceHash);
+        }
+
+        let max_delay = module
+            .module_api
+            .outgoing_contract_expiration(&payload.contract.contract_id())
+            .await
+            .map_err(|_| SendPaymentErrorV2::FederationUnreachable)?
+            .ok_or(SendPaymentErrorV2::UnconfirmedContract)?
+            .saturating_sub(OUTGOING_CLTV_DELTA_V2);
+
+        if max_delay == 0 {
+            return Err(SendPaymentErrorV2::TimeoutTooClose);
+        }
+
+        let invoice_msats = payload
+            .invoice
+            .amount_milli_satoshis()
+            .ok_or(SendPaymentErrorV2::InvoiceMissingAmount)?;
+
+        let min_contract_amount = self.payment_fees_v2().send.add_fee(invoice_msats);
+
+        if payload.contract.amount < min_contract_amount {
+            return Err(SendPaymentErrorV2::Underfunded);
+        }
+
+        let additional_fee = payload.contract.amount - min_contract_amount;
+        let max_ln_fee = additional_fee.msats + (min_contract_amount.msats - invoice_msats) / 2;
+
+        module
+            .start_send_state_machine(
+                operation_id,
+                max_delay,
+                max_ln_fee,
+                payload.invoice,
+                payload.contract.clone(),
+            )
+            .await
+            .ok();
+
+        Ok(module.subscribe_send(operation_id, payload.contract).await)
+    }
+
+    async fn create_invoice_v2(
+        &self,
+        payload: CreateInvoicePayload,
+    ) -> std::result::Result<Bolt11Invoice, CreateInvoiceErrorV2> {
+        if !payload.contract.verify() {
+            return Err(CreateInvoiceErrorV2::InvalidContract);
+        }
+
+        loop {
+            let payload = payload.clone();
+            let mut dbtx = self.gateway_db.begin_transaction().await;
+
+            if let Some(existing_entry) = dbtx
+                .insert_entry(
+                    &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
+                    &payload,
+                )
+                .await
+            {
+                if existing_entry != payload {
+                    return Err(CreateInvoiceErrorV2::HashAlreadyRegistered);
+                }
+            }
+
+            let our_pk = self
+                .public_key_v2(&payload.federation_id)
+                .await
+                .ok_or(CreateInvoiceErrorV2::UnknownFederation)?;
+
+            if payload.contract.commitment.refund_pk != our_pk {
+                return Err(CreateInvoiceErrorV2::NotOurKey);
+            }
+
+            let contract_amount = self
+                .payment_fees_v2()
+                .receive
+                .subtract_fee(payload.invoice_amount.msats);
+
+            if contract_amount != payload.contract.commitment.amount {
+                return Err(CreateInvoiceErrorV2::Unbalanced);
+            }
+
+            if payload.contract.commitment.expiration <= duration_since_epoch().as_secs() {
+                return Err(CreateInvoiceErrorV2::ContractExpired);
+            }
+
+            let invoice = self
+                .create_invoice_via_lnrpc_v2(
+                    payload.contract.commitment.payment_hash,
+                    payload.invoice_amount,
+                    payload.description,
+                    payload.expiry_time,
+                )
+                .await
+                .map_err(CreateInvoiceErrorV2::NodeError)?;
+
+            if dbtx.commit_tx_result().await.is_ok() {
+                return Ok(invoice);
+            }
+        }
+    }
+
+    pub async fn create_invoice_via_lnrpc_v2(
+        &self,
+        payment_hash: sha256::Hash,
+        amount: Amount,
+        description: String,
+        expiry_time: u32,
+    ) -> std::result::Result<Bolt11Invoice, String> {
+        let lnrpc = self
+            .get_lightning_context()
+            .await
+            .map_err(|e| e.to_string())?
+            .lnrpc;
+
+        let response = lnrpc
+            .create_invoice(CreateInvoiceRequest {
+                payment_hash: payment_hash.into_inner().to_vec(),
+                amount_msat: amount.msats,
+                expiry: expiry_time,
+                description,
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Bolt11Invoice::from_str(&response.invoice).map_err(|e| e.to_string())
+    }
+
+    pub async fn receive_v2(
+        &self,
+        payment_hash: [u8; 32],
+        amount: Amount,
+    ) -> std::result::Result<[u8; 32], ReceiveErrorV2> {
+        let operation_id = OperationId(payment_hash);
+
+        let payload = self
+            .gateway_db
+            .begin_transaction_nc()
+            .await
+            .get_value(&CreateInvoicePayloadKey(payment_hash))
+            .await
+            .ok_or(ReceiveErrorV2::UnknownDecryptionContract)?;
+
+        let clients = self.clients.read().await;
+
+        let client = clients
+            .get(&payload.federation_id)
+            .ok_or(ReceiveErrorV2::UnknownFederationId)?
+            .value();
+
+        let module = client.get_first_module::<GatewayClientModuleV2>();
+
+        if client.operation_exists(operation_id).await {
+            return module
+                .subscribe_receive(operation_id)
+                .await
+                .ok_or(ReceiveErrorV2::Failure);
+        }
+
+        if payload.invoice_amount != amount {
+            return Err(ReceiveErrorV2::IncorrectAmount);
+        }
+
+        module
+            .start_receive_state_machine(operation_id, payload.contract)
+            .await
+            .map_err(ReceiveErrorV2::FinalizationError)?;
+
+        module
+            .subscribe_receive(operation_id)
+            .await
+            .ok_or(ReceiveErrorV2::Failure)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum GatewayError {
     #[error("Federation error: {}", OptStacktrace(.0))]
@@ -1616,4 +1861,58 @@ impl Display for PrettyInterceptHtlcRequest<'_> {
             htlc_request.htlc_id,
         )
     }
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum SendPaymentErrorV2 {
+    #[error("The federation id is unknown")]
+    UnknownFederationId,
+    #[error("The outgoing contract has not been confirmed by the federation")]
+    UnconfirmedContract,
+    #[error("The invoice's hash does not match the commitment in the contract")]
+    InvalidInvoiceHash,
+    #[error("The outgoing contract keyed to another gateway")]
+    NotOurKey,
+    #[error("Invoice is missing amount")]
+    InvoiceMissingAmount,
+    #[error("Outgoing contract is underfunded")]
+    Underfunded,
+    #[error("The gateway can not reach the federation to confirm contract")]
+    FederationUnreachable,
+    #[error("The contract's timeout is in the past or does not allow for a safety margin")]
+    TimeoutTooClose,
+    #[error("The invoice is expired.")]
+    InvoiceExpired,
+}
+
+#[derive(Error, Debug)]
+pub enum ReceiveErrorV2 {
+    #[error("The federation id is unknown")]
+    UnknownFederationId,
+    #[error("There is no corresponding decryption contract available")]
+    UnknownDecryptionContract,
+    #[error("The available decryption contract's amount does not match the amount in the request")]
+    IncorrectAmount,
+    #[error("The funding transaction could not be finalized {0}")]
+    FinalizationError(anyhow::Error),
+    #[error("The internal send failed")]
+    Failure,
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum CreateInvoiceErrorV2 {
+    #[error("The contract is invalid")]
+    InvalidContract,
+    #[error("The contract is keyed to another gateway")]
+    NotOurKey,
+    #[error("The gateway is not connected to the Federation")]
+    UnknownFederation,
+    #[error("A different decryption contract with this hash is already registered")]
+    HashAlreadyRegistered,
+    #[error("The contract is already expired")]
+    ContractExpired,
+    #[error("Incoming contract would be underfunded")]
+    Unbalanced,
+    #[error("The lightning node failed to create an invoice")]
+    NodeError(String),
 }

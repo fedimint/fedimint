@@ -1,0 +1,51 @@
+[package]
+name = "fedimint-lnv2-client"
+version = "0.4.0-alpha"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-ln is a lightning payment service module."
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.cargo-udeps.ignore]
+# cargo udeps can't detect that one
+normal = ["aquamarine"]
+
+[lib]
+name = "fedimint_lnv2_client"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+async-trait = "0.1.73"
+async-stream = "0.3.5"
+aquamarine = "0.3.0"
+bincode = "1"
+bitcoin = "0.29.2"
+bitcoin_hashes = "0.11.0"
+erased-serde = { workspace = true }
+futures = "0.3.24"
+itertools = "0.10.5"
+lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
+fedimint-client = { path = "../../fedimint-client" }
+fedimint-core ={ path = "../../fedimint-core" }
+fedimint-lnv2-common ={ path = "../fedimint-lnv2-common" }
+secp256k1 = { version="0.24.2", default-features=false }
+secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
+serde = {version = "1.0.149", features = [ "derive" ] }
+serde_json = "1.0.91"
+strum = "0.24"
+strum_macros = "0.24"
+thiserror = "1.0.39"
+threshold_crypto = { workspace = true }
+tokio = { version = "1.26.0", features = ["macros"] }
+tracing = "0.1.37"
+rand = "0.8"
+url = { version = "2.3.1", features = ["serde"] }
+tpe = { package = "fedimint-tpe", version = "0.4.0-alpha", path = "../../crypto/tpe" }
+reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }
+
+[dev-dependencies]
+tokio = {version = "1.26.0", features = [ "full" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }

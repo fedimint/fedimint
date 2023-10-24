@@ -160,6 +160,20 @@ dependencies = [
 
 [[package]]
 name = "aquamarine"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1da02abba9f9063d786eab1509833ebb2fac0f966862ca59439c76b9c566760"
+dependencies = [
+ "include_dir",
+ "itertools 0.10.5",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "aquamarine"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21cc1548309245035eb18aa7f0967da6bc65587005170c56e6ef2788a4cf3f4e"
@@ -1386,7 +1400,7 @@ name = "fedimint-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
+ "aquamarine 0.5.0",
  "async-stream",
  "async-trait",
  "bitcoin 0.29.2",
@@ -1404,8 +1418,8 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -1476,8 +1490,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serdect",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "test-log",
  "thiserror",
  "tokio",
@@ -1515,8 +1529,8 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "tokio",
  "tracing",
 ]
@@ -1562,8 +1576,8 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
 ]
@@ -1582,8 +1596,8 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
 ]
@@ -1602,8 +1616,8 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tracing",
@@ -1626,8 +1640,8 @@ dependencies = [
  "futures",
  "rand",
  "secp256k1 0.24.3",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "tokio",
  "tracing",
 ]
@@ -1644,8 +1658,8 @@ dependencies = [
  "fedimint-empty-common",
  "futures",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
 ]
@@ -1660,8 +1674,8 @@ dependencies = [
  "fedimint-core",
  "futures",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
 ]
@@ -1677,8 +1691,8 @@ dependencies = [
  "fedimint-empty-common",
  "futures",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
 ]
@@ -1726,7 +1740,7 @@ name = "fedimint-ln-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
+ "aquamarine 0.5.0",
  "async-stream",
  "async-trait",
  "bincode",
@@ -1746,8 +1760,8 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tracing",
@@ -1760,7 +1774,7 @@ name = "fedimint-ln-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
+ "aquamarine 0.5.0",
  "async-trait",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
@@ -1777,8 +1791,8 @@ dependencies = [
  "serde",
  "serde-big-array",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tracing",
@@ -1791,7 +1805,7 @@ name = "fedimint-ln-gateway"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
+ "aquamarine 0.5.0",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -1813,12 +1827,15 @@ dependencies = [
  "fedimint-ln-client",
  "fedimint-ln-common",
  "fedimint-ln-server",
+ "fedimint-lnv2-client",
+ "fedimint-lnv2-common",
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "fedimint-tonic-lnd",
+ "fedimint-tpe",
  "fedimint-unknown-common",
  "fedimint-unknown-server",
  "fedimint-wallet-client",
@@ -1833,8 +1850,8 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -1869,8 +1886,8 @@ dependencies = [
  "secp256k1 0.24.3",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "test-log",
  "thiserror",
  "tokio",
@@ -1904,10 +1921,138 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "fedimint-lnv2-client"
+version = "0.4.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine 0.3.3",
+ "async-stream",
+ "async-trait",
+ "bincode",
+ "bitcoin 0.29.2",
+ "bitcoin_hashes 0.11.0",
+ "erased-serde",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-lnv2-common",
+ "fedimint-threshold-crypto",
+ "fedimint-tpe",
+ "futures",
+ "itertools 0.10.5",
+ "lightning-invoice",
+ "rand",
+ "reqwest 0.11.26",
+ "secp256k1 0.24.3",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "fedimint-lnv2-common"
+version = "0.4.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine 0.3.3",
+ "async-trait",
+ "bincode",
+ "bitcoin 0.29.2",
+ "bitcoin_hashes 0.11.0",
+ "bls12_381",
+ "erased-serde",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-threshold-crypto",
+ "fedimint-tpe",
+ "ff",
+ "futures",
+ "group",
+ "itertools 0.10.5",
+ "lightning-invoice",
+ "rand",
+ "rand_chacha",
+ "secp256k1 0.24.3",
+ "serde",
+ "serde_json",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "fedimint-lnv2-server"
+version = "0.4.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bitcoin_hashes 0.11.0",
+ "bls12_381",
+ "erased-serde",
+ "fedimint-bitcoind",
+ "fedimint-core",
+ "fedimint-lnv2-common",
+ "fedimint-server",
+ "fedimint-threshold-crypto",
+ "fedimint-tpe",
+ "futures",
+ "group",
+ "itertools 0.10.5",
+ "lightning-invoice",
+ "rand",
+ "secp256k1 0.24.3",
+ "serde",
+ "serde_json",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "fedimint-lnv2-tests"
+version = "0.4.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin 0.29.2",
+ "fedimint-bitcoind",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-ln-client",
+ "fedimint-ln-common",
+ "fedimint-ln-server",
+ "fedimint-lnv2-client",
+ "fedimint-lnv2-common",
+ "fedimint-lnv2-server",
+ "fedimint-logging",
+ "fedimint-server",
+ "fedimint-testing",
+ "lightning-invoice",
+ "tokio",
 ]
 
 [[package]]
@@ -1972,8 +2117,8 @@ dependencies = [
  "secp256k1 0.24.3",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
 ]
@@ -1994,8 +2139,8 @@ dependencies = [
  "secp256k1 0.24.3",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
 ]
@@ -2015,8 +2160,8 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tracing",
@@ -2040,7 +2185,7 @@ name = "fedimint-mint-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
+ "aquamarine 0.5.0",
  "async-stream",
  "async-trait",
  "base64 0.22.0",
@@ -2063,8 +2208,8 @@ dependencies = [
  "serde",
  "serde-big-array",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "test-log",
  "thiserror",
  "tokio",
@@ -2089,8 +2234,8 @@ dependencies = [
  "secp256k1 0.24.3",
  "secp256k1-zkp",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tracing",
  "tracing-subscriber",
@@ -2118,8 +2263,8 @@ dependencies = [
  "secp256k1 0.24.3",
  "secp256k1-zkp",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "test-log",
  "thiserror",
  "tokio",
@@ -2152,8 +2297,8 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "tokio",
  "tracing",
 ]
@@ -2255,8 +2400,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "tar",
  "tempfile",
  "test-log",
@@ -2365,6 +2510,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-tpe"
+version = "0.4.0-alpha"
+dependencies = [
+ "bitcoin_hashes 0.11.0",
+ "bls12_381",
+ "fedimint-core",
+ "ff",
+ "group",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde-big-array",
+]
+
+[[package]]
 name = "fedimint-unknown-common"
 version = "0.4.0-alpha"
 dependencies = [
@@ -2392,8 +2552,8 @@ dependencies = [
  "futures",
  "rand",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tracing",
@@ -2404,7 +2564,7 @@ name = "fedimint-wallet-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
+ "aquamarine 0.5.0",
  "async-stream",
  "async-trait",
  "bitcoin 0.29.2",
@@ -2420,8 +2580,8 @@ dependencies = [
  "secp256k1 0.24.3",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tracing",
@@ -2447,8 +2607,8 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "test-log",
  "thiserror",
  "tokio",
@@ -2479,8 +2639,8 @@ dependencies = [
  "rand",
  "secp256k1 0.24.3",
  "serde",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "thiserror",
  "tokio",
  "tracing",
@@ -2514,8 +2674,8 @@ dependencies = [
  "miniscript 10.0.0",
  "rand",
  "secp256k1 0.24.3",
- "strum",
- "strum_macros",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "tokio",
  "tracing",
 ]
@@ -4949,9 +5109,28 @@ checksum = "5ee073c9e4cd00e28217186dbe12796d692868f432bf2e97ee73bed0c56dfa01"
 
 [[package]]
 name = "strum"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
+
+[[package]]
+name = "strum"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d8cec3501a5194c432b2b7976db6b7d10ec95c253208b45f83f7136aa985e29"
+
+[[package]]
+name = "strum_macros"
+version = "0.24.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e385be0d24f186b4ce2f9982191e7101bb737312ad61c1f2f984f34bcf85d59"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "strum_macros"

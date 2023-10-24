@@ -13,8 +13,9 @@ use tracing::info;
 use super::{ILnRpcClient, LightningRpcError};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetNodeInfoResponse,
+    GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
@@ -137,6 +138,20 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 failure_reason: status.message().to_string(),
             }
         })?;
+        Ok(res.into_inner())
+    }
+
+    async fn create_invoice(
+        &self,
+        create_invoice_request: CreateInvoiceRequest,
+    ) -> Result<CreateInvoiceResponse, LightningRpcError> {
+        let mut client = Self::connect(self.connection_url.clone()).await?;
+        let res = client
+            .create_invoice(create_invoice_request)
+            .await
+            .map_err(|status| LightningRpcError::FailedToGetInvoice {
+                failure_reason: status.message().to_string(),
+            })?;
         Ok(res.into_inner())
     }
 }

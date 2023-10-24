@@ -22,8 +22,9 @@ use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
 use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gateway_lnrpc::{
-    EmptyRequest, EmptyResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetNodeInfoResponse,
+    GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -495,6 +496,15 @@ impl GatewayLightning for ClnRpcService {
             return Err(Status::internal("No interceptor reference found for htlc"));
         }
         Ok(tonic::Response::new(EmptyResponse {}))
+    }
+
+    async fn create_invoice(
+        &self,
+        _create_invoice_request: tonic::Request<CreateInvoiceRequest>,
+    ) -> Result<tonic::Response<CreateInvoiceResponse>, Status> {
+        Err(Status::internal(
+            "Invoice creation is not implemented for CLN",
+        ))
     }
 }
 
