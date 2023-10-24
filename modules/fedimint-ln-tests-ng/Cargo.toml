@@ -1,0 +1,33 @@
+[package]
+name = "fedimint-ln-tests-ng"
+version = "0.3.0-alpha"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-ln-tests contains integration tests for the lightning module"
+license = "MIT"
+publish = false
+
+[[test]]
+name = "fedimint_ln_tests_ng"
+path = "tests/tests.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
+fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-ln-common-ng = { path = "../fedimint-ln-common-ng" }
+fedimint-ln-client-ng = { path = "../fedimint-ln-client-ng" }
+fedimint-ln-server-ng = { path = "../fedimint-ln-server-ng" }
+fedimint-ln-common = { path = "../fedimint-ln-common" }
+fedimint-ln-client = { path = "../fedimint-ln-client" }
+fedimint-ln-server = { path = "../fedimint-ln-server" }
+fedimint-testing = { path = "../../fedimint-testing" }
+fedimint-client = { path = "../../fedimint-client" }
+fedimint-core ={ path = "../../fedimint-core" }
+fedimint-server = { path = "../../fedimint-server" }
+fedimint-logging = { path = "../../fedimint-logging" }
+tokio = { version = "1.26.0", features = ["sync"] }
+lightning-invoice = { version = "0.26.0", features = [ "serde" ] }

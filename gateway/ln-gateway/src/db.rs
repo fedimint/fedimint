@@ -9,6 +9,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_ln_client_ng::CreateInvoicePayload;
 use fedimint_ln_common::serde_routing_fees;
 use futures::FutureExt;
 use lightning_invoice::RoutingFees;
@@ -27,6 +28,7 @@ pub enum DbKeyPrefix {
     GatewayPublicKey = 0x06,
     GatewayConfiguration = 0x07,
     PreimageAuthentication = 0x08,
+    CreateInvoicePayload = 0x09,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -150,6 +152,15 @@ async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
 
     Ok(())
 }
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct CreateInvoicePayloadKey(pub [u8; 32]);
+
+impl_db_record!(
+    key = CreateInvoicePayloadKey,
+    value = CreateInvoicePayload,
+    db_prefix = DbKeyPrefix::CreateInvoicePayload,
+);
 
 #[cfg(test)]
 mod fedimint_migration_tests {
@@ -277,6 +288,7 @@ mod fedimint_migration_tests {
                             ensure!(gateway_configuration.is_some(), "validate_migrations was not able to read GatewayConfiguration");
                             info!("Validated GatewayConfiguration");
                         }
+                        DbKeyPrefix::CreateInvoicePayload => {}
                     }
                 }
                 Ok(())

@@ -31,7 +31,9 @@ use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
 use threshold_crypto::poly::Commitment;
 use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::{G1Projective, G2Affine, G2Projective, PublicKeySet, SecretKeyShare};
+use threshold_crypto::{
+    G1Affine, G1Projective, G2Affine, G2Projective, PublicKeySet, SecretKeyShare,
+};
 
 struct Dkg<G> {
     gen_g: G,
@@ -443,6 +445,20 @@ impl DkgKeys<G1Projective> {
             )),
         }
     }
+
+    pub fn tpe(self) -> (Vec<G1Projective>, Scalar) {
+        (self.public_key_set, self.secret_key_share)
+    }
+}
+
+pub fn evaluate_polynomial_g1(coefficients: &[G1Projective], x: &Scalar) -> G1Affine {
+    coefficients
+        .iter()
+        .cloned()
+        .rev()
+        .reduce(|acc, coefficient| acc * x + coefficient)
+        .expect("We have at least one coefficient")
+        .to_affine()
 }
 
 pub fn evaluate_polynomial_g2(coefficients: &[G2Projective], x: &Scalar) -> G2Affine {
