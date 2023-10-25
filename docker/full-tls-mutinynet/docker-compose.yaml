@@ -7,6 +7,7 @@
 # - gatewayd.fedimint.my-super-host.com
 # - gateway-ui.fedimint.my-super-host.com
 # - rtl.fedimint.my-super-host.com
+# - xmpp.fedimint.my-super-host.com
 
 version: "3.3"
 
@@ -21,8 +22,6 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      # - "--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
-      # - "--certificatesresolvers.myresolver.acme.email=postmaster@example.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - "443:443"
@@ -44,6 +43,7 @@ services:
       - FM_P2P_URL=fedimint://fedimint.my-super-host.com:8173
       - FM_BIND_API=0.0.0.0:80
       - FM_API_URL=wss://fedimintd.fedimint.my-super-host.com
+      - FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com
     restart: always
     platform: linux/amd64
     labels:
@@ -54,7 +54,7 @@ services:
       - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
 
   guardian-ui:
-    image: fedimintui/guardian-ui:0.1.1
+    image: fedimintui/guardian-ui:0.1.2
     environment:
       - PORT=80
       - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
@@ -104,7 +104,7 @@ services:
       - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
 
   gateway-ui:
-    image: fedimintui/gateway-ui:0.1.1
+    image: fedimintui/gateway-ui:0.1.2
     environment:
       - PORT=80
       - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
@@ -241,6 +241,172 @@ services:
     restart: always
     platform: linux/amd64
 
+  prosody_config_writer:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - |
+        cat <<EOF > /prosody_data/prosody.cfg.lua
+        pidfile = "/run/prosody/prosody.pid"
+        -- log = "*syslog"
+        log = {
+          {levels = {min = "info"}, to = "console"};
+        }
+
+        data_path = "/var/lib/prosody"
+        plugin_paths = {
+        }
+
+        admins = {  }
+
+        -- we already build with libevent, so we can just enable it for a more performant server
+        use_libevent = true
+
+        modules_enabled = {
+          "admin_adhoc";
+          "blocklist";
+          "bookmarks";
+          "bosh";
+          "carbons";
+          -- "cloud_notify"; -- not working now, perhaps use it if we ever enable push?
+          "csi";
+          "dialback";
+          "disco";
+          "http_files";
+          "limits";
+          "mam";
+          "pep";
+          "ping";
+          "private";
+          "proxy65";
+          "register";
+          "roster";
+          "saslauth";
+          "smacks";
+          "time";
+          "tls";
+          "uptime";
+          "vcard";
+          "version";
+          "websocket";
+          "admin_shell";
+          "http";
+        };
+
+        disco_items = {
+        { "muc.xmpp.fedimint.my-super-host.com", "muc.xmpp.fedimint.my-super-host.com MUC endpoint"};
+        };
+
+        allow_registration = true
+
+        c2s_require_encryption = false
+
+        s2s_require_encryption = true
+
+        s2s_secure_auth = true
+
+        s2s_insecure_domains = {  }
+
+        s2s_secure_domains = {  }
+
+        authentication = "internal_hashed"
+
+        http_interfaces = { "*", "::" }
+
+        https_interfaces = { "*", "::" }
+
+        http_ports = { 5280 }
+
+        https_ports = { 5281 }
+
+        -- Rate limits
+        -- Enable rate limits for incoming client and server connections. These help
+        -- protect from excessive resource consumption and denial-of-service attacks.
+
+        limits = {
+            c2s = {
+                rate = "10kb/s";
+            };
+            s2sin = {
+                rate = "30kb/s";
+            };
+        }
+
+        -- Archiving configuration
+        -- If mod_mam is enabled, Prosody will store a copy of every message. This
+        -- is used to synchronize conversations between multiple clients, even if
+        -- they are offline. This setting controls how long Prosody will keep
+        -- messages in the archive before removing them.
+
+        archive_expires_after = "1w" -- Remove archived messages after 1 week
+
+        -- You can also configure messages to be stored in-memory only. For more
+        -- archiving options, see https://prosody.im/doc/modules/mod_mam
+
+        -- Uncomment to enable statistics
+        -- For more info see https://prosody.im/doc/statistics
+        statistics = "internal"
+
+        -- Certificates
+        -- Every virtual host and component needs a certificate so that clients and
+        -- servers can securely verify its identity. Prosody will automatically load
+        -- certificates/keys from the directory specified here.
+        -- For more information, including how to use 'prosodyctl' to auto-import certificates
+        -- (from e.g. Let's Encrypt) see https://prosody.im/doc/certificates
+
+        -- Location of directory to find certificates in (relative to main config file):
+        -- certificates = "certs"
+
+        -- SSL termination is done elsewhere so we assume these are secure
+        consider_websocket_secure = true
+        consider_bosh_secure = true
+        http_external_url = "https://xmpp.fedimint.my-super-host.com/"
+        trusted_proxies = { "0.0.0.0/0", "::" }
+
+        Component "muc.xmpp.fedimint.my-super-host.com" "muc"
+            modules_enabled = { "muc_mam"; "vcard_muc"; }
+            name = "Chat Rooms"
+            restrict_room_creation = false
+            max_history_messages = 50
+            muc_room_locking = true
+            muc_room_lock_timeout = 300
+            muc_tombstones = true
+            muc_tombstone_expiry = 2678400
+            muc_room_default_public = true
+            muc_room_default_members_only = false
+            muc_room_default_moderated = false
+            muc_room_default_public_jids = false
+            muc_room_default_change_subject = false
+            muc_room_default_history_length = 20
+            muc_room_default_language = "en"
+
+        VirtualHost "xmpp.fedimint.my-super-host.com"
+          enabled = true;
+        EOF
+        tail -f /dev/null
+    volumes:
+      - prosody_datadir:/prosody_data
+    restart: always
+
+  xmpp:
+    image: fedimint/xmpp-prosody-chat-server:latest
+    command:
+      - prosody
+      - --config
+      - /prosody_data/prosody.cfg.lua
+    volumes:
+      - prosody_datadir:/prosody_data
+    depends_on:
+      - prosody_config_writer
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.xmpp.loadbalancer.server.port=5280"
+      - "traefik.http.routers.xmpp.rule=Host(`xmpp.fedimint.my-super-host.com`) || Host(`muc.xmpp.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.xmpp.entrypoints=websecure"
+      - "traefik.http.routers.xmpp.tls.certresolver=myresolver"
+
 volumes:
   letsencrypt_data:
   fedimintd_data:
@@ -249,3 +415,4 @@ volumes:
   gateway_datadir:
   thunderhub_datadir:
   rtl_datadir:
+  prosody_datadir:
