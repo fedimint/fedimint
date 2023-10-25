@@ -740,7 +740,7 @@ pub async fn handle_command(
 }
 
 #[derive(Subcommand, Debug, Clone)]
-enum NostrCommands {
+pub enum NostrCommands {
     /// Update metadata
     UpdateMetadata(nostr_subcommands::update_metadata::UpdateMetadataSubCommand),
     /// Send text note
