@@ -114,6 +114,7 @@ impl GatewayTest {
             listen,
             address.clone(),
             cli_password.clone(),
+            None, // Use default Network which is "regtest"
             RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,

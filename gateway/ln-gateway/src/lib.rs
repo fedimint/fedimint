@@ -24,7 +24,7 @@ use std::time::Duration;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use bitcoin::{Address, Txid};
+use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::ToHex;
 use clap::{Parser, Subcommand};
 use client::GatewayClientBuilder;
@@ -45,9 +45,10 @@ use fedimint_core::time::now;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{push_db_pair_items, Amount};
 use fedimint_ln_client::pay::PayInvoicePayload;
-use fedimint_ln_common::config::GatewayFee;
+use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
+use fedimint_ln_common::LightningCommonGen;
 use fedimint_mint_client::{MintClientGen, MintCommonGen};
 use fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
 use futures::stream::StreamExt;
@@ -85,6 +86,7 @@ pub const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 const ROUTE_HINT_RETRIES: usize = 30;
 const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 const DEFAULT_NUM_ROUTE_HINTS: u32 = 0;
+pub const DEFAULT_NETWORK: Network = Network::Regtest;
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
     /// Base routing fee. Default is 0 msat
@@ -124,6 +126,10 @@ pub struct GatewayOpts {
     #[arg(long = "password", env = "FM_GATEWAY_PASSWORD")]
     pub password: Option<String>,
 
+    /// Bitcoin network this gateway will be running on
+    #[arg(long = "network", env = "FM_GATEWAY_NETWORK")]
+    pub network: Option<Network>,
+
     /// Configured gateway routing fees
     /// Format: <base_msat>,<proportional_millionths>
     #[arg(long = "fees", env = "FM_GATEWAY_FEES")]
@@ -140,6 +146,7 @@ impl GatewayOpts {
             listen: self.listen,
             api_addr: self.api_addr.clone(),
             password: self.password.clone(),
+            network: self.network,
             num_route_hints: self.num_route_hints,
             fees: self.fees.clone(),
         }
@@ -157,6 +164,7 @@ struct GatewayParameters {
     listen: SocketAddr,
     api_addr: SafeUrl,
     password: Option<String>,
+    network: Option<Network>,
     num_route_hints: Option<u32>,
     fees: Option<GatewayFee>,
 }
@@ -244,6 +252,7 @@ impl Gateway {
         listen: SocketAddr,
         api_addr: SafeUrl,
         cli_password: Option<String>,
+        network: Option<Network>,
         fees: RoutingFees,
         num_route_hints: u32,
         gateway_db: Database,
@@ -256,6 +265,7 @@ impl Gateway {
                 password: cli_password,
                 num_route_hints: Some(num_route_hints),
                 fees: Some(GatewayFee(fees)),
+                network,
             },
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
@@ -608,6 +618,7 @@ impl Gateway {
                 route_hints,
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
+                network: Some(gateway_config.network),
             });
         }
 
@@ -620,6 +631,7 @@ impl Gateway {
             route_hints: vec![],
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
+            network: None,
         })
     }
 
@@ -778,6 +790,9 @@ impl Gateway {
 
             let federation_info = self.make_federation_info(&client, federation_id).await;
 
+            self.check_federation_network(&federation_info, gateway_config.network)
+                .await?;
+
             client
                 .register_with_federation(
                     self.gateway_parameters.api_addr.clone(),
@@ -821,6 +836,7 @@ impl Gateway {
         &self,
         SetConfigurationPayload {
             password,
+            network,
             num_route_hints,
             routing_fees,
         }: SetConfigurationPayload,
@@ -840,6 +856,15 @@ impl Gateway {
                 prev_config.password = password;
             }
 
+            if let Some(network) = network {
+                if self.clients.read().await.len() > 0 {
+                    return Err(GatewayError::GatewayConfigurationError(
+                        "Cannot change network while connected to a federation".to_string(),
+                    ));
+                }
+                prev_config.network = network;
+            }
+
             if let Some(num_route_hints) = num_route_hints {
                 prev_config.num_route_hints = num_route_hints;
             }
@@ -852,11 +877,15 @@ impl Gateway {
             prev_config
         } else {
             if password.is_none() {
-                return Err(GatewayError::GatewayConfigurationError);
+                return Err(GatewayError::GatewayConfigurationError(
+                    "The password field is required when initially configuring the gateway"
+                        .to_string(),
+                ));
             }
 
             GatewayConfiguration {
                 password: password.unwrap(),
+                network: DEFAULT_NETWORK,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
             }
@@ -898,8 +927,10 @@ impl Gateway {
             .fees
             .clone()
             .unwrap_or(GatewayFee(DEFAULT_FEES));
+        let network = self.gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
         let gateway_config = GatewayConfiguration {
             password: self.gateway_parameters.password.clone().unwrap(),
+            network,
             num_route_hints,
             routing_fees: routing_fees.0,
         };
@@ -1118,6 +1149,35 @@ impl Gateway {
             config,
         }
     }
+
+    async fn check_federation_network(
+        &self,
+        info: &FederationInfo,
+        network: Network,
+    ) -> Result<()> {
+        let cfg = info
+            .config
+            .modules
+            .values()
+            .find(|m| LightningCommonGen::KIND == m.kind.clone())
+            .ok_or_else(|| {
+                GatewayError::InvalidMetadata(format!(
+                    "Federation {} does not have a lightning module",
+                    info.federation_id
+                ))
+            })?;
+        let ln_cfg: &LightningClientConfig = cfg.cast()?;
+
+        if ln_cfg.network != network {
+            error!(
+                "Federation {} runs on {} but this gateway supports {}",
+                info.federation_id, ln_cfg.network, network,
+            );
+            return Err(GatewayError::UnsupportedNetwork(ln_cfg.network));
+        }
+
+        Ok(())
+    }
 }
 
 pub(crate) async fn fetch_lightning_node_info(
@@ -1187,8 +1247,10 @@ pub enum GatewayError {
     UnexpectedState(String),
     #[error("The gateway is disconnected")]
     Disconnected,
-    #[error("The password field is required when initially configuring the gateway")]
-    GatewayConfigurationError,
+    #[error("Error configuring the gateway: {}", OptStacktrace(0))]
+    GatewayConfigurationError(String),
+    #[error("Unsupported Network: {0}")]
+    UnsupportedNetwork(Network),
 }
 
 impl IntoResponse for GatewayError {
