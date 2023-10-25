@@ -41,7 +41,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
       - name: Docker meta for xmpp-prosody-chat-server
-        id: meta
+        id: meta-xmpp
         uses: docker/metadata-action@v5
         with:
           images: |
