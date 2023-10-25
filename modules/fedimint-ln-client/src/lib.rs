@@ -6,7 +6,7 @@ use std::iter::once;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{bail, ensure, format_err};
+use anyhow::{bail, ensure, format_err, Context};
 use async_stream::stream;
 use bitcoin::{KeyPair, Network};
 use bitcoin_hashes::Hash;
@@ -48,6 +48,7 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::seq::IteratorRandom;
 use rand::{CryptoRng, Rng, RngCore};
+use reqwest::StatusCode;
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -613,6 +614,31 @@ pub enum PayError {
 }
 
 impl LightningClientModule {
+    // Ping gateway endpoint to verify that it is available before locking funds in
+    // OutgoingContract
+    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
+        let response = reqwest::Client::new()
+            .get(
+                gateway
+                    .api
+                    .join("id")
+                    .expect("id contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .send()
+            .await
+            .context("Gateway is not available")?;
+        tracing::info!("StatusCode: {}", response.status());
+        if response.status() == StatusCode::NOT_FOUND {
+            return Err(anyhow::anyhow!(
+                "Gateway is not available. Returned error code: {}",
+                response.status()
+            ));
+        }
+
+        Ok(())
+    }
+
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
     /// for us. It has time till the block height defined by `timelock`,
     /// after that we can claim our money back.
@@ -636,6 +662,10 @@ impl LightningClientModule {
             federation_currency,
             invoice_currency
         );
+
+        // Do not create the funding transaction if the gateway is not currently
+        // available
+        self.verify_gateway_availability(&gateway).await?;
 
         let consensus_count = api
             .fetch_consensus_block_count()
