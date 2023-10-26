@@ -9,7 +9,6 @@ use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
-use fedimint_client::secret::PlainRootSecretStrategy;
 use fedimint_client::Client;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
@@ -369,7 +368,7 @@ pub async fn handle_command(
             Ok(serde_json::to_value(()).unwrap())
         }
         ClientCmd::PrintSecret => {
-            let secret = client.get_secret::<PlainRootSecretStrategy>().await;
+            let secret = client.get_decoded_client_secret::<[u8; 64]>().await?;
             let hex_secret = hex::ToHex::to_hex(&secret[..]);
 
             Ok(json!({

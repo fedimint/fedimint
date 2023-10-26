@@ -15,8 +15,8 @@ use std::{fs, result};
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
-use fedimint_client::secret::PlainRootSecretStrategy;
-use fedimint_client::{get_invite_code_from_db, ClientBuilder, ClientSecret};
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client::{get_invite_code_from_db, ClientBuilder};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
@@ -36,6 +36,7 @@ use fedimint_mint_client::{MintClientExt, MintClientGen, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientGen, WalletClientModule};
+use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -284,9 +285,23 @@ impl Opts {
         module_inits: &ClientModuleInitRegistry,
         invite_code: Option<InviteCode>,
     ) -> CliResult<fedimint_client::Client> {
-        let client_builder = self.build_client_builder(module_inits, invite_code).await?;
+        let mut client_builder = self.build_client_builder(module_inits, invite_code).await?;
+        let client_secret = match client_builder
+            .load_decodable_client_secret::<[u8; 64]>()
+            .await
+        {
+            Ok(secret) => secret,
+            Err(_) => {
+                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                client_builder
+                    .store_encodable_client_secret(secret)
+                    .await
+                    .map_err_cli_general()?;
+                secret
+            }
+        };
         client_builder
-            .build::<PlainRootSecretStrategy>()
+            .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
             .await
             .map_err_cli_general()
     }
@@ -516,13 +531,16 @@ impl FedimintCli {
                 hash: env!("FEDIMINT_BUILD_CODE_VERSION").to_string(),
             }),
             Command::Client(ClientCmd::Restore { secret }) => {
-                let client = cli
+                let mut client_builder = cli
                     .build_client_builder(&self.module_inits, None)
                     .await
-                    .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
-                    .build_restoring_from_backup(ClientSecret::<PlainRootSecretStrategy>::new(
-                        secret,
-                    ))
+                    .map_err_cli_general()?;
+                client_builder
+                    .store_encodable_client_secret(secret)
+                    .await
+                    .map_err_cli_general()?;
+                let client = client_builder
+                    .build_restoring_from_backup(PlainRootSecretStrategy::to_root_secret(&secret))
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
                     .0;

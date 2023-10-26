@@ -2083,6 +2083,7 @@ dependencies = [
  "futures",
  "gloo-net",
  "js-sys",
+ "rand",
  "ring",
  "wasm-bindgen",
  "wasm-bindgen-futures",

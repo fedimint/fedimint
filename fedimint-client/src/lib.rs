@@ -69,7 +69,6 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
-use std::io::{Error, Read, Write};
 use std::ops::Range;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -79,7 +78,7 @@ use anyhow::{anyhow, bail, ensure};
 use async_stream::stream;
 use db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
-    ClientInviteCodeKey, ClientInviteCodeKeyPrefix,
+    ClientInviteCodeKey, ClientInviteCodeKeyPrefix, EncodedClientSecretKey
 };
 use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
@@ -93,7 +92,7 @@ use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
@@ -114,19 +113,16 @@ use module::DynClientModule;
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
-use serde::Serialize;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tracing::{debug, error, info, warn};
 
 use crate::backup::Metadata;
-use crate::db::ClientSecretKey;
 use crate::module::init::{
     ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
 use crate::module::{ClientModule, ClientModuleRegistry, IClientModule, StateGenerator};
 use crate::oplog::OperationLog;
-use crate::secret::RootSecretStrategy;
 use crate::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
@@ -744,12 +740,11 @@ impl Client {
     }
 
     /// Returns the data from which the client's root secret is derived (e.g.
-    /// BIP39 seed phrase struct).
-    pub async fn root_secret_encoding<S>(&self) -> S::Encoding
-    where
-        S: RootSecretStrategy,
-    {
-        get_client_root_secret_encoding::<S>(self.db()).await
+    /// BIP39 seed phrase struct) if it is stored in the client's DB. If it
+    /// is not present, or if it is present but cannot be decoded, an error
+    /// is returned.
+    pub async fn root_secret_encoding<T: Decodable>(&self) -> anyhow::Result<T> {
+        get_decoded_client_secret::<T>(self.db()).await
     }
 
     /// Waits for an output from the primary module to reach its final
@@ -1404,15 +1399,12 @@ impl ClientBuilder {
         );
     }
 
-    pub async fn build_restoring_from_backup<S>(
-        self,
-        secret: ClientSecret<S>,
-    ) -> anyhow::Result<(Client, Metadata)>
-    where
-        S: RootSecretStrategy,
-    {
+    pub async fn store_encodable_client_secret<T: Encodable>(
+        &mut self,
+        secret: T,
+    ) -> anyhow::Result<()> {
         let fake_notifications = Default::default();
-        let mut dbtx = match self.db.as_ref().expect("No database provided") {
+        let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
             DatabaseSource::Fresh(db) => DatabaseTransaction::new(
                 db.begin_transaction().await,
                 Default::default(),
@@ -1421,6 +1413,46 @@ impl ClientBuilder {
             DatabaseSource::Reuse(db) => db.db().begin_transaction().await,
         };
 
+        // Don't overwrite an existing secret
+        match dbtx.get_value(&EncodedClientSecretKey).await {
+            Some(_) => bail!("Encoded client secret already exists, cannot overwrite"),
+            None => {
+                let encoded_secret = T::consensus_encode_to_vec(&secret)?;
+                dbtx.insert_entry(&EncodedClientSecretKey, &encoded_secret)
+                    .await;
+                dbtx.commit_tx().await;
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn load_decodable_client_secret<T: Decodable>(&mut self) -> anyhow::Result<T> {
+        let fake_notifications = Default::default();
+        let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
+            DatabaseSource::Fresh(db) => DatabaseTransaction::new(
+                db.begin_transaction().await,
+                Default::default(),
+                &fake_notifications,
+            ),
+            DatabaseSource::Reuse(db) => db.db().begin_transaction().await,
+        };
+
+        let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
+        dbtx.commit_tx().await;
+
+        match client_secret {
+            Some(client_secret) => {
+                T::consensus_decode(&mut client_secret.as_slice(), &Default::default())
+                    .map_err(|e| anyhow!("Decoding failed: {e}"))
+            }
+            None => bail!("Encoded client secret not present in DB"),
+        }
+    }
+
+    pub async fn build_restoring_from_backup(
+        self,
+        root_secret: DerivableSecret,
+    ) -> anyhow::Result<(Client, Metadata)> {
         // TODO: assert DB is empty (what does that mean? maybe needs a method that
         // checks if "wipe" was called on modules?)
 
@@ -1436,31 +1468,21 @@ impl ClientBuilder {
         //     "Database is not empty, cannot restore from backup"
         // );
 
-        // Write new root secret to DB before starting client
-        set_client_root_secret(&mut dbtx, &secret).await;
-        dbtx.commit_tx().await;
-
-        let client = self.build::<S>().await?;
+        let client = self.build(root_secret).await?;
         let metadata = client.restore_from_backup().await?;
 
         Ok((client, metadata))
     }
 
     /// Build a [`Client`] and start its executor
-    pub async fn build<S>(self) -> anyhow::Result<Client>
-    where
-        S: RootSecretStrategy,
-    {
-        let client = self.build_stopped::<S>().await?;
+    pub async fn build(self, root_secret: DerivableSecret) -> anyhow::Result<Client> {
+        let client = self.build_stopped(root_secret).await?;
         client.start_executor().await;
         Ok(client)
     }
 
     /// Build a [`Client`] but do not start the executor
-    pub async fn build_stopped<S>(self) -> anyhow::Result<Client>
-    where
-        S: RootSecretStrategy,
-    {
+    pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<Client> {
         let (config, decoders, db) = match self.db.ok_or(anyhow!("No database was provided"))? {
             DatabaseSource::Fresh(db) => {
                 let db = Database::new_from_box(db, ModuleDecoderRegistry::default());
@@ -1509,8 +1531,6 @@ impl ClientBuilder {
             &db,
         )
         .await?;
-
-        let root_secret = get_client_root_secret::<S>(&db).await;
 
         let modules = {
             let mut modules = ClientModuleRegistry::default();
@@ -1681,113 +1701,20 @@ async fn try_download_config(
     }
 }
 
-/// Fetches the client secret encoding from the database or generates a new one
-/// if none is present
-pub async fn get_client_root_secret_encoding<S>(db: &Database) -> S::Encoding
-where
-    S: RootSecretStrategy,
-{
+/// Fetches the encoded client secret from the database and decodes it.
+/// If an encoded client secret is not present in the database, or if
+/// decoding fails, an error is returned.
+pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
     let mut tx = db.begin_transaction().await;
-    let client_secret = tx.get_value(&ClientSecretKey::<S>::default()).await;
-    let secret = if let Some(client_secret) = client_secret {
-        client_secret.0
-    } else {
-        let secret = S::random(&mut thread_rng());
-        let no_replacement = tx
-            .insert_entry(
-                &ClientSecretKey::<S>::default(),
-                &ClientSecret(secret.clone()),
-            )
-            .await
-            .is_none();
-        assert!(
-            no_replacement,
-            "We would have overwritten our secret key, aborting!"
-        );
-        secret
-    };
+    let client_secret = tx.get_value(&EncodedClientSecretKey).await;
     tx.commit_tx().await;
-    secret
-}
 
-/// Sets the client secret in the database, returns if an old secret was
-/// overwritten
-async fn set_client_root_secret<S>(
-    dbtx: &mut DatabaseTransaction<'_>,
-    secret: &ClientSecret<S>,
-) -> bool
-where
-    S: RootSecretStrategy,
-{
-    dbtx.insert_entry(&ClientSecretKey::<S>::default(), secret)
-        .await
-        .is_some()
-}
-
-/// Fetches the client secret from the database or generates a new one if
-/// none is present
-pub async fn get_client_root_secret<S>(db: &Database) -> DerivableSecret
-where
-    S: RootSecretStrategy,
-{
-    let encoding = get_client_root_secret_encoding::<S>(db).await;
-    S::to_root_secret(&encoding)
-}
-
-/// Secret input key material from which the [`DerivableSecret`] used by the
-/// client will be seeded
-pub struct ClientSecret<S: RootSecretStrategy>(S::Encoding);
-
-impl<S> ClientSecret<S>
-where
-    S: RootSecretStrategy,
-{
-    pub fn new(key: S::Encoding) -> Self {
-        Self(key)
-    }
-}
-
-impl<ES> Serialize for ClientSecret<ES>
-where
-    ES: RootSecretStrategy,
-{
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut bytes = Vec::new();
-        ES::consensus_encode(&self.0, &mut bytes).expect("Writing to vec can't fail");
-        serializer.serialize_bytes(&bytes)
-    }
-}
-
-impl<S> Encodable for ClientSecret<S>
-where
-    S: RootSecretStrategy,
-{
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> std::result::Result<usize, Error> {
-        S::consensus_encode(&self.0, writer)
-    }
-}
-
-impl<S> Decodable for ClientSecret<S>
-where
-    S: RootSecretStrategy,
-{
-    fn consensus_decode<R: Read>(
-        reader: &mut R,
-        _modules: &ModuleDecoderRegistry,
-    ) -> std::result::Result<Self, DecodeError> {
-        Ok(ClientSecret(S::consensus_decode(reader)?))
-    }
-}
-
-impl<S> Debug for ClientSecret<S>
-where
-    S: RootSecretStrategy,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClientSecret([redacted])")
+    match client_secret {
+        Some(client_secret) => {
+            T::consensus_decode(&mut client_secret.as_slice(), &Default::default())
+                .map_err(|e| anyhow!("Decoding failed: {e}"))
+        }
+        None => bail!("Encoded client secret not present in DB"),
     }
 }
 

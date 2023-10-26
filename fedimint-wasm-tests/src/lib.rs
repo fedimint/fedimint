@@ -1,10 +1,11 @@
 use anyhow::Result;
-use fedimint_client::secret::PlainRootSecretStrategy;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::api::InviteCode;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_mint_client::MintClientGen;
 use fedimint_wallet_client::WalletClientGen;
+use rand::thread_rng;
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::Client> {
     let mut builder = fedimint_client::ClientBuilder::default();
@@ -14,7 +15,17 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::Client> {
     builder.with_primary_module(1);
     builder.with_invite_code(invite_code.clone());
     builder.with_database(MemDatabase::default());
-    builder.build_stopped::<PlainRootSecretStrategy>().await
+    let client_secret = match builder.load_decodable_client_secret::<[u8; 64]>().await {
+        Ok(secret) => secret,
+        Err(_) => {
+            let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+            builder.store_encodable_client_secret(secret).await?;
+            secret
+        }
+    };
+    builder
+        .build_stopped(PlainRootSecretStrategy::to_root_secret(&client_secret))
+        .await
 }
 
 mod faucet {
