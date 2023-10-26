@@ -1,4 +1,4 @@
-{ pkgs, pkgs-unstable, pkgs-kitman, flakeboxLib, toolchains, advisory-db, profiles, craneMultiBuild }:
+{ pkgs, pkgs-unstable, pkgs-kitman, flakeboxLib, toolchains, advisory-db, profiles, craneMultiBuild, replaceGitHash }:
 let
   lib = pkgs.lib;
 
@@ -173,6 +173,7 @@ let
     # the build command will be the test
     doCheck = true;
   };
+
 in
 (flakeboxLib.craneMultiBuild { inherit toolchains profiles; }) (craneLib':
 let
@@ -190,6 +191,14 @@ let
     # there's no point saving the `./target/` dir
     doInstallCargoArtifacts = false;
   });
+
+
+  fedimintBuildPackageGroup = args: replaceGitHash {
+    name = args.pname;
+    package =
+      craneLib.buildPackageGroup args;
+    placeholder = gitHashPlaceholderValue;
+  };
 in
 rec {
   inherit commonArgs;
@@ -362,7 +371,7 @@ rec {
     buildPhaseCargoCommand = "patchShebangs ./scripts; SKIP_CARGO_BUILD=1 ./scripts/tests/wasm-test.sh";
   };
 
-  fedimint-pkgs = craneLib.buildPackageGroup {
+  fedimint-pkgs = fedimintBuildPackageGroup {
     pname = "fedimint-pkgs";
 
     packages = [
@@ -374,7 +383,7 @@ rec {
     defaultBin = "fedimintd";
   };
 
-  gateway-pkgs = craneLib.buildPackageGroup {
+  gateway-pkgs = fedimintBuildPackageGroup {
     pname = "gateway-pkgs";
 
     packages = [
@@ -383,7 +392,7 @@ rec {
     ];
   };
 
-  client-pkgs = craneLib.buildPackageGroup {
+  client-pkgs = fedimintBuildPackageGroup {
     pname = "client-pkgs";
 
     packages = [
@@ -391,15 +400,14 @@ rec {
     ];
   };
 
-  devimint = craneLib.buildPackageGroup
-    {
-      pname = "devimint";
-      packages = [
-        "devimint"
-      ];
-    };
+  devimint = fedimintBuildPackageGroup {
+    pname = "devimint";
+    packages = [
+      "devimint"
+    ];
+  };
 
-  fedimint-load-test-tool = craneLib.buildPackageGroup {
+  fedimint-load-test-tool = fedimintBuildPackageGroup {
     pname = "fedimint-load-test-tool";
     packages = [ "fedimint-load-test-tool" ];
   };
@@ -431,7 +439,6 @@ rec {
       pkg = gateway-pkgs;
       bin = "gateway-cli";
     };
-
 
   container =
     let

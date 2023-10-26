@@ -118,17 +118,6 @@
             toolchains = toolchainsWasm;
           };
 
-          craneMultiBuild = import nix/flakebox.nix {
-            inherit pkgs pkgs-unstable pkgs-kitman flakeboxLib advisory-db;
-
-            # Yes, you're seeing right. We're passing result of this call as an argument
-            # to it.
-            inherit craneMultiBuild;
-
-            toolchains = toolchainsAll;
-            profiles = [ "dev" "ci" "test" "release" ];
-          };
-
           # Replace placeholder git hash in a binary
           #
           # To avoid impurity, we use a git hash placeholder when building binaries
@@ -164,6 +153,18 @@
 
               buildInputs = [ pkgs.bbe ];
             };
+
+
+          craneMultiBuild = import nix/flakebox.nix {
+            inherit pkgs pkgs-unstable pkgs-kitman flakeboxLib advisory-db replaceGitHash;
+
+            # Yes, you're seeing right. We're passing result of this call as an argument
+            # to it.
+            inherit craneMultiBuild;
+
+            toolchains = toolchainsAll;
+            profiles = [ "dev" "ci" "test" "release" ];
+          };
 
           devShells =
 
