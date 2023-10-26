@@ -77,7 +77,10 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
 use async_stream::stream;
-use db::{CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix};
+use db::{
+    CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
+    ClientInviteCodeKey, ClientInviteCodeKeyPrefix,
+};
 use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     InviteCode, WsFederationApi,
@@ -1589,43 +1592,42 @@ async fn get_config(
     db: &Database,
     config_source: Option<ConfigSource>,
 ) -> anyhow::Result<ClientConfig> {
-    let config_res = match get_config_from_db(db).await {
-        Some(config) => {
-            ensure!(
-                config_source.is_none(),
-                "Alternative config source provided but config was found in DB"
-            );
-            Ok(config)
-        }
-        None => {
-            let config = match config_source
-                .clone()
-                .ok_or(anyhow!("No config source was provided"))?
-            {
-                ConfigSource::Config(config) => config.clone(),
-                ConfigSource::Invite(invite_code) => {
-                    try_download_config(invite_code.clone(), 10).await?
-                }
-            };
+    if let Some(config) = get_config_from_db(db).await {
+        ensure!(
+            config_source.is_none(),
+            "Alternative config source provided but config was found in DB"
+        );
+        return Ok(config);
+    }
 
-            // Save config to DB
-            let mut dbtx = db.begin_transaction().await;
-            dbtx.insert_new_entry(
-                &ClientConfigKey {
-                    id: config.global.federation_id,
-                },
-                &config,
-            )
-            .await;
-            dbtx.commit_tx_result().await?;
-
-            Ok(config)
-        }
+    let (config, invite_code) = match config_source
+        .clone()
+        .ok_or(anyhow!("No config source was provided"))?
+    {
+        ConfigSource::Config(config) => (config.clone(), None),
+        ConfigSource::Invite(invite_code) => (
+            try_download_config(invite_code.clone(), 10).await?,
+            Some(invite_code),
+        ),
     };
+    let mut dbtx = db.begin_transaction().await;
+    // Save config to DB
+    dbtx.insert_new_entry(
+        &ClientConfigKey {
+            id: config.global.federation_id,
+        },
+        &config,
+    )
+    .await;
+    // Save invite code to DB
+    if let Some(invite_code) = invite_code {
+        dbtx.insert_new_entry(&ClientInviteCodeKey {}, &invite_code)
+            .await;
+    }
 
-    // some borrowck lifetime limitation thing
-    #[allow(clippy::let_and_return)]
-    config_res
+    dbtx.commit_tx_result().await?;
+
+    Ok(config)
 }
 
 pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
@@ -1638,6 +1640,18 @@ pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
         .await
         .map(|(_, config)| config);
     config
+}
+
+pub async fn get_invite_code_from_db(db: &Database) -> Option<InviteCode> {
+    let mut dbtx = db.begin_transaction().await;
+    #[allow(clippy::let_and_return)]
+    let invite = dbtx
+        .find_by_prefix(&ClientInviteCodeKeyPrefix)
+        .await
+        .next()
+        .await
+        .map(|(_, invite)| invite);
+    invite
 }
 
 /// Tries to download the client config from the federation,

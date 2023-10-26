@@ -16,7 +16,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::PlainRootSecretStrategy;
-use fedimint_client::{ClientBuilder, ClientSecret};
+use fedimint_client::{get_invite_code_from_db, ClientBuilder, ClientSecret};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
@@ -325,6 +325,9 @@ enum Command {
     #[clap(subcommand)]
     Dev(DevCmd),
 
+    /// Config enabling client to establish websocket connection to federation
+    InviteCode,
+
     /// Join a federation using it's InviteCode
     JoinFederation {
         invite_code: String,
@@ -367,9 +370,6 @@ Examples:
         #[clap(long = "peer-id")]
         peer_id: Option<u16>,
     },
-
-    /// Config enabling client to establish websocket connection to federation
-    InviteCode,
 
     /// Wait for the fed to reach a consensus block count
     WaitBlockCount { count: u64 },
@@ -437,7 +437,6 @@ struct PayRequest {
 
 pub struct FedimintCli {
     module_inits: ClientModuleInitRegistry,
-    invite_code: Option<InviteCode>,
 }
 
 impl FedimintCli {
@@ -458,7 +457,6 @@ impl FedimintCli {
 
         Ok(Self {
             module_inits: ClientModuleInitRegistry::new(),
-            invite_code: None,
         })
     }
 
@@ -492,6 +490,14 @@ impl FedimintCli {
 
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
         match cli.command.clone() {
+            Command::InviteCode => {
+                let rockdb = cli.load_rocks_db()?;
+                let db = fedimint_core::db::Database::new(rockdb, Default::default());
+                let invite_code = get_invite_code_from_db(&db)
+                    .await
+                    .ok_or_cli_msg(CliErrorKind::GeneralFailure, "invite code not found")?;
+                Ok(CliOutput::InviteCode { invite_code })
+            }
             Command::JoinFederation { invite_code } => {
                 let invite: InviteCode = InviteCode::from_str(&invite_code)
                     .map_err_cli_msg(CliErrorKind::InvalidValue, "invalid invite code")?;
@@ -501,8 +507,6 @@ impl FedimintCli {
                     .build_client_ng(&self.module_inits, Some(invite.clone()))
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failed to build client")?;
-
-                self.invite_code = Some(invite);
 
                 Ok(CliOutput::JoinFederation {
                     joined: invite_code,
@@ -604,13 +608,6 @@ impl FedimintCli {
                 };
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
-            }
-            Command::Dev(DevCmd::InviteCode) => {
-                let invite_code = self.invite_code.clone().ok_or_cli_msg(
-                    CliErrorKind::GeneralFailure,
-                    "fedimint-cli not connected to a federation",
-                )?;
-                Ok(CliOutput::InviteCode { invite_code })
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => {
                 task::timeout(Duration::from_secs(30), async move {
