@@ -299,7 +299,7 @@
 
           packages = {
             inherit (craneMultiBuild) gatewayd gateway-cli fedimint-cli fedimintd fedimint-load-test-tool;
-            inherit (craneMultiBuild) client-pkgs gateway-pkgs fedimint-pkgs;
+            inherit (craneMultiBuild) client-pkgs gateway-pkgs fedimint-pkgs devimint;
           };
 
           lib = {
