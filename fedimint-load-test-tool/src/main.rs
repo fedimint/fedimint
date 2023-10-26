@@ -13,7 +13,7 @@ use common::{
 };
 use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
-use fedimint_client::Client;
+use fedimint_client::ClientArc;
 use fedimint_core::api::{GlobalFederationApi, InviteCode, WsFederationApi};
 use fedimint_core::endpoint_constants::FETCH_BLOCK_COUNT_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
@@ -416,7 +416,7 @@ async fn run_load_test(
 
 #[allow(clippy::too_many_arguments)]
 async fn do_user_task(
-    client: Client,
+    client: ClientArc,
     oob_notes: Vec<OOBNotes>,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,

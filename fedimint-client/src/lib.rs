@@ -347,9 +347,9 @@ where
 impl GlobalContext for DynGlobalClientContext {}
 
 // TODO: impl `Debug` for `Client` and derive here
-impl Debug for ClientInner {
+impl Debug for Client {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClientInner")
+        write!(f, "Client")
     }
 }
 
@@ -358,7 +358,7 @@ impl Debug for ClientInner {
 /// aware of their instance id etc.
 #[derive(Clone, Debug)]
 struct ModuleGlobalClientContext {
-    client: Arc<ClientInner>,
+    client: Arc<Client>,
     module_instance_id: ModuleInstanceId,
     operation: OperationId,
 }
@@ -458,24 +458,24 @@ fn states_add_instance(
     })
 }
 
-/// Atomically-counted ([`Arc`]) handle to [`ClientInner`]
+/// Atomically-counted ([`Arc`]) handle to [`Client`]
 ///
-/// Notably it `deref`-s to the [`ClientInner`] where most
+/// Notably it `deref`-s to the [`Client`] where most
 /// methods live.
 #[derive(Debug)]
-pub struct Client {
-    inner: Arc<ClientInner>,
+pub struct ClientArc {
+    inner: Arc<Client>,
 }
 
-impl ops::Deref for Client {
-    type Target = Arc<ClientInner>;
+impl ops::Deref for ClientArc {
+    type Target = Arc<Client>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl Client {
+impl ClientArc {
     pub fn downgrade(&self) -> ClientWeak {
         ClientWeak {
             inner: Arc::downgrade(&self.inner),
@@ -483,26 +483,26 @@ impl Client {
     }
 }
 
-impl Clone for Client {
+impl Clone for ClientArc {
     fn clone(&self) -> Self {
         self.inner
             .client_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Client {
+        ClientArc {
             inner: self.inner.clone(),
         }
     }
 }
 
-/// Like [`Client`] but using a [`Weak`] handle to [`ClientInner`]
+/// Like [`ClientArc`] but using a [`Weak`] handle to [`Client`]
 #[derive(Debug)]
 pub struct ClientWeak {
-    inner: Weak<ClientInner>,
+    inner: Weak<Client>,
 }
 
 impl ClientWeak {
-    pub fn upgrade(&self) -> Option<Client> {
-        Weak::upgrade(&self.inner).map(|inner| Client { inner })
+    pub fn upgrade(&self) -> Option<ClientArc> {
+        Weak::upgrade(&self.inner).map(|inner| ClientArc { inner })
     }
 }
 
@@ -510,8 +510,8 @@ impl ClientWeak {
 /// `Executor::stop_executor` even though the `Drop` implementation of
 /// `ExecutorInner` should already take care of that. The reason is that as long
 /// as the executor task is active there may be a cycle in the
-/// `Arc<ClientInner>`s such that at least one `Executor` never gets dropped.
-impl Drop for Client {
+/// `Arc<Client>`s such that at least one `Executor` never gets dropped.
+impl Drop for ClientArc {
     fn drop(&mut self) {
         // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
         // sorry.
@@ -571,7 +571,7 @@ pub struct ClientModuleInstance {
     pub api: DynModuleApi,
 }
 
-pub struct ClientInner {
+pub struct Client {
     config: ClientConfig,
     decoders: ModuleDecoderRegistry,
     db: Database,
@@ -585,16 +585,16 @@ pub struct ClientInner {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
-    /// Number of [`Client`] instances using this `ClientInner`.
+    /// Number of [`ClientArc`] instances using this `Client`.
     ///
-    /// The `ClientInner` struct is both used for the client itself as well as
+    /// The `Client` struct is both used for the client itself as well as
     /// for the global context used in the state machine executor. This means we
-    /// cannot rely on the reference count of the `Arc<ClientInner>` to
+    /// cannot rely on the reference count of the `Arc<Client>` to
     /// determine if the client should shut down.
     client_count: AtomicUsize,
 }
 
-impl ClientInner {
+impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
     pub fn builder() -> ClientBuilder {
@@ -822,7 +822,7 @@ impl ClientInner {
                     let tx_builder = tx_builder.clone();
                     let operation_meta = operation_meta.clone();
                     Box::pin(async move {
-                        if ClientInner::operation_exists(dbtx, operation_id).await {
+                        if Client::operation_exists(dbtx, operation_id).await {
                             bail!("There already exists an operation with id {operation_id:?}")
                         }
 
@@ -1217,7 +1217,7 @@ impl ClientInner {
         debug!("Refreshing common api versions");
 
         let common_api_versions =
-            ClientInner::discover_common_api_version_static(config, module_inits, api).await?;
+            Client::discover_common_api_version_static(config, module_inits, api).await?;
 
         debug!("Updating the cached common api versions");
         let mut dbtx = db.begin_transaction().await;
@@ -1275,7 +1275,7 @@ pub enum ConfigSource {
 
 pub enum DatabaseSource {
     Fresh(Box<dyn IDatabase>),
-    Reuse(Client),
+    Reuse(ClientArc),
 }
 
 impl ClientBuilder {
@@ -1374,7 +1374,7 @@ impl ClientBuilder {
     /// ## Panics
     /// If the old and new client use different config since that might make the
     /// DB incompatible.
-    pub fn with_old_client_database(&mut self, client: Client) {
+    pub fn with_old_client_database(&mut self, client: ClientArc) {
         let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
         assert!(
             !was_replaced,
@@ -1435,7 +1435,7 @@ impl ClientBuilder {
     pub async fn build_restoring_from_backup(
         self,
         root_secret: DerivableSecret,
-    ) -> anyhow::Result<(Client, Metadata)> {
+    ) -> anyhow::Result<(ClientArc, Metadata)> {
         // TODO: assert DB is empty (what does that mean? maybe needs a method that
         // checks if "wipe" was called on modules?)
 
@@ -1458,14 +1458,14 @@ impl ClientBuilder {
     }
 
     /// Build a [`Client`] and start its executor
-    pub async fn build(self, root_secret: DerivableSecret) -> anyhow::Result<Client> {
+    pub async fn build(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
         let client = self.build_stopped(root_secret).await?;
         client.start_executor().await;
         Ok(client)
     }
 
     /// Build a [`Client`] but do not start the executor
-    pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<Client> {
+    pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
         let (config, decoders, db) = match self.db.ok_or(anyhow!("No database was provided"))? {
             DatabaseSource::Fresh(db) => {
                 let db = Database::new_from_box(db, ModuleDecoderRegistry::default());
@@ -1507,7 +1507,7 @@ impl ClientBuilder {
         let notifier = Notifier::new(db.clone());
         let api = DynGlobalApi::from(WsFederationApi::from_config(&config));
 
-        let common_api_versions = ClientInner::load_and_refresh_common_api_version_static(
+        let common_api_versions = Client::load_and_refresh_common_api_version_static(
             &config,
             &self.module_inits,
             &api,
@@ -1567,7 +1567,7 @@ impl ClientBuilder {
             executor_builder.build(db.clone(), notifier).await
         };
 
-        let client_inner = Arc::new(ClientInner {
+        let client_inner = Arc::new(Client {
             config: config.clone(),
             decoders,
             db: db.clone(),
@@ -1584,7 +1584,7 @@ impl ClientBuilder {
             client_count: AtomicUsize::new(1),
         });
 
-        Ok(Client {
+        Ok(ClientArc {
             inner: client_inner,
         })
     }

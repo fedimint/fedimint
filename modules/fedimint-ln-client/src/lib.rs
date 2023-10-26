@@ -21,7 +21,7 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
@@ -219,7 +219,7 @@ async fn invoice_routes_back_to_federation(
 }
 
 #[apply(async_trait_maybe_send!)]
-impl LightningClientExt for Client {
+impl LightningClientExt for ClientArc {
     async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway> {
         let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
         let mut dbtx = instance.db.begin_transaction().await;

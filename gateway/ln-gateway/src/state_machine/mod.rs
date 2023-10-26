@@ -13,7 +13,7 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -150,7 +150,7 @@ pub trait GatewayClientExt {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl GatewayClientExt for Client {
+impl GatewayClientExt for ClientArc {
     /// Pays a LN invoice with our available funds
     async fn gateway_pay_bolt11_invoice(
         &self,

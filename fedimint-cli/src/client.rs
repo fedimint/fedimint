@@ -9,7 +9,7 @@ use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::ToHex;
 use clap::Subcommand;
 use fedimint_client::backup::Metadata;
-use fedimint_client::Client;
+use fedimint_client::ClientArc;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::time::now;
@@ -147,7 +147,7 @@ fn parse_secret(s: &str) -> Result<[u8; 64], hex::Error> {
 pub async fn handle_command(
     command: ClientCmd,
     _config: ClientConfig,
-    client: Client,
+    client: ClientArc,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
@@ -476,7 +476,7 @@ pub async fn handle_command(
     }
 }
 
-async fn get_note_summary(client: &Client) -> anyhow::Result<serde_json::Value> {
+async fn get_note_summary(client: &ClientArc) -> anyhow::Result<serde_json::Value> {
     let (mint_client, _) = client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
     let (wallet_client, _) =
         client.get_first_module::<WalletClientModule>(&fedimint_wallet_client::KIND);

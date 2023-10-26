@@ -14,7 +14,7 @@ use secp256k1_zkp::{KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use super::Client;
+use super::ClientArc;
 use crate::get_decoded_client_secret;
 use crate::secret::DeriveableSecretClientExt;
 
@@ -135,7 +135,7 @@ impl EncryptedClientBackup {
     }
 }
 
-impl Client {
+impl ClientArc {
     /// Create a backup, include provided `metadata`
     pub async fn create_backup(&self, metadata: Metadata) -> anyhow::Result<ClientBackup> {
         let fedimint_block_count = self.inner.api.fetch_block_count().await?;

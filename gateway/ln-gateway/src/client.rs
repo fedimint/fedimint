@@ -49,8 +49,8 @@ impl GatewayClientBuilder {
         lnrpc: Arc<dyn ILnRpcClient>,
         all_clients: FederationToClientMap,
         all_scids: ScidToFederationMap,
-        old_client: Option<fedimint_client::Client>,
-    ) -> Result<fedimint_client::Client> {
+        old_client: Option<fedimint_client::ClientArc>,
+    ) -> Result<fedimint_client::ClientArc> {
         let FederationConfig {
             invite_code,
             mint_channel_id,

@@ -9,7 +9,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::Client;
+use fedimint_client::ClientArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep;
@@ -63,7 +63,7 @@ async fn single_federation_test<B>(
             GatewayTest,
             Box<dyn LightningTest>,
             FederationTest,
-            Client, // User Client
+            ClientArc, // User Client
             Arc<dyn BitcoinTest>,
         ) -> B
         + Copy,
@@ -134,8 +134,8 @@ pub fn sha256(data: &[u8]) -> sha256::Hash {
 
 async fn pay_valid_invoice(
     invoice: Bolt11Invoice,
-    user_client: &Client,
-    gateway: &Client,
+    user_client: &ClientArc,
+    gateway: &ClientArc,
 ) -> anyhow::Result<()> {
     // User client pays test invoice
     let OutgoingLightningPayment {
