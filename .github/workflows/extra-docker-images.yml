@@ -55,7 +55,7 @@ jobs:
       - name: Build and push xmpp-prosody-chat-server
         uses: docker/build-push-action@v5
         with:
-          context: docker/full-tls-mutinynet/prosody
+          context: "{{defaultContext}}:docker/full-tls-mutinynet/prosody"
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
