@@ -22,7 +22,7 @@ jobs:
           username: fedimint
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
       - name: Docker meta for mutinynet-bitcoind
-        id: meta
+        id: meta-mutinynet-bitcoind
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -38,10 +38,10 @@ jobs:
         with:
           file: docker/mutinynet-bitcoind-docker/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-mutinynet-bitcoind.outputs.tags }}
+          labels: ${{ steps.meta-mutinynet-bitcoind.outputs.labels }}
       - name: Docker meta for xmpp-prosody-chat-server
-        id: meta-xmpp
+        id: meta-xmpp-prosody
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -57,5 +57,5 @@ jobs:
         with:
           context: "{{defaultContext}}:docker/full-tls-mutinynet/prosody"
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-xmpp-prosody.outputs.tags }}
+          labels: ${{ steps.meta-xmpp-prosody.outputs.labels }}
