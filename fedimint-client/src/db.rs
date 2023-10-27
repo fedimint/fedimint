@@ -12,7 +12,7 @@ use crate::oplog::OperationLogEntry;
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     EncodedClientSecret = 0x28,
-    ClientSecret = 0x29,
+    ClientSecret = 0x29, // Unused
     OperationLog = 0x2c,
     ChronologicalOperationLog = 0x2d,
     CommonApiVersionCache = 0x2e,

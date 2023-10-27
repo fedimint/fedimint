@@ -292,6 +292,7 @@ impl Opts {
         {
             Ok(secret) => secret,
             Err(_) => {
+                info!("Generating secret and writing to client storage");
                 let secret = PlainRootSecretStrategy::random(&mut thread_rng());
                 client_builder
                     .store_encodable_client_secret(secret)
@@ -547,6 +548,7 @@ impl FedimintCli {
                         .map_err_cli_general()
                     }
                     Err(_) => {
+                        info!("Generating secret and writing to client storage");
                         let new_secret = PlainRootSecretStrategy::random(&mut thread_rng());
                         client_builder
                             .store_encodable_client_secret(new_secret)

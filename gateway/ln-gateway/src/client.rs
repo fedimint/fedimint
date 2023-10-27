@@ -11,6 +11,7 @@ use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::StreamExt;
 use rand::thread_rng;
+use tracing::info;
 
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::lnrpc_client::ILnRpcClient;
@@ -101,6 +102,7 @@ impl GatewayClientBuilder {
         {
             Ok(secret) => secret,
             Err(_) => {
+                info!("Generating secret and writing to client storage");
                 let secret = PlainRootSecretStrategy::random(&mut thread_rng());
                 client_builder
                     .store_encodable_client_secret(secret)
