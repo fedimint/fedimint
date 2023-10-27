@@ -21,7 +21,7 @@ use fedimint_core::{Amount, OutPoint, TransactionId};
 use lightning_invoice::Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::api::LnFederationApi;
 use crate::contracts::incoming::IncomingContractAccount;
@@ -165,7 +165,9 @@ impl FundingOfferState {
             {
                 Err(OutputOutcomeError::Timeout(_)) => {
                     // give some time for other things to run
-                    fedimint_core::task::sleep(Duration::from_secs(retry * 15)).await;
+                    let sleep = retry * 15;
+                    debug!("Got OutputOutcomeError::Timeout, will sleep for {sleep}s");
+                    fedimint_core::task::sleep(Duration::from_secs(sleep)).await;
                     continue;
                 }
                 Ok(_) => return Ok(()),
