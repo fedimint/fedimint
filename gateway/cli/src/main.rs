@@ -77,6 +77,9 @@ pub enum Commands {
 
         #[clap(long)]
         routing_fees: Option<String>,
+
+        #[clap(long)]
+        network: Option<bitcoin::Network>,
     },
 }
 
@@ -150,12 +153,14 @@ async fn main() -> anyhow::Result<()> {
             password,
             num_route_hints,
             routing_fees,
+            network,
         } => {
             client()
                 .set_configuration(SetConfigurationPayload {
                     password,
                     num_route_hints,
                     routing_fees,
+                    network,
                 })
                 .await?;
         }
