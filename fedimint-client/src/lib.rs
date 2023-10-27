@@ -78,7 +78,7 @@ use anyhow::{anyhow, bail, ensure};
 use async_stream::stream;
 use db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
-    ClientInviteCodeKey, ClientInviteCodeKeyPrefix, EncodedClientSecretKey
+    ClientInviteCodeKey, ClientInviteCodeKeyPrefix, EncodedClientSecretKey,
 };
 use fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,

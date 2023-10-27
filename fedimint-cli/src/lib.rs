@@ -535,12 +535,30 @@ impl FedimintCli {
                     .build_client_builder(&self.module_inits, None)
                     .await
                     .map_err_cli_general()?;
-                client_builder
-                    .store_encodable_client_secret(secret)
+                let client_secret = match client_builder
+                    .load_decodable_client_secret::<[u8; 64]>()
                     .await
-                    .map_err_cli_general()?;
+                {
+                    Ok(existing_secret) if existing_secret == secret => secret,
+                    Ok(_) => {
+                        return Err(anyhow::anyhow!(
+                            "Provided secret does not match existing secret"
+                        ))
+                        .map_err_cli_general()
+                    }
+                    Err(_) => {
+                        let new_secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                        client_builder
+                            .store_encodable_client_secret(new_secret)
+                            .await
+                            .map_err_cli_general()?;
+                        new_secret
+                    }
+                };
                 let client = client_builder
-                    .build_restoring_from_backup(PlainRootSecretStrategy::to_root_secret(&secret))
+                    .build_restoring_from_backup(PlainRootSecretStrategy::to_root_secret(
+                        &client_secret,
+                    ))
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?
                     .0;
