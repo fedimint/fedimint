@@ -75,6 +75,7 @@ pub struct GatewayInfo {
     pub route_hints: Vec<route_hints::RouteHint>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
+    pub network: Option<Network>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

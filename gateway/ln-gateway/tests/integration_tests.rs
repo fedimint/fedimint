@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
+use bitcoin::Network;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::Client;
@@ -23,7 +24,7 @@ use fedimint_ln_client::{
     LightningOperationMeta, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::api::LnFederationApi;
-use fedimint_ln_common::config::LightningGenParams;
+use fedimint_ln_common::config::{GatewayFee, LightningGenParams};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage};
@@ -36,7 +37,6 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, LightningNodeType, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::LightningTest;
 use futures::Future;
-use lightning::routing::gossip::RoutingFees;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
@@ -46,7 +46,7 @@ use ln_gateway::state_machine::{
     GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
 use ln_gateway::utils::retry;
-use ln_gateway::GatewayState;
+use ln_gateway::{GatewayState, DEFAULT_FEES, DEFAULT_NETWORK};
 use reqwest::StatusCode;
 use secp256k1::PublicKey;
 use tracing::info;
@@ -818,14 +818,16 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let gw_info = rpc_client.get_info().await?;
     assert_eq!(gw_info.gateway_state, "Configuring".to_string());
 
-    // Verify that the gateway's fees are `None`
+    // Verify that the gateway's fees, and network are `None`
     assert_eq!(gw_info.fees, None);
+    assert_eq!(gw_info.network, None);
 
     let test_password = "test_password".to_string();
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(test_password.clone()),
         num_route_hints: None,
         routing_fees: None,
+        network: None,
     };
     verify_rpc(
         || rpc_client.set_configuration(set_configuration_payload.clone()),
@@ -838,56 +840,101 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     })
     .await?;
 
-    // Test authentication
+    // Verify old password no longer works
+    verify_rpc(|| rpc_client.get_info(), StatusCode::UNAUTHORIZED).await;
+
+    // Verify the gateway's state is "Running" with default fee and network
+    // configurations
     let rpc_client = rpc_client.with_password(Some(test_password));
-    let bad_rpc_client = rpc_client.with_password(Some("invalid".to_string()));
-
-    rpc_client.connect_federation(join_payload.clone()).await?;
-
     let gw_info = rpc_client.get_info().await?;
     assert_eq!(gw_info.gateway_state, "Running".to_string());
-    verify_rpc(|| bad_rpc_client.get_info(), StatusCode::UNAUTHORIZED).await;
+    assert_eq!(gw_info.fees, Some(DEFAULT_FEES));
+    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
-    let federation_id = fed.invite_code().id;
-
-    let payload = BalancePayload { federation_id };
-    rpc_client.get_balance(payload.clone()).await?;
+    // Verify we can change configuration when the gateway is running
+    let new_password = "new_password".to_string();
+    let fee = "1000,2000".to_string();
+    let network = Network::Bitcoin;
+    let set_configuration_payload = SetConfigurationPayload {
+        password: Some(new_password.clone()),
+        num_route_hints: Some(1),
+        routing_fees: Some(fee.clone()),
+        network: Some(Network::Bitcoin),
+    };
     verify_rpc(
-        || bad_rpc_client.get_balance(payload.clone()),
-        StatusCode::UNAUTHORIZED,
+        || rpc_client.set_configuration(set_configuration_payload.clone()),
+        StatusCode::OK,
     )
     .await;
 
-    // Verify that we can change the configuration after it is set
-    let set_configuration_payload = SetConfigurationPayload {
-        password: Some("new_password".to_string()),
-        num_route_hints: Some(1),
-        routing_fees: Some("1000,2000".to_string()),
-    };
-    rpc_client
-        .set_configuration(set_configuration_payload.clone())
-        .await?;
-
     // Verify info works with the new password.
     // Need to retry because the webserver might be restarting.
-    retry(
+    let rpc_client = rpc_client.with_password(Some(new_password.clone()));
+    let gw_info = retry(
         "Get info after restart".to_string(),
         || async {
-            let rpc_client = rpc_client.with_password(Some("new_password".to_string()));
             let info = rpc_client.get_info().await?;
-            assert_eq!(
-                info.fees.expect("Gateway fees were None"),
-                RoutingFees {
-                    base_msat: 1000,
-                    proportional_millionths: 2000,
-                }
-            );
-            Ok(())
+            Ok(info)
         },
         Duration::from_secs(1),
         5,
     )
     .await?;
+
+    assert_eq!(gw_info.gateway_state, "Running".to_string());
+    assert_eq!(gw_info.fees, Some(GatewayFee::from_str(&fee)?.0));
+    assert_eq!(gw_info.network, Some(network));
+
+    // Verify we cant connect to a federation on a different network
+    // By default, test federations are on Regtest but we just configured the
+    // gateway to use mainnet (Network::Bitcoin)
+    verify_rpc(
+        || rpc_client.connect_federation(join_payload.clone()),
+        StatusCode::INTERNAL_SERVER_ERROR,
+    )
+    .await;
+
+    // Verify we can connect to a federation if the gateway is configured to use
+    // the same network
+    let set_configuration_payload = SetConfigurationPayload {
+        password: Some(new_password.clone()),
+        num_route_hints: None,
+        routing_fees: None,
+        network: Some(Network::Regtest),
+    };
+    verify_rpc(
+        || rpc_client.set_configuration(set_configuration_payload.clone()),
+        StatusCode::OK,
+    )
+    .await;
+    verify_rpc(
+        || rpc_client.connect_federation(join_payload.clone()),
+        StatusCode::OK,
+    )
+    .await;
+    verify_rpc(
+        || {
+            rpc_client.get_balance(BalancePayload {
+                federation_id: fed.invite_code().id,
+            })
+        },
+        StatusCode::OK,
+    )
+    .await;
+
+    // Verify we cannot reconfigure the gateway network once it's connected to a
+    // federation
+    let set_configuration_payload = SetConfigurationPayload {
+        password: Some(new_password.clone()),
+        num_route_hints: None,
+        routing_fees: None,
+        network: Some(Network::Regtest),
+    };
+    verify_rpc(
+        || rpc_client.set_configuration(set_configuration_payload.clone()),
+        StatusCode::INTERNAL_SERVER_ERROR,
+    )
+    .await;
 
     Ok(())
 }
