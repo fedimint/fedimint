@@ -12,7 +12,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::{task, TransactionId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::sm::{Context, DynContext, OperationId, OperationState, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState};
@@ -196,6 +196,7 @@ async fn trigger_created_submit(
     loop {
         match context.api().submit_transaction(tx.clone()).await {
             Err(e) if e.is_retryable() => {
+                debug!("Got {e} while submitting transaction, will sleep for {RESUBMISSION_INTERVAL:?}");
                 sleep(RESUBMISSION_INTERVAL).await;
             }
             res => return res.map_err(|e| e.to_string()),
