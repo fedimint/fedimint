@@ -712,11 +712,13 @@ impl JsonRpcClient for WsClient {
         #[cfg(not(target_family = "wasm"))]
         return WsClientBuilder::default()
             .use_webpki_rustls()
+            .max_concurrent_requests(u16::MAX as usize)
             .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
             .await;
 
         #[cfg(target_family = "wasm")]
         WsClientBuilder::default()
+            .max_concurrent_requests(u16::MAX as usize)
             .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
             .await
     }
