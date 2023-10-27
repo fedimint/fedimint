@@ -14,7 +14,7 @@ use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
@@ -153,18 +153,31 @@ impl FundingOfferState {
         out_point: OutPoint,
         context: LightningClientContext,
     ) -> Result<(), IncomingSmError> {
-        global_context
-            .api()
-            .await_output_outcome::<LightningOutputOutcome>(
-                out_point,
-                Duration::from_millis(i32::MAX as u64),
-                &context.ln_decoder,
-            )
-            .await
-            .map_err(|e| IncomingSmError::FailedToFundContract {
-                error_message: e.to_string(),
-            })?;
-        Ok(())
+        for retry in 0.. {
+            match global_context
+                .api()
+                .await_output_outcome::<LightningOutputOutcome>(
+                    out_point,
+                    Duration::from_secs(90),
+                    &context.ln_decoder,
+                )
+                .await
+            {
+                Err(OutputOutcomeError::Timeout(_)) => {
+                    // give some time for other things to run
+                    fedimint_core::task::sleep(Duration::from_secs(retry * 15)).await;
+                    continue;
+                }
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    return Err(IncomingSmError::FailedToFundContract {
+                        error_message: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        unreachable!("there is too many u64s to ever get here")
     }
 
     async fn transition_funding_success(
