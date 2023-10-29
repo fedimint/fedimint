@@ -4,12 +4,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::secret::PlainRootSecretStrategy;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{get_config_from_db, ClientBuilder};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::StreamExt;
+use rand::thread_rng;
+use tracing::info;
 
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::lnrpc_client::ILnRpcClient;
@@ -94,9 +96,24 @@ impl GatewayClientBuilder {
             client_builder.with_database(rocksdb);
         }
 
+        let client_secret = match client_builder
+            .load_decodable_client_secret::<[u8; 64]>()
+            .await
+        {
+            Ok(secret) => secret,
+            Err(_) => {
+                info!("Generating secret and writing to client storage");
+                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+                client_builder
+                    .store_encodable_client_secret(secret)
+                    .await
+                    .map_err(GatewayError::ClientStateMachineError)?;
+                secret
+            }
+        };
         client_builder
             // TODO: make this configurable?
-            .build::<PlainRootSecretStrategy>()
+            .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
             .await
             .map_err(GatewayError::ClientStateMachineError)
     }

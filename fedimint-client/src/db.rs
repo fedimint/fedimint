@@ -1,23 +1,18 @@
-use std::io::{Error, Read, Write};
-use std::marker::PhantomData;
-
 use fedimint_core::api::{ApiVersionSet, InviteCode};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::oplog::OperationLogEntry;
-use crate::secret::RootSecretStrategy;
-use crate::ClientSecret;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    ClientSecret = 0x29,
+    EncodedClientSecret = 0x28,
+    ClientSecret = 0x29, // Unused
     OperationLog = 0x2c,
     ChronologicalOperationLog = 0x2d,
     CommonApiVersionCache = 0x2e,
@@ -31,39 +26,21 @@ impl std::fmt::Display for DbKeyPrefix {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub struct ClientSecretKey<S>(PhantomData<S>);
+#[derive(Debug, Encodable, Decodable)]
+pub struct EncodedClientSecretKey;
 
-impl<S> Default for ClientSecretKey<S> {
-    fn default() -> Self {
-        Self(PhantomData)
-    }
-}
+#[derive(Debug, Encodable, Decodable)]
+pub struct EncodedClientSecretKeyPrefix;
 
-impl<S> Encodable for ClientSecretKey<S> {
-    fn consensus_encode<W: Write>(&self, _writer: &mut W) -> Result<usize, Error> {
-        Ok(0)
-    }
-}
-
-impl<S> Decodable for ClientSecretKey<S> {
-    fn consensus_decode<R: Read>(
-        _r: &mut R,
-        _modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        Ok(ClientSecretKey::default())
-    }
-}
-
-impl<S> ::fedimint_core::db::DatabaseRecord for ClientSecretKey<S>
-where
-    S: RootSecretStrategy,
-{
-    const DB_PREFIX: u8 = DbKeyPrefix::ClientSecret as u8;
-
-    type Key = Self;
-    type Value = ClientSecret<S>;
-}
+impl_db_record!(
+    key = EncodedClientSecretKey,
+    value = Vec<u8>,
+    db_prefix = DbKeyPrefix::EncodedClientSecret,
+);
+impl_db_lookup!(
+    key = EncodedClientSecretKey,
+    query_prefix = EncodedClientSecretKeyPrefix
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct OperationLogKey {

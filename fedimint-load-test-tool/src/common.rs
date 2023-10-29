@@ -6,7 +6,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use bitcoin::secp256k1;
 use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
-use fedimint_client::secret::PlainRootSecretStrategy;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::api::InviteCode;
@@ -22,6 +22,7 @@ use fedimint_mint_client::{
 use fedimint_wallet_client::WalletClientGen;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
+use rand::thread_rng;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -134,7 +135,21 @@ pub async fn build_client(
     } else {
         client_builder.with_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
-    let client = client_builder.build::<PlainRootSecretStrategy>().await?;
+
+    let client_secret = match client_builder
+        .load_decodable_client_secret::<[u8; 64]>()
+        .await
+    {
+        Ok(secret) => secret,
+        Err(_) => {
+            let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+            client_builder.store_encodable_client_secret(secret).await?;
+            secret
+        }
+    };
+    let client = client_builder
+        .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
+        .await?;
     Ok(client)
 }
 
