@@ -1,18 +1,40 @@
-#![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
+#![allow(where_clauses_object_safety)]
+
+// https://github.com/dtolnay/async-trait/issues/228
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::Result;
 use bitcoin_hashes::hex::ToHex;
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
+use fedimint_client::module::ClientModule;
+use fedimint_client::sm::executor::{ActiveStateKeyPrefix, InactiveStateKeyPrefix};
+use fedimint_client::sm::OperationId;
+use fedimint_client::transaction::{
+    tx_submission_sm_decoder, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+};
+use fedimint_client::DynGlobalClientContext;
+use fedimint_client_legacy::modules::mint::MintClientModule;
+use fedimint_client_legacy::modules::wallet::WalletClientModule;
 use fedimint_core::config::ServerModuleInitRegistry;
-use fedimint_core::db::IDatabase;
+use fedimint_core::core::{
+    ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+};
+use fedimint_core::db::notifications::Notifications;
+use fedimint_core::db::{DatabaseTransaction, IDatabase, SingleUseDatabaseTransaction};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::DynServerModuleInit;
 use fedimint_ln_server::LightningGen;
 use fedimint_logging::TracingSetup;
 use fedimint_mint_server::MintGen;
+use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_wallet_server::WalletGen;
 use futures::StreamExt;
+use itertools::Itertools;
+use ln_gateway::ng::GatewayClientModule;
 
 use crate::dump::DatabaseDump;
 
@@ -68,6 +90,26 @@ enum DbCommand {
         modules: Option<String>,
         #[arg(long, required = false)]
         prefixes: Option<String>,
+    },
+
+    /// Lists state machine states from a client database in the format:
+    /// module instance | active | creation time | state debug print
+    ListStates {
+        /// List active states
+        #[arg(long, required = false)]
+        active: bool,
+        /// List inactive states
+        #[arg(long, required = false)]
+        inactive: bool,
+        /// Print the state debug output on multiple lines
+        #[arg(long, required = false)]
+        pretty: bool,
+        /// Only show states belonging to operation
+        #[arg(long, required = false)]
+        operation: Option<String>,
+        /// Only show states belonging to this module instance
+        #[arg(long, required = false)]
+        instance: Option<u16>,
     },
 }
 
@@ -160,7 +202,113 @@ async fn main() -> Result<()> {
             );
             dbdump.dump_database().await?;
         }
+        DbCommand::ListStates {
+            active,
+            inactive,
+            pretty,
+            operation,
+            instance,
+        } => {
+            let decoders = module_decoders();
+
+            let read_only_client = match RocksDbReadOnly::open_read_only(options.database) {
+                Ok(db) => db,
+                Err(_) => {
+                    panic!("Error reading RocksDB database. Quitting...");
+                }
+            };
+
+            let notifications = Box::new(Notifications::new());
+            let single_use = SingleUseDatabaseTransaction::new(read_only_client);
+            let mut dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, &notifications);
+
+            let active_states = if active {
+                dbtx.find_by_prefix(&ActiveStateKeyPrefix::<DynGlobalClientContext>::new())
+                    .await
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .map(|(key, value)| (value.created_at, key.state, true))
+                    .collect::<Vec<_>>()
+            } else {
+                vec![]
+            };
+
+            let inactive_states = if inactive {
+                dbtx.find_by_prefix(&InactiveStateKeyPrefix::<DynGlobalClientContext>::new())
+                    .await
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .map(|(key, value)| (value.created_at, key.state, false))
+                    .collect::<Vec<_>>()
+            } else {
+                vec![]
+            };
+
+            let filter_operation_id =
+                operation.map(|operation_id_str| OperationId::from_str(&operation_id_str).unwrap());
+            let states = inactive_states
+                .into_iter()
+                .chain(active_states)
+                .filter(|(_, state, _)| {
+                    let operation_ok = filter_operation_id
+                        .map(|operation_id| state.operation_id() == operation_id)
+                        .unwrap_or(true);
+
+                    let instance_ok = instance
+                        .map(|instance| state.module_instance_id() == instance)
+                        .unwrap_or(true);
+
+                    operation_ok && instance_ok
+                })
+                .sorted_by(|(time1, ..), (time2, ..)| time1.cmp(time2));
+
+            for (time, state, active) in states {
+                let datetime: DateTime<Utc> = time.into();
+                let instance = state.module_instance_id();
+                if pretty {
+                    println!(
+                        "{instance:5} {active:5} {} {:#?}",
+                        datetime.format("%+"),
+                        state
+                    );
+                } else {
+                    println!(
+                        "{instance:5} {active:5} {} {:?}",
+                        datetime.format("%+"),
+                        state
+                    );
+                }
+            }
+        }
     }
 
     Ok(())
+}
+
+fn module_decoders() -> ModuleDecoderRegistry {
+    let mut decoders = ModuleDecoderRegistry::new(vec![
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+            ModuleKind::from_static_str("wallet"),
+            <WalletClientModule as ClientModule>::decoder(),
+        ),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_LN,
+            ModuleKind::from_static_str("ln"),
+            <GatewayClientModule as ClientModule>::decoder(),
+        ),
+        (
+            LEGACY_HARDCODED_INSTANCE_ID_MINT,
+            ModuleKind::from_static_str("mint"),
+            <MintClientModule as ClientModule>::decoder(),
+        ),
+    ]);
+    decoders.register_module(
+        TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+        ModuleKind::from_static_str("tx_submission"),
+        tx_submission_sm_decoder(),
+    );
+    decoders.with_fallback()
 }

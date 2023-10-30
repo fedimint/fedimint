@@ -14,6 +14,7 @@ anyhow = "1.0.68"
 fedimint-aead = { path = "../crypto/aead" }
 bitcoin_hashes = "0.11.0"
 bytes = "1.4.0"
+chrono = "0.4.31"
 clap = { version = "4.1.6", features  = [ "derive", "env" ] }
 fedimint-core ={ path = "../fedimint-core" }
 fedimint-server = { path = "../fedimint-server" }
@@ -25,7 +26,10 @@ fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 futures = "0.3.24"
 erased-serde = "0.3"
 hex = { version = "0.4.3", features = [ "serde"] }
+itertools = "0.11.0"
 fedimint-client-legacy = { path = "../fedimint-client-legacy" }
+fedimint-client = { path = "../fedimint-client" }
+ln-gateway = { path = "../gateway/ln-gateway" }
 serde = { version = "1.0.149", features = ["derive"] }
 serde_json = "1.0.91"
 strum = "0.24"

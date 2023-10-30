@@ -729,7 +729,7 @@ where
 }
 
 #[derive(Debug)]
-struct ActiveStateKeyPrefix<GC>(PhantomData<GC>);
+pub struct ActiveStateKeyPrefix<GC>(PhantomData<GC>);
 
 impl<GC> ActiveStateKeyPrefix<GC> {
     pub fn new() -> Self {
@@ -872,7 +872,7 @@ where
 }
 
 #[derive(Debug, Clone)]
-struct InactiveStateKeyPrefix<GC>(PhantomData<GC>);
+pub struct InactiveStateKeyPrefix<GC>(PhantomData<GC>);
 
 impl<GC> InactiveStateKeyPrefix<GC> {
     pub fn new() -> Self {
