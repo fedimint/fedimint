@@ -44,6 +44,9 @@ message GetNodeInfoResponse {
 
   // The alias of the lightning node
   string alias = 2;
+
+  // The network the node is on. Valid values are "main" | "test" | "signet" | "regtest"
+  string network = 3;
 }
 
 message PayInvoiceRequest {

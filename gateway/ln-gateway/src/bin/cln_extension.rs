@@ -204,7 +204,7 @@ impl ClnRpcService {
         })
     }
 
-    pub async fn info(&self) -> Result<(PublicKey, String), ClnExtensionError> {
+    pub async fn info(&self) -> Result<(PublicKey, String, String), ClnExtensionError> {
         self.rpc_client()
             .await?
             .call(cln_rpc::Request::Getinfo(
@@ -213,10 +213,14 @@ impl ClnRpcService {
             .await
             .map(|response| match response {
                 cln_rpc::Response::Getinfo(model::responses::GetinfoResponse {
-                    id, alias, ..
+                    id,
+                    alias,
+                    network,
+                    ..
                 }) => {
                     // FIXME: How to handle missing alias?
-                    Ok((id, alias.unwrap_or_default()))
+                    let alias = alias.unwrap_or_default();
+                    Ok((id, alias, network))
                 }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
@@ -232,10 +236,11 @@ impl GatewayLightning for ClnRpcService {
     ) -> Result<tonic::Response<GetNodeInfoResponse>, Status> {
         self.info()
             .await
-            .map(|(pub_key, alias)| {
+            .map(|(pub_key, alias, network)| {
                 tonic::Response::new(GetNodeInfoResponse {
                     pub_key: pub_key.serialize().to_vec(),
                     alias,
+                    network,
                 })
             })
             .map_err(|e| {

@@ -190,6 +190,7 @@ pub enum GatewayState {
         lnrpc: Arc<dyn ILnRpcClient>,
         lightning_public_key: PublicKey,
         lightning_alias: String,
+        lightning_network: Network,
     },
     Disconnected,
 }
@@ -465,7 +466,21 @@ impl Gateway {
                                 info!("Established HTLC stream");
 
                                 match fetch_lightning_node_info(ln_client.clone()).await {
-                                    Ok((lightning_public_key, lightning_alias)) => {
+                                    Ok((lightning_public_key, lightning_alias, lightning_network)) => {
+                                        if let Some(config) = self.get_gateway_configuration().await {
+                                            if config.network != lightning_network {
+                                                warn!("Lightning node does not match previously configured gateway network : ({:?})", config.network);
+                                                info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
+                                                self.handle_set_configuration_msg(SetConfigurationPayload {
+                                                    password: Some(config.password),
+                                                    network: Some(lightning_network),
+                                                    num_route_hints: None,
+                                                    routing_fees: None,
+                                                }).await.expect("Failed to set gateway configuration");
+                                                continue;
+                                            }
+                                        }
+
                                         self.register_clients_timer(&mut htlc_task_group).await;
                                         self.load_clients(
                                             ln_client.clone(),
@@ -480,6 +495,7 @@ impl Gateway {
                                             lnrpc: ln_client,
                                             lightning_public_key,
                                             lightning_alias,
+                                            lightning_network
                                         }).await;
 
                                         // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
@@ -524,12 +540,7 @@ impl Gateway {
     }
 
     pub async fn handle_htlc_stream(&self, mut stream: RouteHtlcStream<'_>, handle: TaskHandle) {
-        let GatewayState::Running {
-            lnrpc,
-            lightning_public_key: _,
-            lightning_alias: _,
-        } = self.state.read().await.clone()
-        else {
+        let GatewayState::Running { lnrpc, .. } = self.state.read().await.clone() else {
             panic!("Gateway isn't in a running state")
         };
         loop {
@@ -592,6 +603,7 @@ impl Gateway {
             lnrpc,
             lightning_public_key,
             lightning_alias,
+            ..
         } = self.state.read().await.clone()
         {
             // `GatewayConfiguration` should always exist in the database when we are in the
@@ -687,12 +699,7 @@ impl Gateway {
     }
 
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<Preimage> {
-        if let GatewayState::Running {
-            lnrpc: _,
-            lightning_public_key: _,
-            lightning_alias: _,
-        } = self.state.read().await.clone()
-        {
+        if let GatewayState::Running { .. } = self.state.read().await.clone() {
             let client = self.select_client(payload.federation_id).await?;
             let operation_id = client.gateway_pay_bolt11_invoice(payload).await?;
             let mut updates = client
@@ -733,6 +740,7 @@ impl Gateway {
             lnrpc,
             lightning_public_key,
             lightning_alias,
+            ..
         } = self.state.read().await.clone()
         {
             let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
@@ -838,12 +846,27 @@ impl Gateway {
         }: SetConfigurationPayload,
     ) -> Result<()> {
         let gw_state = self.state.read().await.clone();
-        let can_set_config = matches!(gw_state, GatewayState::Running { .. })
-            || matches!(gw_state, GatewayState::Configuring)
-            || matches!(gw_state, GatewayState::Connected);
-        if !can_set_config {
+        if matches!(gw_state, GatewayState::Disconnected) {
             return Err(GatewayError::Disconnected);
         }
+
+        let lightning_network = match gw_state {
+            GatewayState::Running {
+                lightning_network, ..
+            } => {
+                if network.is_some() && network != Some(lightning_network) {
+                    return Err(GatewayError::GatewayConfigurationError(
+                        "Cannot change network while connected to a lightning node".to_string(),
+                    ));
+                }
+                lightning_network
+            }
+            // In the case the gateway is not yet running and not yet connected to a lightning node,
+            // we start off with a default network configuration. This default gets replaced later
+            // when the gateway connects to a lightning node, or when a user sets a different
+            // configuration
+            _ => DEFAULT_NETWORK,
+        };
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
@@ -881,7 +904,7 @@ impl Gateway {
 
             GatewayConfiguration {
                 password: password.unwrap(),
-                network: DEFAULT_NETWORK,
+                network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
             }
@@ -1179,11 +1202,17 @@ impl Gateway {
 
 pub(crate) async fn fetch_lightning_node_info(
     lnrpc: Arc<dyn ILnRpcClient>,
-) -> Result<(PublicKey, String)> {
-    let GetNodeInfoResponse { pub_key, alias } = lnrpc.info().await?;
+) -> Result<(PublicKey, String, Network)> {
+    let GetNodeInfoResponse {
+        pub_key,
+        alias,
+        network,
+    } = lnrpc.info().await?;
     let node_pub_key = PublicKey::from_slice(&pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-    Ok((node_pub_key, alias))
+    let network = Network::from_str(&network)
+        .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}")))?;
+    Ok((node_pub_key, alias, network))
 }
 
 async fn wait_for_new_password(

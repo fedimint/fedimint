@@ -306,10 +306,19 @@ impl ILnRpcClient for GatewayLndClient {
                 .map_err(|e| LightningRpcError::FailedToGetNodeInfo {
                     failure_reason: format!("Failed to parse public key {e:?}"),
                 })?;
+        let network = info
+            .chains
+            .first()
+            .ok_or_else(|| LightningRpcError::FailedToGetNodeInfo {
+                failure_reason: "Failed to parse node network".to_string(),
+            })?
+            .clone()
+            .network;
 
         return Ok(GetNodeInfoResponse {
             pub_key: pub_key.serialize().to_vec(),
             alias: info.alias,
+            network,
         });
     }
 

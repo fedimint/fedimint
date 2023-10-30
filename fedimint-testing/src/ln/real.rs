@@ -374,6 +374,7 @@ pub struct LdkLightningTest {
     alias: String,
     ldk_node_sender: Arc<Mutex<std::sync::mpsc::Sender<LdkMessage>>>,
     listening_address: String,
+    network: Network,
 }
 
 #[derive(Debug)]
@@ -472,6 +473,7 @@ impl LdkLightningTest {
             alias: format!("LDKNode-{}", rand::random::<u64>()),
             ldk_node_sender: Arc::new(Mutex::new(sender)),
             listening_address: format!("127.0.0.1:{unused_port}"),
+            network: Network::Regtest,
         })
     }
 
@@ -667,6 +669,7 @@ impl ILnRpcClient for LdkLightningTest {
         Ok(GetNodeInfoResponse {
             pub_key: self.node_pub_key.serialize().to_vec(),
             alias: self.alias.clone(),
+            network: self.network.to_string(),
         })
     }
 

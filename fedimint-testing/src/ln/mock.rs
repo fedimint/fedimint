@@ -101,6 +101,7 @@ impl ILnRpcClient for FakeLightningTest {
         Ok(GetNodeInfoResponse {
             pub_key: self.gateway_node_pub_key.serialize().to_vec(),
             alias: "FakeLightningNode".to_string(),
+            network: "regtest".to_string(),
         })
     }
 
