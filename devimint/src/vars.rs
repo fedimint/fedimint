@@ -119,7 +119,7 @@ declare_vars! {
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join("ready");
 
         FM_CLN_SOCKET: PathBuf = FM_CLN_DIR.join("regtest/lightning-rpc");
-        FM_LND_RPC_ADDR: String = f!("http://localhost:{FM_PORT_LND_RPC}");
+        FM_LND_RPC_ADDR: String = f!("https://localhost:{FM_PORT_LND_RPC}");
         FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join("tls.cert");
         FM_LND_MACAROON: PathBuf = FM_LND_DIR.join("data/chain/bitcoin/regtest/admin.macaroon");
 
