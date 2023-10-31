@@ -29,7 +29,7 @@ The Fedimint Developer Discord is the best place to get help and ask questions. 
 
 ## Running your own Fedimint
 
-It's easy to set up and run your own federations. Fedimint is designed to be [Byzantine Fault Tolerant](https://bitcoinmagazine.com/glossary/what-is-the-byzantine-generals-problem) so is resilient to `m` malicious nodes in a federation of `3m + 1` nodes. If you run a federation of 4 guardians you are resilient to 1 malicious guardian, if you run a federation of 7 guardians you are resilient to 2 guardians, etc.
+It's easy to set up and run your own federations. Fedimint is designed to be [Byzantine Fault Tolerant](https://en.wikipedia.org/wiki/Byzantine_fault) so is resilient to `m` malicious nodes in a federation of `3m + 1` nodes. If you run a federation of 4 guardians you are resilient to 1 malicious guardian, if you run a federation of 7 guardians you are resilient to 2 guardians, etc.
 
 [Fedimint's 0.1 release](https://github.com/fedimint/fedimint/releases/tag/v0.1.3) can also be run with smaller configurations (1/1, 2/2, 2/3) for testing and development.
 
