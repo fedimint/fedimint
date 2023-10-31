@@ -173,6 +173,15 @@ pub trait MintClientExt {
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)>;
 
+    /// Same as `spend_notes` but allows different to select notes to be used.
+    async fn spend_notes_with_selector<M: Serialize + Send>(
+        &self,
+        notes_selector: &impl NotesSelector<SpendableNote>,
+        requested_amount: Amount,
+        try_cancel_after: Duration,
+        extra_meta: M,
+    ) -> anyhow::Result<(OperationId, OOBNotes)>;
+
     /// Validate the given notes and return the total amount of the notes.
     /// Validation checks that:
     /// - the federation ID is correct
@@ -351,6 +360,22 @@ impl MintClientExt for Client {
         try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
+        self.spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            min_amount,
+            try_cancel_after,
+            extra_meta,
+        )
+        .await
+    }
+
+    async fn spend_notes_with_selector<M: Serialize + Send>(
+        &self,
+        notes_selector: &impl NotesSelector<SpendableNote>,
+        requested_amount: Amount,
+        try_cancel_after: Duration,
+        extra_meta: M,
+    ) -> anyhow::Result<(OperationId, OOBNotes)> {
         let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::spend_notes extra_meta is serializable");
@@ -363,7 +388,8 @@ impl MintClientExt for Client {
                         let (operation_id, states, notes) = mint
                             .spend_notes_oob(
                                 &mut dbtx.with_module_prefix(instance.id),
-                                min_amount,
+                                notes_selector,
+                                requested_amount,
                                 try_cancel_after,
                             )
                             .await?;
@@ -385,7 +411,7 @@ impl MintClientExt for Client {
                                 MintCommonGen::KIND.as_str(),
                                 MintOperationMeta {
                                     variant: MintOperationMetaVariants::SpendOOB {
-                                        requested_amount: min_amount,
+                                        requested_amount,
                                         oob_notes: oob_notes.clone(),
                                     },
                                     amount: oob_notes.total_amount(),
@@ -1070,7 +1096,8 @@ impl MintClientModule {
             "zero-amount inputs are not supported"
         );
 
-        let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
+        let spendable_selected_notes =
+            Self::select_notes(dbtx, &SelectNotesWithAtleastAmount, min_amount).await?;
 
         for (amount, note) in spendable_selected_notes.iter_items() {
             dbtx.remove_entry(&NoteKey {
@@ -1132,7 +1159,8 @@ impl MintClientModule {
     async fn spend_notes_oob(
         &self,
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-        min_amount: Amount,
+        notes_selector: &impl NotesSelector<SpendableNote>,
+        requested_amount: Amount,
         try_cancel_after: Duration,
     ) -> anyhow::Result<(
         OperationId,
@@ -1140,11 +1168,12 @@ impl MintClientModule {
         TieredMulti<SpendableNote>,
     )> {
         ensure!(
-            min_amount > Amount::ZERO,
+            requested_amount > Amount::ZERO,
             "zero-amount out-of-band spends are not supported"
         );
 
-        let spendable_selected_notes = Self::select_notes(dbtx, min_amount).await?;
+        let spendable_selected_notes =
+            Self::select_notes(dbtx, notes_selector, requested_amount).await?;
 
         let operation_id = spendable_notes_to_operation_id(&spendable_selected_notes);
 
@@ -1225,20 +1254,19 @@ impl MintClientModule {
         Err(anyhow!("Restore stream closed without success or failure"))
     }
 
-    /// Select notes with total amount of *at least* `amount`. If more than
-    /// requested amount of notes are returned it was because exact change
-    /// couldn't be made, and the next smallest amount will be returned.
-    ///
-    /// The caller can request change from the federation.
+    /// Select notes with `requested_amount` using `notes_selector`.
     async fn select_notes(
         dbtx: &mut ModuleDatabaseTransaction<'_>,
-        amount: Amount,
-    ) -> Result<TieredMulti<SpendableNote>, InsufficientBalanceError> {
+        notes_selector: &impl NotesSelector<SpendableNote>,
+        requested_amount: Amount,
+    ) -> anyhow::Result<TieredMulti<SpendableNote>> {
         let note_stream = dbtx
             .find_by_prefix_sorted_descending(&NoteKeyPrefix)
             .await
             .map(|(key, note)| (key.amount, note));
-        select_notes_from_stream(note_stream, amount).await
+        notes_selector
+            .select_notes(note_stream, requested_amount)
+            .await
     }
 
     async fn get_all_spendable_notes(
@@ -1340,12 +1368,44 @@ pub struct SpendOOBRefund {
     pub transaction_id: TransactionId,
 }
 
+#[apply(async_trait_maybe_send!)]
+pub trait NotesSelector<Note>: Send + Sync {
+    /// Select notes from stream for requested_amount.
+    /// The stream must produce items in non- decreasing order of amount.
+    async fn select_notes(
+        &self,
+        // FIXME: async trait doesn't like maybe_add_send
+        #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
+        #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
+        requested_amount: Amount,
+    ) -> anyhow::Result<TieredMulti<Note>>;
+}
+
+/// Select notes with total amount of *at least* `request_amount`. If more than
+/// requested amount of notes are returned it was because exact change couldn't
+/// be made, and the next smallest amount will be returned.
+///
+/// The caller can request change from the federation.
+pub struct SelectNotesWithAtleastAmount;
+
+#[apply(async_trait_maybe_send!)]
+impl<Note: Send> NotesSelector<Note> for SelectNotesWithAtleastAmount {
+    async fn select_notes(
+        &self,
+        #[cfg(not(target_family = "wasm"))] stream: impl futures::Stream<Item = (Amount, Note)> + Send,
+        #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
+        requested_amount: Amount,
+    ) -> anyhow::Result<TieredMulti<Note>> {
+        Ok(select_notes_from_stream(stream, requested_amount).await?)
+    }
+}
+
 // We are using a greedy algorithm to select notes. We start with the largest
 // then proceed to the lowest tiers/denominations.
 // But there is a catch: we don't know if there are enough notes in the lowest
 // tiers, so we need to save a big note in case the sum of the following
 // small notes are not enough.
-pub async fn select_notes_from_stream<Note>(
+async fn select_notes_from_stream<Note>(
     stream: impl futures::Stream<Item = (Amount, Note)>,
     requested_amount: Amount,
 ) -> Result<TieredMulti<Note>, InsufficientBalanceError> {
