@@ -693,13 +693,8 @@ impl Gateway {
             lightning_alias: _,
         } = self.state.read().await.clone()
         {
-            let PayInvoicePayload {
-                federation_id,
-                contract_id,
-            } = payload;
-
-            let client = self.select_client(federation_id).await?;
-            let operation_id = client.gateway_pay_bolt11_invoice(contract_id).await?;
+            let client = self.select_client(payload.federation_id).await?;
+            let operation_id = client.gateway_pay_bolt11_invoice(payload).await?;
             let mut updates = client
                 .gateway_subscribe_ln_pay(operation_id)
                 .await?
@@ -785,6 +780,7 @@ impl Gateway {
                     all_clients,
                     all_scids,
                     old_client,
+                    self.gateway_db.clone(),
                 )
                 .await?;
 
@@ -990,6 +986,7 @@ impl Gateway {
                         all_clients,
                         all_scids,
                         old_client,
+                        self.gateway_db.clone(),
                     )
                     .await
                 {

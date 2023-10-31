@@ -13,7 +13,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
-use fedimint_ln_common::contracts::ContractId;
+use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
 use fedimint_ln_common::{
     LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome,
 };
@@ -58,6 +58,8 @@ pub struct LightningPayCommon {
     pub federation_id: FederationId,
     pub contract: OutgoingContractData,
     pub gateway_fee: Amount,
+    pub preimage_auth: sha256::Hash,
+    pub payment_hash: sha256::Hash,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -77,7 +79,7 @@ impl State for LightningPayStateMachine {
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) => {
-                created_outgoing_ln_contract.transitions(&self.common, context, global_context)
+                created_outgoing_ln_contract.transitions(context, global_context)
             }
             LightningPayStates::Canceled => {
                 vec![]
@@ -114,13 +116,11 @@ pub struct LightningPayCreatedOutgoingLnContract {
 impl LightningPayCreatedOutgoingLnContract {
     fn transitions(
         &self,
-        common: &LightningPayCommon,
         context: &LightningClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let txid = self.funding_txid;
         let contract_id = self.contract_id;
-        let funded_common = common.clone();
         let success_context = global_context.clone();
         let gateway = self.gateway.clone();
         vec![StateTransition::new(
@@ -134,8 +134,6 @@ impl LightningPayCreatedOutgoingLnContract {
                 Box::pin(Self::transition_outgoing_contract_funded(
                     result,
                     old_state,
-                    funded_common.clone(),
-                    contract_id,
                     gateway.clone(),
                 ))
             },
@@ -170,8 +168,6 @@ impl LightningPayCreatedOutgoingLnContract {
     async fn transition_outgoing_contract_funded(
         result: Result<u32, GatewayPayError>,
         old_state: LightningPayStateMachine,
-        common: LightningPayCommon,
-        contract_id: ContractId,
         gateway: LightningGateway,
     ) -> LightningPayStateMachine {
         assert!(matches!(
@@ -182,19 +178,14 @@ impl LightningPayCreatedOutgoingLnContract {
         match result {
             Ok(timelock) => {
                 // Success case: funding transaction is accepted
-                let payload = PayInvoicePayload::new(common.federation_id, contract_id);
+                let common = old_state.common.clone();
+                let payload = PayInvoicePayload::new(common.clone());
                 LightningPayStateMachine {
                     common: old_state.common,
                     state: LightningPayStates::Funded(LightningPayFunded {
                         payload,
                         gateway,
                         timelock,
-                        payment_hash: *common
-                            .contract
-                            .contract_account
-                            .contract
-                            .invoice
-                            .payment_hash(),
                     }),
                 }
             }
@@ -214,7 +205,6 @@ pub struct LightningPayFunded {
     payload: PayInvoicePayload,
     gateway: LightningGateway,
     timelock: u32,
-    payment_hash: sha256::Hash,
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -238,7 +228,7 @@ impl LightningPayFunded {
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timelock = self.timelock;
-        let payment_hash = self.payment_hash;
+        let payment_hash = common.payment_hash;
         vec![StateTransition::new(
             Self::gateway_pay_invoice(gateway, payload),
             move |dbtx, result, old_state| {
@@ -514,13 +504,17 @@ impl LightningPayRefund {
 pub struct PayInvoicePayload {
     pub federation_id: FederationId,
     pub contract_id: ContractId,
+    pub preimage_auth: sha256::Hash,
+    pub payment_hash: sha256::Hash,
 }
 
 impl PayInvoicePayload {
-    pub fn new(federation_id: FederationId, contract_id: ContractId) -> Self {
+    pub fn new(common: LightningPayCommon) -> Self {
         Self {
-            contract_id,
-            federation_id,
+            contract_id: common.contract.contract_account.contract.contract_id(),
+            federation_id: common.federation_id,
+            preimage_auth: common.preimage_auth,
+            payment_hash: common.payment_hash,
         }
     }
 }

@@ -183,6 +183,64 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed().await;
+    let (client1, client2) = fed.two_clients().await;
+    let gw = gateway(&fixtures, &fed).await;
+
+    // Print money for client1
+    let (op, outpoint) = client1.print_money(sats(10000)).await?;
+    client1.await_primary_module_output(op, outpoint).await?;
+
+    // Print money for client2
+    let (op, outpoint) = client2.print_money(sats(10000)).await?;
+    client2.await_primary_module_output(op, outpoint).await?;
+
+    let cln = fixtures.cln().await;
+    let invoice = cln.invoice(Amount::from_sats(100), None).await?;
+
+    // Pay invoice with client1
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client1.pay_bolt11_invoice(invoice.clone()).await?;
+    match payment_type {
+        PayType::Lightning(operation_id) => {
+            let mut sub = client1.subscribe_ln_pay(operation_id).await?.into_stream();
+
+            assert_eq!(sub.ok().await?, LnPayState::Created);
+            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::Success { .. });
+        }
+        _ => panic!("Expected lightning payment!"),
+    }
+
+    // Verify that client2 cannot pay the same invoice and the preimage is not
+    // returned
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = client2.pay_bolt11_invoice(invoice.clone()).await?;
+    match payment_type {
+        PayType::Lightning(operation_id) => {
+            let mut sub = client2.subscribe_ln_pay(operation_id).await?.into_stream();
+
+            assert_eq!(sub.ok().await?, LnPayState::Created);
+            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::WaitingForRefund { .. });
+            assert_matches!(sub.ok().await?, LnPayState::Refunded { .. });
+        }
+        _ => panic!("Expected lightning payment!"),
+    }
+
+    drop(gw);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;

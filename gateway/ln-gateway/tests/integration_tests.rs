@@ -19,6 +19,7 @@ use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
+use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_client::{
     LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
     LightningOperationMeta, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
@@ -150,7 +151,14 @@ async fn pay_valid_invoice(
             let funded = pay_sub.ok().await?;
             assert_matches!(funded, LnPayState::Funded);
 
-            let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
+            let payload = PayInvoicePayload {
+                federation_id: user_client.federation_id(),
+                contract_id,
+                payment_hash: *invoice.payment_hash(),
+                preimage_auth: Hash::hash(&[0; 32]),
+            };
+
+            let gw_pay_op = gateway.gateway_pay_bolt11_invoice(payload).await?;
             let mut gw_pay_sub = gateway
                 .gateway_subscribe_ln_pay(gw_pay_op)
                 .await?
@@ -325,7 +333,14 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                     let funded = pay_sub.ok().await?;
                     assert_matches!(funded, LnPayState::Funded);
 
-                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
+                    let payload = PayInvoicePayload {
+                        federation_id: user_client.federation_id(),
+                        contract_id,
+                        payment_hash: *invoice.payment_hash(),
+                        preimage_auth: Hash::hash(&[0; 32]),
+                    };
+
+                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(payload).await?;
                     let mut gw_pay_sub = gateway
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
@@ -648,7 +663,14 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                     let funded = pay_sub.ok().await?;
                     assert_matches!(funded, LnPayState::Funded);
 
-                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(contract_id).await?;
+                    let payload = PayInvoicePayload {
+                        federation_id: user_client.federation_id(),
+                        contract_id,
+                        payment_hash: *invoice.payment_hash(),
+                        preimage_auth: Hash::hash(&[0; 32]),
+                    };
+
+                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(payload).await?;
                     let mut gw_pay_sub = gateway
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
