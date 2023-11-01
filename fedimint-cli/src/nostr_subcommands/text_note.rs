@@ -3,9 +3,12 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use clap::Args;
-use nostr_sdk::prelude::*;
+use fedimint_client::Client;
+use nostr_sdk::secp256k1::XOnlyPublicKey;
+use nostr_sdk::{Event, EventId, Tag, Timestamp, ToBech32};
+use resolvr_client::ResolvrClientExt;
 
-use crate::utils::{create_client, handle_keys, parse_key};
+use crate::utils::parse_key;
 
 #[derive(Args, Clone, Debug)]
 pub struct TextNoteSubCommand {
@@ -29,55 +32,52 @@ pub struct TextNoteSubCommand {
     hex: bool,
 }
 
-pub fn broadcast_textnote(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
+pub async fn broadcast_textnote(
+    client: Client,
     sub_command_args: &TextNoteSubCommand,
-) -> Result<()> {
-    todo!()
-    // if relays.is_empty() {
-    //     panic!("No relays specified, at least one relay is required!")
-    // }
+) -> anyhow::Result<EventId> {
+    // Set up tags
+    let mut tags: Vec<Tag> = vec![];
 
-    // let keys = handle_keys(private_key, sub_command_args.hex, true)?;
-    // let client = create_client(&keys, relays, difficulty_target)?;
+    // Subject tag (NIP-14)
+    if let Some(subject) = &sub_command_args.subject {
+        let subject_tag = Tag::Subject(subject.clone());
+        tags.push(subject_tag);
+    }
 
-    // // Set up tags
-    // let mut tags: Vec<Tag> = vec![];
+    // Any p-tag
+    for ptag in sub_command_args.ptag.iter() {
+        // Parse pubkey to ensure we're sending hex keys
+        let pubkey_hex = parse_key(ptag.clone()).unwrap();
+        let pubkey = XOnlyPublicKey::from_str(&pubkey_hex)?;
+        tags.push(Tag::PubKey(pubkey, None));
+    }
+    // Any e-tag
+    for etag in sub_command_args.etag.iter() {
+        let event_id = EventId::from_hex(etag)?;
+        tags.push(Tag::Event(event_id, None, None));
+    }
+    // Set expiration tag
+    if let Some(expiration) = sub_command_args.expiration {
+        let timestamp = Timestamp::now().add(Duration::from_secs(expiration));
+        tags.push(Tag::Expiration(timestamp));
+    }
 
-    // // Subject tag (NIP-14)
-    // if let Some(subject) = &sub_command_args.subject {
-    //     let subject_tag = Tag::Subject(subject.clone());
-    //     tags.push(subject_tag);
-    // }
+    // sign nostrmint with front
 
-    // // Any p-tag
-    // for ptag in sub_command_args.ptag.iter() {
-    //     // Parse pubkey to ensure we're sending hex keys
-    //     let pubkey_hex = parse_key(ptag.clone())?;
-    //     let pubkey = XOnlyPublicKey::from_str(&pubkey_hex)?;
-    //     tags.push(Tag::PubKey(pubkey, None));
-    // }
-    // // Any e-tag
-    // for etag in sub_command_args.etag.iter() {
-    //     let event_id = EventId::from_hex(etag)?;
-    //     tags.push(Tag::Event(event_id, None, None));
-    // }
-    // // Set expiration tag
-    // if let Some(expiration) = sub_command_args.expiration {
-    //     let timestamp =
-    // Timestamp::now().add(Duration::from_secs(expiration));
-    //     tags.push(Tag::Expiration(timestamp));
-    // }
+    let pubkey = client.get_npub().await?;
+    let unsigned_event =
+        nostr_sdk::EventBuilder::new_text_note(sub_command_args.clone().content, &tags)
+            .to_unsigned_event(pubkey);
+    client.request_sign_event(unsigned_event.clone()).await?;
 
-    // // Publish event
-    // let event_id = client.publish_text_note(sub_command_args.content.clone(),
-    // &tags)?; if !sub_command_args.hex {
-    //     println!("Published text note with id: {}", event_id.to_bech32()?);
-    // } else {
-    //     println!("Published text note with id: {}", event_id.to_hex());
-    // }
+    // then
+    // get signed event back
 
-    // Ok(())
+    println!(
+        "Published text note with id: {}",
+        unsigned_event.id.to_bech32()?
+    );
+
+    Ok(unsigned_event.id)
 }

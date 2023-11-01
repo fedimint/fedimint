@@ -3,7 +3,7 @@ use std::ffi;
 use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail, Context, Ok};
 use bitcoin::{secp256k1, Network};
 use bitcoin_hashes::hex;
 use bitcoin_hashes::hex::ToHex;
@@ -24,7 +24,7 @@ use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
-use nostr_sdk::ToBech32;
+use nostr_sdk::{Event, ToBech32};
 use nostrmint_client::NostrmintClientExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -519,7 +519,7 @@ pub async fn handle_command(
         }
         ClientCmd::Nostr { nostr_command } => {
             match &nostr_command {
-                NostrCommands::UpdateMetadata(sub_command_args) => {
+                NostrCommands::UpdateMetadata(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::update_metadata::update_metadata(
                     //     args.private_key,
@@ -529,15 +529,12 @@ pub async fn handle_command(
                     // )
                 }
                 NostrCommands::TextNote(sub_command_args) => {
-                    todo!()
-                    // nostr_subcommands::text_note::broadcast_textnote(
-                    //     args.private_key,
-                    //     args.relays,
-                    //     args.difficulty_target,
-                    //     sub_command_args,
-                    // )
+                    let id =
+                        nostr_subcommands::text_note::broadcast_textnote(client, sub_command_args)
+                            .await?;
+                    Ok(serde_json::Value::String(id.to_string()))
                 }
-                NostrCommands::RecommendRelay(sub_command_args) => {
+                NostrCommands::RecommendRelay(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::recommend_relay::recommend_relay(
                     //     args.private_key,
@@ -546,7 +543,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::PublishContactListCsv(sub_command_args) => {
+                NostrCommands::PublishContactListCsv(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::publish_contactlist_csv::publish_contact_list_from_csv_file(
                     //     args.private_key,
@@ -555,7 +552,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::SendDirectMessage(sub_command_args) => {
+                NostrCommands::SendDirectMessage(_sub_command_args) => {
                     todo!()
                     //     nostr_subcommands::dm::send(
                     //     args.private_key,
@@ -564,7 +561,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::DeleteEvent(sub_command_args) => {
+                NostrCommands::DeleteEvent(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::delete_event::delete(
                     //     args.private_key,
@@ -573,7 +570,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::React(sub_command_args) => {
+                NostrCommands::React(_sub_command_args) => {
                     todo!()
                     //     nostr_subcommands::react::react_to_event(
                     //     args.private_key,
@@ -582,28 +579,28 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::ListEvents(sub_command_args) => {
+                NostrCommands::ListEvents(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::list_events::list_events(args.relays,
                     // sub_command_args)
                 }
-                NostrCommands::GenerateKeypair(sub_command_args) => {
+                NostrCommands::GenerateKeypair(_sub_command_args) => {
                     todo!()
-                    // nostr_subcommands::generate_keypair::get_new_keypair(sub_command_args)
+                    // nostr_subcommands::generate_keypair::get_new_keypair(_sub_command_args)
                 }
-                NostrCommands::ConvertKey(sub_command_args) => {
+                NostrCommands::ConvertKey(_sub_command_args) => {
                     todo!()
-                    // nostr_subcommands::convert_key::convert_key(sub_command_args)
+                    // nostr_subcommands::convert_key::convert_key(_sub_command_args)
                 }
-                NostrCommands::Nprofile(sub_command_args) => {
+                NostrCommands::Nprofile(_sub_command_args) => {
                     todo!()
-                    // nostr_subcommands::nprofile::nprofile(sub_command_args)
+                    // nostr_subcommands::nprofile::nprofile(_sub_command_args)
                 }
-                NostrCommands::Vanity(sub_command_args) => {
+                NostrCommands::Vanity(_sub_command_args) => {
                     todo!()
-                    // nostr_subcommands::vanity::vanity(sub_command_args)
+                    // nostr_subcommands::vanity::vanity(_sub_command_args)
                 }
-                NostrCommands::CreatePublicChannel(sub_command_args) => {
+                NostrCommands::CreatePublicChannel(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::create_public_channel::create_public_channel(
                     //     args.private_key,
@@ -612,7 +609,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::SetChannelMetadata(sub_command_args) => {
+                NostrCommands::SetChannelMetadata(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::set_channel_metadata::set_channel_metadata(
                     //     args.private_key,
@@ -621,7 +618,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::SendChannelMessage(sub_command_args) => {
+                NostrCommands::SendChannelMessage(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::send_channel_message::send_channel_message(
                     //     args.private_key,
@@ -630,7 +627,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::HidePublicChannelMessage(sub_command_args) => {
+                NostrCommands::HidePublicChannelMessage(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::hide_public_channel_message::hide_public_channel_message(
                     //     args.private_key,
@@ -639,7 +636,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::MutePublicKey(sub_command_args) => {
+                NostrCommands::MutePublicKey(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::mute_publickey::mute_publickey(
                     //     args.private_key,
@@ -648,11 +645,11 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::BroadcastEvents(sub_command_args) => {
+                NostrCommands::BroadcastEvents(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::broadcast_events::broadcast_events(args.relays, sub_command_args)
                 }
-                NostrCommands::CreateZapRequest(sub_command_args) => {
+                NostrCommands::CreateZapRequest(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::zap_request::create_zap_request(
                     //     args.private_key,
@@ -660,7 +657,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::CreateZapReceipt(sub_command_args) => {
+                NostrCommands::CreateZapReceipt(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::zap_receipt::send_zap_receipt(
                     //     args.private_key,
@@ -669,7 +666,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::CreateBadge(sub_command_args) => {
+                NostrCommands::CreateBadge(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::create_badge::create_badge(
                     //     args.private_key,
@@ -678,7 +675,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::AwardBadge(sub_command_args) => {
+                NostrCommands::AwardBadge(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::award_badge::award_badge(
                     //     args.private_key,
@@ -687,7 +684,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::ProfileBadges(sub_command_args) => {
+                NostrCommands::ProfileBadges(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::profile_badges::set_profile_badges(
                     //     args.private_key,
@@ -696,7 +693,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::CustomEvent(sub_command_args) => {
+                NostrCommands::CustomEvent(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::custom_event::create_custom_event(
                     //     args.private_key,
@@ -705,7 +702,7 @@ pub async fn handle_command(
                     //     sub_command_args,
                     // )
                 }
-                NostrCommands::SetUserStatus(sub_command_args) => {
+                NostrCommands::SetUserStatus(_sub_command_args) => {
                     todo!()
                     // nostr_subcommands::user_status::set_user_status(
                     //     args.private_key,
