@@ -265,7 +265,9 @@ async fn main() -> anyhow::Result<()> {
                 None
             };
             let invoices = if let Some(invoices_file) = args.invoices_file {
-                let invoices_file = tokio::fs::File::open(invoices_file).await?;
+                let invoices_file = tokio::fs::File::open(&invoices_file)
+                    .await
+                    .with_context(|| format!("Failed to open {invoices_file:?}"))?;
                 let mut lines = tokio::io::BufReader::new(invoices_file).lines();
                 let mut invoices = vec![];
                 while let Some(line) = lines.next_line().await? {
@@ -333,19 +335,43 @@ async fn run_load_test(
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
     let db_path = archive_dir.as_ref().map(|p| p.join("db"));
-    let coordinator_db = if let Some(db_path) = &db_path {
-        tokio::fs::create_dir_all(db_path).await?;
-        Some(db_path.join("coordinator.db"))
+    let coordinator = if let Some(db_path) = &db_path {
+        let coordinator_db = db_path.join("coordinator.db");
+        if coordinator_db.exists() {
+            build_client(None, Some(&coordinator_db)).await?
+        } else {
+            tokio::fs::create_dir_all(db_path).await?;
+            build_client(
+                Some(invite_code.clone().context(
+                    "Running on this archive dir for the first time, an invite code is required",
+                )?),
+                Some(&coordinator_db),
+            )
+            .await?
+        }
     } else {
-        None
+        build_client(
+            Some(
+                invite_code
+                    .clone()
+                    .context("No archive dir given, an invite code is strictly required")?,
+            ),
+            None,
+        )
+        .await?
     };
-    let coordinator = build_client(invite_code.clone(), coordinator_db.as_ref()).await?;
     let mut users_clients = Vec::with_capacity(users.into());
     for u in 0..users {
         let user_db = db_path
             .as_ref()
             .map(|db_path| db_path.join(format!("user_{u}.db")));
-        let client = build_client(invite_code.clone(), user_db.as_ref()).await?;
+
+        let user_invite_code = if user_db.as_ref().map_or(false, |db| db.exists()) {
+            None
+        } else {
+            invite_code.clone()
+        };
+        let client = build_client(user_invite_code, user_db.as_ref()).await?;
         if let Some(gateway_id) = &gateway_id {
             switch_default_gateway(&client, gateway_id).await?;
         }
@@ -617,7 +643,9 @@ async fn handle_metrics_summary(
             .max_by_key(|(_entry, created)| created.to_owned())
             .map(|(entry, _)| entry.path());
         if let Some(latest_metrics_file) = latest_metrics_file {
-            let latest_metrics_file = tokio::fs::File::open(latest_metrics_file).await?;
+            let latest_metrics_file = tokio::fs::File::open(&latest_metrics_file)
+                .await
+                .with_context(|| format!("Failed to open {latest_metrics_file:?}"))?;
             let mut lines = tokio::io::BufReader::new(latest_metrics_file).lines();
             while let Some(line) = lines.next_line().await? {
                 match serde_json::from_str::<EventMetricSummary>(&line) {
