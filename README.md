@@ -21,7 +21,7 @@
 
 [Fedimint](https://fedimint.org) is a module based system for building federated applications. It is designed to be a trust-minimized, censorship-resistant, and private alternative to centralized applications.
 
-> **Fedimint is alpha software released under an [MIT License](https://github.com/fedimint/fedimint/blob/master/LICENSE) and recently cut its 0.1 release. We recommend you run Fedimint on testnets like mutinynet, or on mainnet with small amounts of money.**
+> **Fedimint is alpha software released under an [MIT License](https://github.com/fedimint/fedimint/blob/master/LICENSE) and recently cut its [0.1 release](https://github.com/fedimint/fedimint/releases/tag/v0.1.3). We recommend you run Fedimint on testnets like mutinynet, or on mainnet with small amounts of money.**
 
 Fedimint ships with 3 default modules: [Bitcoin](https://github.com/bitcoin/bitcoin), [Lightning](https://github.com/lightning/bolts), and [Chaumian Ecash](https://en.wikipedia.org/wiki/Ecash), for out-of-the-box best practices for private and trust-minimized payments. [You can write custom modules](https://github.com/fedimint/fedimint-custom-modules-example) that define further consensus items and transaction types leveraging the payments modules to build your own federated applications.
 
