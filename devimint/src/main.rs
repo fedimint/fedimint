@@ -1440,6 +1440,20 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
             .await?;
             let env = fs::read_to_string(&ready_file).await?;
             print!("{env}");
+
+            // Append invite code to devimint env
+            let env_file = common.test_dir.join("env");
+            let invite_file = common.test_dir.join("cfg/invite-code");
+            if fs::try_exists(&env_file).await.ok().unwrap_or(false)
+                && fs::try_exists(&invite_file).await.ok().unwrap_or(false)
+            {
+                let invite = fs::read_to_string(&invite_file).await?;
+                let mut env_string = fs::read_to_string(&env_file).await?;
+                writeln!(env_string, r#"export FM_INVITE_CODE="{invite}""#)?;
+                std::env::set_var("FM_INVITE_CODE", invite);
+                write_overwrite_async(common.test_dir.join("env"), env_string).await?;
+            }
+
             Ok(())
         }
     }

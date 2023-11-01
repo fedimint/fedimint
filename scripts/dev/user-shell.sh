@@ -14,6 +14,8 @@ then
     exit 1
 fi
 
+eval "$(devimint env)"
+
 echo Done!
 echo
 echo "This shell provides the following aliases:"

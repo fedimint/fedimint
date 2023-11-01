@@ -119,7 +119,7 @@ impl Federation {
         let cfg_dir = &process_mgr.globals.FM_DATA_DIR;
         let out_dir = utf8(out_dir);
         let cfg_dir = utf8(cfg_dir);
-        // copy configs to config directory
+        // move configs to config directory
         tokio::fs::rename(
             format!("{out_dir}/invite-code"),
             format!("{cfg_dir}/invite-code"),
@@ -132,7 +132,7 @@ impl Federation {
         )
         .await
         .context("moving client.json")?;
-        info!("copied client configs");
+        info!("moved client configs");
 
         Ok(Self {
             members,
