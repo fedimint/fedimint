@@ -96,9 +96,6 @@ impl ConsensusServer {
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
     ) -> anyhow::Result<(Self, ConsensusApi)> {
-        // We need four peers to run the atomic broadcast
-        assert!(cfg.consensus.api_endpoints.len() >= 4);
-
         // Check the configs are valid
         cfg.validate_config(&cfg.local.identity, &module_inits)?;
 
@@ -214,7 +211,76 @@ impl ConsensusServer {
         Ok((consensus_server, consensus_api))
     }
 
+    pub async fn run(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+        if self.cfg.consensus.broadcast_public_keys.len() == 1 {
+            self.run_single_guardian(task_handle).await
+        } else {
+            self.run_consensus(task_handle).await
+        }
+    }
+
+    pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+        assert_eq!(self.cfg.consensus.broadcast_public_keys.len(), 1);
+
+        while !task_handle.is_shutting_down() {
+            let session_index = self
+                .db
+                .begin_transaction()
+                .await
+                .find_by_prefix(&SignedBlockPrefix)
+                .await
+                .count()
+                .await as u64;
+
+            let mut item_index = self.build_block().await.items.len() as u64;
+
+            let session_start_time = std::time::Instant::now();
+
+            while let Ok(item) = self.submission_receiver.recv().await {
+                if self
+                    .process_consensus_item(
+                        session_index,
+                        item_index,
+                        item,
+                        self.cfg.local.identity,
+                    )
+                    .await
+                    .is_ok()
+                {
+                    item_index += 1;
+                }
+
+                // we rely on the module consensus items to notice the timeout
+                if session_start_time.elapsed() > Duration::from_secs(60) {
+                    break;
+                }
+            }
+
+            let block = self.build_block().await;
+            let header = block.header(session_index);
+            let signature = self.keychain.sign(&header);
+            let signatures = BTreeMap::from_iter([(self.cfg.local.identity, signature)]);
+
+            self.complete_session(session_index, SignedBlock { block, signatures })
+                .await;
+
+            info!(target: LOG_CONSENSUS, "Session completed");
+
+            // if the submission channel is closed we are shutting down
+            if self.submission_receiver.is_closed() {
+                break;
+            }
+        }
+
+        info!(target: LOG_CONSENSUS, "Consensus task shut down");
+
+        Ok(())
+    }
+
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+        // We need four peers to run the atomic broadcast
+        assert!(self.cfg.consensus.broadcast_public_keys.len() >= 4);
+
         self.confirm_consensus_config_hash().await?;
 
         while !task_handle.is_shutting_down() {
