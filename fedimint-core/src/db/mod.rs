@@ -730,7 +730,7 @@ impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T
         KP: DatabaseLookup,
         KP::Record: DatabaseKey,
     {
-        debug!("find by prefix");
+        trace!("find by prefix");
         let decoders = self.decoders.clone();
         let prefix_bytes = key_prefix.to_bytes();
         self.isolated_tx
@@ -1154,7 +1154,7 @@ impl<'parent> DatabaseTransaction<'parent> {
         KP: DatabaseLookup,
         KP::Record: DatabaseKey,
     {
-        debug!("find by prefix");
+        trace!("find by prefix");
         let decoders = self.decoders.clone();
         let prefix_bytes = key_prefix.to_bytes();
         self.tx
