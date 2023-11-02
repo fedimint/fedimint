@@ -11,7 +11,7 @@ use fedimint_core::api::{
     FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-use fedimint_core::block::{Block, SignedBlock};
+use fedimint_core::block::{Block, SchnorrSignature, SignedBlock};
 use fedimint_core::config::{ClientConfig, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -19,9 +19,9 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
+    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_HEADER_SIGNATURE_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT,
+    BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
@@ -46,7 +46,7 @@ use super::peers::PeerStatusChannels;
 use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
+use crate::db::{AcceptedTransactionKey, HeaderSignatureKey, SignedBlockKey, SignedBlockPrefix};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
@@ -178,6 +178,13 @@ impl ConsensusApi {
     pub async fn await_signed_block(&self, index: u64) -> SignedBlock {
         self.db
             .wait_key_check(&SignedBlockKey(index), std::convert::identity)
+            .await
+            .0
+    }
+
+    pub async fn await_header_signature(&self, index: u64) -> SchnorrSignature {
+        self.db
+            .wait_key_check(&HeaderSignatureKey(index), std::convert::identity)
             .await
             .0
     }
@@ -419,6 +426,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             AWAIT_SIGNED_BLOCK_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedBlock> {
                 Ok((&fedimint.await_signed_block(index).await).into())
+            }
+        },
+        api_endpoint! {
+            AWAIT_HEADER_SIGNATURE_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context, index: u64| -> SchnorrSignature {
+                Ok(fedimint.await_header_signature(index).await)
             }
         },
         api_endpoint! {

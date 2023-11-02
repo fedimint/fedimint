@@ -1,10 +1,9 @@
 use std::collections::BTreeSet;
 
 use bitcoin_hashes_12::sha256;
-use fedimint_core::block::{consensus_hash_sha256, SchnorrSignature};
+use fedimint_core::block::consensus_hash_sha256;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
-use tokio::sync::watch;
 
 use crate::LOG_CONSENSUS;
 
@@ -14,37 +13,26 @@ const BYTE_LIMIT: usize = 10_000;
 #[derive(
     Clone, Debug, PartialEq, Eq, Hash, parity_scale_codec::Encode, parity_scale_codec::Decode,
 )]
-pub enum UnitData {
-    Batch(Vec<u8>),
-    Signature(SchnorrSignature),
-}
+pub struct UnitData(pub Vec<u8>);
 
 impl UnitData {
     // in order to bound the RAM consumption of a session we have to bound an
     // individual units size, hence the size of its attached unit data in memory
     pub fn is_valid(&self) -> bool {
-        match self {
-            UnitData::Signature(..) => true,
-            UnitData::Batch(bytes, ..) => bytes.len() <= BYTE_LIMIT,
-        }
+        self.0.len() <= BYTE_LIMIT
     }
 }
 
 pub struct DataProvider {
     mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-    signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
     submitted_items: BTreeSet<sha256::Hash>,
     leftover_item: Option<ConsensusItem>,
 }
 
 impl DataProvider {
-    pub fn new(
-        mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-        signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
-    ) -> Self {
+    pub fn new(mempool_item_receiver: async_channel::Receiver<ConsensusItem>) -> Self {
         Self {
             mempool_item_receiver,
-            signature_receiver,
             submitted_items: BTreeSet::new(),
             leftover_item: None,
         }
@@ -54,11 +42,6 @@ impl DataProvider {
 #[async_trait::async_trait]
 impl aleph_bft::DataProvider<UnitData> for DataProvider {
     async fn get_data(&mut self) -> Option<UnitData> {
-        // we only attach our signature as no more items can be ordered in this session
-        if let Some(signature) = self.signature_receiver.borrow().clone() {
-            return Some(UnitData::Signature(signature));
-        }
-
         // the length of a vector is encoded in at most 9 bytes
         let mut n_bytes = 9;
         let mut items = Vec::new();
@@ -104,6 +87,6 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
 
         assert!(bytes.len() <= BYTE_LIMIT);
 
-        return Some(UnitData::Batch(bytes));
+        return Some(UnitData(bytes));
     }
 }

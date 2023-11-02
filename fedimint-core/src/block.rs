@@ -1,5 +1,7 @@
 use bitcoin30::hashes::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode};
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use crate::encoding::{Decodable, Encodable};
 use crate::epoch::ConsensusItem;
@@ -47,8 +49,10 @@ impl Block {
     }
 }
 
-#[derive(Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash)]
-pub struct SchnorrSignature(pub [u8; 64]);
+#[derive(
+    Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash, Serialize, Deserialize,
+)]
+pub struct SchnorrSignature(#[serde(with = "BigArray")] pub [u8; 64]);
 
 /// A signed block combines a block with the naive threshold secp schnorr
 /// signature for its header created by the federation. The signed blocks allow

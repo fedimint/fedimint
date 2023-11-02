@@ -49,6 +49,7 @@ secp256k1-zkp = { version = "0.7.0", features = [ "use-serde", "bitcoin_hashes",
 macro_rules_attribute = "0.1.3"
 bitvec = "1.0.1"
 parity-scale-codec = { version = "3.5.0", features = ["derive"] }
+serde-big-array = "0.5.1"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.20.0", features = ["webpki-tls"], default-features = false }

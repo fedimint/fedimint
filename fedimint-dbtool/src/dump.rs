@@ -274,6 +274,16 @@ impl DatabaseDump {
                         "Accepted Transactions"
                     );
                 }
+                ConsensusRange::DbKeyPrefix::HeaderSignature => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::HeaderSignaturePrefix,
+                        ConsensusRange::HeaderSignatureKey,
+                        fedimint_core::block::SchnorrSignature,
+                        consensus,
+                        "Header Signatures"
+                    );
+                }
                 ConsensusRange::DbKeyPrefix::SignedBlock => {
                     push_db_pair_items_no_serde!(
                         dbtx,

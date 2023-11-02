@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use fedimint_core::block::{AcceptedItem, SignedBlock};
+use fedimint_core::block::{AcceptedItem, SchnorrSignature, SignedBlock};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -15,6 +15,7 @@ pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 pub enum DbKeyPrefix {
     AcceptedItem = 0x01,
     AcceptedTransaction = 0x02,
+    HeaderSignature = 0x03,
     SignedBlock = 0x04,
     AlephUnits = 0x05,
     Module = MODULE_GLOBAL_PREFIX,
@@ -58,6 +59,23 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable)]
+pub struct HeaderSignatureKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct HeaderSignaturePrefix;
+
+impl_db_record!(
+    key = HeaderSignatureKey,
+    value = SchnorrSignature,
+    db_prefix = DbKeyPrefix::HeaderSignature,
+    notify_on_modify = true,
+);
+impl_db_lookup!(
+    key = HeaderSignatureKey,
+    query_prefix = HeaderSignaturePrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
 pub struct SignedBlockKey(pub u64);
 
 #[derive(Debug, Encodable, Decodable)]
@@ -97,7 +115,7 @@ mod fedimint_migration_tests {
     use anyhow::{ensure, Context};
     use bitcoin::{secp256k1, KeyPair};
     use bitcoin_hashes::Hash;
-    use fedimint_core::block::{Block, SignedBlock};
+    use fedimint_core::block::{Block, SchnorrSignature, SignedBlock};
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -118,8 +136,9 @@ mod fedimint_migration_tests {
     use super::AcceptedTransactionKey;
     use crate::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
-        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedBlockKey,
-        SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
+        HeaderSignatureKey, HeaderSignaturePrefix, SignedBlockKey, SignedBlockPrefix,
+        GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -170,6 +189,9 @@ mod fedimint_migration_tests {
             },
         )
         .await;
+
+        dbtx.insert_new_entry(&HeaderSignatureKey(0), &SchnorrSignature([0; 64]))
+            .await;
 
         dbtx.insert_new_entry(
             &SignedBlockKey(0),
@@ -249,6 +271,18 @@ mod fedimint_migration_tests {
                             ensure!(
                                 num_accepted_transactions > 0,
                                 "validate_migrations was not able to read any AcceptedTransactions"
+                            );
+                        }
+                        DbKeyPrefix::HeaderSignature => {
+                            let header_signatures = dbtx
+                                .find_by_prefix(&HeaderSignaturePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_header_signatures = header_signatures.len();
+                            ensure!(
+                                num_header_signatures > 0,
+                                "validate_migrations was not able to read any HeaderSignatures"
                             );
                         }
                         DbKeyPrefix::SignedBlock => {

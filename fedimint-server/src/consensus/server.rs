@@ -12,7 +12,9 @@ use fedimint_core::db::{
     apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Decodable;
-use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
+use fedimint_core::endpoint_constants::{
+    AWAIT_HEADER_SIGNATURE_ENDPOINT, AWAIT_SIGNED_BLOCK_ENDPOINT,
+};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
@@ -20,12 +22,11 @@ use fedimint_core::module::registry::{
     ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
 };
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::query::FilterMap;
+use fedimint_core::query::{FilterMap, FilterMapThreshold};
 use fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, PeerId};
 use futures::StreamExt;
-use tokio::sync::watch;
 use tracing::{debug, info, warn};
 
 use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
@@ -37,7 +38,8 @@ use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+    AlephUnitsPrefix, HeaderSignatureKey, SignedBlockKey, SignedBlockPrefix,
+    GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::api::{ConsensusApi, ExpiringCache};
@@ -256,7 +258,7 @@ impl ConsensusServer {
             let signature = self.keychain.sign(&header);
             let signatures = BTreeMap::from_iter([(self.cfg.local.identity, signature)]);
 
-            self.complete_session(session_index, SignedBlock { block, signatures })
+            self.complete_session(session_index, block, signatures)
                 .await;
 
             info!(target: LOG_CONSENSUS, "Session completed");
@@ -372,7 +374,6 @@ impl ConsensusServer {
 
         // the number of units ordered in a single aleph session is bounded
         let (unit_data_sender, unit_data_receiver) = async_channel::unbounded();
-        let (signature_sender, signature_receiver) = watch::channel(None);
         let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
         let (loader, saver) = atomic_broadcast::backup::load_session(self.db.clone()).await;
@@ -382,7 +383,7 @@ impl ConsensusServer {
             aleph_bft::run_session(
                 config,
                 aleph_bft::LocalIO::new(
-                    DataProvider::new(self.submission_receiver.clone(), signature_receiver),
+                    DataProvider::new(self.submission_receiver.clone()),
                     FinalizationHandler::new(unit_data_sender),
                     saver,
                     loader,
@@ -395,32 +396,44 @@ impl ConsensusServer {
         )
         .expect("some handle on non-wasm");
 
-        let signed_block = self
-            .complete_signed_block(
-                session_index,
-                batches_per_session,
-                unit_data_receiver,
-                signature_sender,
-            )
+        let block = self
+            .complete_block(session_index, batches_per_session, unit_data_receiver)
             .await?;
+
+        let header = block.header(session_index);
+
+        let signature = self.keychain.sign(&header);
+
+        if self
+            .db
+            .begin_transaction()
+            .await
+            .insert_entry(&HeaderSignatureKey(session_index), &signature)
+            .await
+            .is_some()
+        {
+            panic!("We tried to overwrite a header signature");
+        }
+
+        let signatures = self.request_header_signatures(session_index, header).await;
 
         terminator_sender.send(()).ok();
         aleph_handle.await.ok();
 
         // Only call this after aleph bft has shutdown to avoid write-write conflicts
         // for the aleph bft units
-        self.complete_session(session_index, signed_block).await;
+        self.complete_session(session_index, block, signatures)
+            .await;
 
         Ok(())
     }
 
-    pub async fn complete_signed_block(
+    pub async fn complete_block(
         &self,
         session_index: u64,
         batches_per_block: usize,
         unit_data_receiver: Receiver<(UnitData, PeerId)>,
-        signature_sender: watch::Sender<Option<SchnorrSignature>>,
-    ) -> anyhow::Result<SignedBlock> {
+    ) -> anyhow::Result<Block> {
         let mut num_batches = 0;
         let mut item_index = 0;
 
@@ -429,27 +442,28 @@ impl ConsensusServer {
         while num_batches < batches_per_block {
             tokio::select! {
                 unit_data = unit_data_receiver.recv() => {
-                    if let (UnitData::Batch(bytes), peer) = unit_data? {
-                        if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &self.decoders()){
-                            for item in items {
-                                if self.process_consensus_item(
-                                    session_index,
-                                    item_index,
-                                    item.clone(),
-                                    peer
-                                ).await
-                                .is_ok() {
-                                    item_index += 1;
-                                }
+                    let (batch, peer) = unit_data?;
+
+                    if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut batch.0.as_slice(), &self.decoders()){
+                        for item in items {
+                            if self.process_consensus_item(
+                                session_index,
+                                item_index,
+                                item.clone(),
+                                peer
+                            ).await
+                            .is_ok() {
+                                item_index += 1;
                             }
                         }
-                        num_batches += 1;
                     }
+
+                    num_batches += 1;
                 },
-                signed_block = self.request_signed_block(session_index) => {
+                block = self.request_block(session_index) => {
                     let partial_block = self.build_block().await.items;
 
-                    let (processed, unprocessed) = signed_block.block.items.split_at(partial_block.len());
+                    let (processed, unprocessed) = block.items.split_at(partial_block.len());
 
                     assert!(processed.iter().eq(partial_block.iter()));
 
@@ -466,41 +480,12 @@ impl ConsensusServer {
                         item_index += 1;
                     }
 
-                    return Ok(signed_block);
+                    return Ok(block);
                 }
             }
         }
 
-        let block = self.build_block().await;
-        let header = block.header(session_index);
-
-        // we send our own signature to the data provider to be broadcasted
-        signature_sender.send(Some(self.keychain.sign(&header)))?;
-
-        let mut signatures = BTreeMap::new();
-
-        // we collect the ordered signatures until we either obtain a threshold
-        // signature or a signed block arrives from our peers
-        while signatures.len() < self.keychain.threshold() {
-            tokio::select! {
-                unit_data = unit_data_receiver.recv() => {
-                    if let (UnitData::Signature(signature), peer) = unit_data? {
-                        if self.keychain.verify(&header, &signature, to_node_index(peer)){
-                            // since the signature is valid the node index can be converted to a peer id
-                            signatures.insert(peer, signature);
-                        }
-                    }
-                }
-                signed_block = self.request_signed_block(session_index) => {
-                    // We check that the block we have created agrees with the federations consensus
-                    assert!(header == signed_block.block.header(session_index));
-
-                    return Ok(signed_block);
-                }
-            }
-        }
-
-        Ok(SignedBlock { block, signatures })
+        Ok(self.build_block().await)
     }
 
     fn decoders(&self) -> ModuleDecoderRegistry {
@@ -521,7 +506,12 @@ impl ConsensusServer {
         Block { items }
     }
 
-    pub async fn complete_session(&self, session_index: u64, signed_block: SignedBlock) {
+    pub async fn complete_session(
+        &self,
+        session_index: u64,
+        block: Block,
+        signatures: BTreeMap<PeerId, SchnorrSignature>,
+    ) {
         let mut dbtx = self.db.begin_transaction().await;
 
         dbtx.remove_by_prefix(&AlephUnitsPrefix).await;
@@ -529,7 +519,10 @@ impl ConsensusServer {
         dbtx.remove_by_prefix(&AcceptedItemPrefix).await;
 
         if dbtx
-            .insert_entry(&SignedBlockKey(session_index), &signed_block)
+            .insert_entry(
+                &SignedBlockKey(session_index),
+                &SignedBlock { block, signatures },
+            )
             .await
             .is_some()
         {
@@ -648,12 +641,12 @@ impl ConsensusServer {
         }
     }
 
-    async fn request_signed_block(&self, index: u64) -> SignedBlock {
+    async fn request_block(&self, index: u64) -> Block {
         let keychain = self.keychain.clone();
         let total_peers = self.keychain.peer_count();
         let decoders = self.decoders();
 
-        let filter_map = move |response: SerdeModuleEncoding<SignedBlock>| match response
+        let verify_signatures = move |response: SerdeModuleEncoding<SignedBlock>| match response
             .try_into_inner(&decoders)
         {
             Ok(signed_block) => {
@@ -665,7 +658,7 @@ impl ConsensusServer {
                             to_node_index(*peer_id),
                         )
                     }) {
-                    true => Ok(signed_block),
+                    true => Ok(signed_block.block),
                     false => Err(anyhow!("Invalid signatures")),
                 }
             }
@@ -680,16 +673,50 @@ impl ConsensusServer {
 
             let result = federation_api
                 .request_with_strategy(
-                    FilterMap::new(filter_map.clone(), total_peers),
+                    FilterMap::new(verify_signatures.clone(), total_peers),
                     AWAIT_SIGNED_BLOCK_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )
                 .await;
 
             match result {
-                Ok(signed_block) => return signed_block,
+                Ok(block) => return block,
                 Err(error) => tracing::error!("Error while requesting signed block: {}", error),
             }
+        }
+    }
+
+    async fn request_header_signatures(
+        &self,
+        session_index: u64,
+        header: [u8; 40],
+    ) -> BTreeMap<PeerId, SchnorrSignature> {
+        let keychain = self.keychain.clone();
+        let total_peers = self.keychain.peer_count();
+
+        let verify_signature = move |peer: PeerId, signature: SchnorrSignature| match keychain
+            .verify(&header, &signature, to_node_index(peer))
+        {
+            true => Ok(signature),
+            false => Err(anyhow!("Invalid signatures")),
+        };
+
+        let federation_api = WsFederationApi::new(self.api_endpoints.clone());
+
+        loop {
+            match federation_api
+                .request_with_strategy(
+                    FilterMapThreshold::new(verify_signature.clone(), total_peers),
+                    AWAIT_HEADER_SIGNATURE_ENDPOINT.to_string(),
+                    ApiRequestErased::new(session_index),
+                )
+                .await
+            {
+                Ok(signatures) => return signatures,
+                Err(error) => tracing::error!("Error while requesting header signature: {}", error),
+            }
+
+            sleep(Duration::from_secs(5)).await;
         }
     }
 }

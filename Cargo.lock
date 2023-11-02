@@ -1334,6 +1334,7 @@ dependencies = [
  "rand",
  "secp256k1-zkp",
  "serde",
+ "serde-big-array",
  "serde_json",
  "sha3",
  "strum",
