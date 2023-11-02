@@ -9,7 +9,11 @@ use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync, module_plugin_dyn_newtype_clone_passthrough, module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough, PeerId};
+use fedimint_core::{
+    apply, async_trait_maybe_send, maybe_add_send_sync,
+    module_plugin_dyn_newtype_clone_passthrough, module_plugin_dyn_newtype_define,
+    module_plugin_dyn_newtype_encode_decode, module_plugin_dyn_newtype_eq_passthrough, PeerId,
+};
 
 use crate::module::ClientModule;
 use crate::sm::DynState;

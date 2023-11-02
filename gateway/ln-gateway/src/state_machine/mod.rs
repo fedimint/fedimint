@@ -21,8 +21,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationI
 use fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, MultiApiVersion,
-    TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};

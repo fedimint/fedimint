@@ -3,8 +3,7 @@ use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use anyhow::bail;
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, OperationId,

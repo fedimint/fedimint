@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::Result;
 use bitcoin::secp256k1;
 use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::block::AcceptedItem;
 use fedimint_core::core::backup::{BackupRequest, SignedBackupRequest};
 use fedimint_core::core::{DynModuleConsensusItem, ModuleInstanceId};
 use fedimint_core::db::DatabaseTransaction;
@@ -434,7 +435,7 @@ impl RecoveringClient {
         }
 
         let cancel_recovery_task = cancel_recovery.clone();
-        spawn(async move {
+        spawn("recovery", async move {
             select! {
                 client = Self::run_recovery(stopped_client, modules, update_progress) => {
                     let _ = outcome_sender.send(Ok(client));
@@ -487,14 +488,13 @@ impl RecoveringClient {
 
         let db = stopped_client.db().clone();
         let api = stopped_client.inner.api.clone();
-        let config = stopped_client.get_config().clone();
         let decoders = stopped_client.decoders().clone();
 
         // TODO: fetch backup
-        let last_backup_epoch = 0u64;
-        let current_epoch = loop {
-            match api.fetch_epoch_count().await {
-                Ok(epoch) => break epoch,
+        let last_backup_block = 0u64;
+        let current_block = loop {
+            match api.fetch_block_count().await {
+                Ok(block) => break block,
                 Err(e) => {
                     warn!("Could not fetch current epoch, retrying: {e:?}");
                     sleep(POLL_TIME).await;
@@ -502,20 +502,16 @@ impl RecoveringClient {
             }
         };
 
-        let epoch_pk = config.epoch_pk;
-        let mut epoch_stream = futures::stream::iter(last_backup_epoch + 1..=current_epoch)
-            .map(move |epoch| {
+        let mut block_stream = futures::stream::iter(last_backup_block + 1..=current_block)
+            .map(move |block_idx| {
                 let api_inner = api.clone();
                 let decoders = decoders.clone();
                 async move {
                     loop {
-                        match api_inner
-                            .fetch_epoch_history(epoch, epoch_pk, &decoders)
-                            .await
-                        {
-                            Ok(epoch) => break epoch.outcome,
+                        match api_inner.await_block(block_idx, &decoders).await {
+                            Ok(block) => break (block_idx, block.items),
                             Err(e) => {
-                                warn!("Could not fetch epoch {epoch}, retrying: {e:?}");
+                                warn!("Could not fetch block {block_idx}, retrying: {e:?}");
                                 sleep(POLL_TIME).await;
                             }
                         }
@@ -526,26 +522,22 @@ impl RecoveringClient {
 
         // Run recovery
         let mut dbtx = db.begin_transaction().await;
-        while let Some(epoch) = epoch_stream.next().await {
+        while let Some((block_idx, items)) = block_stream.next().await {
             // TODO: persist progress every N epochs
 
-            let _ = progress.send(Some(RecoveryProgress {
-                recovery_start_epoch: last_backup_epoch + 1,
-                recovery_current_epoch: epoch.epoch,
-                recovery_target_epoch: current_epoch,
+            progress.send_replace(Some(RecoveryProgress {
+                recovery_start_epoch: last_backup_block + 1,
+                recovery_current_epoch: block_idx,
+                recovery_target_epoch: current_block,
             }));
 
-            for (contributor, item) in epoch
-                .items
-                .into_iter()
-                .flat_map(|(peer, items)| items.into_iter().map(move |item| (peer, item)))
-            {
+            for AcceptedItem { item, peer } in items {
                 match item {
                     ConsensusItem::Transaction(tx) => {
                         Self::process_transaction(&mut dbtx, &mut modules, tx).await
                     }
                     ConsensusItem::Module(ci) => {
-                        Self::process_module_ci(&mut dbtx, &mut modules, contributor, ci).await
+                        Self::process_module_ci(&mut dbtx, &mut modules, peer, ci).await
                     }
                     skipped => {
                         trace!("Skipping consensus item: {skipped:?}");

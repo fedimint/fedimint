@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
 use db::DbKeyPrefix;
+use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoRecoveringModule;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -31,7 +32,6 @@ use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 use threshold_crypto::{PublicKey, Signature};
-use fedimint_client::derivable_secret::DerivableSecret;
 
 use crate::api::DummyFederationApi;
 use crate::db::DummyClientFundsKeyV0;
