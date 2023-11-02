@@ -284,7 +284,7 @@ impl Opts {
         &self,
         module_inits: &ClientModuleInitRegistry,
         invite_code: Option<InviteCode>,
-    ) -> CliResult<fedimint_client::Client> {
+    ) -> CliResult<fedimint_client::ClientArc> {
         let mut client_builder = self.build_client_builder(module_inits, invite_code).await?;
         let client_secret = match client_builder
             .load_decodable_client_secret::<[u8; 64]>()

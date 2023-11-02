@@ -69,9 +69,9 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
-use std::ops::Range;
+use std::ops::{self, Range};
 use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure};
@@ -347,9 +347,9 @@ where
 impl GlobalContext for DynGlobalClientContext {}
 
 // TODO: impl `Debug` for `Client` and derive here
-impl Debug for ClientInner {
+impl Debug for Client {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClientInner")
+        write!(f, "Client")
     }
 }
 
@@ -358,7 +358,7 @@ impl Debug for ClientInner {
 /// aware of their instance id etc.
 #[derive(Clone, Debug)]
 struct ModuleGlobalClientContext {
-    client: Arc<ClientInner>,
+    client: Arc<Client>,
     module_instance_id: ModuleInstanceId,
     operation: OperationId,
 }
@@ -393,7 +393,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         };
 
         self.client
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_inner(
                 dbtx.global_tx(),
                 self.operation,
                 TransactionBuilder::new().with_input(instance_input),
@@ -413,7 +413,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         };
 
         self.client
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_inner(
                 dbtx.global_tx(),
                 self.operation,
                 TransactionBuilder::new().with_output(instance_output),
@@ -458,19 +458,51 @@ fn states_add_instance(
     })
 }
 
+/// Atomically-counted ([`Arc`]) handle to [`Client`]
+///
+/// Notably it `deref`-s to the [`Client`] where most
+/// methods live.
 #[derive(Debug)]
-pub struct Client {
-    inner: Arc<ClientInner>,
+pub struct ClientArc {
+    inner: Arc<Client>,
 }
 
-impl Clone for Client {
+impl ops::Deref for ClientArc {
+    type Target = Arc<Client>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl ClientArc {
+    pub fn downgrade(&self) -> ClientWeak {
+        ClientWeak {
+            inner: Arc::downgrade(&self.inner),
+        }
+    }
+}
+
+impl Clone for ClientArc {
     fn clone(&self) -> Self {
         self.inner
             .client_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Client {
+        ClientArc {
             inner: self.inner.clone(),
         }
+    }
+}
+
+/// Like [`ClientArc`] but using a [`Weak`] handle to [`Client`]
+#[derive(Debug)]
+pub struct ClientWeak {
+    inner: Weak<Client>,
+}
+
+impl ClientWeak {
+    pub fn upgrade(&self) -> Option<ClientArc> {
+        Weak::upgrade(&self.inner).map(|inner| ClientArc { inner })
     }
 }
 
@@ -478,8 +510,8 @@ impl Clone for Client {
 /// `Executor::stop_executor` even though the `Drop` implementation of
 /// `ExecutorInner` should already take care of that. The reason is that as long
 /// as the executor task is active there may be a cycle in the
-/// `Arc<ClientInner>`s such that at least one `Executor` never gets dropped.
-impl Drop for Client {
+/// `Arc<Client>`s such that at least one `Executor` never gets dropped.
+impl Drop for ClientArc {
     fn drop(&mut self) {
         // Not sure if Ordering::SeqCst is strictly needed here, but better safe than
         // sorry.
@@ -529,461 +561,6 @@ const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
 
 pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 
-impl Client {
-    /// Initialize a client builder that can be configured to create a new
-    /// client.
-    pub fn builder() -> ClientBuilder {
-        ClientBuilder::default()
-    }
-
-    pub async fn start_executor(&self) {
-        debug!(
-            "Starting fedimint client executor (version: {})",
-            env!("FEDIMINT_BUILD_CODE_VERSION")
-        );
-        self.inner
-            .executor
-            .start_executor(self.inner.context_gen())
-            .await;
-    }
-
-    pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
-        self.inner.api.as_ref()
-    }
-
-    pub fn federation_id(&self) -> FederationId {
-        self.inner.federation_id
-    }
-
-    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
-        Ok((
-            self.federation_id()
-                .to_fake_ln_pub_key(&self.inner.secp_ctx)?,
-            0,
-        ))
-    }
-
-    pub fn get_meta(&self, key: &str) -> Option<String> {
-        self.inner.federation_meta.get(key).cloned()
-    }
-
-    pub fn decoders(&self) -> &ModuleDecoderRegistry {
-        self.inner.decoders()
-    }
-
-    fn root_secret(&self) -> DerivableSecret {
-        self.inner.root_secret.clone()
-    }
-
-    /// Secret that is derived from the seed used by the client and cannot
-    /// collide with secrets used by the client itself. It's intended to be used
-    /// by integrators of the client library so they don't have to implement
-    /// their own secret derivation scheme.
-    pub fn external_secret(&self) -> DerivableSecret {
-        self.root_secret().child_key(EXTERNAL_SECRET_CHILD_ID)
-    }
-
-    /// Add funding and/or change to the transaction builder as needed, finalize
-    /// the transaction and submit it to the federation.
-    ///
-    /// ## Errors
-    /// The function will return an error if the operation with given id already
-    /// exists.
-    ///
-    /// ## Panics
-    /// The function will panic if the the database transaction collides with
-    /// other and fails with others too often, this should not happen except for
-    /// excessively concurrent scenarios.
-    pub async fn finalize_and_submit_transaction<F, M>(
-        &self,
-        operation_id: OperationId,
-        operation_type: &str,
-        operation_meta: F,
-        tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
-    where
-        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
-        M: serde::Serialize + MaybeSend,
-    {
-        let operation_type = operation_type.to_owned();
-
-        let autocommit_res = self
-            .inner
-            .db
-            .autocommit(
-                |dbtx| {
-                    let operation_type = operation_type.clone();
-                    let tx_builder = tx_builder.clone();
-                    let operation_meta = operation_meta.clone();
-                    Box::pin(async move {
-                        if ClientInner::operation_exists(dbtx, operation_id).await {
-                            bail!("There already exists an operation with id {operation_id:?}")
-                        }
-
-                        let (txid, change) = self
-                            .inner
-                            .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
-                            .await?;
-
-                        self.operation_log()
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                &operation_type,
-                                operation_meta(txid, change.clone()),
-                            )
-                            .await;
-
-                        Ok((txid, change))
-                    })
-                },
-                Some(100), // TODO: handle what happens after 100 retries
-            )
-            .await;
-
-        match autocommit_res {
-            Ok(txid) => Ok(txid),
-            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
-            Err(AutocommitError::CommitFailed {
-                attempts,
-                last_error,
-            }) => panic!(
-                "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
-            ),
-        }
-    }
-
-    pub async fn add_state_machines(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        states: Vec<DynState<DynGlobalClientContext>>,
-    ) -> anyhow::Result<()> {
-        self.inner
-            .executor
-            .add_state_machines_dbtx(dbtx, states)
-            .await
-    }
-
-    // TODO: implement as part of OperationLog
-    pub async fn get_active_operations(&self) -> HashSet<OperationId> {
-        self.inner.executor.get_active_operations().await
-    }
-
-    pub fn operation_log(&self) -> &OperationLog {
-        &self.inner.operation_log
-    }
-
-    /// Returns a reference to a typed module client instance by kind
-    pub fn get_first_module<M: ClientModule>(
-        &self,
-        module_kind: &ModuleKind,
-    ) -> (&M, ClientModuleInstance) {
-        let id = self
-            .get_first_instance(module_kind)
-            .unwrap_or_else(|| panic!("No modules found of kind {module_kind}"));
-        let module: &M = self
-            .inner
-            .try_get_module(id)
-            .unwrap_or_else(|| panic!("Unknown module instance {id}"))
-            .as_any()
-            .downcast_ref::<M>()
-            .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
-        let instance = ClientModuleInstance {
-            id,
-            db: self.db().new_isolated(id),
-            api: self.api().with_module(id),
-        };
-        (module, instance)
-    }
-
-    pub fn get_module_client_dyn(
-        &self,
-        instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
-        self.inner
-            .try_get_module(instance_id)
-            .ok_or(anyhow!("Unknown module instance {}", instance_id))
-    }
-
-    pub fn db(&self) -> &Database {
-        &self.inner.db
-    }
-
-    /// Returns a stream of transaction updates for the given operation id that
-    /// can later be used to watch for a specific transaction being accepted.
-    pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
-        TransactionUpdates {
-            update_stream: self.inner.transaction_update_stream(operation_id).await,
-        }
-    }
-
-    /// Returns the instance id of the first module of the given kind. The
-    /// primary module will always be returned before any other modules (which
-    /// themselves are ordered by their instance id).
-    pub fn get_first_instance(&self, module_kind: &ModuleKind) -> Option<ModuleInstanceId> {
-        if &self
-            .inner
-            .modules
-            .get_with_kind(self.inner.primary_module_instance)
-            .expect("must have primary module")
-            .0
-            == module_kind
-        {
-            return Some(self.inner.primary_module_instance);
-        }
-
-        self.inner
-            .modules
-            .iter_modules()
-            .find(|(_, kind, _module)| *kind == module_kind)
-            .map(|(instance_id, _, _)| instance_id)
-    }
-
-    /// Returns the data from which the client's root secret is derived (e.g.
-    /// BIP39 seed phrase struct) if it is stored in the client's DB. If it
-    /// is not present, or if it is present but cannot be decoded, an error
-    /// is returned.
-    pub async fn root_secret_encoding<T: Decodable>(&self) -> anyhow::Result<T> {
-        get_decoded_client_secret::<T>(self.db()).await
-    }
-
-    /// Waits for an output from the primary module to reach its final
-    /// state.
-    pub async fn await_primary_module_output(
-        &self,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -> anyhow::Result<Amount> {
-        self.inner
-            .await_primary_module_output(operation_id, out_point)
-            .await
-    }
-
-    /// Waits for outputs from the primary module to reach its final
-    /// state.
-    pub async fn await_primary_module_outputs(
-        &self,
-        operation_id: OperationId,
-        outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<Amount> {
-        let mut amount = Amount::ZERO;
-
-        for out_point in outputs {
-            amount += self
-                .inner
-                .await_primary_module_output(operation_id, out_point)
-                .await?;
-        }
-
-        Ok(amount)
-    }
-
-    /// Returns the config with which the client was initialized.
-    pub fn get_config(&self) -> &ClientConfig {
-        &self.inner.config
-    }
-
-    /// Returns the config of the client in JSON format.
-    ///
-    /// Compared to the consensus module format where module configs are binary
-    /// encoded this format cannot be cryptographically verified but is easier
-    /// to consume and to some degree human-readable.
-    pub fn get_config_json(&self) -> JsonClientConfig {
-        JsonClientConfig {
-            global: self.get_config().global.clone(),
-            modules: self
-                .get_config()
-                .modules
-                .iter()
-                .map(|(instance_id, ClientModuleConfig { kind, config, .. })| {
-                    (
-                        *instance_id,
-                        JsonWithKind::new(
-                            kind.clone(),
-                            config.clone().expect_decoded().to_json().into(),
-                        ),
-                    )
-                })
-                .collect(),
-        }
-    }
-
-    /// Get the primary module
-    pub fn primary_module(&self) -> &DynClientModule {
-        self.inner
-            .modules
-            .get(self.inner.primary_module_instance)
-            .expect("primary module must be present")
-    }
-
-    /// Balance available to the client for spending
-    pub async fn get_balance(&self) -> Amount {
-        self.primary_module()
-            .get_balance(
-                self.inner.primary_module_instance,
-                &mut self.db().begin_transaction().await,
-            )
-            .await
-    }
-
-    /// Returns a stream that yields the current client balance every time it
-    /// changes.
-    pub async fn subscribe_balance_changes(&self) -> BoxStream<'static, Amount> {
-        let mut balance_changes = self.primary_module().subscribe_balance_changes().await;
-        let initial_balance = self.get_balance().await;
-        let db = self.db().clone();
-        let primary_module = self.primary_module().clone();
-        let primary_module_instance = self.inner.primary_module_instance;
-
-        Box::pin(stream! {
-            yield initial_balance;
-            let mut prev_balance = initial_balance;
-            while let Some(()) = balance_changes.next().await {
-                let mut dbtx = db.begin_transaction().await;
-                let balance = primary_module
-                    .get_balance(primary_module_instance, &mut dbtx)
-                    .await;
-
-                // Deduplicate in case modules cannot always tell if the balance actually changed
-                if balance != prev_balance {
-                    prev_balance = balance;
-                    yield balance;
-                }
-            }
-        })
-    }
-
-    pub async fn discover_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
-        Ok(self
-            .api()
-            .discover_api_version_set(
-                &Self::supported_api_versions_summary_static(
-                    self.get_config(),
-                    &self.inner.module_inits,
-                )
-                .await,
-            )
-            .await?)
-    }
-
-    /// Query the federation for API version support and then calculate
-    /// the best API version to use (supported by most guardians).
-    pub async fn discover_common_api_version_static(
-        config: &ClientConfig,
-        client_module_init: &ClientModuleInitRegistry,
-        api: &DynGlobalApi,
-    ) -> anyhow::Result<ApiVersionSet> {
-        Ok(api
-            .discover_api_version_set(
-                &Self::supported_api_versions_summary_static(config, client_module_init).await,
-            )
-            .await?)
-    }
-
-    /// [`SupportedApiVersionsSummary`] that the client and its modules support
-    pub async fn supported_api_versions_summary_static(
-        config: &ClientConfig,
-        client_module_init: &ClientModuleInitRegistry,
-    ) -> SupportedApiVersionsSummary {
-        SupportedApiVersionsSummary {
-            core: SupportedCoreApiVersions {
-                core_consensus: config.global.consensus_version,
-                api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
-                    .expect("must not have conflicting versions"),
-            },
-            modules: config
-                .modules
-                .iter()
-                .filter_map(|(&module_instance_id, module_config)| {
-                    client_module_init
-                        .get(module_config.kind())
-                        .map(|module_init| {
-                            (
-                                module_instance_id,
-                                SupportedModuleApiVersions {
-                                    core_consensus: config.global.consensus_version,
-                                    module_consensus: module_config.version,
-                                    api: module_init.supported_api_versions(),
-                                },
-                            )
-                        })
-                })
-                .collect(),
-        }
-    }
-
-    /// Load the common api versions to use from cache and start a background
-    /// process to refresh them.
-    ///
-    /// This is a compromise so we not have to wait for version discovery to
-    /// complete every time a [`Client`] is being built.
-    async fn load_and_refresh_common_api_version_static(
-        config: &ClientConfig,
-        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
-        api: &DynGlobalApi,
-        db: &Database,
-    ) -> anyhow::Result<ApiVersionSet> {
-        if let Some(v) = db
-            .begin_transaction()
-            .await
-            .get_value(&CachedApiVersionSetKey)
-            .await
-        {
-            debug!("Found existing cached common api versions");
-            let config = config.clone();
-            let module_inits = module_inits.clone();
-            let api = api.clone();
-            let db = db.clone();
-            // Separate task group, because we actually don't want to be waiting for this to
-            // finish, and it's just best effort.
-            TaskGroup::new()
-                .spawn("refresh_common_api_version_static", |_| async move {
-                    if let Err(e) =
-                        Self::refresh_common_api_version_static(&config, &module_inits, &api, &db)
-                            .await
-                    {
-                        warn!("Failed to discover common api versions: {e}");
-                    }
-                })
-                .await;
-
-            return Ok(v.0);
-        }
-
-        debug!("No existing cached common api versions found, waiting for initial discovery");
-        Self::refresh_common_api_version_static(config, module_inits, api, db).await
-    }
-
-    async fn refresh_common_api_version_static(
-        config: &ClientConfig,
-        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
-        api: &DynGlobalApi,
-        db: &Database,
-    ) -> anyhow::Result<ApiVersionSet> {
-        debug!("Refreshing common api versions");
-
-        let common_api_versions =
-            Client::discover_common_api_version_static(config, module_inits, api).await?;
-
-        debug!("Updating the cached common api versions");
-        let mut dbtx = db.begin_transaction().await;
-        let _ = dbtx
-            .insert_entry(
-                &CachedApiVersionSetKey,
-                &CachedApiVersionSet(common_api_versions.clone()),
-            )
-            .await;
-
-        dbtx.commit_tx().await;
-
-        Ok(common_api_versions)
-    }
-
-    pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
-        self.inner.has_active_states(operation_id).await
-    }
-}
-
 /// Resources particular to a module instance
 pub struct ClientModuleInstance {
     /// Instance id of the module
@@ -994,7 +571,7 @@ pub struct ClientModuleInstance {
     pub api: DynModuleApi,
 }
 
-struct ClientInner {
+pub struct Client {
     config: ClientConfig,
     decoders: ModuleDecoderRegistry,
     db: Database,
@@ -1008,20 +585,36 @@ struct ClientInner {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
-    /// Number of [`Client`] instances using this `ClientInner`.
+    /// Number of [`ClientArc`] instances using this `Client`.
     ///
-    /// The `ClientInner` struct is both used for the client itself as well as
+    /// The `Client` struct is both used for the client itself as well as
     /// for the global context used in the state machine executor. This means we
-    /// cannot rely on the reference count of the `Arc<ClientInner>` to
+    /// cannot rely on the reference count of the `Arc<Client>` to
     /// determine if the client should shut down.
     client_count: AtomicUsize,
 }
 
-impl ClientInner {
-    fn primary_module(&self) -> &DynClientModule {
-        self.modules
-            .get(self.primary_module_instance)
-            .expect("must have primary module")
+impl Client {
+    /// Initialize a client builder that can be configured to create a new
+    /// client.
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::default()
+    }
+
+    pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
+        self.api.as_ref()
+    }
+
+    pub async fn start_executor(self: &Arc<Self>) {
+        debug!(
+            "Starting fedimint client executor (version: {})",
+            env!("FEDIMINT_BUILD_CODE_VERSION")
+        );
+        self.executor.start_executor(self.context_gen()).await;
+    }
+
+    pub fn federation_id(&self) -> FederationId {
+        self.federation_id
     }
 
     fn context_gen(self: &Arc<Self>) -> ModuleGlobalContextGen {
@@ -1043,7 +636,7 @@ impl ClientInner {
         &self.config
     }
 
-    fn decoders(&self) -> &ModuleDecoderRegistry {
+    pub fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.decoders
     }
 
@@ -1095,7 +688,44 @@ impl ClientInner {
         }
     }
 
-    /// Adds funding to a transaction or removes overfunding via change.
+    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+        Ok((self.federation_id().to_fake_ln_pub_key(&self.secp_ctx)?, 0))
+    }
+
+    pub fn get_meta(&self, key: &str) -> Option<String> {
+        self.federation_meta.get(key).cloned()
+    }
+
+    fn root_secret(&self) -> DerivableSecret {
+        self.root_secret.clone()
+    }
+
+    /// Secret that is derived from the seed used by the client and cannot
+    /// collide with secrets used by the client itself. It's intended to be used
+    /// by integrators of the client library so they don't have to implement
+    /// their own secret derivation scheme.
+    pub fn external_secret(&self) -> DerivableSecret {
+        self.root_secret().child_key(EXTERNAL_SECRET_CHILD_ID)
+    }
+
+    pub async fn add_state_machines(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> anyhow::Result<()> {
+        self.executor.add_state_machines_dbtx(dbtx, states).await
+    }
+
+    // TODO: implement as part of [`OperationLog`]
+    pub async fn get_active_operations(&self) -> HashSet<OperationId> {
+        self.executor.get_active_operations().await
+    }
+
+    pub fn operation_log(&self) -> &OperationLog {
+        &self.operation_log
+    }
+
+    /// Adds funding to a transaction or removes over-funding via change.
     async fn finalize_transaction(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -1160,7 +790,75 @@ impl ClientInner {
         Ok((tx, states, change_range))
     }
 
-    async fn finalize_and_submit_transaction(
+    /// Add funding and/or change to the transaction builder as needed, finalize
+    /// the transaction and submit it to the federation.
+    ///
+    /// ## Errors
+    /// The function will return an error if the operation with given ID already
+    /// exists.
+    ///
+    /// ## Panics
+    /// The function will panic if the database transaction collides with
+    /// other and fails with others too often, this should not happen except for
+    /// excessively concurrent scenarios.
+    pub async fn finalize_and_submit_transaction<F, M>(
+        &self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: F,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
+    where
+        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
+        M: serde::Serialize + MaybeSend,
+    {
+        let operation_type = operation_type.to_owned();
+
+        let autocommit_res = self
+            .db
+            .autocommit(
+                |dbtx| {
+                    let operation_type = operation_type.clone();
+                    let tx_builder = tx_builder.clone();
+                    let operation_meta = operation_meta.clone();
+                    Box::pin(async move {
+                        if Client::operation_exists(dbtx, operation_id).await {
+                            bail!("There already exists an operation with id {operation_id:?}")
+                        }
+
+                        let (txid, change) = self
+                            .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
+                            .await?;
+
+                        self.operation_log()
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                &operation_type,
+                                operation_meta(txid, change.clone()),
+                            )
+                            .await;
+
+                        Ok((txid, change))
+                    })
+                },
+                Some(100), // TODO: handle what happens after 100 retries
+            )
+            .await;
+
+        match autocommit_res {
+            Ok(txid) => Ok(txid),
+            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
+            Err(AutocommitError::CommitFailed {
+                attempts,
+                last_error,
+            }) => panic!(
+                "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
+            ),
+        }
+    }
+
+    async fn finalize_and_submit_transaction_inner(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
@@ -1233,6 +931,8 @@ impl ClientInner {
         active_state_exists || inactive_state_exists
     }
 
+    /// Waits for an output from the primary module to reach its final
+    /// state.
     pub async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
@@ -1248,6 +948,289 @@ impl ClientInner {
         all_active_states
             .into_iter()
             .any(|context| context.0.operation_id() == operation_id)
+    }
+
+    /// Returns a reference to a typed module client instance by kind
+    pub fn get_first_module<M: ClientModule>(
+        &self,
+        module_kind: &ModuleKind,
+    ) -> (&M, ClientModuleInstance) {
+        let id = self
+            .get_first_instance(module_kind)
+            .unwrap_or_else(|| panic!("No modules found of kind {module_kind}"));
+        let module: &M = self
+            .try_get_module(id)
+            .unwrap_or_else(|| panic!("Unknown module instance {id}"))
+            .as_any()
+            .downcast_ref::<M>()
+            .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
+        let instance = ClientModuleInstance {
+            id,
+            db: self.db().new_isolated(id),
+            api: self.api().with_module(id),
+        };
+        (module, instance)
+    }
+
+    pub fn get_module_client_dyn(
+        &self,
+        instance_id: ModuleInstanceId,
+    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
+        self.try_get_module(instance_id)
+            .ok_or(anyhow!("Unknown module instance {}", instance_id))
+    }
+
+    pub fn db(&self) -> &Database {
+        &self.db
+    }
+
+    /// Returns a stream of transaction updates for the given operation id that
+    /// can later be used to watch for a specific transaction being accepted.
+    pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
+        TransactionUpdates {
+            update_stream: self.transaction_update_stream(operation_id).await,
+        }
+    }
+
+    /// Returns the instance id of the first module of the given kind. The
+    /// primary module will always be returned before any other modules (which
+    /// themselves are ordered by their instance ID).
+    pub fn get_first_instance(&self, module_kind: &ModuleKind) -> Option<ModuleInstanceId> {
+        if &self
+            .modules
+            .get_with_kind(self.primary_module_instance)
+            .expect("must have primary module")
+            .0
+            == module_kind
+        {
+            return Some(self.primary_module_instance);
+        }
+
+        self.modules
+            .iter_modules()
+            .find(|(_, kind, _module)| *kind == module_kind)
+            .map(|(instance_id, _, _)| instance_id)
+    }
+
+    /// Returns the data from which the client's root secret is derived (e.g.
+    /// BIP39 seed phrase struct).
+    pub async fn root_secret_encoding<T: Decodable>(&self) -> anyhow::Result<T> {
+        get_decoded_client_secret::<T>(self.db()).await
+    }
+
+    /// Waits for outputs from the primary module to reach its final
+    /// state.
+    pub async fn await_primary_module_outputs(
+        &self,
+        operation_id: OperationId,
+        outputs: Vec<OutPoint>,
+    ) -> anyhow::Result<Amount> {
+        let mut amount = Amount::ZERO;
+
+        for out_point in outputs {
+            amount += self
+                .await_primary_module_output(operation_id, out_point)
+                .await?;
+        }
+
+        Ok(amount)
+    }
+
+    /// Returns the config with which the client was initialized.
+    pub fn get_config(&self) -> &ClientConfig {
+        &self.config
+    }
+
+    /// Returns the config of the client in JSON format.
+    ///
+    /// Compared to the consensus module format where module configs are binary
+    /// encoded this format cannot be cryptographically verified but is easier
+    /// to consume and to some degree human-readable.
+    pub fn get_config_json(&self) -> JsonClientConfig {
+        JsonClientConfig {
+            global: self.get_config().global.clone(),
+            modules: self
+                .get_config()
+                .modules
+                .iter()
+                .map(|(instance_id, ClientModuleConfig { kind, config, .. })| {
+                    (
+                        *instance_id,
+                        JsonWithKind::new(
+                            kind.clone(),
+                            config.clone().expect_decoded().to_json().into(),
+                        ),
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    /// Get the primary module
+    pub fn primary_module(&self) -> &DynClientModule {
+        self.modules
+            .get(self.primary_module_instance)
+            .expect("primary module must be present")
+    }
+
+    /// Balance available to the client for spending
+    pub async fn get_balance(&self) -> Amount {
+        self.primary_module()
+            .get_balance(
+                self.primary_module_instance,
+                &mut self.db().begin_transaction().await,
+            )
+            .await
+    }
+
+    /// Returns a stream that yields the current client balance every time it
+    /// changes.
+    pub async fn subscribe_balance_changes(&self) -> BoxStream<'static, Amount> {
+        let mut balance_changes = self.primary_module().subscribe_balance_changes().await;
+        let initial_balance = self.get_balance().await;
+        let db = self.db().clone();
+        let primary_module = self.primary_module().clone();
+        let primary_module_instance = self.primary_module_instance;
+
+        Box::pin(stream! {
+            yield initial_balance;
+            let mut prev_balance = initial_balance;
+            while let Some(()) = balance_changes.next().await {
+                let mut dbtx = db.begin_transaction().await;
+                let balance = primary_module
+                    .get_balance(primary_module_instance, &mut dbtx)
+                    .await;
+
+                // Deduplicate in case modules cannot always tell if the balance actually changed
+                if balance != prev_balance {
+                    prev_balance = balance;
+                    yield balance;
+                }
+            }
+        })
+    }
+
+    pub async fn discover_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
+        Ok(self
+            .api()
+            .discover_api_version_set(
+                &Self::supported_api_versions_summary_static(self.get_config(), &self.module_inits)
+                    .await,
+            )
+            .await?)
+    }
+
+    /// Query the federation for API version support and then calculate
+    /// the best API version to use (supported by most guardians).
+    pub async fn discover_common_api_version_static(
+        config: &ClientConfig,
+        client_module_init: &ClientModuleInitRegistry,
+        api: &DynGlobalApi,
+    ) -> anyhow::Result<ApiVersionSet> {
+        Ok(api
+            .discover_api_version_set(
+                &Self::supported_api_versions_summary_static(config, client_module_init).await,
+            )
+            .await?)
+    }
+
+    /// [`SupportedApiVersionsSummary`] that the client and its modules support
+    pub async fn supported_api_versions_summary_static(
+        config: &ClientConfig,
+        client_module_init: &ClientModuleInitRegistry,
+    ) -> SupportedApiVersionsSummary {
+        SupportedApiVersionsSummary {
+            core: SupportedCoreApiVersions {
+                core_consensus: config.global.consensus_version,
+                api: MultiApiVersion::try_from_iter(SUPPORTED_CORE_API_VERSIONS.to_owned())
+                    .expect("must not have conflicting versions"),
+            },
+            modules: config
+                .modules
+                .iter()
+                .filter_map(|(&module_instance_id, module_config)| {
+                    client_module_init
+                        .get(module_config.kind())
+                        .map(|module_init| {
+                            (
+                                module_instance_id,
+                                SupportedModuleApiVersions {
+                                    core_consensus: config.global.consensus_version,
+                                    module_consensus: module_config.version,
+                                    api: module_init.supported_api_versions(),
+                                },
+                            )
+                        })
+                })
+                .collect(),
+        }
+    }
+
+    /// Load the common api versions to use from cache and start a background
+    /// process to refresh them.
+    ///
+    /// This is a compromise, so we not have to wait for version discovery to
+    /// complete every time a [`Client`] is being built.
+    async fn load_and_refresh_common_api_version_static(
+        config: &ClientConfig,
+        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
+        api: &DynGlobalApi,
+        db: &Database,
+    ) -> anyhow::Result<ApiVersionSet> {
+        if let Some(v) = db
+            .begin_transaction()
+            .await
+            .get_value(&CachedApiVersionSetKey)
+            .await
+        {
+            debug!("Found existing cached common api versions");
+            let config = config.clone();
+            let module_inits = module_inits.clone();
+            let api = api.clone();
+            let db = db.clone();
+            // Separate task group, because we actually don't want to be waiting for this to
+            // finish, and it's just best effort.
+            TaskGroup::new()
+                .spawn("refresh_common_api_version_static", |_| async move {
+                    if let Err(e) =
+                        Self::refresh_common_api_version_static(&config, &module_inits, &api, &db)
+                            .await
+                    {
+                        warn!("Failed to discover common api versions: {e}");
+                    }
+                })
+                .await;
+
+            return Ok(v.0);
+        }
+
+        debug!("No existing cached common api versions found, waiting for initial discovery");
+        Self::refresh_common_api_version_static(config, module_inits, api, db).await
+    }
+
+    async fn refresh_common_api_version_static(
+        config: &ClientConfig,
+        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
+        api: &DynGlobalApi,
+        db: &Database,
+    ) -> anyhow::Result<ApiVersionSet> {
+        debug!("Refreshing common api versions");
+
+        let common_api_versions =
+            Client::discover_common_api_version_static(config, module_inits, api).await?;
+
+        debug!("Updating the cached common api versions");
+        let mut dbtx = db.begin_transaction().await;
+        let _ = dbtx
+            .insert_entry(
+                &CachedApiVersionSetKey,
+                &CachedApiVersionSet(common_api_versions.clone()),
+            )
+            .await;
+
+        dbtx.commit_tx().await;
+
+        Ok(common_api_versions)
     }
 }
 
@@ -1292,7 +1275,7 @@ pub enum ConfigSource {
 
 pub enum DatabaseSource {
     Fresh(Box<dyn IDatabase>),
-    Reuse(Client),
+    Reuse(ClientArc),
 }
 
 impl ClientBuilder {
@@ -1391,7 +1374,7 @@ impl ClientBuilder {
     /// ## Panics
     /// If the old and new client use different config since that might make the
     /// DB incompatible.
-    pub fn with_old_client_database(&mut self, client: Client) {
+    pub fn with_old_client_database(&mut self, client: ClientArc) {
         let was_replaced = self.db.replace(DatabaseSource::Reuse(client)).is_some();
         assert!(
             !was_replaced,
@@ -1452,7 +1435,7 @@ impl ClientBuilder {
     pub async fn build_restoring_from_backup(
         self,
         root_secret: DerivableSecret,
-    ) -> anyhow::Result<(Client, Metadata)> {
+    ) -> anyhow::Result<(ClientArc, Metadata)> {
         // TODO: assert DB is empty (what does that mean? maybe needs a method that
         // checks if "wipe" was called on modules?)
 
@@ -1475,14 +1458,14 @@ impl ClientBuilder {
     }
 
     /// Build a [`Client`] and start its executor
-    pub async fn build(self, root_secret: DerivableSecret) -> anyhow::Result<Client> {
+    pub async fn build(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
         let client = self.build_stopped(root_secret).await?;
         client.start_executor().await;
         Ok(client)
     }
 
     /// Build a [`Client`] but do not start the executor
-    pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<Client> {
+    pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
         let (config, decoders, db) = match self.db.ok_or(anyhow!("No database was provided"))? {
             DatabaseSource::Fresh(db) => {
                 let db = Database::new_from_box(db, ModuleDecoderRegistry::default());
@@ -1584,7 +1567,7 @@ impl ClientBuilder {
             executor_builder.build(db.clone(), notifier).await
         };
 
-        let client_inner = Arc::new(ClientInner {
+        let client_inner = Arc::new(Client {
             config: config.clone(),
             decoders,
             db: db.clone(),
@@ -1601,7 +1584,7 @@ impl ClientBuilder {
             client_count: AtomicUsize::new(1),
         });
 
-        Ok(Client {
+        Ok(ClientArc {
             inner: client_inner,
         })
     }

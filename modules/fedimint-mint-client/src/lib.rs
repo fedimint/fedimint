@@ -28,7 +28,7 @@ use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, Executor, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -239,7 +239,7 @@ pub enum SpendOOBState {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl MintClientExt for Client {
+impl MintClientExt for ClientArc {
     async fn reissue_external_notes<M: Serialize + Send>(
         &self,
         oob_notes: OOBNotes,
@@ -513,7 +513,7 @@ impl MintClientExt for Client {
 }
 
 async fn mint_operation(
-    client: &Client,
+    client: &ClientArc,
     operation_id: OperationId,
 ) -> anyhow::Result<OperationLogEntry> {
     let operation = client
@@ -704,7 +704,7 @@ impl ClientModule for MintClientModule {
 
     async fn handle_cli_command(
         &self,
-        client: &Client,
+        client: &ClientArc,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         if args.is_empty() {

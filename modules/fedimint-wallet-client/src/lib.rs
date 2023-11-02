@@ -20,7 +20,7 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -125,7 +125,7 @@ pub enum WithdrawState {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl WalletClientExt for Client {
+impl WalletClientExt for ClientArc {
     async fn get_deposit_address(
         &self,
         valid_until: SystemTime,

@@ -20,7 +20,7 @@ use fedimint_core::{
 
 use crate::sm::{Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput};
-use crate::{Client, DynGlobalClientContext};
+use crate::{ClientArc, DynGlobalClientContext};
 
 pub mod init;
 
@@ -52,7 +52,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     async fn handle_cli_command(
         &self,
-        _client: &Client,
+        _client: &ClientArc,
         _args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         Err(anyhow::format_err!(
@@ -263,7 +263,7 @@ pub trait IClientModule: Debug {
 
     async fn handle_cli_command(
         &self,
-        client: &Client,
+        client: &ClientArc,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value>;
 
@@ -350,7 +350,7 @@ where
 
     async fn handle_cli_command(
         &self,
-        client: &Client,
+        client: &ClientArc,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         <T as ClientModule>::handle_cli_command(self, client, args).await

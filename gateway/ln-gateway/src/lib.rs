@@ -30,7 +30,7 @@ use clap::{Parser, Subcommand};
 use client::GatewayClientBuilder;
 use db::{DbKeyPrefix, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey};
 use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::Client;
+use fedimint_client::ClientArc;
 use fedimint_core::api::{FederationError, InviteCode};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -199,7 +199,7 @@ impl Display for GatewayState {
 }
 
 pub type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
-pub type FederationToClientMap = Arc<RwLock<BTreeMap<FederationId, fedimint_client::Client>>>;
+pub type FederationToClientMap = Arc<RwLock<BTreeMap<FederationId, fedimint_client::ClientArc>>>;
 
 #[derive(Clone)]
 pub struct Gateway {
@@ -910,7 +910,7 @@ impl Gateway {
     pub async fn remove_client(
         &self,
         federation_id: FederationId,
-    ) -> Result<fedimint_client::Client> {
+    ) -> Result<fedimint_client::ClientArc> {
         let client = self.clients.write().await.remove(&federation_id).ok_or(
             GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
         )?;
@@ -920,7 +920,7 @@ impl Gateway {
     pub async fn select_client(
         &self,
         federation_id: FederationId,
-    ) -> Result<fedimint_client::Client> {
+    ) -> Result<fedimint_client::ClientArc> {
         self.clients
             .read()
             .await
@@ -1106,7 +1106,7 @@ impl Gateway {
 
     async fn make_federation_info(
         &self,
-        client: &Client,
+        client: &ClientArc,
         federation_id: FederationId,
     ) -> FederationInfo {
         let balance_msat = client.get_balance().await;

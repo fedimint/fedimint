@@ -9,7 +9,7 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::{Client, DynGlobalClientContext};
+use fedimint_client::{ClientArc, DynGlobalClientContext};
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
 use fedimint_core::db::ModuleDatabaseTransaction;
@@ -72,7 +72,7 @@ pub trait DummyClientExt {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl DummyClientExt for Client {
+impl DummyClientExt for ClientArc {
     async fn print_using_account(
         &self,
         amount: Amount,

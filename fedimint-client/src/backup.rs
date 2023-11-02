@@ -138,17 +138,17 @@ impl EncryptedClientBackup {
 impl Client {
     /// Create a backup, include provided `metadata`
     pub async fn create_backup(&self, metadata: Metadata) -> anyhow::Result<ClientBackup> {
-        let fedimint_block_count = self.inner.api.fetch_block_count().await?;
+        let fedimint_block_count = self.api.fetch_block_count().await?;
         let mut modules = BTreeMap::new();
         let mut dbtx = self.db().begin_transaction().await;
-        for (id, kind, module) in self.inner.modules.iter_modules() {
+        for (id, kind, module) in self.modules.iter_modules() {
             debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Preparing module backup");
             if module.supports_backup() {
                 let backup = module
                     .backup(
                         &mut dbtx.with_module_prefix(id),
-                        self.inner.executor.clone(),
-                        self.inner.api.clone(),
+                        self.executor.clone(),
+                        self.api.clone(),
                         id,
                     )
                     .await?;
@@ -192,7 +192,7 @@ impl Client {
     pub async fn wipe_state(&self) -> Result<()> {
         let mut dbtx = self.db().begin_transaction().await;
         info!(target: LOG_CLIENT, "Wiping client state");
-        for (id, kind, module) in self.inner.modules.iter_modules() {
+        for (id, kind, module) in self.modules.iter_modules() {
             if !module.supports_backup() {
                 continue;
             }
@@ -204,11 +204,7 @@ impl Client {
                 "Wiping module state"
             );
             module
-                .wipe(
-                    &mut dbtx.with_module_prefix(id),
-                    id,
-                    self.inner.executor.clone(),
-                )
+                .wipe(&mut dbtx.with_module_prefix(id), id, self.executor.clone())
                 .await?;
         }
         dbtx.commit_tx().await;
@@ -226,7 +222,7 @@ impl Client {
             size, "Uploading backup to federation"
         );
         let backup_request = backup.into_backup_request(&self.get_derived_backup_signing_key())?;
-        self.inner.api.upload_backup(&backup_request).await?;
+        self.api.upload_backup(&backup_request).await?;
         info!(
             target: LOG_CLIENT_BACKUP,
             size, "Uploaded backup to federation"
@@ -263,7 +259,7 @@ impl Client {
             .unwrap_or_else(Metadata::empty);
 
         let mut dbtx = self.db().begin_transaction().await;
-        for (id, kind, module) in self.inner.modules.iter_modules() {
+        for (id, kind, module) in self.modules.iter_modules() {
             if !module.supports_backup() {
                 continue;
             }
@@ -279,8 +275,8 @@ impl Client {
                 .restore(
                     &mut dbtx,
                     id,
-                    self.inner.executor.clone(),
-                    self.inner.api.clone(),
+                    self.executor.clone(),
+                    self.api.clone(),
                     module_backup.map(Vec::as_slice),
                 )
                 .await?;
@@ -293,7 +289,6 @@ impl Client {
     /// Download most recent valid backup found from the Federation
     pub async fn download_backup_from_federation(&self) -> Result<Option<ClientBackup>> {
         let mut responses: Vec<_> = self
-            .inner
             .api
             .download_backup(&self.get_backup_id())
             .await?

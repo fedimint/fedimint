@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::Client;
+use fedimint_client::ClientArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
@@ -56,11 +56,11 @@ impl GatewayTest {
     }
 
     /// Removes a client from the gateway
-    pub async fn remove_client(&self, fed: &FederationTest) -> Client {
+    pub async fn remove_client(&self, fed: &FederationTest) -> ClientArc {
         self.gateway.remove_client(fed.id()).await.unwrap()
     }
 
-    pub async fn select_client(&self, federation_id: FederationId) -> Client {
+    pub async fn select_client(&self, federation_id: FederationId) -> ClientArc {
         self.gateway.select_client(federation_id).await.unwrap()
     }
 

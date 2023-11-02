@@ -8,7 +8,7 @@ use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{Client, ClientBuilder};
+use fedimint_client::{ClientArc, ClientBuilder};
 use fedimint_core::api::InviteCode;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::CommonModuleInit;
@@ -52,7 +52,7 @@ pub async fn try_get_notes_cli(amount: &Amount, tries: usize) -> anyhow::Result<
 }
 
 pub async fn reissue_notes(
-    client: &Client,
+    client: &ClientArc,
     oob_notes: OOBNotes,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
@@ -75,7 +75,7 @@ pub async fn reissue_notes(
 }
 
 pub async fn do_spend_notes(
-    client: &Client,
+    client: &ClientArc,
     amount: Amount,
 ) -> anyhow::Result<(OperationId, OOBNotes)> {
     let (operation_id, oob_notes) = client
@@ -98,7 +98,7 @@ pub async fn do_spend_notes(
 }
 
 pub async fn await_spend_notes_finish(
-    client: &Client,
+    client: &ClientArc,
     operation_id: OperationId,
 ) -> anyhow::Result<()> {
     let mut updates = client
@@ -121,7 +121,7 @@ pub async fn await_spend_notes_finish(
 pub async fn build_client(
     invite_code: Option<InviteCode>,
     rocksdb: Option<&PathBuf>,
-) -> anyhow::Result<Client> {
+) -> anyhow::Result<ClientArc> {
     let mut client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientGen);
     client_builder.with_module(LightningClientGen);
@@ -183,7 +183,7 @@ pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
 }
 
 pub async fn gateway_pay_invoice(
-    client: &Client,
+    client: &ClientArc,
     invoice: Bolt11Invoice,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
@@ -242,7 +242,7 @@ pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
     }
 }
 
-pub async fn switch_default_gateway(client: &Client, gateway_id: &str) -> anyhow::Result<()> {
+pub async fn switch_default_gateway(client: &ClientArc, gateway_id: &str) -> anyhow::Result<()> {
     let gateway_id = parse_gateway_id(gateway_id)?;
     client.set_active_gateway(&gateway_id).await?;
     Ok(())
@@ -252,7 +252,7 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
     secp256k1::PublicKey::from_str(s)
 }
 
-pub async fn get_note_summary(client: &Client) -> anyhow::Result<TieredSummary> {
+pub async fn get_note_summary(client: &ClientArc) -> anyhow::Result<TieredSummary> {
     let (mint_client, _) = client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
     let summary = mint_client
         .get_wallet_summary(&mut client.db().begin_transaction().await.with_module_prefix(1))
@@ -261,7 +261,7 @@ pub async fn get_note_summary(client: &Client) -> anyhow::Result<TieredSummary> 
 }
 
 pub async fn remint_denomination(
-    client: &Client,
+    client: &ClientArc,
     denomination: Amount,
     quantity: u16,
 ) -> anyhow::Result<()> {

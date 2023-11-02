@@ -7,7 +7,7 @@ use fedimint_mint_client::MintClientGen;
 use fedimint_wallet_client::WalletClientGen;
 use rand::thread_rng;
 
-async fn client(invite_code: &InviteCode) -> Result<fedimint_client::Client> {
+async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientArc> {
     let mut builder = fedimint_client::ClientBuilder::default();
     builder.with_module(LightningClientGen);
     builder.with_module(MintClientGen);
@@ -86,7 +86,7 @@ mod tests {
         Ok(())
     }
 
-    async fn set_gateway(client: &fedimint_client::Client) -> anyhow::Result<()> {
+    async fn set_gateway(client: &fedimint_client::ClientArc) -> anyhow::Result<()> {
         let gws = client.fetch_registered_gateways().await?;
         let gw_api = faucet::gateway_api().await?;
         let lnd_gw = gws

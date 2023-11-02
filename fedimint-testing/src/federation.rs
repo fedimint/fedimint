@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{Client, ClientBuilder};
+use fedimint_client::{ClientArc, ClientBuilder};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::{
@@ -38,12 +38,12 @@ pub struct FederationTest {
 
 impl FederationTest {
     /// Create two clients, useful for send/receive tests
-    pub async fn two_clients(&self) -> (Client, Client) {
+    pub async fn two_clients(&self) -> (ClientArc, ClientArc) {
         (self.new_client().await, self.new_client().await)
     }
 
     /// Create a client connected to this fed
-    pub async fn new_client(&self) -> Client {
+    pub async fn new_client(&self) -> ClientArc {
         let client_config = self.configs[&PeerId::from(0)]
             .consensus
             .to_client_config(&self.server_init)
@@ -52,7 +52,7 @@ impl FederationTest {
         self.new_client_with_config(client_config).await
     }
 
-    pub async fn new_client_with_config(&self, client_config: ClientConfig) -> Client {
+    pub async fn new_client_with_config(&self, client_config: ClientConfig) -> ClientArc {
         info!(target: LOG_TEST, "Setting new client with config");
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_inits(self.client_init.clone());
