@@ -395,7 +395,7 @@ where
         let mut active_state_count = active_states.len();
         if active_states.is_empty() {
             // FIXME: what to do in this case? Probably best to subscribe to DB eventually
-            debug!("No state transitions available, waiting before re-trying");
+            trace!("No state transitions available, waiting before re-trying");
             task::sleep(EXECUTOR_POLL_INTERVAL).await;
             return Ok(());
         }
