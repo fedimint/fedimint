@@ -184,6 +184,29 @@ pub struct ApiVersionSet {
 /// [`IFederationApi`].
 #[apply(async_trait_maybe_send!)]
 pub trait FederationApiExt: IFederationApi {
+    async fn request_single_peer(
+        &self,
+        timeout: Option<Duration>,
+        method: String,
+        params: ApiRequestErased,
+        peer_id: PeerId,
+    ) -> JsonRpcResult<jsonrpsee_core::JsonValue> {
+        let request = async {
+            self.request_raw(peer_id, &method, &[params.to_json()])
+                .await
+        };
+        let result = if let Some(timeout) = timeout {
+            match fedimint_core::task::timeout(timeout, request).await {
+                Ok(result) => result,
+                Err(_timeout) => Err(JsonRpcError::RequestTimeout),
+            }
+        } else {
+            request.await
+        };
+
+        result
+    }
+
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     async fn request_with_strategy<PeerRet: serde::de::DeserializeOwned, FedRet: Debug>(

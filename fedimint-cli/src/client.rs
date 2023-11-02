@@ -15,7 +15,7 @@ use fedimint_client::Client;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::time::now;
-use fedimint_core::{Amount, ParseAmountError, TieredSummary};
+use fedimint_core::{Amount, ParseAmountError, PeerId, TieredSummary};
 use fedimint_ln_client::{
     InternalPayState, LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
@@ -24,13 +24,15 @@ use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
+use nostr_sdk::ToBech32;
+use nostrmint_client::NostrmintClientExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
 use tracing::info;
 
-use crate::{metadata_from_clap_cli, LnInvoiceResponse};
+use crate::{metadata_from_clap_cli, LnInvoiceResponse, Opts};
 
 #[derive(Debug, Clone)]
 pub enum ModuleSelector {
@@ -55,7 +57,9 @@ pub enum ClientCmd {
     /// Display wallet info (holdings, tiers)
     Info,
     /// Reissue notes received from a third party to avoid double spends
-    Reissue { oob_notes: OOBNotes },
+    Reissue {
+        oob_notes: OOBNotes,
+    },
     /// Prepare notes to send to a third party as a payment
     Spend {
         #[clap(value_parser = parse_fedimint_amount)]
@@ -63,7 +67,9 @@ pub enum ClientCmd {
     },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
-    Validate { oob_notes: OOBNotes },
+    Validate {
+        oob_notes: OOBNotes,
+    },
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
         #[clap(long, value_parser = parse_fedimint_amount)]
@@ -74,7 +80,9 @@ pub enum ClientCmd {
         expiry_time: Option<u64>,
     },
     /// Wait for incoming invoice to be paid
-    AwaitInvoice { operation_id: OperationId },
+    AwaitInvoice {
+        operation_id: OperationId,
+    },
     /// Pay a lightning invoice via a gateway
     LnPay {
         bolt11: lightning_invoice::Bolt11Invoice,
@@ -89,7 +97,9 @@ pub enum ClientCmd {
     /// Generate a new deposit address, funds sent to it can later be claimed
     DepositAddress,
     /// Wait for deposit on previously generated address
-    AwaitDeposit { operation_id: OperationId },
+    AwaitDeposit {
+        operation_id: OperationId,
+    },
     /// Withdraw funds from the federation
     Withdraw {
         #[clap(long)]
@@ -136,6 +146,22 @@ pub enum ClientCmd {
     },
     /// Returns the client config
     Config,
+    CreateNote {
+        #[clap(long)]
+        msg: String,
+
+        #[clap(long)]
+        peer_id: PeerId,
+    },
+    ListNoteRequests,
+    SignNote {
+        #[clap(long)]
+        event_id: String,
+
+        #[clap(long)]
+        peer_id: PeerId,
+    },
+    GetNpub,
 }
 
 pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
@@ -150,6 +176,7 @@ pub async fn handle_command(
     command: ClientCmd,
     _config: ClientConfig,
     client: Client,
+    opts: Opts,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
@@ -474,6 +501,37 @@ pub async fn handle_command(
         ClientCmd::Config => {
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
+        }
+        ClientCmd::CreateNote { msg, peer_id } => {
+            let pubkey = client.get_npub().await?;
+            let unsigned_event =
+                nostr_sdk::EventBuilder::new_text_note(msg, &[]).to_unsigned_event(pubkey);
+            client
+                .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
+                .await?;
+
+            let note_id = format!("{}", unsigned_event.id);
+            Ok(json!(note_id))
+        }
+        ClientCmd::ListNoteRequests => {
+            let note_requests = client.list_note_requests().await?;
+            Ok(json!(note_requests))
+        }
+        ClientCmd::SignNote { event_id, peer_id } => {
+            let note_requests = client.list_note_requests().await?;
+            if let Some((unsigned_event, _count)) = note_requests.get(&event_id) {
+                client
+                    .request_sign_event(unsigned_event.clone().0, peer_id, opts.auth()?)
+                    .await?;
+                return Ok(json!("SigningEvent"));
+            }
+
+            Err(anyhow!("No event with id: {event_id}"))
+        }
+        ClientCmd::GetNpub => {
+            let pubkey = client.get_npub().await?;
+            let npub = pubkey.to_bech32()?;
+            Ok(json!(npub))
         }
     }
 }

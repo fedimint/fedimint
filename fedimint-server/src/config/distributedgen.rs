@@ -7,7 +7,9 @@ use anyhow::{ensure, format_err};
 use async_trait::async_trait;
 use bitcoin::secp256k1;
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
-use fedimint_core::config::{DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, ISupportedDkgMessage};
+use fedimint_core::config::{
+    DkgGroup, DkgMessage, DkgPeerMsg, DkgResult, FrostShareAndPop, ISupportedDkgMessage,
+};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::PeerHandle;
 use fedimint_core::net::peers::MuxPeerConnections;
@@ -16,6 +18,9 @@ use fedimint_core::{BitcoinHash, NumPeers, PeerId};
 use hbbft::crypto::poly::Commitment;
 use hbbft::crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 use rand::rngs::OsRng;
+use schnorr_fun::fun::marker::{NonZero, Public, Secret, Zero};
+use schnorr_fun::fun::Point;
+use schnorr_fun::Signature;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tbs::hash::hash_bytes_to_curve;
@@ -506,6 +511,18 @@ pub trait PeerHandleOps {
         dkg_key: String,
         key: secp256k1::PublicKey,
     ) -> DkgResult<BTreeMap<PeerId, secp256k1::PublicKey>>;
+
+    async fn exchange_polynomials(
+        &self,
+        dkg_key: String,
+        polynomial: Vec<Point>,
+    ) -> DkgResult<BTreeMap<PeerId, Vec<Point>>>;
+
+    async fn exchange_shares_and_pop(
+        &self,
+        dkg_key: String,
+        shares_and_pop: FrostShareAndPop,
+    ) -> DkgResult<BTreeMap<PeerId, FrostShareAndPop>>;
 }
 
 #[async_trait]
@@ -561,5 +578,78 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         }
 
         Ok(peer_peg_in_keys)
+    }
+
+    async fn exchange_polynomials(
+        &self,
+        dkg_key: String,
+        polynomial: Vec<Point>,
+    ) -> DkgResult<BTreeMap<PeerId, Vec<Point>>> {
+        let mut peer_polys: BTreeMap<PeerId, Vec<Point>> = BTreeMap::new();
+
+        self.connections
+            .send(
+                &self.peers,
+                (self.module_instance_id, dkg_key.clone()),
+                DkgPeerMsg::Polynomial(polynomial.clone()),
+            )
+            .await?;
+
+        peer_polys.insert(self.our_id, polynomial);
+        while peer_polys.len() < self.peers.len() {
+            match self
+                .connections
+                .receive((self.module_instance_id, dkg_key.clone()))
+                .await?
+            {
+                (peer, DkgPeerMsg::Polynomial(peer_poly)) => {
+                    peer_polys.insert(peer, peer_poly);
+                }
+                (peer, msg) => {
+                    return Err(format_err!("Invalid message received from {peer}: {msg:?}").into());
+                }
+            }
+        }
+
+        Ok(peer_polys)
+    }
+
+    async fn exchange_shares_and_pop(
+        &self,
+        dkg_key: String,
+        shares_and_pop: (
+            BTreeMap<
+                schnorr_fun::fun::Scalar<Public, NonZero>,
+                schnorr_fun::fun::Scalar<Secret, Zero>,
+            >,
+            Signature,
+        ),
+    ) -> DkgResult<BTreeMap<PeerId, FrostShareAndPop>> {
+        let mut peer_responses: BTreeMap<PeerId, FrostShareAndPop> = BTreeMap::new();
+
+        self.connections
+            .send(
+                &self.peers,
+                (self.module_instance_id, dkg_key.clone()),
+                DkgPeerMsg::ShareAndPop(shares_and_pop.clone()),
+            )
+            .await?;
+        peer_responses.insert(self.our_id, shares_and_pop);
+        while peer_responses.len() < self.peers.len() {
+            match self
+                .connections
+                .receive((self.module_instance_id, dkg_key.clone()))
+                .await?
+            {
+                (peer, DkgPeerMsg::ShareAndPop(frost_share_and_pop)) => {
+                    peer_responses.insert(peer, frost_share_and_pop);
+                }
+                (peer, msg) => {
+                    return Err(format_err!("Invalid message receive from {peer}: {msg:?}").into());
+                }
+            }
+        }
+
+        Ok(peer_responses)
     }
 }

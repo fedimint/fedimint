@@ -226,7 +226,7 @@ impl fmt::Display for CliError {
 
 #[derive(Parser)]
 #[command(version)]
-struct Opts {
+pub struct Opts {
     /// The working directory of the client containing the config and db
     #[arg(long = "data-dir", alias = "workdir", env = "FM_DATA_DIR")]
     workdir: Option<PathBuf>,
@@ -538,7 +538,7 @@ impl FedimintCli {
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;
                 let config = client.get_config().clone();
                 Ok(CliOutput::Raw(
-                    client::handle_command(command, config, client)
+                    client::handle_command(command, config, client, cli)
                         .await
                         .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?,
                 ))

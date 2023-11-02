@@ -33,6 +33,8 @@ fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
+nostr-sdk = "0.24.0"
+nostrmint-client = { path = "../modules/nostrmint-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-server = { path = "../fedimint-server" }
 rand = "0.8"
