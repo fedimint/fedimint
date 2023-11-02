@@ -109,7 +109,7 @@ use fedimint_core::{
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::StreamExt;
-use module::DynClientModule;
+use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
@@ -1547,7 +1547,7 @@ impl ClientBuilder {
         )
         .await?;
 
-        let final_client = Arc::new(std::sync::RwLock::new(None));
+        let final_client = FinalClient::default();
 
         let modules = {
             let mut modules = ClientModuleRegistry::default();
@@ -1623,7 +1623,7 @@ impl ClientBuilder {
             inner: client_inner,
         };
 
-        *final_client.write().expect("lock poisoned") = Some(client_arc.downgrade());
+        final_client.set(client_arc.downgrade());
 
         Ok(client_arc)
     }

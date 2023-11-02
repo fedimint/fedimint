@@ -27,26 +27,39 @@ pub mod init;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
-#[derive(Clone)]
-pub struct ClientContext {
-    client: Arc<std::sync::RwLock<Option<ClientWeak>>>,
-}
+/// A final, fully initialized [`Client`]
+///
+/// Client modules need to be able to access a `Client` they are a part
+/// of. To break the circular dependency, the final `Client` is passed
+/// after `Client` was built via a shared state.
+#[derive(Clone, Default)]
+pub struct FinalClient(Arc<std::sync::OnceLock<ClientWeak>>);
 
-impl ClientContext {
-    /// Internal function get the [`ClientArc`]
+impl FinalClient {
+    /// Get a temporary [`ClientArc`]
     ///
     /// Care must be taken to not let the user take ownership of this value,
     /// and not store it elsewhere permanently either, as it could prevent
     /// the cleanup of the Client.
-    fn client_arc_expect(self) -> ClientArc {
-        self.client
-            .read()
-            .expect("lock poisoned")
-            .clone()
+    pub(crate) fn get(&self) -> ClientArc {
+        self.0
+            .get()
             .expect("client must be already set")
             .upgrade()
             .expect("client module context must not be use past client shutdown")
     }
+
+    pub(crate) fn set(&self, client: ClientWeak) {
+        self.0.set(client).expect("FinalLazyClient already set");
+    }
+}
+
+#[derive(Clone)]
+pub struct ClientContext {
+    client: FinalClient,
+}
+
+impl ClientContext {
     /// Run `f` with a `Client` reference
     ///
     /// This uses a closure-API to prevent the caller from holding on to a
@@ -55,12 +68,12 @@ impl ClientContext {
     where
         F: Future,
     {
-        f(&self.client_arc_expect()).await
+        f(&self.client.get()).await
     }
 
     /// Like [`Self::with_client`] but when `async` is not needed.
     pub fn with_client_sync<R>(self, f: impl FnOnce(&Client) -> R) -> R {
-        f(&self.client_arc_expect())
+        f(&self.client.get())
     }
 }
 

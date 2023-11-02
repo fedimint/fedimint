@@ -12,10 +12,10 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
 
-use super::ClientContext;
+use super::{ClientContext, FinalClient};
 use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
-use crate::{ClientWeak, DynGlobalClientContext};
+use crate::DynGlobalClientContext;
 
 pub type ClientModuleInitRegistry = ModuleInitRegistry<DynClientModuleInit>;
 
@@ -117,7 +117,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
-        final_client: Arc<std::sync::RwLock<Option<ClientWeak>>>,
+        final_client: FinalClient,
         federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
@@ -153,7 +153,7 @@ where
 
     async fn init(
         &self,
-        final_client: Arc<std::sync::RwLock<Option<ClientWeak>>>,
+        final_client: FinalClient,
         federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
