@@ -63,6 +63,11 @@ function load_test_tool_test() {
 }
 export -f load_test_tool_test
 
+function backend_test_mocks() {
+  fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/backend-test.sh
+}
+export -f backend_test_mocks
+
 function backend_test_bitcoind() {
   fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind ./scripts/tests/backend-test.sh
 }
@@ -113,6 +118,7 @@ if parallel \
   --memfree 1G \
   --nice 15 ::: \
   always_success_test \
+  backend_test_mocks \
   backend_test_bitcoind \
   backend_test_electrs \
   backend_test_esplora \

@@ -30,6 +30,23 @@ export RUST_BACKTRACE=1
 eval "$(devimint env)"
 >&2 echo "### Setting up tests - complete"
 
+if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "mocked" ]; then
+  >&2 echo "### Testing against mocked out daemons"
+
+  # Note: Ideally `-E` flags can be used together, but that seems to trigger lots of problems
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-dummy-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-mint-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-wallet-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+    -E 'package(fedimint-ln-tests)'
+  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=1 \
+    -E 'package(ln-gateway)'
+  >&2 echo "### Testing against mocked out daemons - complete"
+fi
+
 export FM_TEST_USE_REAL_DAEMONS=1
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
