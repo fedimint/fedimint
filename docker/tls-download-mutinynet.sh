@@ -222,9 +222,6 @@ echo -n "Checking, please wait..."
 wait_fedimintd_ready
 
 echo "Good!"
-echo "Restarting to make sure all services will read the updated certificate"
-
-$DOCKER_COMPOSE restart
 
 echo
 echo "Optionally run '$DOCKER_COMPOSE logs -f' to see the logs"
