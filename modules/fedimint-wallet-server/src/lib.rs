@@ -31,7 +31,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    ModuleDatabaseTransaction,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
@@ -1628,7 +1629,9 @@ mod fedimint_migration_tests {
         WPubkeyHash,
     };
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-    use fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    use fedimint_core::db::{
+        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};

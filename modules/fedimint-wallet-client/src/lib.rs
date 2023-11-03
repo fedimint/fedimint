@@ -24,7 +24,9 @@ use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientCon
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    AutocommitError, IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,

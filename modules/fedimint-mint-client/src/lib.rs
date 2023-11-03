@@ -32,7 +32,10 @@ use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientCon
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{

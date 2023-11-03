@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 
 use crate::db::AlephUnitsKey;
 use crate::LOG_CONSENSUS;

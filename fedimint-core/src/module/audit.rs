@@ -6,7 +6,11 @@ use futures::StreamExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::db::{DatabaseKey, DatabaseLookup, DatabaseRecord, ModuleDatabaseTransaction};
+use crate::db::{
+    DatabaseKey, DatabaseLookup, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
+    ModuleDatabaseTransaction,
+};
+use crate::task::{MaybeSend, MaybeSync};
 
 #[derive(Default)]
 pub struct Audit {
@@ -29,7 +33,7 @@ impl Audit {
         key_prefix: &KP,
         to_milli_sat: F,
     ) where
-        KP: DatabaseLookup + 'static,
+        KP: DatabaseLookup + 'static + MaybeSend + MaybeSync,
         KP::Record: DatabaseKey,
         F: Fn(KP::Record, <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value) -> i64,
     {

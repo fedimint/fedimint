@@ -324,7 +324,7 @@ impl Opts {
                     .map_err_cli_general()?,
             );
         }
-        client_builder.with_database(db);
+        client_builder.with_raw_database(db);
 
         Ok(client_builder)
     }

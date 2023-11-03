@@ -4,7 +4,7 @@ use fedimint_client::sm::{DynState, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::ModuleDatabaseTransaction;
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_dummy_common::DummyOutputOutcome;

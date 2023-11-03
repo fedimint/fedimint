@@ -7,7 +7,7 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{get_config_from_db, ClientBuilder, FederationInfo};
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::StreamExt;
 use rand::thread_rng;
@@ -96,7 +96,7 @@ impl GatewayClientBuilder {
             let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
                 GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
             })?;
-            client_builder.with_database(rocksdb);
+            client_builder.with_raw_database(rocksdb);
         }
 
         let client_secret = match client_builder

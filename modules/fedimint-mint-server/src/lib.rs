@@ -7,7 +7,9 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction,
+};
 use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -699,7 +701,9 @@ mod fedimint_migration_tests {
     use anyhow::{ensure, Context};
     use bitcoin_hashes::Hash;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_MINT;
-    use fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    use fedimint_core::db::{
+        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::time::now;

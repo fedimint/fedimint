@@ -12,7 +12,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::{ClientArc, DynGlobalClientContext};
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
-use fedimint_core::db::ModuleDatabaseTransaction;
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
     TransactionItemAmount,

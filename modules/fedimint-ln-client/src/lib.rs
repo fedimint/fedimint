@@ -25,7 +25,9 @@ use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientCon
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,

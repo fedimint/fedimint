@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::fmt::Debug;
-use std::marker::PhantomData;
+use std::fmt::{self, Debug};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -26,7 +25,7 @@ pub mod notifications;
 
 pub use test_utils::*;
 
-use self::notifications::{Notifications, NotifyingTransaction};
+use self::notifications::{Notifications, NotifyQueue};
 use crate::module::registry::ModuleDecoderRegistry;
 
 pub const MODULE_GLOBAL_PREFIX: u8 = 0xff;
@@ -108,96 +107,147 @@ pub enum AutocommitError<E> {
 }
 
 #[apply(async_trait_maybe_send!)]
+pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
+    type Transaction<'a>: IRawDatabaseTransaction;
+    async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IRawDatabase for Box<T>
+where
+    T: IRawDatabase,
+{
+    type Transaction<'a> = <T as IRawDatabase>::Transaction<'a>;
+
+    async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
+        (**self).begin_transaction().await
+    }
+}
+
+pub trait IRawDatabaseExt: IRawDatabase + Sized {
+    fn into_database(self, module_decoders: ModuleDecoderRegistry) -> Database {
+        Database::new(self, module_decoders)
+    }
+    fn into_database_no_decoders(self) -> Database {
+        Database::new(self, Default::default())
+    }
+}
+
+impl<T> IRawDatabaseExt for T where T: IRawDatabaseExt {}
+
+/// A database that on top of normal operation, can key change notifications
+#[apply(async_trait_maybe_send!)]
 pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>>;
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a>;
+    async fn register(&self, key: &[u8]);
+    async fn notify(&self, key: &[u8]);
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabase for Arc<T>
+where
+    T: IDatabase + ?Sized,
+{
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
+        (**self).begin_transaction().await
+    }
+    async fn register(&self, key: &[u8]) {
+        (**self).register(key).await
+    }
+    async fn notify(&self, key: &[u8]) {
+        (**self).notify(key).await
+    }
+}
+
+/// Base functionality around [`IRawDatabase`] to make it a [`IDatabase`]
+///
+/// Mostly notification system, but also run-time single-commit by value.
+struct BaseDatabase<RawDatabase> {
+    notifications: Arc<Notifications>,
+    raw: RawDatabase,
+}
+
+impl<RawDatabase> fmt::Debug for BaseDatabase<RawDatabase> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("BaseDatabase")
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase<RawDatabase> {
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
+        Box::new(BaseDatabaseTransaction::new(
+            self.raw.begin_transaction().await,
+            self.notifications.clone(),
+        ))
+    }
+    async fn register(&self, key: &[u8]) {
+        self.notifications.register(key).await
+    }
+    async fn notify(&self, key: &[u8]) {
+        self.notifications.notify(key).await
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Database {
-    inner_db: Arc<DatabaseInner>,
-    module_instance_id: Option<ModuleInstanceId>,
+    inner: Arc<dyn IDatabase + 'static>,
     module_decoders: ModuleDecoderRegistry,
-}
-
-#[derive(Debug)]
-struct DatabaseInner {
-    notifications: Notifications,
-    db: Box<dyn IDatabase + 'static>,
 }
 
 impl Database {
     /// Creates a new Fedimint database from any object implementing
-    /// [`IDatabase`]. For more flexibility see also [`Database::new_from_box`].
-    pub fn new(
-        db: impl IDatabase + MaybeSend + 'static,
-        module_decoders: ModuleDecoderRegistry,
-    ) -> Self {
-        let inner = DatabaseInner {
-            db: Box::new(db),
-            notifications: Notifications::new(),
+    /// [`IDatabase`].
+    ///
+    /// For more flexibility see also [`Database::new_from_arc`].
+    pub fn new(raw: impl IRawDatabase + 'static, module_decoders: ModuleDecoderRegistry) -> Self {
+        let inner = BaseDatabase {
+            raw,
+            notifications: Arc::new(Notifications::new()),
         };
-
-        Self {
-            inner_db: Arc::new(inner),
-            module_instance_id: None,
+        Self::new_from_arc(
+            Arc::new(inner) as Arc<dyn IDatabase + 'static>,
             module_decoders,
-        }
+        )
     }
 
-    /// Creates a new Fedimint database from a `Box<dyn IDatabase>`, allowing
-    /// the caller to have a dynamic database backend that can choose
-    /// implementations at runtime, while not needing to bind decoders that
-    /// might only be available later.
-    pub fn new_from_box(
-        db: Box<dyn IDatabase + 'static>,
+    pub fn new_from_arc(
+        inner: Arc<dyn IDatabase + 'static>,
         module_decoders: ModuleDecoderRegistry,
     ) -> Self {
-        let inner = DatabaseInner {
-            db,
-            notifications: Notifications::new(),
-        };
-
         Self {
-            inner_db: Arc::new(inner),
-            module_instance_id: None,
+            inner,
             module_decoders,
         }
     }
 
     pub fn new_isolated(&self, module_instance_id: ModuleInstanceId) -> Self {
-        if self.module_instance_id.is_some() {
-            panic!("Cannot isolate and already isolated database.");
-        }
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
 
-        let db = self.inner_db.clone();
         Self {
-            inner_db: db,
+            inner: Arc::new(PrefixDatabase {
+                inner: self.inner.clone(),
+                prefix,
+            }),
             module_decoders: self.module_decoders.clone(),
-            module_instance_id: Some(module_instance_id),
         }
     }
 
     pub fn new_with_decoders(&self, module_decoders: ModuleDecoderRegistry) -> Self {
-        let inner_db = self.inner_db.clone();
-        let module_instance_id = self.module_instance_id;
         Self {
-            inner_db,
+            inner: self.inner.clone(),
             module_decoders,
-            module_instance_id,
         }
     }
 
-    pub async fn begin_transaction(&self) -> DatabaseTransaction {
-        let dbtx = DatabaseTransaction::new(
-            self.inner_db.db.begin_transaction().await,
+    pub async fn begin_transaction<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx>
+    where
+        's: 'tx,
+    {
+        DatabaseTransaction::new(
+            self.inner.begin_transaction().await,
             self.module_decoders.clone(),
-            &self.inner_db.notifications,
-        );
-
-        match self.module_instance_id {
-            Some(module_instance_id) => dbtx.new_module_tx(module_instance_id),
-            None => dbtx,
-        }
+        )
     }
 
     /// Runs a closure with a reference to a database transaction and tries to
@@ -296,22 +346,13 @@ impl Database {
     where
         K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
     {
-        let key_bytes = if let Some(module_id) = self.module_instance_id {
-            let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
-            module_id
-                .consensus_encode(&mut prefix_bytes)
-                .expect("Error encoding module instance id as prefix");
-            prefix_bytes.extend(key.to_bytes());
-            prefix_bytes
-        } else {
-            key.to_bytes()
-        };
+        let key_bytes = key.to_bytes();
         loop {
             // register for notification
-            let notify = self.inner_db.notifications.register(&key_bytes);
+            let notify = self.inner.register(&key_bytes);
 
             // check for value in db
-            let mut tx = self.inner_db.db.begin_transaction().await;
+            let mut tx = self.inner.begin_transaction().await;
 
             let maybe_value_bytes = tx
                 .raw_get_bytes(&key_bytes)
@@ -330,11 +371,7 @@ impl Database {
             if let Some(value) = checker(maybe_value_bytes) {
                 return (
                     value,
-                    DatabaseTransaction::new(
-                        tx,
-                        self.module_decoders.clone(),
-                        &self.inner_db.notifications,
-                    ),
+                    DatabaseTransaction::new(tx, self.module_decoders.clone()),
                 );
             } else {
                 // key not found, try again
@@ -354,8 +391,154 @@ impl Database {
     }
 }
 
+fn module_instance_id_to_byte_prefix(module_instance_id: u16) -> Vec<u8> {
+    let mut prefix = vec![MODULE_GLOBAL_PREFIX];
+    module_instance_id
+        .consensus_encode(&mut prefix)
+        .expect("Error encoding module instance id as prefix");
+    prefix
+}
+
+/// A database that wraps an `inner` one and adds a prefix to all operations,
+/// effectively creating an isolated partition.
+#[derive(Clone, Debug)]
+pub struct PrefixDatabase<Inner>
+where
+    Inner: Debug,
+{
+    prefix: Vec<u8>,
+    inner: Inner,
+}
+
+impl<Inner> PrefixDatabase<Inner>
+where
+    Inner: Debug,
+{
+    // TODO: we should optimize these concatenations, maybe by having an internal
+    // `key: &[&[u8]]` that we flatten once, when passing to lowest layer, or
+    // something
+    fn get_full_key(&self, key: &[u8]) -> Vec<u8> {
+        let mut full_key = self.prefix.clone();
+        full_key.extend_from_slice(key);
+        full_key
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOps<'a>: 'a + MaybeSend {
+impl<Inner> IDatabase for PrefixDatabase<Inner>
+where
+    Inner: Debug + MaybeSend + MaybeSync + 'static + IDatabase,
+{
+    async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
+        Box::new(PrefixDatabaseTransaction {
+            inner: self.inner.begin_transaction().await,
+            prefix: self.prefix.clone(),
+        })
+    }
+    async fn register(&self, key: &[u8]) {
+        self.inner.register(&self.get_full_key(key)).await
+    }
+    async fn notify(&self, key: &[u8]) {
+        self.inner.notify(&self.get_full_key(key)).await
+    }
+}
+
+/// A database transactions that wraps an `inner` one and adds a prefix to all
+/// operations, effectively creating an isolated partition.
+///
+/// Produced by [`PrefixDatabase`].
+struct PrefixDatabaseTransaction<Inner> {
+    inner: Inner,
+    prefix: Vec<u8>,
+}
+
+impl<Inner> PrefixDatabaseTransaction<Inner> {
+    // TODO: we should optimize these concatenations, maybe by having an internal
+    // `key: &[&[u8]]` that we flatten once, when passing to lowest layer, or
+    // something
+    fn get_full_key(&self, key: &[u8]) -> Vec<u8> {
+        let mut full_key = self.prefix.clone();
+        full_key.extend_from_slice(key);
+        full_key
+    }
+
+    fn adapt_prefix_stream(stream: PrefixStream<'_>, prefix_len: usize) -> PrefixStream<'_> {
+        Box::pin(stream.map(move |(k, v)| (k[prefix_len..].to_owned(), v))) /* as Pin<Box<dyn Stream<Item =
+                                                                             * _>>> */
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Inner> IDatabaseTransaction for PrefixDatabaseTransaction<Inner>
+where
+    Inner: IDatabaseTransaction,
+{
+    async fn commit_tx(&mut self) -> Result<()> {
+        self.inner.commit_tx().await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Inner> IDatabaseTransactionOpsCore for PrefixDatabaseTransaction<Inner>
+where
+    Inner: IDatabaseTransactionOpsCore,
+{
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_insert_bytes(&key, value).await
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_get_bytes(&key).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_remove_entry(&key).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        let key = self.get_full_key(key_prefix);
+        let stream = self.inner.raw_find_by_prefix(&key).await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        let key = self.get_full_key(key_prefix);
+        let stream = self
+            .inner
+            .raw_find_by_prefix_sorted_descending(&key)
+            .await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        let key = self.get_full_key(key_prefix);
+        self.inner.raw_remove_by_prefix(&key).await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner>
+where
+    Inner: IDatabaseTransactionOps,
+{
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.inner.rollback_tx_to_savepoint().await
+    }
+
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.set_tx_savepoint().await
+    }
+}
+
+/// Core raw operations database transactions support
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOpsCore: MaybeSend {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
@@ -374,9 +557,81 @@ pub trait IDatabaseTransactionOps<'a>: 'a + MaybeSend {
 
     /// Delete keys matching prefix
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
+}
 
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCore for Box<T>
+where
+    T: IDatabaseTransactionOpsCore + ?Sized,
+{
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        (**self).raw_insert_bytes(key, value).await
+    }
 
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        (**self).raw_get_bytes(key).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        (**self).raw_remove_entry(key).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        (**self).raw_find_by_prefix(key_prefix).await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        (**self)
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
+    }
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        (**self).raw_remove_by_prefix(key_prefix).await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCore for &mut T
+where
+    T: IDatabaseTransactionOpsCore + ?Sized,
+{
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        (**self).raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        (**self).raw_get_bytes(key).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        (**self).raw_remove_entry(key).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        (**self).raw_find_by_prefix(key_prefix).await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        (**self)
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
+    }
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        (**self).raw_remove_by_prefix(key_prefix).await
+    }
+}
+
+/// Additional operations (some) database transactions support
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {
     /// Create a savepoint during the transaction that can be rolled back to
     /// using rollback_tx_to_savepoint. Rolling back to the savepoint will
     /// atomically remove the writes that were applied since the savepoint
@@ -386,8 +641,247 @@ pub trait IDatabaseTransactionOps<'a>: 'a + MaybeSend {
     /// transaction implementations will support setting a savepoint during
     /// a transaction.
     async fn set_tx_savepoint(&mut self) -> Result<()>;
+
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
 }
 
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOps for Box<T>
+where
+    T: IDatabaseTransactionOps + ?Sized,
+{
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        (**self).set_tx_savepoint().await
+    }
+
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        (**self).rollback_tx_to_savepoint().await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOps for &mut T
+where
+    T: IDatabaseTransactionOps + ?Sized,
+{
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        (**self).set_tx_savepoint().await
+    }
+
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        (**self).rollback_tx_to_savepoint().await
+    }
+}
+
+/// Like [`IDatabaseTransactionOpsCore`], but typed
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOpsCoreTyped<'a> {
+    async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
+
+    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
+
+    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
+
+    async fn find_by_prefix<KP>(
+        &mut self,
+        key_prefix: &KP,
+    ) -> Pin<
+        Box<
+            maybe_add_send!(
+                dyn Stream<
+                        Item = (
+                            KP::Record,
+                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+                        ),
+                    > + '_
+            ),
+        >,
+    >
+    where
+        KP: DatabaseLookup + MaybeSend + MaybeSync,
+        KP::Record: DatabaseKey;
+
+    async fn find_by_prefix_sorted_descending<KP>(
+        &mut self,
+        key_prefix: &KP,
+    ) -> Pin<
+        Box<
+            maybe_add_send!(
+                dyn Stream<
+                        Item = (
+                            KP::Record,
+                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+                        ),
+                    > + '_
+            ),
+        >,
+    >
+    where
+        KP: DatabaseLookup + MaybeSend + MaybeSync,
+        KP::Record: DatabaseKey;
+
+    async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
+
+    async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
+    where
+        KP: DatabaseLookup + MaybeSend + MaybeSync;
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<'a, T> IDatabaseTransactionOpsCoreTyped<'a> for T
+where
+    T: IDatabaseTransactionOpsCore + WithDecoders,
+{
+    async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+    {
+        let raw = self
+            .raw_get_bytes(&key.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while reading and entry from the database");
+        raw.map(|value_bytes| {
+            decode_value::<K::Value>(&value_bytes, self.decoders())
+                .expect("Unrecoverable error when decoding the database value")
+        })
+    }
+
+    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        self.raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while inserting entry into the database")
+            .map(|value_bytes| {
+                decode_value::<K::Value>(&value_bytes, self.decoders())
+                    .expect("Unrecoverable error when decoding the database value")
+            })
+    }
+
+    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        if let Some(prev) = self.insert_entry(key, value).await {
+            warn!(
+                target: LOG_DB,
+                "Database overwriting element when expecting insertion of new
+            entry. Key: {:?} Prev Value: {:?}",             key,
+                prev,
+            );
+        }
+    }
+
+    async fn find_by_prefix<KP>(
+        &mut self,
+        key_prefix: &KP,
+    ) -> Pin<
+        Box<
+            maybe_add_send!(
+                dyn Stream<
+                        Item = (
+                            KP::Record,
+                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+                        ),
+                    > + '_
+            ),
+        >,
+    >
+    where
+        KP: DatabaseLookup + MaybeSend + MaybeSync,
+        KP::Record: DatabaseKey,
+    {
+        let decoders = self.decoders().clone();
+        Box::pin(
+            self.raw_find_by_prefix(&key_prefix.to_bytes())
+                .await
+                .expect("Unrecoverable error occurred while listing entries from the database")
+                .map(move |(key_bytes, value_bytes)| {
+                    let key = KP::Record::from_bytes(&key_bytes, &decoders)
+                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                        .expect("Unrecoverable error reading DatabaseKey");
+                    let value = decode_value(&value_bytes, &decoders)
+                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                        .expect("Unrecoverable decoding DatabaseValue");
+                    (key, value)
+                }),
+        )
+    }
+
+    async fn find_by_prefix_sorted_descending<KP>(
+        &mut self,
+        key_prefix: &KP,
+    ) -> Pin<
+        Box<
+            maybe_add_send!(
+                dyn Stream<
+                        Item = (
+                            KP::Record,
+                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
+                        ),
+                    > + '_
+            ),
+        >,
+    >
+    where
+        KP: DatabaseLookup + MaybeSend + MaybeSync,
+        KP::Record: DatabaseKey,
+    {
+        let decoders = self.decoders().clone();
+        Box::pin(
+            self.raw_find_by_prefix_sorted_descending(&key_prefix.to_bytes())
+                .await
+                .expect("Unrecoverable error occurred while listing entries from the database")
+                .map(move |(key_bytes, value_bytes)| {
+                    let key = KP::Record::from_bytes(&key_bytes, &decoders)
+                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                        .expect("Unrecoverable error reading DatabaseKey");
+                    let value = decode_value(&value_bytes, &decoders)
+                        .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
+                        .expect("Unrecoverable decoding DatabaseValue");
+                    (key, value)
+                }),
+        )
+    }
+    async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+    {
+        self.raw_remove_entry(&key.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while inserting removing entry from the database")
+            .map(|value_bytes| {
+                decode_value::<K::Value>(&value_bytes, self.decoders())
+                    .expect("Unrecoverable error when decoding the database value")
+            })
+    }
+    async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
+    where
+        KP: DatabaseLookup + MaybeSend + MaybeSync,
+    {
+        self.raw_remove_by_prefix(&key_prefix.to_bytes())
+            .await
+            .expect("Unrecoverable error when removing entries from the database")
+    }
+}
+
+/// A type that hold decoders
+pub trait WithDecoders {
+    fn decoders(&self) -> &ModuleDecoderRegistry;
+}
 /// Fedimint requires that the database implementation implement Snapshot
 /// Isolation. Snapshot Isolation is a database isolation level that guarantees
 /// consistent reads from the time that the snapshot was created (at transaction
@@ -420,43 +914,79 @@ pub trait IDatabaseTransactionOps<'a>: 'a + MaybeSend {
 /// Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
 /// | Prevented           | Prevented      | Prevented   |
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransaction<'a>: 'a + MaybeSend + IDatabaseTransactionOps<'a> {
+pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
     async fn commit_tx(self) -> Result<()>;
-    fn add_notification_key(&mut self, _key: &[u8]) -> Result<()> {
-        anyhow::bail!("add_notification_key called without NotifyingTransaction")
+}
+
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
+    async fn commit_tx(&mut self) -> Result<()>;
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransaction for Box<T>
+where
+    T: IDatabaseTransaction + ?Sized,
+{
+    async fn commit_tx(&mut self) -> Result<()> {
+        (**self).commit_tx().await
     }
 }
 
-/// `ISingleUseDatabaseTransaction` re-defines the functions from
-/// `IDatabaseTransaction` but does not consumed `self` when committing to the
-/// database. This allows for wrapper structs to more easily borrow
-/// `ISingleUseDatabaseTransaction` without needing to make additional
-/// allocations.
 #[apply(async_trait_maybe_send!)]
-pub trait ISingleUseDatabaseTransaction<'a>: 'a + MaybeSend + IDatabaseTransactionOps<'a> {
-    async fn commit_tx(&mut self) -> Result<()>;
-    fn add_notification_key(&mut self, _key: &[u8]) -> Result<()>;
+impl<'a, T> IDatabaseTransaction for &'a mut T
+where
+    T: IDatabaseTransaction + ?Sized,
+{
+    async fn commit_tx(&mut self) -> Result<()> {
+        (**self).commit_tx().await
+    }
 }
 
 /// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
-pub struct SingleUseDatabaseTransaction<'a, Tx: IDatabaseTransaction<'a> + MaybeSend>(
-    Option<Tx>,
-    &'a PhantomData<()>,
-);
+pub struct BaseDatabaseTransaction<Tx> {
+    // TODO: merge options
+    raw: Option<Tx>,
+    notify_queue: Option<NotifyQueue>,
+    notifications: Arc<Notifications>,
+}
 
-impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> SingleUseDatabaseTransaction<'a, Tx> {
-    pub fn new(dbtx: Tx) -> SingleUseDatabaseTransaction<'a, Tx> {
-        SingleUseDatabaseTransaction(Some(dbtx), &PhantomData)
+impl<Tx> BaseDatabaseTransaction<Tx>
+where
+    Tx: IRawDatabaseTransaction,
+{
+    pub fn new(dbtx: Tx, notifications: Arc<Notifications>) -> BaseDatabaseTransaction<Tx> {
+        BaseDatabaseTransaction {
+            raw: Some(dbtx),
+            notifications,
+            notify_queue: Some(NotifyQueue::new()),
+        }
+    }
+
+    /// Create a `BaseDatabaseTransaction`, with notifications disconnected from
+    /// any other database.
+    pub fn new_detached(dbtx: Tx) -> BaseDatabaseTransaction<Tx> {
+        BaseDatabaseTransaction {
+            raw: Some(dbtx),
+            notifications: Arc::new(Notifications::new()),
+            notify_queue: Some(NotifyQueue::new()),
+        }
+    }
+    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
+        self.notify_queue
+            .as_mut()
+            .context("can not call add_notification_key after commit")?
+            .add(&key);
+        Ok(())
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
-    for SingleUseDatabaseTransaction<'a, Tx>
-{
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTransaction<Tx> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.0
+        self.add_notification_key(key)?;
+        self.raw
             .as_mut()
             .context("Cannot insert into already consumed transaction")?
             .raw_insert_bytes(key, value)
@@ -464,7 +994,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.0
+        self.raw
             .as_mut()
             .context("Cannot retrieve from already consumed transaction")?
             .raw_get_bytes(key)
@@ -472,7 +1002,8 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.0
+        self.add_notification_key(key)?;
+        self.raw
             .as_mut()
             .context("Cannot remove from already consumed transaction")?
             .raw_remove_entry(key)
@@ -480,7 +1011,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        self.0
+        self.raw
             .as_mut()
             .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_prefix(key_prefix)
@@ -491,7 +1022,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
         &mut self,
         key_prefix: &[u8],
     ) -> Result<PrefixStream<'_>> {
-        self.0
+        self.raw
             .as_mut()
             .context("Cannot retrieve from already consumed transaction")?
             .raw_find_by_prefix_sorted_descending(key_prefix)
@@ -499,15 +1030,18 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        self.0
+        self.raw
             .as_mut()
             .context("Cannot remove from already consumed transaction")?
             .raw_remove_by_prefix(key_prefix)
             .await
     }
+}
 
+#[apply(async_trait_maybe_send!)]
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        self.0
+        self.raw
             .as_mut()
             .context("Cannot rollback to a savepoint on an already consumed transaction")?
             .rollback_tx_to_savepoint()
@@ -516,7 +1050,7 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
     }
 
     async fn set_tx_savepoint(&mut self) -> Result<()> {
-        self.0
+        self.raw
             .as_mut()
             .context("Cannot set a tx savepoint on an already consumed transaction")?
             .set_tx_savepoint()
@@ -526,22 +1060,19 @@ impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> IDatabaseTransactionOps<'a>
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a, Tx: IDatabaseTransaction<'a> + MaybeSend> ISingleUseDatabaseTransaction<'a>
-    for SingleUseDatabaseTransaction<'a, Tx>
-{
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransaction<Tx> {
     async fn commit_tx(&mut self) -> Result<()> {
-        self.0
+        self.raw
             .take()
             .context("Cannot commit an already committed transaction")?
             .commit_tx()
-            .await
-    }
-
-    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
-        self.0
-            .as_mut()
-            .context("Cannot add notification on an already consumed transaction")?
-            .add_notification_key(key)
+            .await?;
+        self.notifications.submit_queue(
+            self.notify_queue
+                .take()
+                .expect("commit must be called only once"),
+        );
+        Ok(())
     }
 }
 
@@ -573,455 +1104,49 @@ impl Drop for CommitTracker {
     }
 }
 
-/// `CommittableIsolatedDatabaseTransaction` is a private, isolated database
-/// transaction that consumes an existing `ISingleUseDatabaseTransaction`.
-/// Unlike `IsolatedDatabaseTransaction`,
-/// `CommittableIsolatedDatabaseTransaction` can be owned by the module as long
-/// as it has a handle to the isolated `Database`. This allows the module to
-/// make changes only affecting it's own portion of the database and also being
-/// able to commit those changes. From the module's perspective, the `Database`
-/// is isolated and calling `begin_transaction` will always produce a
-/// `CommittableIsolatedDatabaseTransaction`, which is isolated from other
-/// modules by prepending a prefix to each key.
-///
-/// `CommittableIsolatedDatabaseTransaction` cannot be used as an atomic
-/// database transaction across modules.
-struct CommittableIsolatedDatabaseTransaction<'a> {
-    dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
-    prefix: ModuleInstanceId,
-}
-
-impl<'a> CommittableIsolatedDatabaseTransaction<'a> {
-    pub fn new(
-        dbtx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
-        prefix: ModuleInstanceId,
-    ) -> CommittableIsolatedDatabaseTransaction<'a> {
-        CommittableIsolatedDatabaseTransaction { dbtx, prefix }
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOps<'a> for CommittableIsolatedDatabaseTransaction<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
-        isolated.raw_insert_bytes(key, value).await
-    }
-
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
-        isolated.raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
-        isolated.raw_remove_entry(key).await
-    }
-
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        let prefix_with_module = IsolatedDatabaseTransaction::prefix_with_module(&self.prefix);
-        IsolatedDatabaseTransaction::<u16>::raw_find_by_prefix(
-            prefix_with_module,
-            self.dbtx.as_mut(),
-            key_prefix,
-        )
-        .await
-    }
-
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
-        let prefix_with_module = IsolatedDatabaseTransaction::prefix_with_module(&self.prefix);
-        IsolatedDatabaseTransaction::<u16>::raw_find_by_prefix_sorted_descending(
-            prefix_with_module,
-            self.dbtx.as_mut(),
-            key_prefix,
-        )
-        .await
-    }
-
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
-        isolated.raw_remove_by_prefix(key_prefix).await
-    }
-
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
-        isolated.rollback_tx_to_savepoint().await
-    }
-
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
-        isolated.set_tx_savepoint().await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<'a> ISingleUseDatabaseTransaction<'a> for CommittableIsolatedDatabaseTransaction<'a> {
-    async fn commit_tx(&mut self) -> Result<()> {
-        self.dbtx.commit_tx().await
-    }
-
-    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
-        let mut isolated = IsolatedDatabaseTransaction::new(self.dbtx.as_mut(), Some(&self.prefix));
-        isolated.add_notification_key(key)
-    }
-}
-
 /// `ModuleDatabaseTransaction` is the public wrapper structure that allows
 /// modules to modify the database. It takes a `ISingleUseDatabaseTransaction`
 /// that handles the details of interacting with the database. The APIs that the
 /// modules are allowed to interact with are a subset of `DatabaseTransaction`,
 /// since modules do not manage the lifetime of database transactions.
 /// Committing to the database or rolling back a transaction is not exposed.
-pub struct ModuleDatabaseTransaction<
-    'isolated,
-    T: MaybeSend + Encodable + 'isolated = ModuleInstanceId,
-> {
-    isolated_tx: Box<dyn ISingleUseDatabaseTransaction<'isolated>>,
-    decoders: &'isolated ModuleDecoderRegistry,
-    commit_tracker: &'isolated mut CommitTracker,
-    _marker: PhantomData<T>,
-}
+pub struct ModuleDatabaseTransaction<'a>(DatabaseTransaction<'a>);
 
-impl<'isolated, T: MaybeSend + Encodable> ModuleDatabaseTransaction<'isolated, T> {
-    pub fn new<'parent: 'isolated>(
-        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-        module_prefix: Option<&T>,
-        decoders: &'isolated ModuleDecoderRegistry,
-        commit_tracker: &'isolated mut CommitTracker,
-    ) -> ModuleDatabaseTransaction<'isolated, T> {
-        let isolated = IsolatedDatabaseTransaction::new(dbtx, module_prefix);
-
-        ModuleDatabaseTransaction {
-            isolated_tx: Box::new(isolated),
-            decoders,
-            commit_tracker,
-            _marker: PhantomData::<T>,
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key))]
-    pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        let key_bytes = key.to_bytes();
-        let value_bytes = self
-            .isolated_tx
-            .raw_get_bytes(&key_bytes)
-            .await
-            .expect("Unrecoverable error when reading from database");
-        match value_bytes {
-            Some(value_bytes) => Some(
-                decode_value::<K::Value>(&value_bytes, self.decoders)
-                    .expect("Unrecoverable error when decoding the database value"),
-            ),
-            None => None,
-        }
-    }
-
-    pub async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        self.isolated_tx.raw_find_by_prefix(key_prefix).await
-    }
-
-    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
-    pub async fn find_by_prefix<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> impl Stream<
-        Item = (
-            KP::Record,
-            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-        ),
-    > + '_
-    where
-        KP: DatabaseLookup,
-        KP::Record: DatabaseKey,
-    {
-        trace!("find by prefix");
-        let decoders = self.decoders.clone();
-        let prefix_bytes = key_prefix.to_bytes();
-        self.isolated_tx
-            .raw_find_by_prefix(&prefix_bytes)
-            .await
-            .expect("Error doing prefix search in database")
-            .map(move |(key_bytes, value_bytes)| {
-                let key = KP::Record::from_bytes(&key_bytes, &decoders)
-                    .expect("Unrecoverable error reading the DatabaseKey");
-                let value = decode_value(&value_bytes, &decoders)
-                    .expect("Unrecoverable error decoding the DatabaseValue");
-                (key, value)
-            })
-    }
-
-    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
-    pub async fn find_by_prefix_sorted_descending<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> impl Stream<
-        Item = (
-            KP::Record,
-            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-        ),
-    > + '_
-    where
-        KP: DatabaseLookup,
-        KP::Record: DatabaseKey,
-    {
-        find_by_prefix_sorted_descending(
-            self.isolated_tx.as_mut(),
-            self.decoders.clone(),
-            key_prefix,
-        )
-        .await
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key))]
-    fn add_notification_key<K>(&mut self, key: &K)
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
-            self.isolated_tx
-                .add_notification_key(&key.to_bytes())
-                .expect("Notifications not setup properly")
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        self.commit_tracker.has_writes = true;
-        self.add_notification_key(key);
-        self.isolated_tx
-            .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
-            .await
-            .expect("Unrecoverable error while inserting into the database")
-            .map(|old_val_bytes| {
-                decode_value(&old_val_bytes, self.decoders)
-                    .expect("Unrecoverable error while decoding the database value")
-            })
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        self.commit_tracker.has_writes = true;
-        self.add_notification_key(key);
-        let key_bytes = key.to_bytes();
-        let value_bytes = value.to_bytes();
-        let prev_val = self
-            .isolated_tx
-            .raw_insert_bytes(&key_bytes, &value_bytes)
-            .await
-            .expect("Unrecoverable error occurred while inserting new entry into database");
-        if let Some(prev_val) = prev_val {
-            warn!(
-                target: LOG_DB,
-                key = %AbbreviateHexBytes(&key_bytes),
-                prev_value = %AbbreviateHexBytes(&prev_val),
-                "Database overwriting element when expecting insertion of new entry.",
-            );
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
-    pub async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        self.commit_tracker.has_writes = true;
-        self.add_notification_key(key);
-        let key_bytes = key.to_bytes();
-        match self
-            .isolated_tx
-            .raw_remove_entry(&key_bytes)
-            .await
-            .expect("Unrecoverable error occurred while removing an entry from the database")
-        {
-            Some(value) => Some(
-                K::Value::from_bytes(&value, self.decoders)
-                    .expect("Unrecoverable error when decoding the database value"),
-            ),
-            None => None,
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix), ret)]
-    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
-    where
-        KP: DatabaseLookup,
-    {
-        self.commit_tracker.has_writes = true;
-        self.isolated_tx
-            .raw_remove_by_prefix(&key_prefix.to_bytes())
-            .await
-            .expect("Unrecoverable error occurred while removing by prefix");
-    }
-}
-
-/// IsolatedDatabaseTransaction is a private wrapper around
-/// ISingleUseDatabaseTransaction that is responsible for inserting and striping
-/// prefixes before reading or writing to the database. It does this by
-/// implementing ISingleUseDatabaseTransaction and manipulating the prefix bytes
-/// in the raw insert/get functions. This is done to isolate modules/module
-/// instances from each other inside the database, which allows the same module
-/// to be instantiated twice or two different modules to use the same key.
-struct IsolatedDatabaseTransaction<
-    'isolated,
-    'parent: 'isolated,
-    T: MaybeSend + Encodable + 'isolated,
-> {
-    inner_tx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-    prefix: Vec<u8>,
-    _marker: PhantomData<T>,
-}
-
-impl<'isolated, 'parent: 'isolated, T: MaybeSend + Encodable>
-    IsolatedDatabaseTransaction<'isolated, 'parent, T>
-{
-    pub fn new(
-        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-        module_prefix: Option<&T>,
-    ) -> IsolatedDatabaseTransaction<'isolated, 'parent, T> {
-        let mut prefix_bytes = vec![];
-        if let Some(module_prefix) = module_prefix {
-            prefix_bytes = Self::prefix_with_module(module_prefix);
-        }
-
-        IsolatedDatabaseTransaction {
-            inner_tx: dbtx,
-            prefix: prefix_bytes,
-            _marker: PhantomData::<T>,
-        }
-    }
-
-    fn prefix_with_module(module_prefix: &T) -> Vec<u8> {
-        let mut prefix_bytes = vec![MODULE_GLOBAL_PREFIX];
-        module_prefix
-            .consensus_encode(&mut prefix_bytes)
-            .expect("Error encoding module instance id as prefix");
-        prefix_bytes
-    }
-
-    // Yes, this could be proper method receiving self but it's hard to return a
-    // stream and satisfy the borrow checker if this struct is short lived
-    async fn raw_find_by_prefix(
-        mut prefix_with_module: Vec<u8>,
-        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-        key_prefix: &[u8],
-    ) -> Result<PrefixStream<'isolated>> {
-        let original_prefix_len = prefix_with_module.len();
-        prefix_with_module.extend_from_slice(key_prefix);
-        let raw_prefix = dbtx
-            .raw_find_by_prefix(prefix_with_module.as_slice())
-            .await?;
-
-        Ok(Box::pin(raw_prefix.map(move |(key, value)| {
-            let stripped_key = &key[original_prefix_len..];
-            (stripped_key.to_vec(), value)
-        })))
-    }
-
-    async fn raw_find_by_prefix_sorted_descending(
-        mut prefix_with_module: Vec<u8>,
-        dbtx: &'isolated mut dyn ISingleUseDatabaseTransaction<'parent>,
-        key_prefix: &[u8],
-    ) -> Result<PrefixStream<'isolated>> {
-        let original_prefix_len = prefix_with_module.len();
-        prefix_with_module.extend_from_slice(key_prefix);
-        let raw_prefix = dbtx
-            .raw_find_by_prefix_sorted_descending(prefix_with_module.as_slice())
-            .await?;
-
-        Ok(Box::pin(raw_prefix.map(move |(key, value)| {
-            let stripped_key = &key[original_prefix_len..];
-            (stripped_key.to_vec(), value)
-        })))
+impl<'a> WithDecoders for ModuleDatabaseTransaction<'a> {
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.0.decoders
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated> IDatabaseTransactionOps<'isolated>
-    for IsolatedDatabaseTransaction<'isolated, 'parent, T>
-{
+impl<'a> IDatabaseTransactionOpsCore for ModuleDatabaseTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut key_with_prefix = self.prefix.clone();
-        key_with_prefix.extend_from_slice(key);
-        self.inner_tx
-            .raw_insert_bytes(key_with_prefix.as_slice(), value)
-            .await
+        self.0.raw_insert_bytes(key, value).await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut key_with_prefix = self.prefix.clone();
-        key_with_prefix.extend_from_slice(key);
-        self.inner_tx
-            .raw_get_bytes(key_with_prefix.as_slice())
-            .await
+        self.0.raw_get_bytes(key).await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut key_with_prefix = self.prefix.clone();
-        key_with_prefix.extend_from_slice(key);
-        self.inner_tx
-            .raw_remove_entry(key_with_prefix.as_slice())
-            .await
+        self.0.raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        IsolatedDatabaseTransaction::<T>::raw_find_by_prefix(
-            self.prefix.clone(),
-            self.inner_tx,
-            key_prefix,
-        )
-        .await
+        self.0.raw_find_by_prefix(key_prefix).await
     }
 
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
     ) -> Result<PrefixStream<'_>> {
-        IsolatedDatabaseTransaction::<T>::raw_find_by_prefix_sorted_descending(
-            self.prefix.clone(),
-            self.inner_tx,
-            key_prefix,
-        )
-        .await
+        self.0
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
     }
 
-    async fn raw_remove_by_prefix(&mut self, key: &[u8]) -> Result<()> {
-        let mut key_with_prefix = self.prefix.clone();
-        key_with_prefix.extend_from_slice(key);
-        self.inner_tx.raw_remove_by_prefix(&key_with_prefix).await
-    }
-
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        self.inner_tx.rollback_tx_to_savepoint().await
-    }
-
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
-        self.inner_tx.set_tx_savepoint().await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
-    ISingleUseDatabaseTransaction<'isolated>
-    for IsolatedDatabaseTransaction<'isolated, 'parent, T>
-{
-    async fn commit_tx(&mut self) -> Result<()> {
-        panic!("DatabaseTransaction inside modules cannot be committed");
-    }
-    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
-        let mut key_with_module = self.prefix.clone();
-        key_with_module.extend_from_slice(key);
-        self.inner_tx.add_notification_key(&key_with_module)
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        self.0.raw_remove_by_prefix(key_prefix).await
     }
 }
 
@@ -1036,11 +1161,17 @@ impl<'isolated, 'parent, T: MaybeSend + Encodable + 'isolated>
 /// `DatabaseTransaction` is intended to be used for atomic database operations
 /// that span across modules.
 #[doc = " A handle to a type-erased database implementation"]
-pub struct DatabaseTransaction<'a> {
-    tx: Box<dyn ISingleUseDatabaseTransaction<'a>>,
+pub struct DatabaseTransaction<'tx> {
+    tx: Box<dyn IDatabaseTransaction + 'tx>,
     decoders: ModuleDecoderRegistry,
     commit_tracker: CommitTracker,
     on_commit_hooks: Vec<Box<maybe_add_send!(dyn FnOnce())>>,
+}
+
+impl<'tx> WithDecoders for DatabaseTransaction<'tx> {
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.decoders
+    }
 }
 
 #[instrument(level = "trace", skip_all, fields(value_type = std::any::type_name::<V>()), err)]
@@ -1055,14 +1186,13 @@ fn decode_value<V: DatabaseValue>(
     V::from_bytes(value_bytes, decoders)
 }
 
-impl<'parent> DatabaseTransaction<'parent> {
+impl<'tx> DatabaseTransaction<'tx> {
     pub fn new(
-        dbtx: Box<dyn ISingleUseDatabaseTransaction<'parent>>,
+        dbtx: Box<dyn IDatabaseTransaction + 'tx>,
         decoders: ModuleDecoderRegistry,
-        notifications: &'parent Notifications,
-    ) -> DatabaseTransaction<'parent> {
+    ) -> DatabaseTransaction<'tx> {
         DatabaseTransaction {
-            tx: Box::new(NotifyingTransaction::new(dbtx, notifications)),
+            tx: dbtx,
             decoders,
             commit_tracker: CommitTracker {
                 is_committed: false,
@@ -1073,36 +1203,60 @@ impl<'parent> DatabaseTransaction<'parent> {
         }
     }
 
-    pub fn with_module_prefix(
-        &mut self,
-        module_instance_id: ModuleInstanceId,
-    ) -> ModuleDatabaseTransaction<'_> {
-        ModuleDatabaseTransaction::new(
-            self.tx.as_mut(),
-            Some(&module_instance_id),
-            &self.decoders,
-            &mut self.commit_tracker,
-        )
-    }
-
-    pub fn get_isolated(&mut self) -> ModuleDatabaseTransaction<'_> {
-        ModuleDatabaseTransaction::new(
-            self.tx.as_mut(),
-            None,
-            &self.decoders,
-            &mut self.commit_tracker,
-        )
-    }
-
-    pub fn new_module_tx(
-        self,
-        module_instance_id: ModuleInstanceId,
-    ) -> DatabaseTransaction<'parent> {
+    pub fn get_isolated<'s, 'a>(&'s mut self) -> ModuleDatabaseTransaction<'a>
+    where
+        'tx: 'a,
+        's: 'a,
+    {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
-        let single_use = CommittableIsolatedDatabaseTransaction::new(self.tx, module_instance_id);
+
+        ModuleDatabaseTransaction(DatabaseTransaction {
+            tx: Box::new(&mut self.tx),
+            decoders,
+            commit_tracker,
+            on_commit_hooks: vec![],
+        })
+    }
+
+    pub fn with_module_prefix<'a>(
+        &'a mut self,
+        module_instance_id: ModuleInstanceId,
+    ) -> ModuleDatabaseTransaction<'a>
+    where
+        'tx: 'a,
+    {
+        let decoders = self.decoders.clone();
+        let commit_tracker = self.commit_tracker.clone();
+
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        ModuleDatabaseTransaction(DatabaseTransaction {
+            tx: Box::new(PrefixDatabaseTransaction {
+                inner: &mut self.tx,
+                prefix,
+            }),
+            decoders,
+            commit_tracker,
+            on_commit_hooks: vec![],
+        })
+    }
+
+    pub fn new_module_tx<'a: 'tx>(
+        self,
+        module_instance_id: ModuleInstanceId,
+    ) -> DatabaseTransaction<'a>
+    where
+        'tx: 'a,
+    {
+        let decoders = self.decoders.clone();
+        let commit_tracker = self.commit_tracker.clone();
+
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
         DatabaseTransaction {
-            tx: Box::new(single_use),
+            tx: Box::new(PrefixDatabaseTransaction {
+                inner: self.tx,
+                prefix,
+            }),
             decoders,
             commit_tracker,
             on_commit_hooks: vec![],
@@ -1136,174 +1290,54 @@ impl<'parent> DatabaseTransaction<'parent> {
             .expect("Unrecoverable error occurred while committing to the database.");
     }
 
-    #[instrument(level = "debug", skip_all, fields(?key))]
-    pub async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        let key_bytes = key.to_bytes();
-        let value_bytes = self
-            .tx
-            .raw_get_bytes(&key_bytes)
-            .await
-            .expect("Unrecoverable error when reading from database");
-        match value_bytes {
-            Some(value_bytes) => Some(
-                decode_value::<K::Value>(&value_bytes, &self.decoders)
-                    .expect("Unrecoverable error when decoding the database value"),
-            ),
-            None => None,
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
-    pub async fn find_by_prefix<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> impl Stream<
-        Item = (
-            KP::Record,
-            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-        ),
-    > + '_
-    where
-        KP: DatabaseLookup,
-        KP::Record: DatabaseKey,
-    {
-        trace!("find by prefix");
-        let decoders = self.decoders.clone();
-        let prefix_bytes = key_prefix.to_bytes();
-        self.tx
-            .raw_find_by_prefix(&prefix_bytes)
-            .await
-            .expect("Error doing prefix search in database")
-            .map(move |(key_bytes, value_bytes)| {
-                let key = KP::Record::from_bytes(&key_bytes, &decoders)
-                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                    .expect("Unrecoverable error reading DatabaseKey");
-                let value = decode_value(&value_bytes, &decoders)
-                    .with_context(|| anyhow::anyhow!("key: {}", AbbreviateHexBytes(&key_bytes)))
-                    .expect("Unrecoverable decoding DatabaseValue");
-                (key, value)
-            })
-    }
-
-    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix))]
-    pub async fn find_by_prefix_sorted_descending<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> impl Stream<
-        Item = (
-            KP::Record,
-            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-        ),
-    > + '_
-    where
-        KP: DatabaseLookup,
-        KP::Record: DatabaseKey,
-    {
-        find_by_prefix_sorted_descending(self.tx.as_mut(), self.decoders.clone(), key_prefix).await
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        self.commit_tracker.has_writes = true;
-        self.add_notification_key(key);
-        self.tx
-            .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
-            .await
-            .expect("Unrecoverable error while inserting into the database")
-            .map(|old_val_bytes| {
-                decode_value(&old_val_bytes, &self.decoders)
-                    .expect("Unrecoverable error while decoding the database value")
-            })
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key, ?value), ret)]
-    pub async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        self.commit_tracker.has_writes = true;
-        self.add_notification_key(key);
-        let prev_val = self
-            .tx
-            .raw_insert_bytes(&key.to_bytes(), &value.to_bytes())
-            .await
-            .expect("Unrecoverable error occurred while inserting new entry into database");
-        if let Some(prev_val) = prev_val {
-            warn!(
-                target: LOG_DB,
-                "Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}",
-                key,
-                prev_val,
-            );
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key))]
-    fn add_notification_key<K>(&mut self, key: &K)
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        if <K as DatabaseKey>::NOTIFY_ON_MODIFY {
-            self.tx
-                .add_notification_key(&key.to_bytes())
-                .expect("Notifications not setup properly")
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?key, ret), ret)]
-    pub async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord,
-    {
-        self.commit_tracker.has_writes = true;
-        self.add_notification_key(key);
-        let key_bytes = key.to_bytes();
-        match self
-            .tx
-            .raw_remove_entry(&key_bytes)
-            .await
-            .expect("Unrecoverable error occurred while removing an entry from the database")
-        {
-            Some(value) => Some(
-                K::Value::from_bytes(&value, &self.decoders)
-                    .expect("Unrecoverable error occurred while decoding the database value"),
-            ),
-            None => None,
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(key = ?key_prefix), ret)]
-    pub async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
-    where
-        KP: DatabaseLookup,
-    {
-        self.commit_tracker.has_writes = true;
-        self.tx
-            .raw_remove_by_prefix(&key_prefix.to_bytes())
-            .await
-            .expect("Unrecoverable error occurred while removing by prefix");
-    }
-
-    #[instrument(level = "debug", skip_all, ret)]
-    pub async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        self.tx.rollback_tx_to_savepoint().await
-    }
-
-    #[instrument(level = "debug", skip_all, ret)]
-    pub async fn set_tx_savepoint(&mut self) -> Result<()> {
-        self.tx.set_tx_savepoint().await
-    }
-
     /// Register a hook that will be run after commit succeeds.
     #[instrument(level = "debug", skip_all, ret)]
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
         self.on_commit_hooks.push(Box::new(f));
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<'a> IDatabaseTransactionOpsCore for DatabaseTransaction<'a> {
+    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.tx.raw_get_bytes(key).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.tx.raw_remove_entry(key).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        self.tx.raw_find_by_prefix(key_prefix).await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> Result<PrefixStream<'_>> {
+        self.tx
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
+    }
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_remove_by_prefix(key_prefix).await
+    }
+}
+#[apply(async_trait_maybe_send!)]
+impl<'a> IDatabaseTransactionOps for DatabaseTransaction<'a> {
+    async fn set_tx_savepoint(&mut self) -> Result<()> {
+        self.tx.set_tx_savepoint().await
+    }
+
+    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+        self.tx.rollback_tx_to_savepoint().await
     }
 }
 
@@ -1519,17 +1553,18 @@ impl DecodingError {
 #[macro_export]
 macro_rules! push_db_pair_items {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = $dbtx
-            .find_by_prefix(&$prefix_type)
-            .await
-            .map(|(key, val)| {
-                (
-                    $crate::encoding::Encodable::consensus_encode_to_hex(&key).expect("can't fail"),
-                    val,
-                )
-            })
-            .collect::<BTreeMap<String, $value_type>>()
-            .await;
+        let db_items =
+            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+                .await
+                .map(|(key, val)| {
+                    (
+                        $crate::encoding::Encodable::consensus_encode_to_hex(&key)
+                            .expect("can't fail"),
+                        val,
+                    )
+                })
+                .collect::<BTreeMap<String, $value_type>>()
+                .await;
 
         $map.insert($key_literal.to_string(), Box::new(db_items));
     };
@@ -1538,17 +1573,18 @@ macro_rules! push_db_pair_items {
 #[macro_export]
 macro_rules! push_db_pair_items_no_serde {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = $dbtx
-            .find_by_prefix(&$prefix_type)
-            .await
-            .map(|(key, val)| {
-                (
-                    $crate::encoding::Encodable::consensus_encode_to_hex(&key).expect("can't fail"),
-                    SerdeWrapper::from_encodable(val),
-                )
-            })
-            .collect::<BTreeMap<_, _>>()
-            .await;
+        let db_items =
+            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+                .await
+                .map(|(key, val)| {
+                    (
+                        $crate::encoding::Encodable::consensus_encode_to_hex(&key)
+                            .expect("can't fail"),
+                        SerdeWrapper::from_encodable(val),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>()
+                .await;
 
         $map.insert($key_literal.to_string(), Box::new(db_items));
     };
@@ -1557,12 +1593,12 @@ macro_rules! push_db_pair_items_no_serde {
 #[macro_export]
 macro_rules! push_db_key_items {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items = $dbtx
-            .find_by_prefix(&$prefix_type)
-            .await
-            .map(|(key, _)| key)
-            .collect::<Vec<$key_type>>()
-            .await;
+        let db_items =
+            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+                .await
+                .map(|(key, _)| key)
+                .collect::<Vec<$key_type>>()
+                .await;
 
         $map.insert($key_literal.to_string(), Box::new(db_items));
     };
@@ -1639,6 +1675,7 @@ mod test_utils {
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
+    use crate::db::{IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped};
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;
 
@@ -2283,8 +2320,9 @@ mod test_utils {
         use async_trait::async_trait;
 
         use crate::db::{
-            AutocommitError, IDatabase, IDatabaseTransaction, IDatabaseTransactionOps,
-            ISingleUseDatabaseTransaction, SingleUseDatabaseTransaction,
+            AutocommitError, BaseDatabaseTransaction, IDatabaseTransaction,
+            IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase,
+            IRawDatabaseTransaction,
         };
         use crate::ModuleDecoderRegistry;
 
@@ -2292,10 +2330,10 @@ mod test_utils {
         struct FakeDatabase;
 
         #[async_trait]
-        impl IDatabase for FakeDatabase {
-            async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
-                let single_use = SingleUseDatabaseTransaction::new(FakeTransaction(PhantomData));
-                Box::new(single_use)
+        impl IRawDatabase for FakeDatabase {
+            type Transaction<'a> = FakeTransaction<'a>;
+            async fn begin_transaction(&self) -> FakeTransaction {
+                FakeTransaction(PhantomData)
             }
         }
 
@@ -2303,7 +2341,7 @@ mod test_utils {
         struct FakeTransaction<'a>(PhantomData<&'a ()>);
 
         #[async_trait]
-        impl<'a> IDatabaseTransactionOps<'a> for FakeTransaction<'a> {
+        impl<'a> IDatabaseTransactionOpsCore for FakeTransaction<'a> {
             async fn raw_insert_bytes(
                 &mut self,
                 _key: &[u8],
@@ -2337,7 +2375,10 @@ mod test_utils {
             ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
+        }
 
+        #[async_trait]
+        impl<'a> IDatabaseTransactionOps for FakeTransaction<'a> {
             async fn rollback_tx_to_savepoint(&mut self) -> anyhow::Result<()> {
                 unimplemented!()
             }
@@ -2348,7 +2389,7 @@ mod test_utils {
         }
 
         #[async_trait]
-        impl<'a> IDatabaseTransaction<'a> for FakeTransaction<'a> {
+        impl<'a> IRawDatabaseTransaction for FakeTransaction<'a> {
             async fn commit_tx(self) -> anyhow::Result<()> {
                 Err(anyhow!("Can't commit!"))
             }
@@ -2373,7 +2414,7 @@ mod test_utils {
 }
 
 pub async fn find_by_prefix_sorted_descending<'r, 'inner, KP>(
-    tx: &'r mut dyn ISingleUseDatabaseTransaction<'inner>,
+    tx: &'r mut (dyn IDatabaseTransaction + 'inner),
     decoders: ModuleDecoderRegistry,
     key_prefix: &KP,
 ) -> impl Stream<

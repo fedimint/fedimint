@@ -91,7 +91,9 @@ use fedimint_core::config::{
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabase,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -1330,7 +1332,7 @@ pub struct ClientBuilder {
 }
 
 pub enum DatabaseSource {
-    Fresh(Box<dyn IDatabase>),
+    Fresh(Database),
     Reuse(ClientArc),
 }
 
@@ -1385,13 +1387,13 @@ impl ClientBuilder {
     // TODO: impl config from federation
 
     /// Uses this database to store the client state
-    pub fn with_database<D: IDatabase + 'static>(&mut self, db: D) {
-        self.with_dyn_database(Box::new(db));
+    pub fn with_raw_database<D: IRawDatabase + 'static>(&mut self, db: D) {
+        self.with_database(Database::new(db, Default::default()));
     }
 
-    /// Uses this database to store the client state, allowing for flexibility
-    /// on the caller side by accepting a type-erased trait object.
-    pub fn with_dyn_database(&mut self, db: Box<dyn IDatabase>) {
+    // /// Uses this database to store the client state, allowing for flexibility
+    // /// on the caller side by accepting a type-erased trait object.
+    pub fn with_database(&mut self, db: Database) {
         let was_replaced = self.db.replace(DatabaseSource::Fresh(db)).is_some();
         assert!(
             !was_replaced,
@@ -1418,14 +1420,9 @@ impl ClientBuilder {
         &mut self,
         secret: T,
     ) -> anyhow::Result<()> {
-        let fake_notifications = Default::default();
         let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
-            DatabaseSource::Fresh(db) => DatabaseTransaction::new(
-                db.begin_transaction().await,
-                Default::default(),
-                &fake_notifications,
-            ),
-            DatabaseSource::Reuse(db) => db.db().begin_transaction().await,
+            DatabaseSource::Fresh(db) => db.begin_transaction().await,
+            DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
         };
 
         // Don't overwrite an existing secret
@@ -1442,14 +1439,9 @@ impl ClientBuilder {
     }
 
     pub async fn load_decodable_client_secret<T: Decodable>(&mut self) -> anyhow::Result<T> {
-        let fake_notifications = Default::default();
         let mut dbtx = match self.db.as_ref().ok_or(anyhow!("No database provided"))? {
-            DatabaseSource::Fresh(db) => DatabaseTransaction::new(
-                db.begin_transaction().await,
-                Default::default(),
-                &fake_notifications,
-            ),
-            DatabaseSource::Reuse(db) => db.db().begin_transaction().await,
+            DatabaseSource::Fresh(db) => db.begin_transaction().await,
+            DatabaseSource::Reuse(client) => client.db().begin_transaction().await,
         };
 
         let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
@@ -1500,7 +1492,6 @@ impl ClientBuilder {
     pub async fn build_stopped(self, root_secret: DerivableSecret) -> anyhow::Result<ClientArc> {
         let (config, decoders, db) = match self.db.ok_or(anyhow!("No database was provided"))? {
             DatabaseSource::Fresh(db) => {
-                let db = Database::new_from_box(db, ModuleDecoderRegistry::default());
                 let config = get_config(&db, self.config.clone()).await?;
 
                 let mut decoders = client_decoders(

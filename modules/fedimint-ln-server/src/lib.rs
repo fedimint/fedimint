@@ -9,7 +9,9 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
@@ -1136,7 +1138,7 @@ mod tests {
     use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
     use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::Database;
+    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     use fedimint_core::task::TaskGroup;
@@ -1387,7 +1389,9 @@ mod fedimint_migration_tests {
     use anyhow::{ensure, Context};
     use bitcoin_hashes::Hash;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
-    use fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    use fedimint_core::db::{
+        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};

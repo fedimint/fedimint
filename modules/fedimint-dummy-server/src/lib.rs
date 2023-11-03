@@ -8,7 +8,9 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap, ModuleDatabaseTransaction,
+};
 use fedimint_core::endpoint_constants::{SIGN_MESSAGE_ENDPOINT, WAIT_SIGNED_ENDPOINT};
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;

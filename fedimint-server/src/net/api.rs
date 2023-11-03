@@ -16,7 +16,9 @@ use fedimint_core::block::{Block, SignedBlock};
 use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
-use fedimint_core::db::{Database, DatabaseTransaction, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction,
+};
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_BLOCK_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
@@ -411,9 +413,9 @@ impl ConsensusApi {
         ))
     }
 
-    async fn handle_backup_request(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+    async fn handle_backup_request<'s, 'dbtx, 'a>(
+        &'s self,
+        dbtx: &'dbtx mut ModuleDatabaseTransaction<'a>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request

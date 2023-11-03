@@ -8,8 +8,7 @@ use futures::{stream, StreamExt};
 use macro_rules_attribute::apply;
 
 use super::{
-    IDatabase, IDatabaseTransaction, IDatabaseTransactionOps, ISingleUseDatabaseTransaction,
-    SingleUseDatabaseTransaction,
+    IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
 };
 use crate::async_trait_maybe_send;
 use crate::db::PrefixStream;
@@ -64,8 +63,9 @@ impl MemDatabase {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl IDatabase for MemDatabase {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
+impl IRawDatabase for MemDatabase {
+    type Transaction<'a> = MemTransaction<'a>;
+    async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
         let db_copy = self.data.lock().unwrap().clone();
         let mut memtx = MemTransaction {
             operations: Vec::new(),
@@ -77,15 +77,14 @@ impl IDatabase for MemDatabase {
         };
 
         memtx.set_tx_savepoint().await.expect("can't fail");
-        let single_use = SingleUseDatabaseTransaction::new(memtx);
-        Box::new(single_use)
+        memtx
     }
 }
 
 // In-memory database transaction should only be used for test code and never
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOps<'a> for MemTransaction<'a> {
+impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key).await;
         // Insert data from copy so we can read our own writes
@@ -151,7 +150,10 @@ impl<'a> IDatabaseTransactionOps<'a> for MemTransaction<'a> {
 
         Ok(Box::pin(stream::iter(data)))
     }
+}
 
+#[apply(async_trait_maybe_send!)]
+impl<'a> IDatabaseTransactionOps for MemTransaction<'a> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         self.tx_data = self.savepoint.clone();
 
@@ -172,7 +174,7 @@ impl<'a> IDatabaseTransactionOps<'a> for MemTransaction<'a> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
+impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
         for op in self.operations {
             match op {

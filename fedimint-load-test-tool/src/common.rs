@@ -131,9 +131,9 @@ pub async fn build_client(
         client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).await?);
     }
     if let Some(rocksdb) = rocksdb {
-        client_builder.with_database(fedimint_rocksdb::RocksDb::open(rocksdb)?)
+        client_builder.with_raw_database(fedimint_rocksdb::RocksDb::open(rocksdb)?)
     } else {
-        client_builder.with_database(fedimint_core::db::mem_impl::MemDatabase::new())
+        client_builder.with_raw_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
 
     let client_secret = match client_builder

@@ -7,6 +7,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::block::Block;
 use fedimint_core::core::{OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT};
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;

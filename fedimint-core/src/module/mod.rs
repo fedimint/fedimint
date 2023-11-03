@@ -154,9 +154,9 @@ impl ApiError {
 }
 
 /// State made available to all API endpoints for handling a request
-pub struct ApiEndpointContext<'a> {
+pub struct ApiEndpointContext<'dbtx> {
     db: Database,
-    dbtx: DatabaseTransaction<'a>,
+    dbtx: DatabaseTransaction<'dbtx>,
     has_auth: bool,
     request_auth: Option<ApiAuth>,
 }
@@ -178,7 +178,11 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Database tx handle, will be committed
-    pub fn dbtx(&mut self) -> ModuleDatabaseTransaction<'_> {
+    pub fn dbtx<'s, 'mtx>(&'s mut self) -> ModuleDatabaseTransaction<'mtx>
+    where
+        'a: 'mtx,
+        's: 'mtx,
+    {
         // dbtx is already isolated.
         self.dbtx.get_isolated()
     }
@@ -246,11 +250,13 @@ pub trait TypedApiEndpoint {
     type Param: serde::de::DeserializeOwned + Send;
     type Response: serde::Serialize;
 
-    async fn handle<'a, 'b>(
-        state: &'a Self::State,
-        context: &'a mut ApiEndpointContext<'b>,
+    async fn handle<'state, 'context, 'dbtx>(
+        state: &'state Self::State,
+        context: &'context mut ApiEndpointContext<'dbtx>,
         request: Self::Param,
-    ) -> Result<Self::Response, ApiError>;
+    ) -> Result<Self::Response, ApiError>
+    where
+        'dbtx: 'context;
 }
 
 #[doc(hidden)]
@@ -286,9 +292,9 @@ macro_rules! __api_endpoint {
             type Param = $param_ty;
             type Response = $resp_ty;
 
-            async fn handle<'a, 'b>(
-                $state: &'a Self::State,
-                $context: &'a mut $crate::module::ApiEndpointContext<'b>,
+            async fn handle<'state, 'context, 'dbtx>(
+                $state: &'state Self::State,
+                $context: &'context mut $crate::module::ApiEndpointContext<'dbtx>,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 $body
@@ -340,12 +346,13 @@ impl ApiEndpoint<()> {
             fields(method = E::PATH),
             ret,
         )]
-        async fn handle_request<'a, 'b, E>(
-            state: &'a E::State,
-            context: &'a mut ApiEndpointContext<'b>,
+        async fn handle_request<'state, 'context, 'dbtx, E>(
+            state: &'state E::State,
+            context: &'context mut ApiEndpointContext<'dbtx>,
             request: ApiRequest<E::Param>,
         ) -> Result<E::Response, ApiError>
         where
+            'dbtx: 'context,
             E: TypedApiEndpoint,
             E::Param: Debug,
             E::Response: Debug,

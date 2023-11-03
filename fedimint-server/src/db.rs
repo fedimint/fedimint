@@ -148,7 +148,9 @@ mod fedimint_migration_tests {
     use fedimint_core::api::ClientConfigDownloadToken;
     use fedimint_core::block::{Block, SignedBlock};
     use fedimint_core::core::{DynInput, DynOutput};
-    use fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    use fedimint_core::db::{
+        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;

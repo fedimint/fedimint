@@ -9,7 +9,9 @@ use bitcoin_hashes::sha256;
 use fedimint_core::api::{FederationApiExt, GlobalFederationApi, WsFederationApi};
 use fedimint_core::block::{AcceptedItem, Block, SchnorrSignature, SignedBlock};
 use fedimint_core::config::ServerModuleInitRegistry;
-use fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
+use fedimint_core::db::{
+    apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
 use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
