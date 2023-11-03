@@ -23,7 +23,7 @@ services:
     platform: linux/amd64
 
   guardian-ui:
-    image: fedimintui/guardian-ui:v0.1.1
+    image: fedimintui/guardian-ui:0.1
     ports:
       - "0.0.0.0:3000:3000"
     environment:
