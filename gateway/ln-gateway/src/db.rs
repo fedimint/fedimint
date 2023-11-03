@@ -1,3 +1,4 @@
+use bitcoin::Network;
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -65,6 +66,7 @@ pub struct GatewayConfiguration {
     pub num_route_hints: u32,
     #[serde(with = "serde_routing_fees")]
     pub routing_fees: RoutingFees,
+    pub network: Network,
 }
 
 impl_db_record!(

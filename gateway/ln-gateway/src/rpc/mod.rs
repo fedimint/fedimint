@@ -4,7 +4,7 @@ pub mod rpc_server;
 use std::borrow::Cow;
 use std::io::Cursor;
 
-use bitcoin::{Address, Txid};
+use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::task::TaskGroup;
@@ -75,6 +75,7 @@ pub struct GatewayInfo {
     pub route_hints: Vec<route_hints::RouteHint>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
+    pub network: Option<Network>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -82,6 +83,7 @@ pub struct SetConfigurationPayload {
     pub password: Option<String>,
     pub num_route_hints: Option<u32>,
     pub routing_fees: Option<String>,
+    pub network: Option<Network>,
 }
 
 #[derive(Debug)]
