@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{get_config_from_db, ClientBuilder};
+use fedimint_client::{get_config_from_db, ClientBuilder, FederationInfo};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -86,7 +86,8 @@ impl GatewayClientBuilder {
                 // Initialize a client database to check if a config was previously saved in it
                 let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
                 if (get_config_from_db(&db).await).is_none() {
-                    client_builder.with_invite_code(invite_code);
+                    client_builder
+                        .with_federation_info(FederationInfo::from_invite_code(invite_code).await?);
                 }
             }
 

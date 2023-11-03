@@ -8,7 +8,7 @@ use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{ClientArc, ClientBuilder};
+use fedimint_client::{ClientArc, ClientBuilder, FederationInfo};
 use fedimint_core::api::InviteCode;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::CommonModuleInit;
@@ -128,7 +128,7 @@ pub async fn build_client(
     client_builder.with_module(WalletClientGen::default());
     client_builder.with_primary_module(1);
     if let Some(invite_code) = invite_code {
-        client_builder.with_invite_code(invite_code);
+        client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).await?);
     }
     if let Some(rocksdb) = rocksdb {
         client_builder.with_database(fedimint_rocksdb::RocksDb::open(rocksdb)?)

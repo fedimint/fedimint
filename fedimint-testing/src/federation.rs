@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{ClientArc, ClientBuilder};
+use fedimint_client::{ClientArc, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::{
@@ -57,7 +57,8 @@ impl FederationTest {
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
-        client_builder.with_config(client_config);
+        client_builder
+            .with_federation_info(FederationInfo::from_config(client_config).await.unwrap());
         client_builder.with_database(MemDatabase::new());
         let client_secret = match client_builder
             .load_decodable_client_secret::<[u8; 64]>()
