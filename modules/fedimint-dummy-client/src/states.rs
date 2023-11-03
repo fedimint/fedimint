@@ -2,17 +2,21 @@ use std::time::Duration;
 
 use fedimint_client::sm::{DynState, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::task::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_dummy_common::DummyOutputOutcome;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::debug;
 
 use crate::db::DummyClientFundsKeyV0;
 use crate::{get_funds, DummyClientContext};
+
+const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 /// Tracks a transaction
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -98,16 +102,31 @@ async fn await_dummy_output_outcome(
     outpoint: OutPoint,
     module_decoder: Decoder,
 ) -> Result<(), DummyError> {
-    global_context
-        .api()
-        .await_output_outcome::<DummyOutputOutcome>(
-            outpoint,
-            Duration::from_millis(i32::MAX as u64),
-            &module_decoder,
-        )
-        .await
-        .map_err(|_| DummyError::DummyInternalError)?;
-    Ok(())
+    loop {
+        match global_context
+            .api()
+            .await_output_outcome::<DummyOutputOutcome>(
+                outpoint,
+                Duration::from_millis(i32::MAX as u64),
+                &module_decoder,
+            )
+            .await
+        {
+            Ok(_) => {
+                return Ok(());
+            }
+            Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+                debug!(
+                    "Awaiting output outcome failed, retrying in {}s",
+                    RETRY_DELAY.as_secs_f64()
+                );
+                sleep(RETRY_DELAY).await;
+            }
+            Err(_) => {
+                return Err(DummyError::DummyInternalError);
+            }
+        }
+    }
 }
 
 // TODO: Boiler-plate
