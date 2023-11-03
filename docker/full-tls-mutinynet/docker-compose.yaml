@@ -390,7 +390,7 @@ services:
     restart: always
 
   xmpp:
-    image: fedimint/xmpp-prosody-chat-server:latest
+    image: fedimint/xmpp-prosody-chat-server:master
     command:
       - prosody
       - --config
