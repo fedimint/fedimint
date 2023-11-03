@@ -74,7 +74,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
 use db::{
     CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
@@ -1258,19 +1258,76 @@ impl TransactionUpdates {
     }
 }
 
+/// Federation config and meta data that can be used to show a preview of the
+/// federation one is about to join or to initialize a client.
+#[derive(Debug, Clone)]
+pub struct FederationInfo {
+    config: ClientConfig,
+    // TODO: make non-optional or remove
+    invite_code: Option<InviteCode>,
+}
+
+impl FederationInfo {
+    /// Download federation info using invitation code
+    pub async fn from_invite_code(invite: InviteCode) -> anyhow::Result<FederationInfo> {
+        let config = try_download_config(invite.clone(), 10).await?;
+        Ok(FederationInfo {
+            config,
+            invite_code: Some(invite),
+        })
+    }
+
+    /// Create `FederationInfo` from config, may download further meta data in
+    /// the future
+    pub async fn from_config(config: ClientConfig) -> anyhow::Result<FederationInfo> {
+        // The return type is a result in case we want to fallibly fetch additional meta
+        // data in the future
+        Ok(FederationInfo {
+            config,
+            invite_code: None,
+        })
+    }
+
+    /// Returns the federations configuration
+    pub fn config(&self) -> &ClientConfig {
+        &self.config
+    }
+
+    /// Returns the invite code from which the `FederationInfo` was created, if
+    /// any.
+    pub fn invite_code(&self) -> Option<InviteCode> {
+        self.invite_code.clone()
+    }
+
+    /// Get the string representation of a given meta field
+    pub fn meta_raw(&self, key: &str) -> Option<&str> {
+        self.config.global.meta.get(key).map(AsRef::as_ref)
+    }
+
+    /// Get the value of a given meta field
+    pub fn meta<V: serde::de::DeserializeOwned>(&self, key: &str) -> anyhow::Result<Option<V>> {
+        let Some(str_value) = self.meta_raw(key) else {
+            return Ok(None);
+        };
+        serde_json::from_str(str_value).context(format!("Decoding meta field '{key}' failed"))
+    }
+
+    /// Creates an API client for the federation
+    pub fn api(&self) -> DynGlobalApi {
+        DynGlobalApi::from(WsFederationApi::from_config(&self.config))
+    }
+
+    pub fn federation_id(&self) -> FederationId {
+        self.config.global.federation_id
+    }
+}
+
 #[derive(Default)]
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: Option<ModuleInstanceId>,
-    config_source: Option<ConfigSource>,
+    config: Option<FederationInfo>,
     db: Option<DatabaseSource>,
-}
-
-#[derive(Clone)]
-#[allow(clippy::large_enum_variant)]
-pub enum ConfigSource {
-    Config(ClientConfig),
-    Invite(InviteCode),
 }
 
 pub enum DatabaseSource {
@@ -1289,47 +1346,23 @@ impl ClientBuilder {
         self.module_inits.attach(module_init);
     }
 
-    /// Instructs the client builder to use this `InviteCode` in building a
-    /// client. Use this configuration method as an alternative to
-    /// `with_config` builder option.
+    /// Instructs the client builder to use this `FederationInfo` in building a
+    /// client. A `FederationInfo` can be created from either an invite code via
+    /// [`FederationInfo::from_invite_code`] or from a config via
+    /// [`FederationInfo::from_config`].
     ///
     /// ## Failure Conditions
     ///
-    /// If a `ConfigSource` already exists in the builder, calling this method
+    /// If a config already exists in the builder, calling this method
     /// fails. If a `ClientConfig` already exists in the database, calling
     /// `ClientBuilder::build` fails.
     /// - You can use `get_config_from_db` to check if a config exists in the
     ///   database.
-    pub fn with_invite_code(&mut self, invite_code: InviteCode) {
-        let was_replaced = self
-            .config_source
-            .replace(ConfigSource::Invite(invite_code))
-            .is_some();
+    pub fn with_federation_info(&mut self, federation_info: FederationInfo) {
+        let was_replaced = self.config.replace(federation_info).is_some();
         assert!(
             !was_replaced,
             "Only one configuration source can be given to the builder."
-        )
-    }
-
-    /// Instructs the client builder to use this `ClientConfig` in building a
-    /// client. Use this configuration method as an alternative to
-    /// `with_invite_code` builder option.
-    ///
-    /// ## Failure Conditions
-    ///
-    /// If a `ConfigSource` already exists in the builder, calling this method
-    /// fails. If a `ClientConfig` already exists in the database, calling
-    /// `ClientBuilder::build` fails.
-    /// - You can use `get_config_from_db` to check if a config exists in the
-    ///   database.
-    pub fn with_config(&mut self, config: ClientConfig) {
-        let was_replaced = self
-            .config_source
-            .replace(ConfigSource::Config(config))
-            .is_some();
-        assert!(
-            !was_replaced,
-            "Only one config source can be given to the builder."
         )
     }
 
@@ -1469,7 +1502,7 @@ impl ClientBuilder {
         let (config, decoders, db) = match self.db.ok_or(anyhow!("No database was provided"))? {
             DatabaseSource::Fresh(db) => {
                 let db = Database::new_from_box(db, ModuleDecoderRegistry::default());
-                let config = get_config(&db, self.config_source.clone()).await?;
+                let config = get_config(&db, self.config.clone()).await?;
 
                 let mut decoders = client_decoders(
                     &self.module_inits,
@@ -1492,7 +1525,7 @@ impl ClientBuilder {
             DatabaseSource::Reuse(client) => {
                 let db = client.inner.db.clone();
                 let decoders = client.inner.decoders.clone();
-                let config = get_config(&db, self.config_source.clone()).await?;
+                let config = get_config(&db, self.config.clone()).await?;
 
                 (config, decoders, db)
             }
@@ -1593,44 +1626,36 @@ impl ClientBuilder {
 // Sources config from database or from config source specified
 async fn get_config(
     db: &Database,
-    config_source: Option<ConfigSource>,
+    maybe_federation_info: Option<FederationInfo>,
 ) -> anyhow::Result<ClientConfig> {
     if let Some(config) = get_config_from_db(db).await {
         ensure!(
-            config_source.is_none(),
+            maybe_federation_info.is_none(),
             "Alternative config source provided but config was found in DB"
         );
         return Ok(config);
     }
 
-    let (config, invite_code) = match config_source
-        .clone()
-        .ok_or(anyhow!("No config source was provided"))?
-    {
-        ConfigSource::Config(config) => (config.clone(), None),
-        ConfigSource::Invite(invite_code) => (
-            try_download_config(invite_code.clone(), 10).await?,
-            Some(invite_code),
-        ),
-    };
+    let federation_info = maybe_federation_info.ok_or(anyhow!("No config source was provided"))?;
+
     let mut dbtx = db.begin_transaction().await;
     // Save config to DB
     dbtx.insert_new_entry(
         &ClientConfigKey {
-            id: config.global.federation_id,
+            id: federation_info.federation_id(),
         },
-        &config,
+        &federation_info.config().clone(),
     )
     .await;
     // Save invite code to DB
-    if let Some(invite_code) = invite_code {
+    if let Some(invite_code) = federation_info.invite_code() {
         dbtx.insert_new_entry(&ClientInviteCodeKey {}, &invite_code)
             .await;
     }
 
     dbtx.commit_tx_result().await?;
 
-    Ok(config)
+    Ok(federation_info.config().clone())
 }
 
 pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {

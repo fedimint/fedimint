@@ -16,7 +16,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{get_invite_code_from_db, ClientBuilder};
+use fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
     ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
@@ -318,7 +318,11 @@ impl Opts {
         client_builder.with_module_inits(module_inits.clone());
         client_builder.with_primary_module(1);
         if let Some(invite_code) = invite_code {
-            client_builder.with_invite_code(invite_code);
+            client_builder.with_federation_info(
+                FederationInfo::from_invite_code(invite_code)
+                    .await
+                    .map_err_cli_general()?,
+            );
         }
         client_builder.with_database(db);
 
