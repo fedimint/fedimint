@@ -125,15 +125,24 @@ where
 }
 
 pub trait IRawDatabaseExt: IRawDatabase + Sized {
-    fn into_database(self, module_decoders: ModuleDecoderRegistry) -> Database {
-        Database::new(self, module_decoders)
-    }
-    fn into_database_no_decoders(self) -> Database {
+    /// Convert to type implementing [`IRawDatabase`] into [`Database`].
+    ///
+    /// When type inference is not an issue, [`Into::into`] can be used instead.
+    fn into_database(self) -> Database {
         Database::new(self, Default::default())
     }
 }
 
-impl<T> IRawDatabaseExt for T where T: IRawDatabaseExt {}
+impl<T> IRawDatabaseExt for T where T: IRawDatabase {}
+
+impl<T> From<T> for Database
+where
+    T: IRawDatabase,
+{
+    fn from(raw: T) -> Self {
+        Database::new(raw, Default::default())
+    }
+}
 
 /// A database that on top of normal operation, can key change notifications
 #[apply(async_trait_maybe_send!)]
@@ -2469,7 +2478,7 @@ mod tests {
     async fn test_wait_key_before_transaction() {
         let key = TestKey(1);
         let val = TestVal(2);
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
 
         let key_task = waiter(&db, TestKey(1)).await;
 
@@ -2488,7 +2497,7 @@ mod tests {
     async fn test_wait_key_before_insert() {
         let key = TestKey(1);
         let val = TestVal(2);
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
 
         let mut tx = db.begin_transaction().await;
         let key_task = waiter(&db, TestKey(1)).await;
@@ -2506,7 +2515,7 @@ mod tests {
     async fn test_wait_key_after_insert() {
         let key = TestKey(1);
         let val = TestVal(2);
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
 
         let mut tx = db.begin_transaction().await;
         tx.insert_new_entry(&key, &val).await;
@@ -2526,7 +2535,7 @@ mod tests {
     async fn test_wait_key_after_commit() {
         let key = TestKey(1);
         let val = TestVal(2);
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
 
         let mut tx = db.begin_transaction().await;
         tx.insert_new_entry(&key, &val).await;
@@ -2545,7 +2554,7 @@ mod tests {
         let module_instance_id = 10;
         let key = TestKey(1);
         let val = TestVal(2);
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
         let db = db.new_isolated(module_instance_id);
 
         let key_task = waiter(&db, TestKey(1)).await;
@@ -2566,7 +2575,7 @@ mod tests {
         let module_instance_id = 10;
         let key = TestKey(1);
         let val = TestVal(2);
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
 
         let key_task = waiter(&db.new_isolated(module_instance_id), TestKey(1)).await;
 
@@ -2585,7 +2594,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_wait_key_no_transaction() {
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
 
         let key_task = waiter(&db, TestKey(1)).await;
         assert_eq!(

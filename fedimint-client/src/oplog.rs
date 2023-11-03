@@ -339,7 +339,7 @@ where
 mod tests {
     use fedimint_core::core::OperationId;
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::Database;
+    use fedimint_core::db::{Database, IRawDatabaseExt};
     use futures::stream::StreamExt;
     use serde::{Deserialize, Serialize};
 
@@ -422,7 +422,7 @@ mod tests {
     async fn test_operation_log_update_from_stream() {
         let op_id = OperationId([0x32; 32]);
 
-        let db = Database::new(MemDatabase::new(), Default::default());
+        let db = MemDatabase::new().into_database();
         let op_log = OperationLog::new(db.clone());
 
         let mut dbtx = db.begin_transaction().await;

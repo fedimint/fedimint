@@ -1388,7 +1388,7 @@ impl ClientBuilder {
 
     /// Uses this database to store the client state
     pub fn with_raw_database<D: IRawDatabase + 'static>(&mut self, db: D) {
-        self.with_database(Database::new(db, Default::default()));
+        self.with_database(db.into());
     }
 
     // /// Uses this database to store the client state, allowing for flexibility

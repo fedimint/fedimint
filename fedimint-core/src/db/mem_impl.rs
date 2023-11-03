@@ -199,15 +199,14 @@ impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
 mod tests {
     use super::MemDatabase;
     use crate::core::ModuleInstanceId;
-    use crate::db::Database;
-    use crate::module::registry::ModuleDecoderRegistry;
+    use crate::db::{Database, IRawDatabaseExt};
 
     fn database() -> Database {
-        Database::new(MemDatabase::new(), ModuleDecoderRegistry::default())
+        MemDatabase::new().into()
     }
 
     fn module_database(module_instance_id: ModuleInstanceId) -> Database {
-        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        let db = MemDatabase::new().into_database();
         db.new_isolated(module_instance_id)
     }
 

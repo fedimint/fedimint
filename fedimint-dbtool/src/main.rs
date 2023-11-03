@@ -7,7 +7,7 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
 use fedimint_core::config::ServerModuleInitRegistry;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCore};
+use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
 use fedimint_core::module::DynServerModuleInit;
 use fedimint_ln_client::LightningClientGen;
 use fedimint_ln_server::LightningGen;
@@ -91,10 +91,9 @@ async fn main() -> Result<()> {
 
     match options.command {
         DbCommand::List { prefix } => {
-            let rocksdb = Database::new(
-                fedimint_rocksdb::RocksDb::open(&options.database).unwrap(),
-                Default::default(),
-            );
+            let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                .unwrap()
+                .into_database();
             let mut dbtx = rocksdb.begin_transaction().await;
             let prefix_iter = dbtx
                 .raw_find_by_prefix(&prefix)
@@ -107,10 +106,9 @@ async fn main() -> Result<()> {
             dbtx.commit_tx().await;
         }
         DbCommand::Write { key, value } => {
-            let rocksdb = Database::new(
-                fedimint_rocksdb::RocksDb::open(&options.database).unwrap(),
-                Default::default(),
-            );
+            let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                .unwrap()
+                .into_database();
             let mut dbtx = rocksdb.begin_transaction().await;
             dbtx.raw_insert_bytes(&key, &value)
                 .await
@@ -118,10 +116,9 @@ async fn main() -> Result<()> {
             dbtx.commit_tx().await;
         }
         DbCommand::Delete { key } => {
-            let rocksdb = Database::new(
-                fedimint_rocksdb::RocksDb::open(&options.database).unwrap(),
-                Default::default(),
-            );
+            let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                .unwrap()
+                .into_database();
             let mut dbtx = rocksdb.begin_transaction().await;
             dbtx.raw_remove_entry(&key)
                 .await

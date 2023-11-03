@@ -9,7 +9,7 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientArc;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{IRawDatabaseExt, ModuleDatabaseTransaction};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{sats, Amount, Feerate, PeerId, ServerModule};
@@ -398,7 +398,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let bitcoin = fixtures.bitcoin();
     let server_bitcoin_rpc_config = fixtures.bitcoin_server();
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
-    let db = Database::new(MemDatabase::new(), Default::default());
+    let db = MemDatabase::new().into_database();
     let mut task_group = fedimint_core::task::TaskGroup::new();
     info!("Starting test peg_ins_that_are_unconfirmed_are_rejected");
 

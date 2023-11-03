@@ -691,8 +691,7 @@ mod tests {
     use fedimint_core::api::{FederationResult, ServerStatus, StatusResponse};
     use fedimint_core::config::{ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry};
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::Database;
-    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::db::IRawDatabaseExt;
     use fedimint_core::module::ApiAuth;
     use fedimint_core::task::{sleep, spawn, TaskGroup};
     use fedimint_core::util::SafeUrl;
@@ -730,7 +729,7 @@ mod tests {
             name_suffix: u16,
             data_dir: PathBuf,
         ) -> (TestConfigApi, FedimintServer) {
-            let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+            let db = MemDatabase::new().into_database();
 
             let name = format!("peer{name_suffix}");
             let api_bind = format!("127.0.0.1:{port}").parse().expect("parses");
