@@ -24,7 +24,7 @@ services:
       - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/signet/admin.macaroon
     volumes:
       - gateway_datadir:/gateway_data
-      - lnd_datadir:/lnd_data
+      - lnd_datadir:/lnd_data:ro
     ports:
       - "8175:8175"
       - "8080:8080"
