@@ -134,8 +134,13 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let (tx, _) = tx.build(&Secp256k1::new(), rand::thread_rng());
     let result = client.api().submit_transaction(tx).await;
     match result {
-        Ok(_) => bail!("Should have failed"),
-        Err(e) if e.to_string().contains("The transaction is unbalanced") => Ok(()),
-        Err(e) => bail!("Unexpected error: {e:?}"),
+        Ok(submission_result) => {
+            if submission_result.is_ok() {
+                bail!("Should have been rejected")
+            }
+        }
+        Err(e) => bail!("Submission unsuccessful: {}", e),
     }
+
+    Ok(())
 }

@@ -101,7 +101,6 @@ use fedimint_core::module::{
     SupportedModuleApiVersions,
 };
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
@@ -226,17 +225,15 @@ impl DynGlobalClientContext {
     pub async fn await_tx_accepted(
         &self,
         operation_id: OperationId,
-        txid: TransactionId,
+        query_txid: TransactionId,
     ) -> Result<(), String> {
-        let update_stream = self.transaction_update_stream(operation_id).await;
-
-        let query_txid = txid;
-        update_stream
+        self.transaction_update_stream(operation_id)
+            .await
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid } if txid == query_txid => Some(Ok(())),
-                    TxSubmissionStates::Rejected { txid, error } if txid == query_txid => {
-                        Some(Err(error))
+                    TxSubmissionStates::Accepted(txid) if txid == query_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected(txid, submit_error) if txid == query_txid => {
+                        Some(Err(submit_error))
                     }
                     _ => None,
                 })
@@ -879,11 +876,7 @@ impl Client {
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
             OperationState {
                 operation_id,
-                state: TxSubmissionStates::Created {
-                    txid,
-                    tx: transaction,
-                    next_submission: now(),
-                },
+                state: TxSubmissionStates::Created(transaction),
             },
         );
         states.push(tx_submission_sm);
@@ -1248,9 +1241,9 @@ impl TransactionUpdates {
         self.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
-                    TxSubmissionStates::Accepted { txid } if txid == await_txid => Some(Ok(())),
-                    TxSubmissionStates::Rejected { txid, error } if txid == await_txid => {
-                        Some(Err(error))
+                    TxSubmissionStates::Accepted(txid) if txid == await_txid => Some(Ok(())),
+                    TxSubmissionStates::Rejected(txid, submit_error) if txid == await_txid => {
+                        Some(Err(submit_error))
                     }
                     _ => None,
                 })

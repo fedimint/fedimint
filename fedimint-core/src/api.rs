@@ -346,7 +346,10 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 /// The API for the global (non-module) endpoints
 #[apply(async_trait_maybe_send!)]
 pub trait GlobalFederationApi {
-    async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
+    async fn submit_transaction(
+        &self,
+        tx: Transaction,
+    ) -> FederationResult<Result<TransactionId, String>>;
 
     async fn await_block(
         &self,
@@ -414,7 +417,10 @@ where
     T: IGlobalFederationApi + MaybeSend + MaybeSync + 'static,
 {
     /// Submit a transaction for inclusion
-    async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
+    async fn submit_transaction(
+        &self,
+        tx: Transaction,
+    ) -> FederationResult<Result<TransactionId, String>> {
         self.request_current_consensus(
             TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
