@@ -482,7 +482,7 @@ impl Encodable for lightning_invoice::Bolt11Invoice {
     }
 }
 
-impl Encodable for lightning::routing::gossip::RoutingFees {
+impl Encodable for lightning_invoice::RoutingFees {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
         len += self.base_msat.consensus_encode(writer)?;
@@ -491,14 +491,14 @@ impl Encodable for lightning::routing::gossip::RoutingFees {
     }
 }
 
-impl Decodable for lightning::routing::gossip::RoutingFees {
+impl Decodable for lightning_invoice::RoutingFees {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let base_msat = Decodable::consensus_decode(d, modules)?;
         let proportional_millionths = Decodable::consensus_decode(d, modules)?;
-        Ok(lightning::routing::gossip::RoutingFees {
+        Ok(lightning_invoice::RoutingFees {
             base_msat,
             proportional_millionths,
         })

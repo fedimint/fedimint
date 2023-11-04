@@ -54,7 +54,7 @@ use fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, 
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
-use lightning::routing::gossip::RoutingFees;
+use lightning_invoice::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
 use rpc::{FederationInfo, SetConfigurationPayload};

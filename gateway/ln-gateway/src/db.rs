@@ -4,7 +4,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::serde_routing_fees;
-use lightning::routing::gossip::RoutingFees;
+use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 

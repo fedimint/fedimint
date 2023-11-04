@@ -1413,8 +1413,7 @@ mod fedimint_migration_tests {
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64,
     };
     use futures::StreamExt;
-    use lightning::routing::gossip::RoutingFees;
-    use lightning_invoice::Bolt11Invoice;
+    use lightning_invoice::{Bolt11Invoice, RoutingFees};
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;

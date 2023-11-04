@@ -13,7 +13,7 @@ use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};
 use futures::Future;
-use lightning::routing::gossip::RoutingFees;
+use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tokio::sync::oneshot;
 

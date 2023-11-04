@@ -37,7 +37,7 @@ use fedimint_ln_common::{
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, KIND,
 };
 use futures::StreamExt;
-use lightning::routing::gossip::RoutingFees;
+use lightning_invoice::RoutingFees;
 use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

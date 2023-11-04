@@ -15,7 +15,7 @@ use fedimint_core::task::{block_in_place, sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_TEST;
 use futures::executor::block_on;
-use lightning::routing::gossip::RoutingFees;
+use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::lnrpc_client::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;

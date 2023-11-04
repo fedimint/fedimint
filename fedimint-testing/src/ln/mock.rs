@@ -10,9 +10,8 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
 use fedimint_logging::LOG_TEST;
-use lightning::ln::PaymentSecret;
 use lightning_invoice::{
-    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder,
+    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
     SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gateway_lnrpc::{
