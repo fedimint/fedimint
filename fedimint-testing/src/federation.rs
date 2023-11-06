@@ -133,7 +133,7 @@ impl FederationTest {
             let api_handle = FedimintServer::spawn_consensus_api(consensus_api, false).await;
 
             task.spawn("fedimintd", move |handle| async move {
-                consensus_server.run_consensus(handle).await.unwrap();
+                consensus_server.run(handle).await.unwrap();
                 api_handle.stop().await;
             })
             .await;

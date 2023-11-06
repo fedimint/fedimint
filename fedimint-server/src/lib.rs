@@ -96,9 +96,7 @@ impl FedimintServer {
 
         let handler = Self::spawn_consensus_api(consensus_api, true).await;
 
-        consensus_server
-            .run_consensus(task_group.make_handle())
-            .await?;
+        consensus_server.run(task_group.make_handle()).await?;
 
         handler.stop().await;
 
