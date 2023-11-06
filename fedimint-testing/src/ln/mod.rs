@@ -4,8 +4,9 @@ use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::KeyPair;
 use fedimint_core::{Amount, BitcoinHash};
-use lightning::ln::PaymentSecret;
-use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
+use lightning_invoice::{
+    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
+};
 use ln_gateway::lnrpc_client::ILnRpcClient;
 use rand::rngs::OsRng;
 use secp256k1_zkp::SecretKey;

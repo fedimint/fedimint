@@ -31,8 +31,7 @@ lazy_static = "1.4.0"
 ln-gateway = { path = "../gateway/ln-gateway" }
 ldk-node = { git = "https://github.com/lightningdevkit/ldk-node", rev = "5029b2f88642864ed32835a31c1fa8b1405129dd" }
 futures = "0.3"
-lightning = "0.0.116"
-lightning-invoice = "0.24.0"
+lightning-invoice = "0.26.0"
 tempfile = "3.4.0"
 secp256k1 = "0.24.2"
 secp256k1-zkp = { version = "0.7.0", features = [ "global-context", "bitcoin_hashes" ] }

@@ -26,7 +26,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
-use lightning::routing::gossip::RoutingFees;
+use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -299,7 +299,7 @@ impl Context for LightningClientContext {}
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
     use fedimint_core::encoding::{Decodable, Encodable};
-    use lightning::routing::gossip::RoutingFees;
+    use lightning_invoice::RoutingFees;
     use secp256k1::PublicKey;
     use serde::{Deserialize, Serialize};
 
@@ -328,11 +328,11 @@ pub mod route_hints {
     pub struct RouteHint(pub Vec<RouteHintHop>);
 
     impl RouteHint {
-        pub fn to_ldk_route_hint(&self) -> lightning::routing::router::RouteHint {
-            lightning::routing::router::RouteHint(
+        pub fn to_ldk_route_hint(&self) -> lightning_invoice::RouteHint {
+            lightning_invoice::RouteHint(
                 self.0
                     .iter()
-                    .map(|hop| lightning::routing::router::RouteHintHop {
+                    .map(|hop| lightning_invoice::RouteHintHop {
                         src_node_id: hop.src_node_id,
                         short_channel_id: hop.short_channel_id,
                         fees: RoutingFees {
@@ -350,10 +350,10 @@ pub mod route_hints {
 }
 
 // TODO: Upstream serde serialization for
-// lightning::routing::gossip::RoutingFees
+// lightning_invoice::RoutingFees
 // See https://github.com/lightningdevkit/rust-lightning/blob/b8ed4d2608e32128dd5a1dee92911638a4301138/lightning/src/routing/gossip.rs#L1057-L1065
 pub mod serde_routing_fees {
-    use lightning::routing::gossip::RoutingFees;
+    use lightning_invoice::RoutingFees;
     use serde::ser::SerializeStruct;
     use serde::{Deserialize, Deserializer, Serializer};
 
@@ -394,7 +394,7 @@ pub mod serde_routing_fees {
 }
 
 pub mod serde_option_routing_fees {
-    use lightning::routing::gossip::RoutingFees;
+    use lightning_invoice::RoutingFees;
     use serde::ser::SerializeStruct;
     use serde::{Deserialize, Deserializer, Serializer};
 
