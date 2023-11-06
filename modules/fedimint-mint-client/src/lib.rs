@@ -1748,8 +1748,7 @@ mod tests {
     #[test]
     fn decoding_empty_oob_notes_fails() {
         let empty_oob_notes = OOBNotes {
-            federation_id_prefix: FederationId(threshold_crypto::SecretKey::random().public_key())
-                .to_prefix(),
+            federation_id_prefix: FederationId::dummy().to_prefix(),
             notes: Default::default(),
         };
         let oob_notes_string = empty_oob_notes.to_string();

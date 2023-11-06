@@ -9,15 +9,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, result};
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin::secp256k1;
-use bitcoin_hashes::sha256;
-use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
+use bitcoin_hashes::{sha256, Hash};
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::endpoint_constants::AWAIT_BLOCK_ENDPOINT;
+use fedimint_core::endpoint_constants::{
+    AWAIT_BLOCK_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+};
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
@@ -39,7 +41,6 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::backup::ClientBackupSnapshot;
@@ -47,7 +48,7 @@ use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
     FETCH_BLOCK_COUNT_ENDPOINT, RECOVER_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
     WAIT_TRANSACTION_ENDPOINT,
 };
@@ -363,7 +364,7 @@ pub trait GlobalFederationApi {
     async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig>;
 
     /// Fetches the server consensus hash if enough peers agree on it
-    async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
+    async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash>;
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()>;
 
@@ -469,33 +470,53 @@ where
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 
-    async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig> {
-        let id = info.id;
+    async fn download_client_config(
+        &self,
+        invite_code: &InviteCode,
+    ) -> FederationResult<ClientConfig> {
+        // we have to download the api endpoints first
+        let id = invite_code.id;
         let qs = FilterMap::new(
-            move |config: ClientConfigResponse| match id
-                .0
-                .verify(&config.signature.0, config.client_config.consensus_hash())
-            {
-                true => Ok(config),
-                false => Err(anyhow!("Invalid signature")),
+            move |cfg: ClientConfig| {
+                if id.0 != cfg.global.api_endpoints.consensus_hash() {
+                    bail!("Guardian api endpoint map does not hash to FederationId")
+                }
+
+                Ok(cfg.global.api_endpoints)
             },
             self.all_peers().total(),
         )
-        // downloading a config shouldn't take too long
+        // downloading the endpoints shouldn't take too long
         .with_request_timeout(Duration::from_secs(5));
 
-        self.request_with_strategy(
-            qs,
-            CONFIG_ENDPOINT.to_owned(),
-            ApiRequestErased::new(info.to_string()),
-        )
-        .await
-        .map(|cfg: ClientConfigResponse| cfg.client_config)
+        let api_endpoints = self
+            .request_with_strategy(
+                qs,
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        // now we can build an api for all guardians and download the client config
+        let api_endpoints = api_endpoints
+            .into_iter()
+            .map(|(peer, url)| (peer, url.url))
+            .collect();
+
+        WsFederationApi::new(api_endpoints)
+            .request_current_consensus(
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await
     }
 
-    async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
-        self.request_current_consensus(CONFIG_HASH_ENDPOINT.to_owned(), ApiRequestErased::default())
-            .await
+    async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash> {
+        self.request_current_consensus(
+            SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+        )
+        .await
     }
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
@@ -598,7 +619,7 @@ impl FromStr for InviteCode {
 
         let bytes: Vec<u8> = Vec::<u8>::from_base32(&data)?;
         let mut cursor = Cursor::new(bytes);
-        let mut id_bytes = [0; PK_SIZE];
+        let mut id_bytes = [0; 32];
         cursor.read_exact(&mut id_bytes)?;
         let mut peer_id_bytes = [0; 2];
         cursor.read_exact(&mut peer_id_bytes)?;
@@ -616,7 +637,7 @@ impl FromStr for InviteCode {
         Ok(Self {
             url: url.parse()?,
             download_token: ClientConfigDownloadToken(download_token),
-            id: FederationId(PublicKey::from_bytes(id_bytes)?),
+            id: FederationId::from_byte_array(id_bytes),
             peer_id: PeerId(u16::from_be_bytes(peer_id_bytes)),
         })
     }
@@ -626,7 +647,7 @@ impl FromStr for InviteCode {
 impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let mut data = vec![];
-        data.extend(self.id.0.to_bytes());
+        data.extend(self.id.0.into_inner());
         data.extend(self.peer_id.0.to_be_bytes());
         let url_bytes = self.url.as_str().as_bytes();
         data.extend((url_bytes.len() as u16).to_be_bytes());

@@ -5,8 +5,7 @@ use fedimint_core::block::{AcceptedItem, SignedBlock};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -19,8 +18,6 @@ pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
     SignedBlock = 0x04,
     AlephUnits = 0x05,
-    ClientConfigSignature = 0x07,
-    ClientConfigSignatureShare = 0x3,
     ClientConfigDownload = 0x09,
     Module = MODULE_GLOBAL_PREFIX,
 }
@@ -91,33 +88,6 @@ impl_db_record!(
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientConfigSignatureKey;
-
-impl_db_record!(
-    key = ClientConfigSignatureKey,
-    value = SerdeSignature,
-    db_prefix = DbKeyPrefix::ClientConfigSignature,
-    notify_on_modify = true
-);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientConfigSignatureShareKey(pub PeerId);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct ClientConfigSignatureSharePrefix;
-
-impl_db_record!(
-    key = ClientConfigSignatureShareKey,
-    value = SerdeSignatureShare,
-    db_prefix = DbKeyPrefix::ClientConfigSignatureShare,
-);
-
-impl_db_lookup!(
-    key = ClientConfigSignatureShareKey,
-    query_prefix = ClientConfigSignatureSharePrefix
-);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientConfigDownloadKeyPrefix;
 
 #[derive(Debug, Encodable, Decodable, Serialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -151,7 +121,7 @@ mod fedimint_migration_tests {
     use fedimint_core::db::{
         apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
+    use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::transaction::Transaction;
@@ -160,21 +130,17 @@ mod fedimint_migration_tests {
     use fedimint_dummy_server::Dummy;
     use fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     use futures::StreamExt;
-    use rand::distributions::{Distribution, Standard};
     use rand::rngs::OsRng;
     use rand::Rng;
     use secp256k1_zkp::Message;
     use strum::IntoEnumIterator;
-    use threshold_crypto::SignatureShare;
 
-    use super::{
-        AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
-    };
+    use super::AcceptedTransactionKey;
     use crate::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
         AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, ClientConfigDownloadKey,
-        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix, SignedBlockKey,
-        SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+        ClientConfigDownloadKeyPrefix, DbKeyPrefix, SignedBlockKey, SignedBlockPrefix,
+        GLOBAL_DATABASE_VERSION,
     };
 
     /// Create a database with version 0 data. The database produced is not
@@ -237,23 +203,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&AlephUnitsKey(0), &vec![42, 42, 42])
             .await;
 
-        let sig_share = SignatureShare(Standard.sample(&mut OsRng));
-
-        let _consensus_items = vec![
-            ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig_share.clone())),
-            ConsensusItem::Transaction(transaction),
-        ];
-
-        let serde_sig = SerdeSignature(Standard.sample(&mut OsRng));
-        dbtx.insert_new_entry(&ClientConfigSignatureKey, &serde_sig)
-            .await;
-
-        let serde_sig_share = SerdeSignatureShare(Standard.sample(&mut OsRng));
-        dbtx.insert_new_entry(
-            &ClientConfigSignatureShareKey(PeerId::from(0)),
-            &serde_sig_share,
-        )
-        .await;
+        let _consensus_items = vec![ConsensusItem::Transaction(transaction)];
 
         dbtx.insert_new_entry(
             &ClientConfigDownloadKey(ClientConfigDownloadToken(OsRng.gen())),
@@ -350,24 +300,6 @@ mod fedimint_migration_tests {
                                     num_aleph_units > 0,
                                     "validate_migrations was not able to read any AlephUnits"
                                 );
-                        }
-                        DbKeyPrefix::ClientConfigSignature => {
-                            dbtx
-                                .get_value(&ClientConfigSignatureKey)
-                                .await
-                                .expect("validate_migrations was not able to read the ClientConfigSignature");
-                        }
-                        DbKeyPrefix::ClientConfigSignatureShare => {
-                            let signature_shares = dbtx
-                                .find_by_prefix(&ClientConfigSignatureSharePrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_signature_shares = signature_shares.len();
-                            ensure!(
-                                num_signature_shares > 0,
-                                "validate_migrations was not able to read any ClientConfigSignatureShares"
-                            );
                         }
                         DbKeyPrefix::ClientConfigDownload => {
                             let downloads = dbtx

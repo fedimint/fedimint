@@ -11,7 +11,6 @@ use fedimint_core::db::{
     Database, DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Encodable;
-use fedimint_core::epoch::SerdeSignatureShare;
 use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{push_db_pair_items, push_db_pair_items_no_serde};
@@ -293,26 +292,6 @@ impl DatabaseDump {
                         Vec<u8>,
                         consensus,
                         "Aleph Units"
-                    );
-                }
-                ConsensusRange::DbKeyPrefix::ClientConfigSignature => {
-                    let signature = dbtx
-                        .get_value(&ConsensusRange::ClientConfigSignatureKey)
-                        .await;
-
-                    if let Some(signature) = signature {
-                        consensus
-                            .insert("Client Config Signature".to_string(), Box::new(signature));
-                    }
-                }
-                ConsensusRange::DbKeyPrefix::ClientConfigSignatureShare => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ConsensusRange::ClientConfigSignatureSharePrefix,
-                        ConsensusRange::ClientConfigSignatureShareKey,
-                        SerdeSignatureShare,
-                        consensus,
-                        "Client Config Signature Share"
                     );
                 }
                 ConsensusRange::DbKeyPrefix::ClientConfigDownload => {
