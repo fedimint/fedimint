@@ -19,7 +19,7 @@ jobs:
         continue-on-error: true
 
       - name: Build docs
-        run: nix build -L .#debug.workspaceDocExport
+        run: nix build -L .#ci.workspaceDocExport
 
       - if: github.repository == 'fedimint/fedimint'
         name: Deploy docs
