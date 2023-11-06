@@ -37,7 +37,7 @@ strum = "0.24"
 strum_macros = "0.24"
 tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.39"
-threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+threshold_crypto = { workspace = true }
 tokio = { version = "1.27.0", features = [ "sync" ] }
 tracing ="0.1.37"
 
