@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FORCE_GIT_HASH_ENV","GIT_HASH_ENV"],"fn":["set_code_version","set_code_version_inner"]};
+window.SIDEBAR_ITEMS = {"constant":["FORCE_GIT_HASH_ENV","GIT_HASH_ENV"],"fn":["call_cmd","set_code_version","set_code_version_inner"]};

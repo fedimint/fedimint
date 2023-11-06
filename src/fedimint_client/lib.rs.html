@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (030e4d382 2023-09-10)" data-channel="nightly" data-search-js="search-5d3eaacf19ebf04f.js" data-settings-js="settings-74424d7eec62a23e.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-f194925aa375ae96.css" data-theme-dark-css="dark-1dd4d1ce031e15de.css" data-theme-ayu-css="ayu-49e58d069f567085.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-8d035c8cea6edbc4.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-f194925aa375ae96.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1dd4d1ce031e15de.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1746,23 +1746,6 @@
 <a href="#1746" id="1746">1746</a>
 <a href="#1747" id="1747">1747</a>
 <a href="#1748" id="1748">1748</a>
-<a href="#1749" id="1749">1749</a>
-<a href="#1750" id="1750">1750</a>
-<a href="#1751" id="1751">1751</a>
-<a href="#1752" id="1752">1752</a>
-<a href="#1753" id="1753">1753</a>
-<a href="#1754" id="1754">1754</a>
-<a href="#1755" id="1755">1755</a>
-<a href="#1756" id="1756">1756</a>
-<a href="#1757" id="1757">1757</a>
-<a href="#1758" id="1758">1758</a>
-<a href="#1759" id="1759">1759</a>
-<a href="#1760" id="1760">1760</a>
-<a href="#1761" id="1761">1761</a>
-<a href="#1762" id="1762">1762</a>
-<a href="#1763" id="1763">1763</a>
-<a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1818,7 +1801,7 @@
 //! module and its smart contracts are only used to incentivize LN payments, not
 //! to hold money. The mint module on the other hand holds e-cash note and can
 //! thus be used to fund transactions and to absorb change. Module clients with
-//! this ability should implement [`ClientModule::supports_being_primary`] and
+//! this ability should implement [`ClientModule::  supports_being_primary`] and
 //! related methods.
 //!
 //! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
@@ -1834,14 +1817,17 @@
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
-<span class="kw">use </span>std::io::{Error, Read, Write};
+<span class="kw">use </span>std::ops::{<span class="self">self</span>, Range};
 <span class="kw">use </span>std::sync::atomic::AtomicUsize;
-<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, ensure};
+<span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context};
 <span class="kw">use </span>async_stream::stream;
-<span class="kw">use </span>db::{CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix};
+<span class="kw">use </span>db::{
+    CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientConfigKeyPrefix,
+    ClientInviteCodeKey, ClientInviteCodeKeyPrefix, EncodedClientSecretKey,
+};
 <span class="kw">use </span>fedimint_core::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, GlobalFederationApi, IGlobalFederationApi,
     InviteCode, WsFederationApi,
@@ -1850,9 +1836,11 @@
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
 };
-<span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::core::{
+    DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
+};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
-<span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
@@ -1873,24 +1861,21 @@
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
-<span class="kw">use </span>serde::Serialize;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
-<span class="kw">use </span><span class="kw">crate</span>::db::ClientSecretKey;
 <span class="kw">use </span><span class="kw">crate</span>::module::init::{
     ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
 <span class="kw">use </span><span class="kw">crate</span>::module::{ClientModule, ClientModuleRegistry, IClientModule, StateGenerator};
 <span class="kw">use </span><span class="kw">crate</span>::oplog::OperationLog;
-<span class="kw">use </span><span class="kw">crate</span>::secret::RootSecretStrategy;
 <span class="kw">use </span><span class="kw">crate</span>::sm::executor::{
     ActiveOperationStateKeyPrefix, ContextGen, InactiveOperationStateKeyPrefix,
 };
 <span class="kw">use </span><span class="kw">crate</span>::sm::{
-    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier, OperationId,
+    ClientSMDatabaseTransaction, DynState, Executor, GlobalContext, IState, Notifier,
     OperationState, State,
 };
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{
@@ -1951,7 +1936,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         input: InstancelessDynClientInput,
-    ) -&gt; (TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;);
+    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;);
 
     <span class="doccomment">/// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -1961,7 +1946,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         output: InstancelessDynClientOutput,
-    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt;;
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;;
 
     <span class="doccomment">/// Adds a state machine to the executor.
     </span><span class="kw">async fn </span>add_state_machine_dyn(
@@ -2018,7 +2003,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         input: ClientInput&lt;I, S&gt;,
-    ) -&gt; (TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)
+    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;)
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         S: IState&lt;DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
@@ -2046,7 +2031,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         output: ClientOutput&lt;O, S&gt;,
-    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt;
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
         </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
         S: IState&lt;DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
@@ -2110,9 +2095,9 @@
 <span class="kw">impl </span>GlobalContext <span class="kw">for </span>DynGlobalClientContext {}
 
 <span class="comment">// TODO: impl `Debug` for `Client` and derive here
-</span><span class="kw">impl </span>Debug <span class="kw">for </span>ClientInner {
+</span><span class="kw">impl </span>Debug <span class="kw">for </span>Client {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;ClientInner&quot;</span>)
+        <span class="macro">write!</span>(f, <span class="string">&quot;Client&quot;</span>)
     }
 }
 
@@ -2121,7 +2106,7 @@
 /// aware of their instance id etc.
 </span><span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">struct </span>ModuleGlobalClientContext {
-    client: Arc&lt;ClientInner&gt;,
+    client: Arc&lt;Client&gt;,
     module_instance_id: ModuleInstanceId,
     operation: OperationId,
 }
@@ -2148,7 +2133,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         input: InstancelessDynClientInput,
-    ) -&gt; (TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;) {
+    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;) {
         <span class="kw">let </span>instance_input = ClientInput {
             input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
             keys: input.keys,
@@ -2156,7 +2141,7 @@
         };
 
         <span class="self">self</span>.client
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_inner(
                 dbtx.global_tx(),
                 <span class="self">self</span>.operation,
                 TransactionBuilder::new().with_input(instance_input),
@@ -2169,14 +2154,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         output: InstancelessDynClientOutput,
-    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt; {
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="kw">let </span>instance_output = ClientOutput {
             output: DynOutput::from_parts(<span class="self">self</span>.module_instance_id, output.output),
             state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, output.state_machines),
         };
 
         <span class="self">self</span>.client
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_inner(
                 dbtx.global_tx(),
                 <span class="self">self</span>.operation,
                 TransactionBuilder::new().with_output(instance_output),
@@ -2221,18 +2206,51 @@
     })
 }
 
-<span class="kw">pub struct </span>Client {
-    inner: Arc&lt;ClientInner&gt;,
+<span class="doccomment">/// Atomically-counted ([`Arc`]) handle to [`Client`]
+///
+/// Notably it `deref`-s to the [`Client`] where most
+/// methods live.
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>ClientArc {
+    inner: Arc&lt;Client&gt;,
 }
 
-<span class="kw">impl </span>Clone <span class="kw">for </span>Client {
+<span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientArc {
+    <span class="kw">type </span>Target = Arc&lt;Client&gt;;
+
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.inner
+    }
+}
+
+<span class="kw">impl </span>ClientArc {
+    <span class="kw">pub fn </span>downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientWeak {
+        ClientWeak {
+            inner: Arc::downgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner),
+        }
+    }
+}
+
+<span class="kw">impl </span>Clone <span class="kw">for </span>ClientArc {
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.inner
             .client_count
             .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
-        Client {
+        ClientArc {
             inner: <span class="self">self</span>.inner.clone(),
         }
+    }
+}
+
+<span class="doccomment">/// Like [`ClientArc`] but using a [`Weak`] handle to [`Client`]
+</span><span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>ClientWeak {
+    inner: Weak&lt;Client&gt;,
+}
+
+<span class="kw">impl </span>ClientWeak {
+    <span class="kw">pub fn </span>upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ClientArc&gt; {
+        Weak::upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner).map(|inner| ClientArc { inner })
     }
 }
 
@@ -2240,8 +2258,8 @@
 /// `Executor::stop_executor` even though the `Drop` implementation of
 /// `ExecutorInner` should already take care of that. The reason is that as long
 /// as the executor task is active there may be a cycle in the
-/// `Arc&lt;ClientInner&gt;`s such that at least one `Executor` never gets dropped.
-</span><span class="kw">impl </span>Drop <span class="kw">for </span>Client {
+/// `Arc&lt;Client&gt;`s such that at least one `Executor` never gets dropped.
+</span><span class="kw">impl </span>Drop <span class="kw">for </span>ClientArc {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="comment">// Not sure if Ordering::SeqCst is strictly needed here, but better safe than
         // sorry.
@@ -2291,6 +2309,39 @@
 
 <span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen&lt;DynGlobalClientContext&gt;;
 
+<span class="doccomment">/// Resources particular to a module instance
+</span><span class="kw">pub struct </span>ClientModuleInstance {
+    <span class="doccomment">/// Instance id of the module
+    </span><span class="kw">pub </span>id: ModuleInstanceId,
+    <span class="doccomment">/// Module-specific DB
+    </span><span class="kw">pub </span>db: Database,
+    <span class="doccomment">/// Module-specific API
+    </span><span class="kw">pub </span>api: DynModuleApi,
+}
+
+<span class="kw">pub struct </span>Client {
+    config: ClientConfig,
+    decoders: ModuleDecoderRegistry,
+    db: Database,
+    federation_id: FederationId,
+    federation_meta: BTreeMap&lt;String, String&gt;,
+    primary_module_instance: ModuleInstanceId,
+    modules: ClientModuleRegistry,
+    module_inits: ClientModuleInitRegistry,
+    executor: Executor&lt;DynGlobalClientContext&gt;,
+    api: DynGlobalApi,
+    root_secret: DerivableSecret,
+    operation_log: OperationLog,
+    secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
+    <span class="doccomment">/// Number of [`ClientArc`] instances using this `Client`.
+    ///
+    /// The `Client` struct is both used for the client itself as well as
+    /// for the global context used in the state machine executor. This means we
+    /// cannot rely on the reference count of the `Arc&lt;Client&gt;` to
+    /// determine if the client should shut down.
+    </span>client_count: AtomicUsize,
+}
+
 <span class="kw">impl </span>Client {
     <span class="doccomment">/// Initialize a client builder that can be configured to create a new
     /// client.
@@ -2298,43 +2349,103 @@
         ClientBuilder::default()
     }
 
-    <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+    <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
+        <span class="self">self</span>.api.as_ref()
+    }
+
+    <span class="kw">pub async fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
         <span class="macro">debug!</span>(
             <span class="string">&quot;Starting fedimint client executor (version: {})&quot;</span>,
             <span class="macro">env!</span>(<span class="string">&quot;FEDIMINT_BUILD_CODE_VERSION&quot;</span>)
         );
-        <span class="self">self</span>.inner
-            .executor
-            .start_executor(<span class="self">self</span>.inner.context_gen())
-            .<span class="kw">await</span>;
-    }
-
-    <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
-        <span class="self">self</span>.inner.api.as_ref()
+        <span class="self">self</span>.executor.start_executor(<span class="self">self</span>.context_gen()).<span class="kw">await</span>;
     }
 
     <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
-        <span class="self">self</span>.inner.federation_id
+        <span class="self">self</span>.federation_id
     }
 
-    <span class="kw">pub fn </span>get_internal_payment_markers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PublicKey, u64)&gt; {
-        <span class="prelude-val">Ok</span>((
-            <span class="self">self</span>.federation_id()
-                .to_fake_ln_pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>.inner.secp_ctx)<span class="question-mark">?</span>,
-            <span class="number">0</span>,
-        ))
+    <span class="kw">fn </span>context_gen(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) -&gt; ModuleGlobalContextGen {
+        <span class="kw">let </span>client_inner = Arc::downgrade(<span class="self">self</span>);
+        Arc::new(<span class="kw">move </span>|module_instance, operation| {
+            ModuleGlobalClientContext {
+                client: client_inner
+                    .clone()
+                    .upgrade()
+                    .expect(<span class="string">&quot;ModuleGlobalContextGen called after client was dropped&quot;</span>),
+                module_instance_id: module_instance,
+                operation,
+            }
+            .into()
+        })
     }
 
-    <span class="kw">pub fn </span>get_meta(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-        <span class="self">self</span>.inner.federation_meta.get(key).cloned()
+    <span class="kw">fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.config
     }
 
     <span class="kw">pub fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
-        <span class="self">self</span>.inner.decoders()
+        <span class="kw-2">&amp;</span><span class="self">self</span>.decoders
+    }
+
+    <span class="doccomment">/// Returns a reference to the module, panics if not found
+    </span><span class="kw">fn </span>get_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule) {
+        <span class="self">self</span>.try_get_module(instance)
+            .expect(<span class="string">&quot;Module instance not found&quot;</span>)
+    }
+
+    <span class="kw">fn </span>try_get_module(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        instance: ModuleInstanceId,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule)&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.modules.get(instance)<span class="question-mark">?</span>.as_ref())
+    }
+
+    <span class="doccomment">/// Determines if a transaction is underfunded, overfunded or balanced
+    </span><span class="kw">fn </span>transaction_builder_balance(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        builder: <span class="kw-2">&amp;</span>TransactionBuilder,
+    ) -&gt; TransactionBuilderBalance {
+        <span class="comment">// FIXME: prevent overflows, currently not suitable for untrusted input
+        </span><span class="kw">let </span><span class="kw-2">mut </span>in_amount = Amount::ZERO;
+        <span class="kw">let </span><span class="kw-2">mut </span>out_amount = Amount::ZERO;
+        <span class="kw">let </span><span class="kw-2">mut </span>fee_amount = Amount::ZERO;
+
+        <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>builder.inputs {
+            <span class="kw">let </span>module = <span class="self">self</span>.get_module(input.input.module_instance_id());
+            <span class="kw">let </span>item_amount = module.input_amount(<span class="kw-2">&amp;</span>input.input);
+            in_amount += item_amount.amount;
+            fee_amount += item_amount.fee;
+        }
+
+        <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>builder.outputs {
+            <span class="kw">let </span>module = <span class="self">self</span>.get_module(output.output.module_instance_id());
+            <span class="kw">let </span>item_amount = module.output_amount(<span class="kw-2">&amp;</span>output.output);
+            out_amount += item_amount.amount;
+            fee_amount += item_amount.fee;
+        }
+
+        <span class="kw">let </span>total_out_amount = out_amount + fee_amount;
+
+        <span class="kw">match </span>total_out_amount.cmp(<span class="kw-2">&amp;</span>in_amount) {
+            Ordering::Equal =&gt; TransactionBuilderBalance::Balanced,
+            Ordering::Less =&gt; TransactionBuilderBalance::Overfunded(in_amount - total_out_amount),
+            Ordering::Greater =&gt; {
+                TransactionBuilderBalance::Underfunded(total_out_amount - in_amount)
+            }
+        }
+    }
+
+    <span class="kw">pub fn </span>get_internal_payment_markers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PublicKey, u64)&gt; {
+        <span class="prelude-val">Ok</span>((<span class="self">self</span>.federation_id().to_fake_ln_pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx)<span class="question-mark">?</span>, <span class="number">0</span>))
+    }
+
+    <span class="kw">pub fn </span>get_meta(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+        <span class="self">self</span>.federation_meta.get(key).cloned()
     }
 
     <span class="kw">fn </span>root_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DerivableSecret {
-        <span class="self">self</span>.inner.root_secret.clone()
+        <span class="self">self</span>.root_secret.clone()
     }
 
     <span class="doccomment">/// Secret that is derived from the seed used by the client and cannot
@@ -2345,15 +2456,97 @@
         <span class="self">self</span>.root_secret().child_key(EXTERNAL_SECRET_CHILD_ID)
     }
 
+    <span class="kw">pub async fn </span>add_state_machines(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.executor.add_state_machines_dbtx(dbtx, states).<span class="kw">await
+    </span>}
+
+    <span class="comment">// TODO: implement as part of [`OperationLog`]
+    </span><span class="kw">pub async fn </span>get_active_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashSet&lt;OperationId&gt; {
+        <span class="self">self</span>.executor.get_active_operations().<span class="kw">await
+    </span>}
+
+    <span class="kw">pub fn </span>operation_log(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>OperationLog {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.operation_log
+    }
+
+    <span class="doccomment">/// Adds funding to a transaction or removes over-funding via change.
+    </span><span class="kw">async fn </span>finalize_transaction(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
+        <span class="kw-2">mut </span>partial_transaction: TransactionBuilder,
+    ) -&gt; anyhow::Result&lt;(
+        Transaction,
+        Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
+        Range&lt;u64&gt;,
+    )&gt; {
+        <span class="kw">if let </span>TransactionBuilderBalance::Underfunded(missing_amount) =
+            <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
+        {
+            <span class="kw">let </span>inputs = <span class="self">self
+                </span>.primary_module()
+                .create_sufficient_input(
+                    <span class="self">self</span>.primary_module_instance,
+                    dbtx,
+                    operation_id,
+                    missing_amount,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            partial_transaction.inputs.extend(inputs);
+        }
+
+        <span class="comment">// This is the range of mint outputs that will be added to the transaction
+        // in order to balance it. Notice that it may stay empty in case the transaction
+        // is already balanced.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>change_range = Range {
+            start: partial_transaction.outputs.len() <span class="kw">as </span>u64,
+            end: partial_transaction.outputs.len() <span class="kw">as </span>u64,
+        };
+
+        <span class="kw">if let </span>TransactionBuilderBalance::Overfunded(excess_amount) =
+            <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
+        {
+            <span class="kw">let </span>change_outputs = <span class="self">self
+                </span>.primary_module()
+                .create_exact_output(
+                    <span class="self">self</span>.primary_module_instance,
+                    dbtx,
+                    operation_id,
+                    excess_amount,
+                )
+                .<span class="kw">await</span>;
+
+            <span class="comment">// We add our new mint outputs to the change range
+            </span>change_range.end += change_outputs.len() <span class="kw">as </span>u64;
+            partial_transaction.outputs.extend(change_outputs);
+        }
+
+        <span class="macro">assert!</span>(
+            <span class="macro">matches!</span>(
+                <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction),
+                TransactionBuilderBalance::Balanced
+            ),
+            <span class="string">&quot;Transaction is balanced after the previous two operations&quot;
+        </span>);
+
+        <span class="kw">let </span>(tx, states) = partial_transaction.build(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx, thread_rng());
+
+        <span class="prelude-val">Ok</span>((tx, states, change_range))
+    }
+
     <span class="doccomment">/// Add funding and/or change to the transaction builder as needed, finalize
     /// the transaction and submit it to the federation.
     ///
     /// ## Errors
-    /// The function will return an error if the operation with given id already
+    /// The function will return an error if the operation with given ID already
     /// exists.
     ///
     /// ## Panics
-    /// The function will panic if the the database transaction collides with
+    /// The function will panic if the database transaction collides with
     /// other and fails with others too often, this should not happen except for
     /// excessively concurrent scenarios.
     </span><span class="kw">pub async fn </span>finalize_and_submit_transaction&lt;F, M&gt;(
@@ -2362,29 +2555,27 @@
         operation_type: <span class="kw-2">&amp;</span>str,
         operation_meta: F,
         tx_builder: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;TransactionId&gt;
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
-        </span>F: Fn(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;) -&gt; M + Clone + MaybeSend + MaybeSync,
+        </span>F: Fn(TransactionId, Vec&lt;OutPoint&gt;) -&gt; M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
     {
         <span class="kw">let </span>operation_type = operation_type.to_owned();
 
         <span class="kw">let </span>autocommit_res = <span class="self">self
-            </span>.inner
-            .db
+            </span>.db
             .autocommit(
                 |dbtx| {
                     <span class="kw">let </span>operation_type = operation_type.clone();
                     <span class="kw">let </span>tx_builder = tx_builder.clone();
                     <span class="kw">let </span>operation_meta = operation_meta.clone();
                     Box::pin(<span class="kw">async move </span>{
-                        <span class="kw">if </span>ClientInner::operation_exists(dbtx, operation_id).<span class="kw">await </span>{
+                        <span class="kw">if </span>Client::operation_exists(dbtx, operation_id).<span class="kw">await </span>{
                             <span class="macro">bail!</span>(<span class="string">&quot;There already exists an operation with id {operation_id:?}&quot;</span>)
                         }
 
-                        <span class="kw">let </span>(txid, change_outpoint) = <span class="self">self
-                            </span>.inner
-                            .finalize_and_submit_transaction(dbtx, operation_id, tx_builder)
+                        <span class="kw">let </span>(txid, change) = <span class="self">self
+                            </span>.finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         <span class="self">self</span>.operation_log()
@@ -2392,11 +2583,11 @@
                                 dbtx,
                                 operation_id,
                                 <span class="kw-2">&amp;</span>operation_type,
-                                operation_meta(txid, change_outpoint),
+                                operation_meta(txid, change.clone()),
                             )
                             .<span class="kw">await</span>;
 
-                        <span class="prelude-val">Ok</span>(txid)
+                        <span class="prelude-val">Ok</span>((txid, change))
                     })
                 },
                 <span class="prelude-val">Some</span>(<span class="number">100</span>), <span class="comment">// TODO: handle what happens after 100 retries
@@ -2415,24 +2606,96 @@
         }
     }
 
-    <span class="kw">pub async fn </span>add_state_machines(
+    <span class="kw">async fn </span>finalize_and_submit_transaction_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.inner
-            .executor
-            .add_state_machines_dbtx(dbtx, states)
+        operation_id: OperationId,
+        tx_builder: TransactionBuilder,
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
+        <span class="kw">let </span>(transaction, <span class="kw-2">mut </span>states, change_range) = <span class="self">self
+            </span>.finalize_transaction(dbtx, operation_id, tx_builder)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>txid = transaction.tx_hash();
+        <span class="kw">let </span>change_outpoints = change_range
+            .into_iter()
+            .map(|out_idx| OutPoint { txid, out_idx })
+            .collect();
+
+        <span class="kw">let </span>tx_submission_sm = DynState::from_typed(
+            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            OperationState {
+                operation_id,
+                state: TxSubmissionStates::Created {
+                    txid,
+                    tx: transaction,
+                    next_submission: now(),
+                },
+            },
+        );
+        states.push(tx_submission_sm);
+
+        <span class="self">self</span>.executor.add_state_machines_dbtx(dbtx, states).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>((txid, change_outpoints))
+    }
+
+    <span class="kw">async fn </span>transaction_update_stream(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+    ) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, OperationState&lt;TxSubmissionStates&gt;&gt; {
+        <span class="self">self</span>.executor
+            .notifier()
+            .module_notifier::&lt;OperationState&lt;TxSubmissionStates&gt;&gt;(
+                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+            )
+            .subscribe(operation_id)
             .<span class="kw">await
     </span>}
 
-    <span class="comment">// TODO: implement as part of OperationLog
-    </span><span class="kw">pub async fn </span>get_active_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashSet&lt;OperationId&gt; {
-        <span class="self">self</span>.inner.executor.get_active_operations().<span class="kw">await
+    <span class="kw">async fn </span>operation_exists(
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        operation_id: OperationId,
+    ) -&gt; bool {
+        <span class="kw">let </span>active_state_exists = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>ActiveOperationStateKeyPrefix::&lt;DynGlobalClientContext&gt; {
+                operation_id,
+                _pd: Default::default(),
+            })
+            .<span class="kw">await
+            </span>.next()
+            .<span class="kw">await
+            </span>.is_some();
+
+        <span class="kw">let </span>inactive_state_exists = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>InactiveOperationStateKeyPrefix::&lt;DynGlobalClientContext&gt; {
+                operation_id,
+                _pd: Default::default(),
+            })
+            .<span class="kw">await
+            </span>.next()
+            .<span class="kw">await
+            </span>.is_some();
+
+        active_state_exists || inactive_state_exists
+    }
+
+    <span class="doccomment">/// Waits for an output from the primary module to reach its final
+    /// state.
+    </span><span class="kw">pub async fn </span>await_primary_module_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        out_point: OutPoint,
+    ) -&gt; anyhow::Result&lt;Amount&gt; {
+        <span class="self">self</span>.primary_module()
+            .await_primary_module_output(operation_id, out_point)
+            .<span class="kw">await
     </span>}
 
-    <span class="kw">pub fn </span>operation_log(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>OperationLog {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.inner.operation_log
+    <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
+        <span class="kw">let </span>all_active_states = <span class="self">self</span>.executor.get_active_states().<span class="kw">await</span>;
+        all_active_states
+            .into_iter()
+            .any(|context| context.<span class="number">0</span>.operation_id() == operation_id)
     }
 
     <span class="doccomment">/// Returns a reference to a typed module client instance by kind
@@ -2444,8 +2707,7 @@
             </span>.get_first_instance(module_kind)
             .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;No modules found of kind {module_kind}&quot;</span>));
         <span class="kw">let </span>module: <span class="kw-2">&amp;</span>M = <span class="self">self
-            </span>.inner
-            .try_get_module(id)
+            </span>.try_get_module(id)
             .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;Unknown module instance {id}&quot;</span>))
             .as_any()
             .downcast_ref::&lt;M&gt;()
@@ -2462,40 +2724,37 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule)&gt; {
-        <span class="self">self</span>.inner
-            .try_get_module(instance_id)
+        <span class="self">self</span>.try_get_module(instance_id)
             .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Unknown module instance {}&quot;</span>, instance_id))
     }
 
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.inner.db
+        <span class="kw-2">&amp;</span><span class="self">self</span>.db
     }
 
     <span class="doccomment">/// Returns a stream of transaction updates for the given operation id that
     /// can later be used to watch for a specific transaction being accepted.
     </span><span class="kw">pub async fn </span>transaction_updates(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; TransactionUpdates {
         TransactionUpdates {
-            update_stream: <span class="self">self</span>.inner.transaction_update_stream(operation_id).<span class="kw">await</span>,
+            update_stream: <span class="self">self</span>.transaction_update_stream(operation_id).<span class="kw">await</span>,
         }
     }
 
     <span class="doccomment">/// Returns the instance id of the first module of the given kind. The
     /// primary module will always be returned before any other modules (which
-    /// themselves are ordered by their instance id).
+    /// themselves are ordered by their instance ID).
     </span><span class="kw">pub fn </span>get_first_instance(<span class="kw-2">&amp;</span><span class="self">self</span>, module_kind: <span class="kw-2">&amp;</span>ModuleKind) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt; {
         <span class="kw">if </span><span class="kw-2">&amp;</span><span class="self">self
-            </span>.inner
-            .modules
-            .get_with_kind(<span class="self">self</span>.inner.primary_module_instance)
+            </span>.modules
+            .get_with_kind(<span class="self">self</span>.primary_module_instance)
             .expect(<span class="string">&quot;must have primary module&quot;</span>)
             .<span class="number">0
             </span>== module_kind
         {
-            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="self">self</span>.inner.primary_module_instance);
+            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="self">self</span>.primary_module_instance);
         }
 
-        <span class="self">self</span>.inner
-            .modules
+        <span class="self">self</span>.modules
             .iter_modules()
             .find(|(<span class="kw">_</span>, kind, _module)| <span class="kw-2">*</span>kind == module_kind)
             .map(|(instance_id, <span class="kw">_</span>, <span class="kw">_</span>)| instance_id)
@@ -2503,28 +2762,31 @@
 
     <span class="doccomment">/// Returns the data from which the client&#39;s root secret is derived (e.g.
     /// BIP39 seed phrase struct).
-    </span><span class="kw">pub async fn </span>root_secret_encoding&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; S::Encoding
-    <span class="kw">where
-        </span>S: RootSecretStrategy,
-    {
-        get_client_root_secret_encoding::&lt;S&gt;(<span class="self">self</span>.db()).<span class="kw">await
+    </span><span class="kw">pub async fn </span>root_secret_encoding&lt;T: Decodable&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
+        get_decoded_client_secret::&lt;T&gt;(<span class="self">self</span>.db()).<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Waits for an output from the primary module to reach its final
+    <span class="doccomment">/// Waits for outputs from the primary module to reach its final
     /// state.
-    </span><span class="kw">pub async fn </span>await_primary_module_output(
+    </span><span class="kw">pub async fn </span>await_primary_module_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        out_point: OutPoint,
+        outputs: Vec&lt;OutPoint&gt;,
     ) -&gt; anyhow::Result&lt;Amount&gt; {
-        <span class="self">self</span>.inner
-            .await_primary_module_output(operation_id, out_point)
-            .<span class="kw">await
-    </span>}
+        <span class="kw">let </span><span class="kw-2">mut </span>amount = Amount::ZERO;
+
+        <span class="kw">for </span>out_point <span class="kw">in </span>outputs {
+            amount += <span class="self">self
+                </span>.await_primary_module_output(operation_id, out_point)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(amount)
+    }
 
     <span class="doccomment">/// Returns the config with which the client was initialized.
     </span><span class="kw">pub fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.inner.config
+        <span class="kw-2">&amp;</span><span class="self">self</span>.config
     }
 
     <span class="doccomment">/// Returns the config of the client in JSON format.
@@ -2554,9 +2816,8 @@
 
     <span class="doccomment">/// Get the primary module
     </span><span class="kw">pub fn </span>primary_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynClientModule {
-        <span class="self">self</span>.inner
-            .modules
-            .get(<span class="self">self</span>.inner.primary_module_instance)
+        <span class="self">self</span>.modules
+            .get(<span class="self">self</span>.primary_module_instance)
             .expect(<span class="string">&quot;primary module must be present&quot;</span>)
     }
 
@@ -2564,7 +2825,7 @@
     </span><span class="kw">pub async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="self">self</span>.primary_module()
             .get_balance(
-                <span class="self">self</span>.inner.primary_module_instance,
+                <span class="self">self</span>.primary_module_instance,
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>.db().begin_transaction().<span class="kw">await</span>,
             )
             .<span class="kw">await
@@ -2577,7 +2838,7 @@
         <span class="kw">let </span>initial_balance = <span class="self">self</span>.get_balance().<span class="kw">await</span>;
         <span class="kw">let </span>db = <span class="self">self</span>.db().clone();
         <span class="kw">let </span>primary_module = <span class="self">self</span>.primary_module().clone();
-        <span class="kw">let </span>primary_module_instance = <span class="self">self</span>.inner.primary_module_instance;
+        <span class="kw">let </span>primary_module_instance = <span class="self">self</span>.primary_module_instance;
 
         Box::pin(<span class="macro">stream! </span>{
             <span class="kw">yield </span>initial_balance;
@@ -2601,11 +2862,8 @@
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.api()
             .discover_api_version_set(
-                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(
-                    <span class="self">self</span>.get_config(),
-                    <span class="kw-2">&amp;</span><span class="self">self</span>.inner.module_inits,
-                )
-                .<span class="kw">await</span>,
+                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(<span class="self">self</span>.get_config(), <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits)
+                    .<span class="kw">await</span>,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
@@ -2659,7 +2917,7 @@
     <span class="doccomment">/// Load the common api versions to use from cache and start a background
     /// process to refresh them.
     ///
-    /// This is a compromise so we not have to wait for version discovery to
+    /// This is a compromise, so we not have to wait for version discovery to
     /// complete every time a [`Client`] is being built.
     </span><span class="kw">async fn </span>load_and_refresh_common_api_version_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
@@ -2722,265 +2980,6 @@
 
         <span class="prelude-val">Ok</span>(common_api_versions)
     }
-
-    <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
-        <span class="self">self</span>.inner.has_active_states(operation_id).<span class="kw">await
-    </span>}
-}
-
-<span class="doccomment">/// Resources particular to a module instance
-</span><span class="kw">pub struct </span>ClientModuleInstance {
-    <span class="doccomment">/// Instance id of the module
-    </span><span class="kw">pub </span>id: ModuleInstanceId,
-    <span class="doccomment">/// Module-specific DB
-    </span><span class="kw">pub </span>db: Database,
-    <span class="doccomment">/// Module-specific API
-    </span><span class="kw">pub </span>api: DynModuleApi,
-}
-
-<span class="kw">struct </span>ClientInner {
-    config: ClientConfig,
-    decoders: ModuleDecoderRegistry,
-    db: Database,
-    federation_id: FederationId,
-    federation_meta: BTreeMap&lt;String, String&gt;,
-    primary_module_instance: ModuleInstanceId,
-    modules: ClientModuleRegistry,
-    module_inits: ClientModuleInitRegistry,
-    executor: Executor&lt;DynGlobalClientContext&gt;,
-    api: DynGlobalApi,
-    root_secret: DerivableSecret,
-    operation_log: OperationLog,
-    secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
-    <span class="doccomment">/// Number of [`Client`] instances using this `ClientInner`.
-    ///
-    /// The `ClientInner` struct is both used for the client itself as well as
-    /// for the global context used in the state machine executor. This means we
-    /// cannot rely on the reference count of the `Arc&lt;ClientInner&gt;` to
-    /// determine if the client should shut down.
-    </span>client_count: AtomicUsize,
-}
-
-<span class="kw">impl </span>ClientInner {
-    <span class="kw">fn </span>primary_module(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynClientModule {
-        <span class="self">self</span>.modules
-            .get(<span class="self">self</span>.primary_module_instance)
-            .expect(<span class="string">&quot;must have primary module&quot;</span>)
-    }
-
-    <span class="kw">fn </span>context_gen(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) -&gt; ModuleGlobalContextGen {
-        <span class="kw">let </span>client_inner = Arc::downgrade(<span class="self">self</span>);
-        Arc::new(<span class="kw">move </span>|module_instance, operation| {
-            ModuleGlobalClientContext {
-                client: client_inner
-                    .clone()
-                    .upgrade()
-                    .expect(<span class="string">&quot;ModuleGlobalContextGen called after client was dropped&quot;</span>),
-                module_instance_id: module_instance,
-                operation,
-            }
-            .into()
-        })
-    }
-
-    <span class="kw">fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.config
-    }
-
-    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.decoders
-    }
-
-    <span class="doccomment">/// Returns a reference to the module, panics if not found
-    </span><span class="kw">fn </span>get_module(<span class="kw-2">&amp;</span><span class="self">self</span>, instance: ModuleInstanceId) -&gt; <span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule) {
-        <span class="self">self</span>.try_get_module(instance)
-            .expect(<span class="string">&quot;Module instance not found&quot;</span>)
-    }
-
-    <span class="kw">fn </span>try_get_module(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        instance: ModuleInstanceId,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IClientModule)&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.modules.get(instance)<span class="question-mark">?</span>.as_ref())
-    }
-
-    <span class="doccomment">/// Determines if a transaction is underfunded, overfunded or balanced
-    </span><span class="kw">fn </span>transaction_builder_balance(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        builder: <span class="kw-2">&amp;</span>TransactionBuilder,
-    ) -&gt; TransactionBuilderBalance {
-        <span class="comment">// FIXME: prevent overflows, currently not suitable for untrusted input
-        </span><span class="kw">let </span><span class="kw-2">mut </span>in_amount = Amount::ZERO;
-        <span class="kw">let </span><span class="kw-2">mut </span>out_amount = Amount::ZERO;
-        <span class="kw">let </span><span class="kw-2">mut </span>fee_amount = Amount::ZERO;
-
-        <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>builder.inputs {
-            <span class="kw">let </span>module = <span class="self">self</span>.get_module(input.input.module_instance_id());
-            <span class="kw">let </span>item_amount = module.input_amount(<span class="kw-2">&amp;</span>input.input);
-            in_amount += item_amount.amount;
-            fee_amount += item_amount.fee;
-        }
-
-        <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>builder.outputs {
-            <span class="kw">let </span>module = <span class="self">self</span>.get_module(output.output.module_instance_id());
-            <span class="kw">let </span>item_amount = module.output_amount(<span class="kw-2">&amp;</span>output.output);
-            out_amount += item_amount.amount;
-            fee_amount += item_amount.fee;
-        }
-
-        <span class="kw">let </span>total_out_amount = out_amount + fee_amount;
-
-        <span class="kw">match </span>total_out_amount.cmp(<span class="kw-2">&amp;</span>in_amount) {
-            Ordering::Equal =&gt; TransactionBuilderBalance::Balanced,
-            Ordering::Less =&gt; TransactionBuilderBalance::Overfunded(in_amount - total_out_amount),
-            Ordering::Greater =&gt; {
-                TransactionBuilderBalance::Underfunded(total_out_amount - in_amount)
-            }
-        }
-    }
-
-    <span class="doccomment">/// Adds funding to a transaction or removes overfunding via change.
-    </span><span class="kw">async fn </span>finalize_transaction(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-        <span class="kw-2">mut </span>partial_transaction: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;(
-        Transaction,
-        Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-        <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    )&gt; {
-        <span class="kw">if let </span>TransactionBuilderBalance::Underfunded(missing_amount) =
-            <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
-        {
-            <span class="kw">let </span>input = <span class="self">self
-                </span>.primary_module()
-                .create_sufficient_input(
-                    <span class="self">self</span>.primary_module_instance,
-                    dbtx,
-                    operation_id,
-                    missing_amount,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-            partial_transaction.inputs.push(input);
-        }
-
-        <span class="kw">let </span><span class="kw-2">mut </span>change_idx: <span class="prelude-ty">Option</span>&lt;u64&gt; = <span class="prelude-val">None</span>;
-        <span class="kw">if let </span>TransactionBuilderBalance::Overfunded(excess_amount) =
-            <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction)
-        {
-            <span class="kw">let </span>output = <span class="self">self
-                </span>.primary_module()
-                .create_exact_output(
-                    <span class="self">self</span>.primary_module_instance,
-                    dbtx,
-                    operation_id,
-                    excess_amount,
-                )
-                .<span class="kw">await</span>;
-            change_idx = <span class="prelude-val">Some</span>(partial_transaction.outputs.len() <span class="kw">as </span>u64);
-            partial_transaction.outputs.push(output);
-        }
-
-        <span class="macro">assert!</span>(
-            <span class="macro">matches!</span>(
-                <span class="self">self</span>.transaction_builder_balance(<span class="kw-2">&amp;</span>partial_transaction),
-                TransactionBuilderBalance::Balanced
-            ),
-            <span class="string">&quot;Transaction is balanced after the previous two operations&quot;
-        </span>);
-
-        <span class="kw">let </span>(tx, states) = partial_transaction.build(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx, thread_rng());
-
-        <span class="prelude-val">Ok</span>((tx, states, change_idx))
-    }
-
-    <span class="kw">async fn </span>finalize_and_submit_transaction(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-        tx_builder: TransactionBuilder,
-    ) -&gt; anyhow::Result&lt;(TransactionId, <span class="prelude-ty">Option</span>&lt;OutPoint&gt;)&gt; {
-        <span class="kw">let </span>(transaction, <span class="kw-2">mut </span>states, change_idx) = <span class="self">self
-            </span>.finalize_transaction(dbtx, operation_id, tx_builder)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>txid = transaction.tx_hash();
-        <span class="kw">let </span>change_outpoint = change_idx.map(|out_idx| OutPoint { txid, out_idx });
-
-        <span class="kw">let </span>tx_submission_sm = DynState::from_typed(
-            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            OperationState {
-                operation_id,
-                state: TxSubmissionStates::Created {
-                    txid,
-                    tx: transaction,
-                    next_submission: now(),
-                },
-            },
-        );
-        states.push(tx_submission_sm);
-
-        <span class="self">self</span>.executor.add_state_machines_dbtx(dbtx, states).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>((txid, change_outpoint))
-    }
-
-    <span class="kw">async fn </span>transaction_update_stream(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, OperationState&lt;TxSubmissionStates&gt;&gt; {
-        <span class="self">self</span>.executor
-            .notifier()
-            .module_notifier::&lt;OperationState&lt;TxSubmissionStates&gt;&gt;(
-                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-            )
-            .subscribe(operation_id)
-            .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>operation_exists(
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        operation_id: OperationId,
-    ) -&gt; bool {
-        <span class="kw">let </span>active_state_exists = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>ActiveOperationStateKeyPrefix::&lt;DynGlobalClientContext&gt; {
-                operation_id,
-                _pd: Default::default(),
-            })
-            .<span class="kw">await
-            </span>.next()
-            .<span class="kw">await
-            </span>.is_some();
-
-        <span class="kw">let </span>inactive_state_exists = dbtx
-            .find_by_prefix(<span class="kw-2">&amp;</span>InactiveOperationStateKeyPrefix::&lt;DynGlobalClientContext&gt; {
-                operation_id,
-                _pd: Default::default(),
-            })
-            .<span class="kw">await
-            </span>.next()
-            .<span class="kw">await
-            </span>.is_some();
-
-        active_state_exists || inactive_state_exists
-    }
-
-    <span class="kw">pub async fn </span>await_primary_module_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-        out_point: OutPoint,
-    ) -&gt; anyhow::Result&lt;Amount&gt; {
-        <span class="self">self</span>.primary_module()
-            .await_primary_module_output(operation_id, out_point)
-            .<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool {
-        <span class="kw">let </span>all_active_states = <span class="self">self</span>.executor.get_active_states().<span class="kw">await</span>;
-        all_active_states
-            .into_iter()
-            .any(|context| context.<span class="number">0</span>.operation_id() == operation_id)
-    }
 }
 
 <span class="doccomment">/// See [`Client::transaction_updates`]
@@ -3007,24 +3006,80 @@
     </span>}
 }
 
+<span class="doccomment">/// Federation config and meta data that can be used to show a preview of the
+/// federation one is about to join or to initialize a client.
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>FederationInfo {
+    config: ClientConfig,
+    <span class="comment">// TODO: make non-optional or remove
+    </span>invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
+}
+
+<span class="kw">impl </span>FederationInfo {
+    <span class="doccomment">/// Download federation info using invitation code
+    </span><span class="kw">pub async fn </span>from_invite_code(invite: InviteCode) -&gt; anyhow::Result&lt;FederationInfo&gt; {
+        <span class="kw">let </span>config = try_download_config(invite.clone(), <span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(FederationInfo {
+            config,
+            invite_code: <span class="prelude-val">Some</span>(invite),
+        })
+    }
+
+    <span class="doccomment">/// Create `FederationInfo` from config, may download further meta data in
+    /// the future
+    </span><span class="kw">pub async fn </span>from_config(config: ClientConfig) -&gt; anyhow::Result&lt;FederationInfo&gt; {
+        <span class="comment">// The return type is a result in case we want to fallibly fetch additional meta
+        // data in the future
+        </span><span class="prelude-val">Ok</span>(FederationInfo {
+            config,
+            invite_code: <span class="prelude-val">None</span>,
+        })
+    }
+
+    <span class="doccomment">/// Returns the federations configuration
+    </span><span class="kw">pub fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.config
+    }
+
+    <span class="doccomment">/// If the federation info was created from
+    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
+        <span class="self">self</span>.invite_code.clone()
+    }
+
+    <span class="doccomment">/// Get the string representation of a given meta field
+    </span><span class="kw">pub fn </span>meta_raw(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.config.global.meta.get(key).map(AsRef::as_ref)
+    }
+
+    <span class="doccomment">/// Get the value of a given meta field
+    </span><span class="kw">pub fn </span>meta&lt;V: serde::de::DeserializeOwned&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;V&gt;&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(str_value) = <span class="self">self</span>.meta_raw(key) <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        };
+        serde_json::from_str(str_value).context(<span class="macro">format!</span>(<span class="string">&quot;Decoding meta field &#39;{key}&#39; failed&quot;</span>))
+    }
+
+    <span class="doccomment">/// Creates an API client for the federation
+    </span><span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
+        DynGlobalApi::from(WsFederationApi::from_config(<span class="kw-2">&amp;</span><span class="self">self</span>.config))
+    }
+
+    <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
+        <span class="self">self</span>.config.global.federation_id
+    }
+}
+
 <span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     primary_module_instance: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    config_source: <span class="prelude-ty">Option</span>&lt;ConfigSource&gt;,
+    config: <span class="prelude-ty">Option</span>&lt;FederationInfo&gt;,
     db: <span class="prelude-ty">Option</span>&lt;DatabaseSource&gt;,
-}
-
-<span class="attr">#[derive(Clone)]
-#[allow(clippy::large_enum_variant)]
-</span><span class="kw">pub enum </span>ConfigSource {
-    Config(ClientConfig),
-    Invite(InviteCode),
 }
 
 <span class="kw">pub enum </span>DatabaseSource {
     Fresh(Box&lt;<span class="kw">dyn </span>IDatabase&gt;),
-    Reuse(Client),
+    Reuse(ClientArc),
 }
 
 <span class="kw">impl </span>ClientBuilder {
@@ -3038,47 +3093,23 @@
         <span class="self">self</span>.module_inits.attach(module_init);
     }
 
-    <span class="doccomment">/// Instructs the client builder to use this `InviteCode` in building a
-    /// client. Use this configuration method as an alternative to
-    /// `with_config` builder option.
+    <span class="doccomment">/// Instructs the client builder to use this `FederationInfo` in building a
+    /// client. A `FederationInfo` can be created from either an invite code via
+    /// [`FederationInfo::from_invite_code`] or from a config via
+    /// [`FederationInfo::from_config`].
     ///
     /// ## Failure Conditions
     ///
-    /// If a `ConfigSource` already exists in the builder, calling this method
+    /// If a config already exists in the builder, calling this method
     /// fails. If a `ClientConfig` already exists in the database, calling
     /// `ClientBuilder::build` fails.
     /// - You can use `get_config_from_db` to check if a config exists in the
     ///   database.
-    </span><span class="kw">pub fn </span>with_invite_code(<span class="kw-2">&amp;mut </span><span class="self">self</span>, invite_code: InviteCode) {
-        <span class="kw">let </span>was_replaced = <span class="self">self
-            </span>.config_source
-            .replace(ConfigSource::Invite(invite_code))
-            .is_some();
+    </span><span class="kw">pub fn </span>with_federation_info(<span class="kw-2">&amp;mut </span><span class="self">self</span>, federation_info: FederationInfo) {
+        <span class="kw">let </span>was_replaced = <span class="self">self</span>.config.replace(federation_info).is_some();
         <span class="macro">assert!</span>(
             !was_replaced,
             <span class="string">&quot;Only one configuration source can be given to the builder.&quot;
-        </span>)
-    }
-
-    <span class="doccomment">/// Instructs the client builder to use this `ClientConfig` in building a
-    /// client. Use this configuration method as an alternative to
-    /// `with_invite_code` builder option.
-    ///
-    /// ## Failure Conditions
-    ///
-    /// If a `ConfigSource` already exists in the builder, calling this method
-    /// fails. If a `ClientConfig` already exists in the database, calling
-    /// `ClientBuilder::build` fails.
-    /// - You can use `get_config_from_db` to check if a config exists in the
-    ///   database.
-    </span><span class="kw">pub fn </span>with_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config: ClientConfig) {
-        <span class="kw">let </span>was_replaced = <span class="self">self
-            </span>.config_source
-            .replace(ConfigSource::Config(config))
-            .is_some();
-        <span class="macro">assert!</span>(
-            !was_replaced,
-            <span class="string">&quot;Only one config source can be given to the builder.&quot;
         </span>)
     }
 
@@ -3123,7 +3154,7 @@
     /// ## Panics
     /// If the old and new client use different config since that might make the
     /// DB incompatible.
-    </span><span class="kw">pub fn </span>with_old_client_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, client: Client) {
+    </span><span class="kw">pub fn </span>with_old_client_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, client: ClientArc) {
         <span class="kw">let </span>was_replaced = <span class="self">self</span>.db.replace(DatabaseSource::Reuse(client)).is_some();
         <span class="macro">assert!</span>(
             !was_replaced,
@@ -3131,15 +3162,12 @@
         </span>);
     }
 
-    <span class="kw">pub async fn </span>build_restoring_from_backup&lt;S&gt;(
-        <span class="self">self</span>,
-        secret: ClientSecret&lt;S&gt;,
-    ) -&gt; anyhow::Result&lt;(Client, Metadata)&gt;
-    <span class="kw">where
-        </span>S: RootSecretStrategy,
-    {
+    <span class="kw">pub async fn </span>store_encodable_client_secret&lt;T: Encodable&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        secret: T,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>fake_notifications = Default::default();
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().expect(<span class="string">&quot;No database provided&quot;</span>) {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
             DatabaseSource::Fresh(db) =&gt; DatabaseTransaction::new(
                 db.begin_transaction().<span class="kw">await</span>,
                 Default::default(),
@@ -3148,6 +3176,46 @@
             DatabaseSource::Reuse(db) =&gt; db.db().begin_transaction().<span class="kw">await</span>,
         };
 
+        <span class="comment">// Don&#39;t overwrite an existing secret
+        </span><span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await </span>{
+            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret already exists, cannot overwrite&quot;</span>),
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret)<span class="question-mark">?</span>;
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>EncodedClientSecretKey, <span class="kw-2">&amp;</span>encoded_secret)
+                    .<span class="kw">await</span>;
+                dbtx.commit_tx().<span class="kw">await</span>;
+                <span class="prelude-val">Ok</span>(())
+            }
+        }
+    }
+
+    <span class="kw">pub async fn </span>load_decodable_client_secret&lt;T: Decodable&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
+        <span class="kw">let </span>fake_notifications = Default::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
+            DatabaseSource::Fresh(db) =&gt; DatabaseTransaction::new(
+                db.begin_transaction().<span class="kw">await</span>,
+                Default::default(),
+                <span class="kw-2">&amp;</span>fake_notifications,
+            ),
+            DatabaseSource::Reuse(db) =&gt; db.db().begin_transaction().<span class="kw">await</span>,
+        };
+
+        <span class="kw">let </span>client_secret = dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+
+        <span class="kw">match </span>client_secret {
+            <span class="prelude-val">Some</span>(client_secret) =&gt; {
+                T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
+                    .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Decoding failed: {e}&quot;</span>))
+            }
+            <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret not present in DB&quot;</span>),
+        }
+    }
+
+    <span class="kw">pub async fn </span>build_restoring_from_backup(
+        <span class="self">self</span>,
+        root_secret: DerivableSecret,
+    ) -&gt; anyhow::Result&lt;(ClientArc, Metadata)&gt; {
         <span class="comment">// TODO: assert DB is empty (what does that mean? maybe needs a method that
         // checks if &quot;wipe&quot; was called on modules?)
 
@@ -3163,35 +3231,25 @@
         //     &quot;Database is not empty, cannot restore from backup&quot;
         // );
 
-        // Write new root secret to DB before starting client
-        </span>set_client_root_secret(<span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>secret).<span class="kw">await</span>;
-        dbtx.commit_tx().<span class="kw">await</span>;
-
-        <span class="kw">let </span>client = <span class="self">self</span>.build::&lt;S&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>client = <span class="self">self</span>.build(root_secret).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>metadata = client.restore_from_backup().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((client, metadata))
     }
 
     <span class="doccomment">/// Build a [`Client`] and start its executor
-    </span><span class="kw">pub async fn </span>build&lt;S&gt;(<span class="self">self</span>) -&gt; anyhow::Result&lt;Client&gt;
-    <span class="kw">where
-        </span>S: RootSecretStrategy,
-    {
-        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped::&lt;S&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
+    </span><span class="kw">pub async fn </span>build(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret).<span class="kw">await</span><span class="question-mark">?</span>;
         client.start_executor().<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(client)
     }
 
     <span class="doccomment">/// Build a [`Client`] but do not start the executor
-    </span><span class="kw">pub async fn </span>build_stopped&lt;S&gt;(<span class="self">self</span>) -&gt; anyhow::Result&lt;Client&gt;
-    <span class="kw">where
-        </span>S: RootSecretStrategy,
-    {
+    </span><span class="kw">pub async fn </span>build_stopped(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
         <span class="kw">let </span>(config, decoders, db) = <span class="kw">match </span><span class="self">self</span>.db.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database was provided&quot;</span>))<span class="question-mark">? </span>{
             DatabaseSource::Fresh(db) =&gt; {
                 <span class="kw">let </span>db = Database::new_from_box(db, ModuleDecoderRegistry::default());
-                <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config_source.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
                     <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
@@ -3214,7 +3272,7 @@
             DatabaseSource::Reuse(client) =&gt; {
                 <span class="kw">let </span>db = client.inner.db.clone();
                 <span class="kw">let </span>decoders = client.inner.decoders.clone();
-                <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config_source.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 (config, decoders, db)
             }
@@ -3236,8 +3294,6 @@
             <span class="kw-2">&amp;</span>db,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>root_secret = get_client_root_secret::&lt;S&gt;(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 
         <span class="kw">let </span>modules = {
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();
@@ -3291,7 +3347,7 @@
             executor_builder.build(db.clone(), notifier).<span class="kw">await
         </span>};
 
-        <span class="kw">let </span>client_inner = Arc::new(ClientInner {
+        <span class="kw">let </span>client_inner = Arc::new(Client {
             config: config.clone(),
             decoders,
             db: db.clone(),
@@ -3308,7 +3364,7 @@
             client_count: AtomicUsize::new(<span class="number">1</span>),
         });
 
-        <span class="prelude-val">Ok</span>(Client {
+        <span class="prelude-val">Ok</span>(ClientArc {
             inner: client_inner,
         })
     }
@@ -3317,45 +3373,36 @@
 <span class="comment">// Sources config from database or from config source specified
 </span><span class="kw">async fn </span>get_config(
     db: <span class="kw-2">&amp;</span>Database,
-    config_source: <span class="prelude-ty">Option</span>&lt;ConfigSource&gt;,
+    maybe_federation_info: <span class="prelude-ty">Option</span>&lt;FederationInfo&gt;,
 ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="kw">let </span>config_res = <span class="kw">match </span>get_config_from_db(db).<span class="kw">await </span>{
-        <span class="prelude-val">Some</span>(config) =&gt; {
-            <span class="macro">ensure!</span>(
-                config_source.is_none(),
-                <span class="string">&quot;Alternative config source provided but config was found in DB&quot;
-            </span>);
-            <span class="prelude-val">Ok</span>(config)
-        }
-        <span class="prelude-val">None </span>=&gt; {
-            <span class="kw">let </span>config = <span class="kw">match </span>config_source
-                .clone()
-                .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No config source was provided&quot;</span>))<span class="question-mark">?
-            </span>{
-                ConfigSource::Config(config) =&gt; config.clone(),
-                ConfigSource::Invite(invite_code) =&gt; {
-                    try_download_config(invite_code.clone(), <span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?
-                </span>}
-            };
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = get_config_from_db(db).<span class="kw">await </span>{
+        <span class="macro">ensure!</span>(
+            maybe_federation_info.is_none(),
+            <span class="string">&quot;Alternative config source provided but config was found in DB&quot;
+        </span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(config);
+    }
 
-            <span class="comment">// Save config to DB
-            </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-            dbtx.insert_new_entry(
-                <span class="kw-2">&amp;</span>ClientConfigKey {
-                    id: config.global.federation_id,
-                },
-                <span class="kw-2">&amp;</span>config,
-            )
+    <span class="kw">let </span>federation_info = maybe_federation_info.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No config source was provided&quot;</span>))<span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+    <span class="comment">// Save config to DB
+    </span>dbtx.insert_new_entry(
+        <span class="kw-2">&amp;</span>ClientConfigKey {
+            id: federation_info.federation_id(),
+        },
+        <span class="kw-2">&amp;</span>federation_info.config().clone(),
+    )
+    .<span class="kw">await</span>;
+    <span class="comment">// Save invite code to DB
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = federation_info.invite_code() {
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientInviteCodeKey {}, <span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await</span>;
-            dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
-            <span class="prelude-val">Ok</span>(config)
-        }
-    };
+    dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="comment">// some borrowck lifetime limitation thing
-    </span><span class="attr">#[allow(clippy::let_and_return)]
-    </span>config_res
+    <span class="prelude-val">Ok</span>(federation_info.config().clone())
 }
 
 <span class="kw">pub async fn </span>get_config_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;ClientConfig&gt; {
@@ -3368,6 +3415,18 @@
         .<span class="kw">await
         </span>.map(|(<span class="kw">_</span>, config)| config);
     config
+}
+
+<span class="kw">pub async fn </span>get_invite_code_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+    <span class="attr">#[allow(clippy::let_and_return)]
+    </span><span class="kw">let </span>invite = dbtx
+        .find_by_prefix(<span class="kw-2">&amp;</span>ClientInviteCodeKeyPrefix)
+        .<span class="kw">await
+        </span>.next()
+        .<span class="kw">await
+        </span>.map(|(<span class="kw">_</span>, invite)| invite);
+    invite
 }
 
 <span class="doccomment">/// Tries to download the client config from the federation,
@@ -3397,113 +3456,20 @@
     }
 }
 
-<span class="doccomment">/// Fetches the client secret encoding from the database or generates a new one
-/// if none is present
-</span><span class="kw">pub async fn </span>get_client_root_secret_encoding&lt;S&gt;(db: <span class="kw-2">&amp;</span>Database) -&gt; S::Encoding
-<span class="kw">where
-    </span>S: RootSecretStrategy,
-{
+<span class="doccomment">/// Fetches the encoded client secret from the database and decodes it.
+/// If an encoded client secret is not present in the database, or if
+/// decoding fails, an error is returned.
+</span><span class="kw">pub async fn </span>get_decoded_client_secret&lt;T: Decodable&gt;(db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;T&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>tx = db.begin_transaction().<span class="kw">await</span>;
-    <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>ClientSecretKey::&lt;S&gt;::default()).<span class="kw">await</span>;
-    <span class="kw">let </span>secret = <span class="kw">if let </span><span class="prelude-val">Some</span>(client_secret) = client_secret {
-        client_secret.<span class="number">0
-    </span>} <span class="kw">else </span>{
-        <span class="kw">let </span>secret = S::random(<span class="kw-2">&amp;mut </span>thread_rng());
-        <span class="kw">let </span>no_replacement = tx
-            .insert_entry(
-                <span class="kw-2">&amp;</span>ClientSecretKey::&lt;S&gt;::default(),
-                <span class="kw-2">&amp;</span>ClientSecret(secret.clone()),
-            )
-            .<span class="kw">await
-            </span>.is_none();
-        <span class="macro">assert!</span>(
-            no_replacement,
-            <span class="string">&quot;We would have overwritten our secret key, aborting!&quot;
-        </span>);
-        secret
-    };
+    <span class="kw">let </span>client_secret = tx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await</span>;
     tx.commit_tx().<span class="kw">await</span>;
-    secret
-}
 
-<span class="doccomment">/// Sets the client secret in the database, returns if an old secret was
-/// overwritten
-</span><span class="kw">async fn </span>set_client_root_secret&lt;S&gt;(
-    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    secret: <span class="kw-2">&amp;</span>ClientSecret&lt;S&gt;,
-) -&gt; bool
-<span class="kw">where
-    </span>S: RootSecretStrategy,
-{
-    dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientSecretKey::&lt;S&gt;::default(), secret)
-        .<span class="kw">await
-        </span>.is_some()
-}
-
-<span class="doccomment">/// Fetches the client secret from the database or generates a new one if
-/// none is present
-</span><span class="kw">pub async fn </span>get_client_root_secret&lt;S&gt;(db: <span class="kw-2">&amp;</span>Database) -&gt; DerivableSecret
-<span class="kw">where
-    </span>S: RootSecretStrategy,
-{
-    <span class="kw">let </span>encoding = get_client_root_secret_encoding::&lt;S&gt;(db).<span class="kw">await</span>;
-    S::to_root_secret(<span class="kw-2">&amp;</span>encoding)
-}
-
-<span class="doccomment">/// Secret input key material from which the [`DerivableSecret`] used by the
-/// client will be seeded
-</span><span class="kw">pub struct </span>ClientSecret&lt;S: RootSecretStrategy&gt;(S::Encoding);
-
-<span class="kw">impl</span>&lt;S&gt; ClientSecret&lt;S&gt;
-<span class="kw">where
-    </span>S: RootSecretStrategy,
-{
-    <span class="kw">pub fn </span>new(key: S::Encoding) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(key)
-    }
-}
-
-<span class="kw">impl</span>&lt;ES&gt; Serialize <span class="kw">for </span>ClientSecret&lt;ES&gt;
-<span class="kw">where
-    </span>ES: RootSecretStrategy,
-{
-    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; std::result::Result&lt;S::Ok, S::Error&gt;
-    <span class="kw">where
-        </span>S: serde::Serializer,
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
-        ES::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, <span class="kw-2">&amp;mut </span>bytes).expect(<span class="string">&quot;Writing to vec can&#39;t fail&quot;</span>);
-        serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
-    }
-}
-
-<span class="kw">impl</span>&lt;S&gt; Encodable <span class="kw">for </span>ClientSecret&lt;S&gt;
-<span class="kw">where
-    </span>S: RootSecretStrategy,
-{
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, Error&gt; {
-        S::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, writer)
-    }
-}
-
-<span class="kw">impl</span>&lt;S&gt; Decodable <span class="kw">for </span>ClientSecret&lt;S&gt;
-<span class="kw">where
-    </span>S: RootSecretStrategy,
-{
-    <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
-        reader: <span class="kw-2">&amp;mut </span>R,
-        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; std::result::Result&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(ClientSecret(S::consensus_decode(reader)<span class="question-mark">?</span>))
-    }
-}
-
-<span class="kw">impl</span>&lt;S&gt; Debug <span class="kw">for </span>ClientSecret&lt;S&gt;
-<span class="kw">where
-    </span>S: RootSecretStrategy,
-{
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;ClientSecret([redacted])&quot;</span>)
+    <span class="kw">match </span>client_secret {
+        <span class="prelude-val">Some</span>(client_secret) =&gt; {
+            T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
+                .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;Decoding failed: {e}&quot;</span>))
+        }
+        <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Encoded client secret not present in DB&quot;</span>),
     }
 }
 

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (030e4d382 2023-09-10)" data-channel="nightly" data-search-js="search-5d3eaacf19ebf04f.js" data-settings-js="settings-74424d7eec62a23e.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-f194925aa375ae96.css" data-theme-dark-css="dark-1dd4d1ce031e15de.css" data-theme-ayu-css="ayu-49e58d069f567085.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-8d035c8cea6edbc4.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-f194925aa375ae96.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1dd4d1ce031e15de.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_ln_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_ln_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_ln_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1316,7 +1316,6 @@
 <a href="#1316" id="1316">1316</a>
 <a href="#1317" id="1317">1317</a>
 <a href="#1318" id="1318">1318</a>
-<a href="#1319" id="1319">1319</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1338,12 +1337,12 @@
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, OperationId, State, StateTransition};
+<span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
@@ -1370,10 +1369,10 @@
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>incoming::IncomingSmError;
-<span class="kw">use </span>lightning::ln::PaymentSecret;
-<span class="kw">use </span>lightning::routing::gossip::RoutingFees;
-<span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
-<span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
+<span class="kw">use </span>lightning_invoice::{
+    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
+    DEFAULT_EXPIRY_TIME,
+};
 <span class="kw">use </span>rand::seq::IteratorRandom;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -1459,7 +1458,7 @@
     Funding,
     Preimage(Preimage),
     RefundSuccess {
-        outpoint: OutPoint,
+        out_points: Vec&lt;OutPoint&gt;,
         error: IncomingSmError,
     },
     RefundError {
@@ -1538,7 +1537,7 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>LightningClientExt <span class="kw">for </span>Client {
+</span><span class="kw">impl </span>LightningClientExt <span class="kw">for </span>ClientArc {
     <span class="kw">async fn </span>select_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;LightningGateway&gt; {
         <span class="kw">let </span>(_lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
@@ -1682,11 +1681,11 @@
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;User client will only create contract outputs on spend&quot;</span>),
         };
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
-        <span class="kw">let </span>operation_meta_gen = |txid, change_outpoint| LightningOperationMeta::Pay {
+        <span class="kw">let </span>operation_meta_gen = |txid, change| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
             invoice: invoice.clone(),
             fee,
-            change_outpoint,
+            change,
         };
 
         <span class="comment">// Write the new payment index into the database, fail the payment if the commit
@@ -1748,7 +1747,7 @@
             invoice: invoice.clone(),
             extra_meta: extra_meta.clone(),
         };
-        <span class="kw">let </span>txid = <span class="self">self
+        <span class="kw">let </span>(txid, <span class="kw">_</span>) = <span class="self">self
             </span>.finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonGen::KIND.as_str(),
@@ -1807,10 +1806,10 @@
                     <span class="prelude-val">Ok</span>(()) =&gt; {
                         <span class="kw">yield </span>LnReceiveState::Funded;
 
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(txid) = lightning.await_claim_acceptance(operation_id).<span class="kw">await </span>{
+                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(out_points) = lightning.await_claim_acceptance(operation_id).<span class="kw">await </span>{
                             <span class="kw">yield </span>LnReceiveState::AwaitingFunds;
 
-                            <span class="kw">if </span>client.await_primary_module_output(operation_id, OutPoint{ txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
+                            <span class="kw">if </span>client.await_primary_module_outputs(operation_id, out_points).<span class="kw">await</span>.is_ok() {
                                 <span class="kw">yield </span>LnReceiveState::Claimed;
                                 <span class="kw">return</span>;
                             }
@@ -1831,13 +1830,13 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(out_point, <span class="kw">_</span>, change_outpoint) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;() {
+        <span class="kw">let </span>(out_point, <span class="kw">_</span>, change) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;() {
             LightningOperationMeta::Pay {
                 out_point,
                 invoice,
-                change_outpoint,
+                change,
                 ..
-            } =&gt; (out_point, invoice, change_outpoint),
+            } =&gt; (out_point, invoice, change),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
 
@@ -1863,9 +1862,9 @@
 
                 <span class="kw">match </span>lightning.await_lightning_payment_success(operation_id).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(preimage) =&gt; {
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(change) = change_outpoint {
+                        <span class="kw">if </span>!change.is_empty() {
                             <span class="kw">yield </span>LnPayState::AwaitingChange;
-                            <span class="kw">match </span>client.await_primary_module_output(operation_id, change).<span class="kw">await </span>{
+                            <span class="kw">match </span>client.await_primary_module_outputs(operation_id, change).<span class="kw">await </span>{
                                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
                                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                                     <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">&quot;Error occurred while waiting for the primary module&#39;s output&quot;</span>.to_string() };
@@ -1880,9 +1879,9 @@
                     <span class="prelude-val">Err</span>(PayError::Refundable(block_height, error)) =&gt; {
                         <span class="kw">yield </span>LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
 
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(refund_txid) = lightning.await_refund(operation_id).<span class="kw">await </span>{
+                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(out_points) = lightning.await_refund(operation_id).<span class="kw">await </span>{
                             <span class="comment">// need to await primary module to get refund
-                            </span><span class="kw">if </span>client.await_primary_module_output(operation_id, OutPoint{ txid: refund_txid, out_idx: <span class="number">0</span>}).<span class="kw">await</span>.is_ok() {
+                            </span><span class="kw">if </span>client.await_primary_module_outputs(operation_id, out_points).<span class="kw">await</span>.is_ok() {
                                 <span class="kw">yield </span>LnPayState::Refunded { gateway_error: error };
                                 <span class="kw">return</span>;
                             }
@@ -1914,10 +1913,9 @@
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(LightningClientStateMachines::InternalPay(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt; <span class="kw">break </span>InternalPayState::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted{ txid, error } =&gt; {
-                                <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0</span>};
-                                <span class="kw">match </span>client.await_primary_module_output(operation_id, out_point).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>InternalPayState::RefundSuccess { outpoint: out_point, error },
+                            IncomingSmStates::RefundSubmitted{ out_points, error } =&gt; {
+                                <span class="kw">match </span>client.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
+                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break </span>InternalPayState::RefundSuccess { out_points, error },
                                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">break </span>InternalPayState::RefundError{ error_message: e.to_string(), error },
                                 }
                             },
@@ -1941,7 +1939,7 @@
         out_point: OutPoint,
         invoice: Bolt11Invoice,
         fee: Amount,
-        change_outpoint: <span class="prelude-ty">Option</span>&lt;OutPoint&gt;,
+        change: Vec&lt;OutPoint&gt;,
     },
     Receive {
         out_point: OutPoint,
@@ -2319,12 +2317,12 @@
     <span class="kw">async fn </span>await_claim_acceptance(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId, LightningReceiveError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;OutPoint&gt;, LightningReceiveError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">loop </span>{
             <span class="kw">match </span>stream.next().<span class="kw">await </span>{
                 <span class="prelude-val">Some</span>(LightningClientStateMachines::Receive(state)) =&gt; <span class="kw">match </span>state.state {
-                    LightningReceiveStates::Success(txid) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(txid),
+                    LightningReceiveStates::Success(out_points) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(out_points),
                     LightningReceiveStates::Canceled(e) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
@@ -2362,13 +2360,13 @@
         }
     }
 
-    <span class="kw">async fn </span>await_refund(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId, PayError&gt; {
+    <span class="kw">async fn </span>await_refund(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;OutPoint&gt;, PayError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">loop </span>{
             <span class="kw">match </span>stream.next().<span class="kw">await </span>{
                 <span class="prelude-val">Some</span>(LightningClientStateMachines::LightningPay(state)) =&gt; <span class="kw">match </span>state.state {
-                    LightningPayStates::Refunded(refund_txid) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(refund_txid);
+                    LightningPayStates::Refunded(out_points) =&gt; {
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(out_points);
                     }
                     LightningPayStates::Failure(reason) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(PayError::Failed(reason)),
                     <span class="kw">_ </span>=&gt; {}

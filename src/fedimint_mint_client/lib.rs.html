@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (030e4d382 2023-09-10)" data-channel="nightly" data-search-js="search-5d3eaacf19ebf04f.js" data-settings-js="settings-74424d7eec62a23e.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-f194925aa375ae96.css" data-theme-dark-css="dark-1dd4d1ce031e15de.css" data-theme-ayu-css="ayu-49e58d069f567085.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-8d035c8cea6edbc4.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-f194925aa375ae96.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1dd4d1ce031e15de.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/lib.rs`."><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1648,6 +1648,116 @@
 <a href="#1648" id="1648">1648</a>
 <a href="#1649" id="1649">1649</a>
 <a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
+<a href="#1659" id="1659">1659</a>
+<a href="#1660" id="1660">1660</a>
+<a href="#1661" id="1661">1661</a>
+<a href="#1662" id="1662">1662</a>
+<a href="#1663" id="1663">1663</a>
+<a href="#1664" id="1664">1664</a>
+<a href="#1665" id="1665">1665</a>
+<a href="#1666" id="1666">1666</a>
+<a href="#1667" id="1667">1667</a>
+<a href="#1668" id="1668">1668</a>
+<a href="#1669" id="1669">1669</a>
+<a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
+<a href="#1693" id="1693">1693</a>
+<a href="#1694" id="1694">1694</a>
+<a href="#1695" id="1695">1695</a>
+<a href="#1696" id="1696">1696</a>
+<a href="#1697" id="1697">1697</a>
+<a href="#1698" id="1698">1698</a>
+<a href="#1699" id="1699">1699</a>
+<a href="#1700" id="1700">1700</a>
+<a href="#1701" id="1701">1701</a>
+<a href="#1702" id="1702">1702</a>
+<a href="#1703" id="1703">1703</a>
+<a href="#1704" id="1704">1704</a>
+<a href="#1705" id="1705">1705</a>
+<a href="#1706" id="1706">1706</a>
+<a href="#1707" id="1707">1707</a>
+<a href="#1708" id="1708">1708</a>
+<a href="#1709" id="1709">1709</a>
+<a href="#1710" id="1710">1710</a>
+<a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
+<a href="#1737" id="1737">1737</a>
+<a href="#1738" id="1738">1738</a>
+<a href="#1739" id="1739">1739</a>
+<a href="#1740" id="1740">1740</a>
+<a href="#1741" id="1741">1741</a>
+<a href="#1742" id="1742">1742</a>
+<a href="#1743" id="1743">1743</a>
+<a href="#1744" id="1744">1744</a>
+<a href="#1745" id="1745">1745</a>
+<a href="#1746" id="1746">1746</a>
+<a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1676,14 +1786,12 @@
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client::sm::{
-    Context, DynState, Executor, ModuleNotifier, OperationId, State, StateTransition,
-};
+<span class="kw">use </span>fedimint_client::sm::{Context, DynState, Executor, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, Client, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
-<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1693,8 +1801,8 @@
 };
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, Tiered, TieredMulti,
-    TieredSummary, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
+    TieredMulti, TieredSummary, TransactionId,
 };
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
@@ -1719,7 +1827,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreated};
 <span class="kw">use </span><span class="kw">crate</span>::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStates, MintOutputStatesCreated,
-    MultiNoteIssuanceRequest, NoteIssuanceRequest,
+    NoteIssuanceRequest,
 };
 
 <span class="kw">const </span>MINT_E_CASH_TYPE_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
@@ -1825,6 +1933,15 @@
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt;;
 
+    <span class="doccomment">/// Same as `spend_notes` but allows different to select notes to be used.
+    </span><span class="kw">async fn </span>spend_notes_with_selector&lt;M: Serialize + Send&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
+        requested_amount: Amount,
+        try_cancel_after: Duration,
+        extra_meta: M,
+    ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt;;
+
     <span class="doccomment">/// Validate the given notes and return the total amount of the notes.
     /// Validation checks that:
     /// - the federation ID is correct
@@ -1846,7 +1963,7 @@
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;SpendOOBState&gt;&gt;;
 
     <span class="doccomment">/// Awaits the backup restoration to complete
-    </span><span class="kw">async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt;;
+    </span><span class="kw">async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Amount&gt;;
 }
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
@@ -1891,7 +2008,7 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>MintClientExt <span class="kw">for </span>Client {
+</span><span class="kw">impl </span>MintClientExt <span class="kw">for </span>ClientArc {
     <span class="kw">async fn </span>reissue_external_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         oob_notes: OOBNotes,
@@ -1918,9 +2035,14 @@
         );
 
         <span class="kw">let </span>amount = notes.total_amount();
-        <span class="kw">let </span>mint_input = mint.create_input_from_notes(operation_id, notes).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>mint_input = mint
+            .create_input_from_notes(operation_id, notes)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .map(|input| input.into_dyn(instance.id))
+            .collect();
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_input(mint_input.into_dyn(instance.id));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(mint_input);
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">&quot;MintClientExt::reissue_external_notes extra_meta is serializable&quot;</span>);
@@ -1932,14 +2054,19 @@
             extra_meta: extra_meta.clone(),
         };
 
-        <span class="self">self</span>.finalize_and_submit_transaction(
-            operation_id,
-            MintCommonGen::KIND.as_str(),
-            operation_meta_gen,
-            tx,
-        )
-        .<span class="kw">await
-        </span>.context(<span class="string">&quot;We already reissued these notes&quot;</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>change = <span class="self">self
+            </span>.finalize_and_submit_transaction(
+                operation_id,
+                MintCommonGen::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .<span class="kw">await
+            </span>.context(<span class="string">&quot;We already reissued these notes&quot;</span>)<span class="question-mark">?
+            </span>.<span class="number">1</span>;
+
+        <span class="self">self</span>.await_primary_module_outputs(operation_id, change)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(operation_id)
     }
@@ -1993,6 +2120,22 @@
         try_cancel_after: Duration,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
+        <span class="self">self</span>.spend_notes_with_selector(
+            <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+            min_amount,
+            try_cancel_after,
+            extra_meta,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>spend_notes_with_selector&lt;M: Serialize + Send&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
+        requested_amount: Amount,
+        try_cancel_after: Duration,
+        extra_meta: M,
+    ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
         <span class="kw">let </span>(mint, instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">&quot;MintClientExt::spend_notes extra_meta is serializable&quot;</span>);
@@ -2005,7 +2148,8 @@
                         <span class="kw">let </span>(operation_id, states, notes) = mint
                             .spend_notes_oob(
                                 <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance.id),
-                                min_amount,
+                                notes_selector,
+                                requested_amount,
                                 try_cancel_after,
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2027,7 +2171,7 @@
                                 MintCommonGen::KIND.as_str(),
                                 MintOperationMeta {
                                     variant: MintOperationMetaVariants::SpendOOB {
-                                        requested_amount: min_amount,
+                                        requested_amount,
                                         oob_notes: oob_notes.clone(),
                                     },
                                     amount: oob_notes.total_amount(),
@@ -2148,14 +2292,14 @@
     }
 
     <span class="doccomment">/// Waits for the mint backup restoration to finish
-    </span><span class="kw">async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+    </span><span class="kw">async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Amount&gt; {
         <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
         mint.await_restore_finished().<span class="kw">await
     </span>}
 }
 
 <span class="kw">async fn </span>mint_operation(
-    client: <span class="kw-2">&amp;</span>Client,
+    client: <span class="kw-2">&amp;</span>ClientArc,
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
     <span class="kw">let </span>operation = client
@@ -2297,7 +2441,8 @@
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>MintClientContext {
     <span class="kw">pub </span>mint_decoder: Decoder,
-    <span class="kw">pub </span>mint_keys: Tiered&lt;AggregatePublicKey&gt;,
+    <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
+    <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;tbs::PublicKeyShare&gt;&gt;,
     <span class="kw">pub </span>secret: DerivableSecret,
     <span class="kw">pub </span>cancel_oob_payment_bc: tokio::sync::broadcast::Sender&lt;OperationId&gt;,
 }
@@ -2319,7 +2464,8 @@
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
         MintClientContext {
             mint_decoder: <span class="self">self</span>.decoder(),
-            mint_keys: <span class="self">self</span>.cfg.tbs_pks.clone(),
+            tbs_pks: <span class="self">self</span>.cfg.tbs_pks.clone(),
+            peer_tbs_pks: <span class="self">self</span>.cfg.peer_tbs_pks.clone(),
             secret: <span class="self">self</span>.secret.clone(),
             cancel_oob_payment_bc: <span class="self">self</span>.cancel_oob_payment_bc.clone(),
         }
@@ -2327,9 +2473,8 @@
 
     <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; TransactionItemAmount {
         TransactionItemAmount {
-            amount: input.<span class="number">0</span>.total_amount(),
-            <span class="comment">// FIXME: prevent overflows
-            </span>fee: <span class="self">self</span>.cfg.fee_consensus.note_spend_abs * (input.<span class="number">0</span>.count_items() <span class="kw">as </span>u64),
+            amount: input.amount,
+            fee: <span class="self">self</span>.cfg.fee_consensus.note_spend_abs,
         }
     }
 
@@ -2338,14 +2483,14 @@
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
     ) -&gt; TransactionItemAmount {
         TransactionItemAmount {
-            amount: output.<span class="number">0</span>.total_amount(),
-            fee: <span class="self">self</span>.cfg.fee_consensus.note_issuance_abs * (output.<span class="number">0</span>.count_items() <span class="kw">as </span>u64),
+            amount: output.amount,
+            fee: <span class="self">self</span>.cfg.fee_consensus.note_issuance_abs,
         }
     }
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        client: <span class="kw-2">&amp;</span>Client,
+        client: <span class="kw-2">&amp;</span>ClientArc,
         args: <span class="kw-2">&amp;</span>[ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
         <span class="kw">if </span>args.is_empty() {
@@ -2500,7 +2645,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
         <span class="self">self</span>.create_input(dbtx, operation_id, min_amount).<span class="kw">await
     </span>}
 
@@ -2509,7 +2654,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         amount: Amount,
-    ) -&gt; ClientOutput&lt;MintOutput, MintClientStateMachines&gt; {
+    ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
         <span class="comment">// FIXME: don&#39;t hardcode notes per denomination
         </span><span class="self">self</span>.create_output(dbtx, operation_id, <span class="number">2</span>, amount).<span class="kw">await
     </span>}
@@ -2551,13 +2696,36 @@
                         // showing incremental progress. Ideally the balance isn&#39;t shown to them
                         // during recovery anyway.
                         </span>MintClientStateMachines::Restore(MintRestoreStateMachine {
-                            state: MintRestoreStates::Success,
+                            state: MintRestoreStates::Success(<span class="kw">_</span>),
                             ..
                         }) =&gt; <span class="prelude-val">Some</span>(()),
                         <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
                     }
                 }),
         )
+    }
+
+    <span class="kw">async fn </span>leave(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        module_instance_id: ModuleInstanceId,
+        executor: Executor&lt;DynGlobalClientContext&gt;,
+        _api: DynGlobalApi,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>balance = ClientModule::get_balance(<span class="self">self</span>, dbtx).<span class="kw">await</span>;
+        <span class="kw">if </span>Amount::from_sats(<span class="number">0</span>) &lt; balance {
+            <span class="macro">bail!</span>(<span class="string">&quot;Outstanding balance: {balance}&quot;</span>);
+        }
+
+        <span class="kw">if </span>executor
+            .get_active_states()
+            .<span class="kw">await
+            </span>.into_iter()
+            .any(|s| s.<span class="number">0</span>.module_instance_id() == module_instance_id)
+        {
+            <span class="macro">bail!</span>(<span class="string">&quot;Pending operations&quot;</span>)
+        }
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -2588,48 +2756,55 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         notes_per_denomination: u16,
-        amount: Amount,
-    ) -&gt; ClientOutput&lt;MintOutput, MintClientStateMachines&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>amount_requests: Vec&lt;((Amount, NoteIssuanceRequest), (Amount, BlindNonce))&gt; =
-            Vec::new();
+        exact_amount: Amount,
+    ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
+        <span class="macro">assert!</span>(
+            exact_amount &gt; Amount::ZERO,
+            <span class="string">&quot;zero-amount outputs are not supported&quot;
+        </span>);
+
         <span class="kw">let </span>denominations = TieredSummary::represent_amount(
-            amount,
+            exact_amount,
             <span class="kw-2">&amp;</span><span class="self">self</span>.get_wallet_summary(dbtx).<span class="kw">await</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tbs_pks,
             notes_per_denomination,
         );
-        <span class="kw">for </span>(amt, num) <span class="kw">in </span>denominations.iter() {
+
+        <span class="kw">let </span><span class="kw-2">mut </span>outputs = Vec::new();
+
+        <span class="kw">for </span>(amount, num) <span class="kw">in </span>denominations.iter() {
             <span class="kw">for _ in </span><span class="number">0</span>..num {
-                <span class="kw">let </span>(request, blind_nonce) = <span class="self">self</span>.new_ecash_note(amt, dbtx).<span class="kw">await</span>;
-                amount_requests.push(((amt, request), (amt, blind_nonce)));
+                <span class="kw">let </span>(issuance_request, blind_nonce) = <span class="self">self</span>.new_ecash_note(amount, dbtx).<span class="kw">await</span>;
+
+                <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|txid, out_idx| {
+                    <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
+                        common: MintOutputCommon {
+                            operation_id,
+                            out_point: OutPoint { txid, out_idx },
+                        },
+                        state: MintOutputStates::Created(MintOutputStatesCreated {
+                            amount,
+                            issuance_request,
+                        }),
+                    })]
+                });
+
+                <span class="macro">debug!</span>(
+                    %amount,
+                    <span class="string">&quot;Generated issuance request&quot;
+                </span>);
+
+                outputs.push(ClientOutput {
+                    output: MintOutput {
+                        amount,
+                        blind_nonce,
+                    },
+                    state_machines: state_generator,
+                });
             }
         }
-        <span class="kw">let </span>(note_issuance, sig_req): (MultiNoteIssuanceRequest, MintOutput) =
-            amount_requests.into_iter().unzip();
 
-        <span class="kw">let </span>state_generator = Arc::new(<span class="kw">move </span>|txid, out_idx| {
-            <span class="macro">vec!</span>[MintClientStateMachines::Output(MintOutputStateMachine {
-                common: MintOutputCommon {
-                    operation_id,
-                    out_point: OutPoint { txid, out_idx },
-                },
-                state: MintOutputStates::Created(MintOutputStatesCreated {
-                    note_issuance: note_issuance.clone(),
-                }),
-            })]
-        });
-
-        <span class="macro">debug!</span>(
-            %amount,
-            notes = %sig_req.<span class="number">0</span>.count_items(),
-            tiers = <span class="question-mark">?</span>sig_req.<span class="number">0</span>.iter_tiers().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-            <span class="string">&quot;Generated issuance request&quot;
-        </span>);
-
-        ClientOutput {
-            output: sig_req,
-            state_machines: state_generator,
-        }
+        outputs
     }
 
     <span class="doccomment">/// Wait for the e-cash notes to be retrieved. If this is not possible
@@ -2675,8 +2850,14 @@
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt; {
-        <span class="kw">let </span>spendable_selected_notes = <span class="self">Self</span>::select_notes(dbtx, min_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
+        <span class="macro">assert!</span>(
+            min_amount &gt; Amount::ZERO,
+            <span class="string">&quot;zero-amount inputs are not supported&quot;
+        </span>);
+
+        <span class="kw">let </span>spendable_selected_notes =
+            <span class="self">Self</span>::select_notes(dbtx, <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount, min_amount).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>spendable_selected_notes.iter_items() {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
@@ -2695,49 +2876,51 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         notes: TieredMulti&lt;SpendableNote&gt;,
-    ) -&gt; anyhow::Result&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((amt, invalid_note)) = notes.iter_items().find(|(amt, note)| {
-            <span class="kw">let </span><span class="prelude-val">Some</span>(mint_key) = <span class="self">self</span>.cfg.tbs_pks.get(<span class="kw-2">*</span>amt) <span class="kw">else </span>{
-                <span class="kw">return </span><span class="bool-val">true</span>;
-            };
-            !note.note().verify(<span class="kw-2">*</span>mint_key)
-        }) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
-                <span class="string">&quot;Invalid note in input: amt={} note={:?}&quot;</span>,
-                amt,
-                invalid_note
-            ));
+    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>inputs = Vec::new();
+
+        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>notes.into_iter() {
+            <span class="kw">let </span>key = <span class="self">self
+                </span>.cfg
+                .tbs_pks
+                .get(amount)
+                .ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid amount tier: {amount}&quot;</span>))<span class="question-mark">?</span>;
+
+            <span class="kw">let </span>note = spendable_note.note();
+
+            <span class="kw">if </span>!note.verify(<span class="kw-2">*</span>key) {
+                <span class="macro">bail!</span>(<span class="string">&quot;Invalid note&quot;</span>);
+            }
+
+            <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid, input_idx| {
+                <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
+                    common: MintInputCommon {
+                        operation_id,
+                        txid,
+                        input_idx,
+                    },
+                    state: MintInputStates::Created(MintInputStateCreated {
+                        amount,
+                        spendable_note,
+                    }),
+                })]
+            });
+
+            inputs.push(ClientInput {
+                input: MintInput { amount, note },
+                keys: <span class="macro">vec!</span>[spendable_note.spend_key],
+                state_machines: sm_gen,
+            });
         }
 
-        <span class="kw">let </span>(spend_keys, selected_notes) = notes
-            .iter_items()
-            .map(|(amt, spendable_note)| (spendable_note.spend_key, (amt, spendable_note.note())))
-            .unzip();
-
-        <span class="kw">let </span>sm_gen = Arc::new(<span class="kw">move </span>|txid, input_idx| {
-            <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {
-                common: MintInputCommon {
-                    operation_id,
-                    txid,
-                    input_idx,
-                },
-                state: MintInputStates::Created(MintInputStateCreated {
-                    notes: notes.clone(),
-                }),
-            })]
-        });
-
-        <span class="prelude-val">Ok</span>(ClientInput {
-            input: MintInput(selected_notes),
-            keys: spend_keys,
-            state_machines: sm_gen,
-        })
+        <span class="prelude-val">Ok</span>(inputs)
     }
 
     <span class="kw">async fn </span>spend_notes_oob(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        min_amount: Amount,
+        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
+        requested_amount: Amount,
         try_cancel_after: Duration,
     ) -&gt; anyhow::Result&lt;(
         OperationId,
@@ -2745,11 +2928,12 @@
         TieredMulti&lt;SpendableNote&gt;,
     )&gt; {
         <span class="macro">ensure!</span>(
-            min_amount &gt; Amount::ZERO,
+            requested_amount &gt; Amount::ZERO,
             <span class="string">&quot;zero-amount out-of-band spends are not supported&quot;
         </span>);
 
-        <span class="kw">let </span>spendable_selected_notes = <span class="self">Self</span>::select_notes(dbtx, min_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>spendable_selected_notes =
+            <span class="self">Self</span>::select_notes(dbtx, notes_selector, requested_amount).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>operation_id = spendable_notes_to_operation_id(<span class="kw-2">&amp;</span>spendable_selected_notes);
 
@@ -2761,13 +2945,18 @@
             .<span class="kw">await</span>;
         }
 
-        <span class="kw">let </span>state_machines = <span class="macro">vec!</span>[MintClientStateMachines::OOB(MintOOBStateMachine {
-            operation_id,
-            state: MintOOBStates::Created(MintOOBStatesCreated {
-                notes: spendable_selected_notes.clone(),
-                timeout: fedimint_core::time::now() + try_cancel_after,
-            }),
-        })];
+        <span class="kw">let </span><span class="kw-2">mut </span>state_machines = Vec::new();
+
+        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>spendable_selected_notes.clone() {
+            state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
+                operation_id,
+                state: MintOOBStates::Created(MintOOBStatesCreated {
+                    amount,
+                    spendable_note,
+                    timeout: fedimint_core::time::now() + try_cancel_after,
+                }),
+            }));
+        }
 
         <span class="prelude-val">Ok</span>((operation_id, state_machines, spendable_selected_notes))
     }
@@ -2799,7 +2988,7 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Amount&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>restore_stream = <span class="self">self
             </span>.notifier
             .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
@@ -2807,10 +2996,10 @@
         <span class="kw">while let </span><span class="prelude-val">Some</span>(restore_step) = restore_stream.next().<span class="kw">await </span>{
             <span class="kw">match </span>restore_step {
                 MintClientStateMachines::Restore(MintRestoreStateMachine {
-                    state: MintRestoreStates::Success,
+                    state: MintRestoreStates::Success(amount),
                     ..
                 }) =&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(amount);
                 }
                 MintClientStateMachines::Restore(MintRestoreStateMachine {
                     state: MintRestoreStates::Failed(error),
@@ -2825,20 +3014,19 @@
         <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Restore stream closed without success or failure&quot;</span>))
     }
 
-    <span class="doccomment">/// Select notes with total amount of *at least* `amount`. If more than
-    /// requested amount of notes are returned it was because exact change
-    /// couldn&#39;t be made, and the next smallest amount will be returned.
-    ///
-    /// The caller can request change from the federation.
+    <span class="doccomment">/// Select notes with `requested_amount` using `notes_selector`.
     </span><span class="kw">async fn </span>select_notes(
         dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-        amount: Amount,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;, InsufficientBalanceError&gt; {
+        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
+        requested_amount: Amount,
+    ) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>note_stream = dbtx
             .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
             </span>.map(|(key, note)| (key.amount, note));
-        select_notes_from_stream(note_stream, amount).<span class="kw">await
+        notes_selector
+            .select_notes(note_stream, requested_amount)
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>get_all_spendable_notes(
@@ -2940,12 +3128,44 @@
     <span class="kw">pub </span>transaction_id: TransactionId,
 }
 
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>NotesSelector&lt;Note&gt;: Send + Sync {
+    <span class="doccomment">/// Select notes from stream for requested_amount.
+    /// The stream must produce items in non- decreasing order of amount.
+    </span><span class="kw">async fn </span>select_notes(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="comment">// FIXME: async trait doesn&#39;t like maybe_add_send
+        </span><span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
+        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
+        requested_amount: Amount,
+    ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt;;
+}
+
+<span class="doccomment">/// Select notes with total amount of *at least* `request_amount`. If more than
+/// requested amount of notes are returned it was because exact change couldn&#39;t
+/// be made, and the next smallest amount will be returned.
+///
+/// The caller can request change from the federation.
+</span><span class="kw">pub struct </span>SelectNotesWithAtleastAmount;
+
+<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">impl</span>&lt;Note: Send&gt; NotesSelector&lt;Note&gt; <span class="kw">for </span>SelectNotesWithAtleastAmount {
+    <span class="kw">async fn </span>select_notes(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt; + Send,
+        <span class="attr">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)] </span>stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
+        requested_amount: Amount,
+    ) -&gt; anyhow::Result&lt;TieredMulti&lt;Note&gt;&gt; {
+        <span class="prelude-val">Ok</span>(select_notes_from_stream(stream, requested_amount).<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+}
+
 <span class="comment">// We are using a greedy algorithm to select notes. We start with the largest
 // then proceed to the lowest tiers/denominations.
 // But there is a catch: we don&#39;t know if there are enough notes in the lowest
 // tiers, so we need to save a big note in case the sum of the following
 // small notes are not enough.
-</span><span class="kw">pub async fn </span>select_notes_from_stream&lt;Note&gt;(
+</span><span class="kw">async fn </span>select_notes_from_stream&lt;Note&gt;(
     stream: <span class="kw">impl </span>futures::Stream&lt;Item = (Amount, Note)&gt;,
     requested_amount: Amount,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;Note&gt;, InsufficientBalanceError&gt; {

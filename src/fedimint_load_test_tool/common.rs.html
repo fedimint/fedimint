@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-load-test-tool/src/common.rs`."><title>common.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_load_test_tool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (030e4d382 2023-09-10)" data-channel="nightly" data-search-js="search-5d3eaacf19ebf04f.js" data-settings-js="settings-74424d7eec62a23e.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-f194925aa375ae96.css" data-theme-dark-css="dark-1dd4d1ce031e15de.css" data-theme-ayu-css="ayu-49e58d069f567085.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-8d035c8cea6edbc4.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-f194925aa375ae96.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1dd4d1ce031e15de.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_load_test_tool/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-load-test-tool/src/common.rs`."><title>common.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_load_test_tool" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_load_test_tool/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -290,6 +290,24 @@
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -298,12 +316,11 @@
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{ClnLightningCli, FedimintCli, LnCli};
-<span class="kw">use </span>fedimint_client::secret::PlainRootSecretStrategy;
-<span class="kw">use </span>fedimint_client::sm::OperationId;
+<span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::transaction::TransactionBuilder;
-<span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
+<span class="kw">use </span>fedimint_client::{ClientArc, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::api::InviteCode;
-<span class="kw">use </span>fedimint_core::core::IntoDynInstance;
+<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
@@ -315,6 +332,7 @@
 <span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
 
@@ -344,7 +362,7 @@
 </span>}
 
 <span class="kw">pub async fn </span>reissue_notes(
-    client: <span class="kw-2">&amp;</span>Client,
+    client: <span class="kw-2">&amp;</span>ClientArc,
     oob_notes: OOBNotes,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -367,7 +385,7 @@
 }
 
 <span class="kw">pub async fn </span>do_spend_notes(
-    client: <span class="kw-2">&amp;</span>Client,
+    client: <span class="kw-2">&amp;</span>ClientArc,
     amount: Amount,
 ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
     <span class="kw">let </span>(operation_id, oob_notes) = client
@@ -390,7 +408,7 @@
 }
 
 <span class="kw">pub async fn </span>await_spend_notes_finish(
-    client: <span class="kw-2">&amp;</span>Client,
+    client: <span class="kw-2">&amp;</span>ClientArc,
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>updates = client
@@ -413,21 +431,35 @@
 <span class="kw">pub async fn </span>build_client(
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
-) -&gt; anyhow::Result&lt;Client&gt; {
+) -&gt; anyhow::Result&lt;ClientArc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientGen);
     client_builder.with_module(LightningClientGen);
     client_builder.with_module(WalletClientGen::default());
     client_builder.with_primary_module(<span class="number">1</span>);
     <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = invite_code {
-        client_builder.with_invite_code(invite_code);
+        client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>);
     }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
         client_builder.with_database(fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>)
     } <span class="kw">else </span>{
         client_builder.with_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
-    <span class="kw">let </span>client = client_builder.build::&lt;PlainRootSecretStrategy&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
+        .load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;()
+        .<span class="kw">await
+    </span>{
+        <span class="prelude-val">Ok</span>(secret) =&gt; secret,
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
+            client_builder.store_encodable_client_secret(secret).<span class="kw">await</span><span class="question-mark">?</span>;
+            secret
+        }
+    };
+    <span class="kw">let </span>client = client_builder
+        .build(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret))
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(client)
 }
 
@@ -461,7 +493,7 @@
 }
 
 <span class="kw">pub async fn </span>gateway_pay_invoice(
-    client: <span class="kw-2">&amp;</span>Client,
+    client: <span class="kw-2">&amp;</span>ClientArc,
     invoice: Bolt11Invoice,
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -520,7 +552,7 @@
     }
 }
 
-<span class="kw">pub async fn </span>switch_default_gateway(client: <span class="kw-2">&amp;</span>Client, gateway_id: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {
+<span class="kw">pub async fn </span>switch_default_gateway(client: <span class="kw-2">&amp;</span>ClientArc, gateway_id: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>gateway_id = parse_gateway_id(gateway_id)<span class="question-mark">?</span>;
     client.set_active_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
@@ -530,7 +562,7 @@
     secp256k1::PublicKey::from_str(s)
 }
 
-<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>Client) -&gt; anyhow::Result&lt;TieredSummary&gt; {
+<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientArc) -&gt; anyhow::Result&lt;TieredSummary&gt; {
     <span class="kw">let </span>(mint_client, <span class="kw">_</span>) = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
     <span class="kw">let </span>summary = mint_client
         .get_wallet_summary(<span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>))
@@ -539,7 +571,7 @@
 }
 
 <span class="kw">pub async fn </span>remint_denomination(
-    client: <span class="kw-2">&amp;</span>Client,
+    client: <span class="kw-2">&amp;</span>ClientArc,
     denomination: Amount,
     quantity: u16,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -550,14 +582,18 @@
     <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::new();
     <span class="kw">let </span>operation_id = OperationId::new_random();
     <span class="kw">for _ in </span><span class="number">0</span>..quantity {
-        <span class="kw">let </span>output = mint_client
+        <span class="kw">let </span>outputs = mint_client
             .create_output(<span class="kw-2">&amp;mut </span>module_transaction, operation_id, <span class="number">1</span>, denomination)
-            .<span class="kw">await</span>;
-        tx = tx.with_output(output.into_dyn(client_module_instance.id));
+            .<span class="kw">await
+            </span>.into_iter()
+            .map(|output| output.into_dyn(client_module_instance.id))
+            .collect();
+
+        tx = tx.with_outputs(outputs);
     }
     drop(module_transaction);
     <span class="kw">let </span>operation_meta_gen = |_txid, _outpoint| ();
-    <span class="kw">let </span>txid = client
+    <span class="kw">let </span>(txid, <span class="kw">_</span>) = client
         .finalize_and_submit_transaction(
             operation_id,
             MintCommonGen::KIND.as_str(),

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/module/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-47e7ab555ef2818a.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (030e4d382 2023-09-10)" data-channel="nightly" data-search-js="search-5d3eaacf19ebf04f.js" data-settings-js="settings-74424d7eec62a23e.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-f194925aa375ae96.css" data-theme-dark-css="dark-1dd4d1ce031e15de.css" data-theme-ayu-css="ayu-49e58d069f567085.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-8d035c8cea6edbc4.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-f194925aa375ae96.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-1dd4d1ce031e15de.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-client/src/module/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../fedimint_client/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -416,13 +416,87 @@
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::api::DynGlobalApi;
-<span class="kw">use </span>fedimint_core::core::{Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::core::{
+    Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, OperationId,
+};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{ModuleCommon, TransactionItemAmount};
@@ -433,9 +507,9 @@
     TransactionId,
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, Executor, OperationId, State};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, Executor, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput};
-<span class="kw">use crate</span>::{Client, DynGlobalClientContext};
+<span class="kw">use crate</span>::{ClientArc, DynGlobalClientContext};
 
 <span class="kw">pub mod </span>init;
 
@@ -467,7 +541,7 @@
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _client: <span class="kw-2">&amp;</span>Client,
+        _client: <span class="kw-2">&amp;</span>ClientArc,
         _args: <span class="kw-2">&amp;</span>[ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
         <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
@@ -534,8 +608,7 @@
         <span class="bool-val">false
     </span>}
 
-    <span class="comment">// TODO: unclear if we should return a vec of inputs
-    </span><span class="doccomment">/// Creates an input of **at least** a given `min_amount` from the holdings
+    <span class="doccomment">/// Creates an input of **at least** a given `min_amount` from the holdings
     /// managed by the module.
     ///
     /// If successful it returns:
@@ -556,7 +629,7 @@
         _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         _operation_id: OperationId,
         _min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;&gt; {
         <span class="macro">unimplemented!</span>()
     }
 
@@ -574,7 +647,7 @@
         _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         _operation_id: OperationId,
         _amount: Amount,
-    ) -&gt; ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt; {
+    ) -&gt; Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt; {
         <span class="macro">unimplemented!</span>()
     }
 
@@ -601,6 +674,71 @@
     </span><span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {
         <span class="macro">unimplemented!</span>()
     }
+
+    <span class="doccomment">/// Leave the federation
+    ///
+    /// While technically there&#39;s nothing stopping the client from just
+    /// abandoning Federation at any point by deleting all the related
+    /// local data, it is useful to make sure it&#39;s safe beforehand.
+    ///
+    /// This call indicates the desire of the caller client code
+    /// to orderly and safely leave the Federation by this module instance.
+    /// The goal of the implementations is to fulfil that wish,
+    /// giving prompt and informative feedback if it&#39;s not yet possible.
+    ///
+    /// The client module implementation should handle the request
+    /// and return as fast as possible avoiding blocking for longer than
+    /// necessary. This would usually involve some combination of:
+    ///
+    /// * recording the state of being in process of leaving the Federation to
+    ///   prevent initiating new conditions that could delay its completion;
+    /// * performing any fast to complete cleanup/exit logic;
+    /// * initiating any time-consuming logic (e.g. canceling outstanding
+    ///   contracts), as background jobs, tasks machines, etc.
+    /// * checking for any conditions indicating it might not be safe to leave
+    ///   at the moment.
+    ///
+    /// This function should return `Ok` only if from the perspective
+    /// of this module instance, it is safe to delete client data and
+    /// stop using it, with no further actions (like background jobs) required
+    /// to complete.
+    ///
+    /// This function should return an error if it&#39;s not currently possible
+    /// to safely (e.g. without loosing funds) leave the Federation.
+    /// It should avoid running indefinitely trying to complete any cleanup
+    /// actions necessary to reach a clean state, preferring spawning new
+    /// state machines and returning an informative error about cleanup
+    /// still in progress.
+    ///
+    /// If any internal task needs to complete, any user action is required,
+    /// or even external condition needs to be met this function
+    /// should return a `Err`.
+    ///
+    /// Notably modules should not disable interaction that might be necessary
+    /// for the user (possibly through other modules) to leave the Federation.
+    /// In particular a Mint module should retain ability to create new notes,
+    /// and LN module should retain ability to send funds out.
+    ///
+    /// Calling code must NOT assume that a module that once returned `Ok`,
+    /// will not return `Err` at later point. E.g. a Mint module might have
+    /// no outstanding balance at first, but other modules winding down
+    /// might &quot;cash-out&quot; to Ecash.
+    ///
+    /// Before leaving the Federation and deleting any state the calling code
+    /// must collect a full round of `Ok` from all the modules.
+    ///
+    /// Calling code should allow the user to override and ignore any
+    /// outstanding errors, after sufficient amount of warnings. Ideally,
+    /// this should be done on per-module basis, to avoid mistakes.
+    </span><span class="kw">async fn </span>leave(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _module_instance_id: ModuleInstanceId,
+        _executor: Executor&lt;DynGlobalClientContext&gt;,
+        _api: DynGlobalApi,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="macro">bail!</span>(<span class="string">&quot;Unable to determine if safe to leave the federation: Not implemented&quot;</span>)
+    }
 }
 
 <span class="doccomment">/// Type-erased version of [`ClientModule`]
@@ -614,7 +752,7 @@
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        client: <span class="kw-2">&amp;</span>Client,
+        client: <span class="kw-2">&amp;</span>ClientArc,
         args: <span class="kw-2">&amp;</span>[ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt;;
 
@@ -657,7 +795,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInput&gt;;
+    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&gt;&gt;;
 
     <span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -665,7 +803,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         amount: Amount,
-    ) -&gt; ClientOutput;
+    ) -&gt; Vec&lt;ClientOutput&gt;;
 
     <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -701,7 +839,7 @@
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        client: <span class="kw-2">&amp;</span>Client,
+        client: <span class="kw-2">&amp;</span>ClientArc,
         args: <span class="kw-2">&amp;</span>[ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
         &lt;T <span class="kw">as </span>ClientModule&gt;::handle_cli_command(<span class="self">self</span>, client, args).<span class="kw">await
@@ -772,7 +910,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;ClientInput&gt; {
+    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&gt;&gt; {
         <span class="prelude-val">Ok</span>(&lt;T <span class="kw">as </span>ClientModule&gt;::create_sufficient_input(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
@@ -780,7 +918,9 @@
             min_amount,
         )
         .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_dyn(module_instance))
+        </span>.into_iter()
+        .map(|input| input.into_dyn(module_instance))
+        .collect())
     }
 
     <span class="kw">async fn </span>create_exact_output(
@@ -789,7 +929,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         amount: Amount,
-    ) -&gt; ClientOutput {
+    ) -&gt; Vec&lt;ClientOutput&gt; {
         &lt;T <span class="kw">as </span>ClientModule&gt;::create_exact_output(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
@@ -797,7 +937,9 @@
             amount,
         )
         .<span class="kw">await
-        </span>.into_dyn(module_instance)
+        </span>.into_iter()
+        .map(|output| output.into_dyn(module_instance))
+        .collect()
     }
 
     <span class="kw">async fn </span>await_primary_module_output(

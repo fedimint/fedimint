@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/output.rs`."><title>output.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-47e7ab555ef2818a.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.74.0-nightly (030e4d382 2023-09-10)" data-channel="nightly" data-search-js="search-5d3eaacf19ebf04f.js" data-settings-js="settings-74424d7eec62a23e.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-f194925aa375ae96.css" data-theme-dark-css="dark-1dd4d1ce031e15de.css" data-theme-ayu-css="ayu-49e58d069f567085.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-8d035c8cea6edbc4.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-f194925aa375ae96.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-1dd4d1ce031e15de.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-mint-client/src/output.rs`."><title>output.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_mint_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../fedimint_mint_client/index.html"><img class="rust-logo" src="../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -402,20 +402,32 @@
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, OperationId, State, StateTransition};
+<span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
-<span class="kw">use </span>fedimint_core::core::Decoder;
+<span class="kw">use </span>fedimint_core::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+<span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
+<span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+<span class="kw">use </span>fedimint_core::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
+<span class="kw">use </span>fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_mint_common::{BlindNonce, MintOutputBlindSignatures, MintOutputOutcome, Nonce, Note};
+<span class="kw">use </span>fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce, Note};
 <span class="kw">use </span>secp256k1::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedSignature, BlindingKey};
+<span class="kw">use </span>tbs::{
+    blind_message, combine_valid_shares, unblind_signature, AggregatePublicKey, BlindedSignature,
+    BlindingKey, PublicKeyShare,
+};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{error, trace};
 
@@ -505,7 +517,8 @@
 <span class="doccomment">/// See [`MintOutputStates`]
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>MintOutputStatesCreated {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) note_issuance: MultiNoteIssuanceRequest,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) amount: Amount,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) issuance_request: NoteIssuanceRequest,
 }
 
 <span class="kw">impl </span>MintOutputStatesCreated {
@@ -516,7 +529,7 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
         common: MintOutputCommon,
     ) -&gt; Vec&lt;StateTransition&lt;MintOutputStateMachine&gt;&gt; {
-        <span class="kw">let </span>mint_keys = context.mint_keys.clone();
+        <span class="kw">let </span>tbs_pks = context.tbs_pks.clone();
         <span class="macro">vec!</span>[
             <span class="comment">// Check if transaction was rejected
             </span>StateTransition::new(
@@ -529,14 +542,17 @@
                     global_context.clone(),
                     common,
                     context.mint_decoder.clone(),
+                    <span class="self">self</span>.amount,
+                    <span class="self">self</span>.issuance_request,
+                    context.peer_tbs_pks.clone(),
                 ),
-                <span class="kw">move </span>|dbtx, bsigs, old_state| {
+                <span class="kw">move </span>|dbtx, output_outcomes, old_state| {
                     Box::pin(<span class="self">Self</span>::transition_outcome_ready(
                         dbtx,
-                        bsigs,
+                        output_outcomes,
                         old_state,
                         <span class="comment">// TODO: avoid clone of whole object
-                        </span>mint_keys.clone(),
+                        </span>tbs_pks.clone(),
                     ))
                 },
             ),
@@ -569,76 +585,99 @@
         global_context: DynGlobalClientContext,
         common: MintOutputCommon,
         module_decoder: Decoder,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;MintOutputBlindSignatures, String&gt; {
+        amount: Amount,
+        request: NoteIssuanceRequest,
+        peer_tbs_pks: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;PeerId, MintOutputOutcome&gt;, String&gt; {
         <span class="kw">loop </span>{
-            <span class="kw">let </span>outcome: MintOutputOutcome = <span class="kw">match </span>global_context
+            <span class="kw">let </span>decoder = module_decoder.clone();
+            <span class="kw">let </span>pks = peer_tbs_pks.clone();
+
+            <span class="kw">match </span>global_context
                 .api()
-                .await_output_outcome(common.out_point, Duration::MAX, <span class="kw-2">&amp;</span>module_decoder)
+                .request_with_strategy(
+                    <span class="comment">// this query collects a threshold of 2f + 1 valid blind signature shares
+                    </span>FilterMapThreshold::new(
+                        <span class="kw">move </span>|peer, outcome| {
+                            verify_blind_share(peer, outcome, amount, <span class="kw-2">&amp;</span>request, <span class="kw-2">&amp;</span>decoder, <span class="kw-2">&amp;</span>pks)
+                        },
+                        global_context.api().all_peers().total(),
+                    ),
+                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(common.out_point),
+                )
                 .<span class="kw">await
             </span>{
-                <span class="prelude-val">Ok</span>(outcome) =&gt; outcome,
-                <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
+                <span class="prelude-val">Ok</span>(outcome) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(outcome),
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="kw">if </span>!error.is_retryable() {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(error.to_string());
+                    }
+
                     <span class="macro">trace!</span>(
-                        <span class="string">&quot;Awaiting outcome to become ready failed, retrying in {}s: {e}&quot;</span>,
+                        <span class="string">&quot;Awaiting outcome to become ready failed, retrying in {}s: {error}&quot;</span>,
                         RETRY_DELAY.as_secs()
                     );
-                    sleep(RETRY_DELAY).<span class="kw">await</span>;
-                    <span class="kw">continue</span>;
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
-            };
 
-            <span class="kw">match </span>outcome.<span class="number">0 </span>{
-                <span class="prelude-val">Some</span>(bsigs) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(bsigs),
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="comment">// FIXME: hack since we can&#39;t await outpoints yet?! may return non-final outcome
-                    </span>sleep(RETRY_DELAY).<span class="kw">await</span>;
+                    sleep(RETRY_DELAY).<span class="kw">await</span>;
                 }
-            }
+            };
         }
     }
 
     <span class="kw">async fn </span>transition_outcome_ready(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
-        bsig_res: <span class="prelude-ty">Result</span>&lt;MintOutputBlindSignatures, String&gt;,
+        output_outcomes_result: <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;PeerId, MintOutputOutcome&gt;, String&gt;,
         old_state: MintOutputStateMachine,
         mint_keys: Tiered&lt;AggregatePublicKey&gt;,
     ) -&gt; MintOutputStateMachine {
-        <span class="kw">let </span>issuance = <span class="kw">match </span>old_state.state {
-            MintOutputStates::Created(created) =&gt; created.note_issuance,
+        <span class="kw">let </span>(amount, issuance_request) = <span class="kw">match </span>old_state.state {
+            MintOutputStates::Created(created) =&gt; (created.amount, created.issuance_request),
             <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unexpected prior state&quot;</span>),
         };
-        <span class="kw">let </span>notes_res = bsig_res.and_then(|bsigs| {
-            issuance
-                .finalize(bsigs, <span class="kw-2">&amp;</span>mint_keys)
-                .map_err(|e| e.to_string())
+
+        <span class="comment">// if the query obtained a threshold of valid blind signature shares, we combine
+        // the shares, finalize the issuance request with the blind signature
+        // and store the resulting note in the database
+        </span><span class="kw">let </span>note_res = output_outcomes_result.and_then(|blind_signature_shares| {
+            <span class="kw">match </span>mint_keys.tier(<span class="kw-2">&amp;</span>amount) {
+                <span class="prelude-val">Ok</span>(amount_key) =&gt; issuance_request
+                    .finalize(
+                        combine_valid_shares(
+                            blind_signature_shares
+                                .iter()
+                                .map(|(peer, share)| (peer.to_usize(), share.<span class="number">0</span>)),
+                            blind_signature_shares.len(),
+                        ),
+                        <span class="kw-2">*</span>amount_key,
+                    )
+                    .map_err(|e| e.to_string()),
+                <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(NoteFinalizationError::InvalidAmountTier(error.<span class="number">0</span>).to_string()),
+            }
         });
 
-        <span class="kw">match </span>notes_res {
-            <span class="prelude-val">Ok</span>(notes) =&gt; {
-                <span class="kw">for </span>(amount, note) <span class="kw">in </span>notes.iter_items() {
-                    <span class="kw">let </span>replaced = dbtx
-                        .module_tx()
-                        .insert_entry(
-                            <span class="kw-2">&amp;</span>NoteKey {
-                                amount,
-                                nonce: note.nonce(),
-                            },
-                            note,
-                        )
-                        .<span class="kw">await</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(note) = replaced {
-                        <span class="macro">error!</span>(
-                            <span class="question-mark">?</span>note,
-                            <span class="string">&quot;E-cash note was replaced in DB, this should never happen!&quot;
-                        </span>)
-                    }
+        <span class="kw">match </span>note_res {
+            <span class="prelude-val">Ok</span>(note) =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(note) = dbtx
+                    .module_tx()
+                    .insert_entry(
+                        <span class="kw-2">&amp;</span>NoteKey {
+                            amount,
+                            nonce: note.nonce(),
+                        },
+                        <span class="kw-2">&amp;</span>note,
+                    )
+                    .<span class="kw">await
+                </span>{
+                    <span class="macro">error!</span>(
+                        <span class="question-mark">?</span>note,
+                        <span class="string">&quot;E-cash note was replaced in DB, this should never happen!&quot;
+                    </span>)
                 }
+
                 MintOutputStateMachine {
                     common: old_state.common,
-                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
-                        amount: notes.total_amount(),
-                    }),
+                    state: MintOutputStates::Succeeded(MintOutputStatesSucceeded { amount }),
                 }
             }
             <span class="prelude-val">Err</span>(error) =&gt; MintOutputStateMachine {
@@ -647,6 +686,29 @@
             },
         }
     }
+}
+
+<span class="kw">pub fn </span>verify_blind_share(
+    peer: PeerId,
+    outcome: SerdeOutputOutcome,
+    amount: Amount,
+    request: <span class="kw-2">&amp;</span>NoteIssuanceRequest,
+    decoder: <span class="kw-2">&amp;</span>Decoder,
+    peer_tbs_pks: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
+) -&gt; anyhow::Result&lt;MintOutputOutcome&gt; {
+    <span class="kw">let </span>outcome: MintOutputOutcome = deserialize_outcome(outcome.clone(), decoder)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>blinded_message = blind_message(request.nonce().to_message(), request.blinding_key);
+
+    <span class="kw">let </span>amount_key = peer_tbs_pks[<span class="kw-2">&amp;</span>peer]
+        .tier(<span class="kw-2">&amp;</span>amount)
+        .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;Invalid Amount Tier&quot;</span>))<span class="question-mark">?</span>;
+
+    <span class="kw">if </span>!tbs::verify_blind_share(blinded_message, outcome.<span class="number">0</span>, <span class="kw-2">*</span>amount_key) {
+        <span class="macro">bail!</span>(<span class="string">&quot;Invalid blind signature&quot;</span>)
+    }
+
+    <span class="prelude-val">Ok</span>(outcome)
 }
 
 <span class="doccomment">/// See [`MintOutputStates`]
@@ -734,60 +796,6 @@
         } <span class="kw">else </span>{
             <span class="prelude-val">Err</span>(NoteFinalizationError::InvalidSignature)
         }
-    }
-}
-
-<span class="doccomment">/// Multiple [`Note`] issuance requests
-///
-/// Keeps all the data to generate [`SpendableNote`]s once the
-/// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
-</span><span class="attr">#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>MultiNoteIssuanceRequest {
-    <span class="doccomment">/// Finalization data for all note outputs in this request
-    </span><span class="kw">pub </span>notes: TieredMulti&lt;NoteIssuanceRequest&gt;,
-}
-
-<span class="kw">impl </span>MultiNoteIssuanceRequest {
-    <span class="doccomment">/// Finalize the issuance request using a [`MintOutputBlindSignatures`] from
-    /// the mint containing the blind signatures for all notes in this
-    /// `IssuanceRequest`. It also takes the mint&#39;s [`AggregatePublicKey`]
-    /// to validate the supplied blind signatures.
-    </span><span class="kw">pub fn </span>finalize(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        bsigs: MintOutputBlindSignatures,
-        mint_pub_key: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-    ) -&gt; std::result::Result&lt;TieredMulti&lt;SpendableNote&gt;, NoteFinalizationError&gt; {
-        <span class="kw">if </span>!<span class="self">self</span>.notes.structural_eq(<span class="kw-2">&amp;</span>bsigs.<span class="number">0</span>) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(NoteFinalizationError::WrongMintAnswer);
-        }
-
-        <span class="self">self</span>.notes
-            .iter_items()
-            .zip(bsigs.<span class="number">0</span>)
-            .enumerate()
-            .map(|(idx, ((amt, note_req), (_amt, bsig)))| {
-                <span class="prelude-val">Ok</span>((
-                    amt,
-                    <span class="kw">match </span>note_req.finalize(
-                        bsig,
-                        <span class="kw-2">*</span>mint_pub_key
-                            .tier(<span class="kw-2">&amp;</span>amt)
-                            .map_err(|e| NoteFinalizationError::InvalidAmountTier(e.<span class="number">0</span>))<span class="question-mark">?</span>,
-                    ) {
-                        <span class="prelude-val">Err</span>(NoteFinalizationError::InvalidSignature) =&gt; {
-                            <span class="prelude-val">Err</span>(NoteFinalizationError::InvalidSignatureAtIdx(idx))
-                        }
-                        other =&gt; other,
-                    }<span class="question-mark">?</span>,
-                ))
-            })
-            .collect()
-    }
-}
-
-<span class="kw">impl </span>Extend&lt;(Amount, NoteIssuanceRequest)&gt; <span class="kw">for </span>MultiNoteIssuanceRequest {
-    <span class="kw">fn </span>extend&lt;T: IntoIterator&lt;Item = (Amount, NoteIssuanceRequest)&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: T) {
-        <span class="self">self</span>.notes.extend(iter)
     }
 }
 

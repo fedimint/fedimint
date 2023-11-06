@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayPayStates","OutgoingContractError","OutgoingPaymentError"],"struct":["GatewayPayCancelContract","GatewayPayClaimOutgoingContract","GatewayPayCommon","GatewayPayInvoice","GatewayPayStateMachine","PaymentParameters"]};
+window.SIDEBAR_ITEMS = {"enum":["GatewayPayStates","OutgoingContractError","OutgoingPaymentErrorType"],"struct":["GatewayPayCancelContract","GatewayPayClaimOutgoingContract","GatewayPayCommon","GatewayPayInvoice","GatewayPayStateMachine","GatewayPayWaitForSwapPreimage","OutgoingPaymentError","PaymentParameters"]};
