@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-wallet-common"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-wallet is a n on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet."
