@@ -108,7 +108,7 @@ impl DatabaseDump {
 
         Ok(DatabaseDump {
             serialized: BTreeMap::new(),
-            read_only: read_only.new_with_decoders(decoders),
+            read_only: read_only.with_decoders(decoders),
             modules,
             prefixes,
             cfg: server_cfg,
@@ -136,7 +136,7 @@ impl DatabaseDump {
             return Ok(());
         }
         let mut dbtx = self.read_only.begin_transaction().await;
-        let mut isolated_dbtx = dbtx.with_module_prefix(*module_id);
+        let mut isolated_dbtx = dbtx.dbtx_ref_with_prefix_module_id(*module_id);
 
         match inits.get(kind) {
             None => {
@@ -192,7 +192,7 @@ impl DatabaseDump {
 
     async fn serialize_gateway(&mut self) -> anyhow::Result<()> {
         let mut dbtx = self.read_only.begin_transaction().await;
-        let mut dbtx = dbtx.get_isolated();
+        let mut dbtx = dbtx.dbtx_ref();
         let gateway_serialized = Gateway::dump_database(&mut dbtx, self.prefixes.clone())
             .await
             .collect::<BTreeMap<String, _>>();

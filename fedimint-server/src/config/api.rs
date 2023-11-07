@@ -556,8 +556,8 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         let mut db = self.db.clone();
         let mut dbtx = self.db.begin_transaction().await;
         if let Some(id) = id {
-            db = self.db.new_isolated(id);
-            dbtx = dbtx.new_module_tx(id)
+            db = self.db.with_prefix_module_id(id);
+            dbtx = dbtx.with_prefix_module_id(id)
         }
         let state = self.state.lock().expect("locks");
         let auth = request.auth.as_ref();

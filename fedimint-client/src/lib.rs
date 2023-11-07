@@ -968,7 +968,7 @@ impl Client {
             .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
         let instance = ClientModuleInstance {
             id,
-            db: self.db().new_isolated(id),
+            db: self.db().with_prefix_module_id(id),
             api: self.api().with_module(id),
         };
         (module, instance)
@@ -1508,7 +1508,7 @@ impl ClientBuilder {
                     ModuleKind::from_static_str("tx_submission"),
                     tx_submission_sm_decoder(),
                 );
-                let db = db.new_with_decoders(decoders.clone());
+                let db = db.with_decoders(decoders.clone());
 
                 (config, decoders, db)
             }

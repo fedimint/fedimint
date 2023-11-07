@@ -207,7 +207,7 @@ mod tests {
 
     fn module_database(module_instance_id: ModuleInstanceId) -> Database {
         let db = MemDatabase::new().into_database();
-        db.new_isolated(module_instance_id)
+        db.with_prefix_module_id(module_instance_id)
     }
 
     #[test_log::test(tokio::test)]

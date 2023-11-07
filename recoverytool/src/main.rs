@@ -139,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
             let db = if legacy {
                 db
             } else {
-                db.new_isolated(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+                db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             };
 
             let utxos: Vec<ImportableWallet> = db

@@ -17,7 +17,7 @@ use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientCon
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransactionRef};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -365,7 +365,7 @@ impl ExtendsCommonModuleInit for GatewayClientGen {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _dbtx: &mut DatabaseTransactionRef<'_>,
         _prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         Box::new(vec![].into_iter())

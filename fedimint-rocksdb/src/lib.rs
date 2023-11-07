@@ -446,7 +446,7 @@ mod fedimint_rocksdb_tests {
 
         fedimint_core::db::verify_module_db(
             open_temp_db("fcb-rocksdb-test-module-db"),
-            module_db.new_isolated(module_instance_id),
+            module_db.with_prefix_module_id(module_instance_id),
         )
         .await;
     }

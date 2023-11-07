@@ -29,7 +29,7 @@ use crate::core::{
 };
 use crate::db::{
     Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    DatabaseVersion, MigrationMap, ModuleDatabaseTransaction,
+    DatabaseTransactionRef, DatabaseVersion, MigrationMap,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -178,13 +178,13 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Database tx handle, will be committed
-    pub fn dbtx<'s, 'mtx>(&'s mut self) -> ModuleDatabaseTransaction<'mtx>
+    pub fn dbtx<'s, 'mtx>(&'s mut self) -> DatabaseTransactionRef<'mtx>
     where
         'a: 'mtx,
         's: 'mtx,
     {
         // dbtx is already isolated.
-        self.dbtx.get_isolated()
+        self.dbtx.dbtx_ref()
     }
 
     /// Returns the auth set on the request (regardless of whether it was
@@ -433,7 +433,7 @@ pub trait IDynCommonModuleInit: Debug {
 
     async fn dump_database(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
@@ -444,7 +444,7 @@ pub trait ExtendsCommonModuleInit: Debug + Clone + Send + Sync + 'static {
 
     async fn dump_database(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
@@ -468,7 +468,7 @@ where
 
     async fn dump_database(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         <Self as ExtendsCommonModuleInit>::dump_database(self, dbtx, prefix_names).await
@@ -801,7 +801,7 @@ pub trait ServerModule: Debug + Sized {
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
     ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
@@ -809,7 +809,7 @@ pub trait ServerModule: Debug + Sized {
     /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransactionRef<'b>,
         consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
@@ -820,7 +820,7 @@ pub trait ServerModule: Debug + Sized {
     /// no effect.
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
     ) -> Result<InputMeta, ModuleError>;
 
@@ -834,7 +834,7 @@ pub trait ServerModule: Debug + Sized {
     /// `output_status`.
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError>;
@@ -845,7 +845,7 @@ pub trait ServerModule: Debug + Sized {
     /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         out_point: OutPoint,
     ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
 
@@ -856,7 +856,7 @@ pub trait ServerModule: Debug + Sized {
     /// occurred in the database and consensus should halt.
     async fn audit(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     );

@@ -8,7 +8,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction,
+    DatabaseTransactionRef, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
@@ -58,7 +58,7 @@ impl ExtendsCommonModuleInit for MintGen {
 
     async fn dump_database(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
@@ -302,14 +302,14 @@ impl ServerModule for Mint {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut ModuleDatabaseTransaction<'_>,
+        _dbtx: &mut DatabaseTransactionRef<'_>,
     ) -> Vec<MintConsensusItem> {
         Vec::new()
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        _dbtx: &mut ModuleDatabaseTransaction<'b>,
+        _dbtx: &mut DatabaseTransactionRef<'b>,
         _consensus_item: MintConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -318,7 +318,7 @@ impl ServerModule for Mint {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b MintInput,
     ) -> Result<InputMeta, ModuleError> {
         let amount_key = self
@@ -356,7 +356,7 @@ impl ServerModule for Mint {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -383,7 +383,7 @@ impl ServerModule for Mint {
 
     async fn output_status(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         out_point: OutPoint,
     ) -> Option<MintOutputOutcome> {
         dbtx.get_value(&MintOutputOutcomeKey(out_point)).await
@@ -391,7 +391,7 @@ impl ServerModule for Mint {
 
     async fn audit(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -460,7 +460,7 @@ impl ServerModule for Mint {
 impl Mint {
     async fn handle_backup_request(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -490,7 +490,7 @@ impl Mint {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await
@@ -685,11 +685,11 @@ mod test {
 
         // Double spend in same epoch is detected
         let mut dbtx = db.begin_transaction().await;
-        mint.process_input(&mut dbtx.with_module_prefix(42), &input)
+        mint.process_input(&mut dbtx.dbtx_ref_with_prefix_module_id(42), &input)
             .await
             .expect("Spend of valid e-cash works");
         assert_matches!(
-            mint.process_input(&mut dbtx.with_module_prefix(42), &input,)
+            mint.process_input(&mut dbtx.dbtx_ref_with_prefix_module_id(42), &input,)
                 .await,
             Err(_)
         );

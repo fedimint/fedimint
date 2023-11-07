@@ -26,7 +26,7 @@ use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, ModuleDatabaseTransaction,
+    DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -638,7 +638,7 @@ impl ExtendsCommonModuleInit for LightningClientGen {
 
     async fn dump_database(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut ln_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -1322,7 +1322,7 @@ pub struct OutgoingLightningPayment {
 }
 
 async fn set_payment_result(
-    dbtx: &mut ModuleDatabaseTransaction<'_>,
+    dbtx: &mut DatabaseTransactionRef<'_>,
     payment_hash: sha256::Hash,
     payment_type: PayType,
     contract_id: ContractId,

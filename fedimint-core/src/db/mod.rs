@@ -230,7 +230,7 @@ impl Database {
         }
     }
 
-    pub fn new_isolated(&self, module_instance_id: ModuleInstanceId) -> Self {
+    pub fn with_prefix_module_id(&self, module_instance_id: ModuleInstanceId) -> Self {
         let prefix = module_instance_id_to_byte_prefix(module_instance_id);
 
         Self {
@@ -242,7 +242,7 @@ impl Database {
         }
     }
 
-    pub fn new_with_decoders(&self, module_decoders: ModuleDecoderRegistry) -> Self {
+    pub fn with_decoders(&self, module_decoders: ModuleDecoderRegistry) -> Self {
         Self {
             inner: self.inner.clone(),
             module_decoders,
@@ -1113,22 +1113,21 @@ impl Drop for CommitTracker {
     }
 }
 
-/// `ModuleDatabaseTransaction` is the public wrapper structure that allows
-/// modules to modify the database. It takes a `ISingleUseDatabaseTransaction`
-/// that handles the details of interacting with the database. The APIs that the
-/// modules are allowed to interact with are a subset of `DatabaseTransaction`,
-/// since modules do not manage the lifetime of database transactions.
-/// Committing to the database or rolling back a transaction is not exposed.
-pub struct ModuleDatabaseTransaction<'a>(DatabaseTransaction<'a>);
+/// An open [`DatabaseTransaction`] that can not be committed by the owner.
+///
+/// This is used in APIs that require logic to be a part of a larger
+/// database transaction, given that `commit_tx` takes `&mut self` (
+/// not `self`, due to trait/Sized and support for `&mut T` issues).
+pub struct DatabaseTransactionRef<'a>(DatabaseTransaction<'a>);
 
-impl<'a> WithDecoders for ModuleDatabaseTransaction<'a> {
+impl<'a> WithDecoders for DatabaseTransactionRef<'a> {
     fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.0.decoders
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOpsCore for ModuleDatabaseTransaction<'a> {
+impl<'a> IDatabaseTransactionOpsCore for DatabaseTransactionRef<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         self.0.raw_insert_bytes(key, value).await
     }
@@ -1212,7 +1211,40 @@ impl<'tx> DatabaseTransaction<'tx> {
         }
     }
 
-    pub fn get_isolated<'s, 'a>(&'s mut self) -> ModuleDatabaseTransaction<'a>
+    /// Get [`DatabaseTransaction`] isolated to a `prefix`
+    pub fn with_prefix<'a: 'tx>(self, prefix: Vec<u8>) -> DatabaseTransaction<'a>
+    where
+        'tx: 'a,
+    {
+        let decoders = self.decoders.clone();
+        let commit_tracker = self.commit_tracker.clone();
+
+        DatabaseTransaction {
+            tx: Box::new(PrefixDatabaseTransaction {
+                inner: self.tx,
+                prefix,
+            }),
+            decoders,
+            commit_tracker,
+            on_commit_hooks: vec![],
+        }
+    }
+
+    /// Get [`DatabaseTransaction`] isolated to a prefix of a given
+    /// `module_instance_id`
+    pub fn with_prefix_module_id<'a: 'tx>(
+        self,
+        module_instance_id: ModuleInstanceId,
+    ) -> DatabaseTransaction<'a>
+    where
+        'tx: 'a,
+    {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        self.with_prefix(prefix)
+    }
+
+    /// Get [`DatabaseTransactionRef`] to `self`
+    pub fn dbtx_ref<'s, 'a>(&'s mut self) -> DatabaseTransactionRef<'a>
     where
         'tx: 'a,
         's: 'a,
@@ -1220,7 +1252,7 @@ impl<'tx> DatabaseTransaction<'tx> {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
 
-        ModuleDatabaseTransaction(DatabaseTransaction {
+        DatabaseTransactionRef(DatabaseTransaction {
             tx: Box::new(&mut self.tx),
             decoders,
             commit_tracker,
@@ -1228,18 +1260,15 @@ impl<'tx> DatabaseTransaction<'tx> {
         })
     }
 
-    pub fn with_module_prefix<'a>(
-        &'a mut self,
-        module_instance_id: ModuleInstanceId,
-    ) -> ModuleDatabaseTransaction<'a>
+    /// Get [`DatabaseTransactionRef`] isolated to a `prefix` of `self`
+    pub fn dbtx_ref_with_prefix<'a>(&'a mut self, prefix: Vec<u8>) -> DatabaseTransactionRef<'a>
     where
         'tx: 'a,
     {
         let decoders = self.decoders.clone();
         let commit_tracker = self.commit_tracker.clone();
 
-        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        ModuleDatabaseTransaction(DatabaseTransaction {
+        DatabaseTransactionRef(DatabaseTransaction {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: &mut self.tx,
                 prefix,
@@ -1250,26 +1279,15 @@ impl<'tx> DatabaseTransaction<'tx> {
         })
     }
 
-    pub fn new_module_tx<'a: 'tx>(
-        self,
+    pub fn dbtx_ref_with_prefix_module_id<'a>(
+        &'a mut self,
         module_instance_id: ModuleInstanceId,
-    ) -> DatabaseTransaction<'a>
+    ) -> DatabaseTransactionRef<'a>
     where
         'tx: 'a,
     {
-        let decoders = self.decoders.clone();
-        let commit_tracker = self.commit_tracker.clone();
-
         let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-        DatabaseTransaction {
-            tx: Box::new(PrefixDatabaseTransaction {
-                inner: self.tx,
-                prefix,
-            }),
-            decoders,
-            commit_tracker,
-            on_commit_hooks: vec![],
-        }
+        self.dbtx_ref_with_prefix(prefix)
     }
 
     /// Cancel the tx to avoid debugging warnings about uncommitted writes
@@ -2183,7 +2201,7 @@ mod test_utils {
     pub async fn verify_module_prefix(db: Database) {
         let mut test_dbtx = db.begin_transaction().await;
         {
-            let mut test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
+            let mut test_module_dbtx = test_dbtx.dbtx_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
 
             test_module_dbtx
                 .insert_entry(&TestKey(100), &TestVal(101))
@@ -2198,7 +2216,7 @@ mod test_utils {
 
         let mut alt_dbtx = db.begin_transaction().await;
         {
-            let mut alt_module_dbtx = alt_dbtx.with_module_prefix(ALT_MODULE_PREFIX);
+            let mut alt_module_dbtx = alt_dbtx.dbtx_ref_with_prefix_module_id(ALT_MODULE_PREFIX);
 
             alt_module_dbtx
                 .insert_entry(&TestKey(100), &TestVal(103))
@@ -2213,7 +2231,7 @@ mod test_utils {
 
         // verify test_module_dbtx can only see key/value pairs from its own module
         let mut test_dbtx = db.begin_transaction().await;
-        let mut test_module_dbtx = test_dbtx.with_module_prefix(TEST_MODULE_PREFIX);
+        let mut test_module_dbtx = test_dbtx.dbtx_ref_with_prefix_module_id(TEST_MODULE_PREFIX);
         assert_eq!(
             test_module_dbtx.get_value(&TestKey(100)).await,
             Some(TestVal(101))
@@ -2555,7 +2573,7 @@ mod tests {
         let key = TestKey(1);
         let val = TestVal(2);
         let db = MemDatabase::new().into_database();
-        let db = db.new_isolated(module_instance_id);
+        let db = db.with_prefix_module_id(module_instance_id);
 
         let key_task = waiter(&db, TestKey(1)).await;
 
@@ -2577,10 +2595,10 @@ mod tests {
         let val = TestVal(2);
         let db = MemDatabase::new().into_database();
 
-        let key_task = waiter(&db.new_isolated(module_instance_id), TestKey(1)).await;
+        let key_task = waiter(&db.with_prefix_module_id(module_instance_id), TestKey(1)).await;
 
         let mut tx = db.begin_transaction().await;
-        let mut tx_mod = tx.with_module_prefix(module_instance_id);
+        let mut tx_mod = tx.dbtx_ref_with_prefix_module_id(module_instance_id);
         tx_mod.insert_new_entry(&key, &val).await;
         drop(tx_mod);
         tx.commit_tx().await;

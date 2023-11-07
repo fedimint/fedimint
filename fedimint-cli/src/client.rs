@@ -481,7 +481,13 @@ async fn get_note_summary(client: &ClientArc) -> anyhow::Result<serde_json::Valu
     let (wallet_client, _) =
         client.get_first_module::<WalletClientModule>(&fedimint_wallet_client::KIND);
     let summary = mint_client
-        .get_wallet_summary(&mut client.db().begin_transaction().await.with_module_prefix(1))
+        .get_wallet_summary(
+            &mut client
+                .db()
+                .begin_transaction()
+                .await
+                .dbtx_ref_with_prefix_module_id(1),
+        )
         .await;
     Ok(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),

@@ -120,7 +120,7 @@ impl ConsensusServer {
             info!(target: LOG_CORE,
                 module_instance_id = *module_id, kind = %kind, "Init module");
 
-            let isolated_db = db.new_isolated(*module_id);
+            let isolated_db = db.with_prefix_module_id(*module_id);
 
             apply_migrations(
                 &isolated_db,
@@ -588,7 +588,7 @@ impl ConsensusServer {
         for (module_instance_id, _, module) in self.modules.iter_modules() {
             module
                 .audit(
-                    &mut dbtx.with_module_prefix(module_instance_id),
+                    &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
                     &mut audit,
                     module_instance_id,
                 )
@@ -618,7 +618,8 @@ impl ConsensusServer {
 
         match consensus_item {
             ConsensusItem::Module(module_item) => {
-                let moduletx = &mut dbtx.with_module_prefix(module_item.module_instance_id());
+                let moduletx =
+                    &mut dbtx.dbtx_ref_with_prefix_module_id(module_item.module_instance_id());
 
                 self.modules
                     .get_expect(module_item.module_instance_id())
@@ -650,7 +651,7 @@ impl ConsensusServer {
             }
             ConsensusItem::ClientConfigSignatureShare(signature_share) => {
                 if dbtx
-                    .get_isolated()
+                    .dbtx_ref()
                     .get_value(&ClientConfigSignatureKey)
                     .await
                     .is_some()
@@ -778,7 +779,7 @@ async fn submit_module_consensus_items(
                     for (instance_id, _, module) in modules.iter_modules() {
                         let items = module
                             .consensus_proposal(
-                                &mut dbtx.with_module_prefix(instance_id),
+                                &mut dbtx.dbtx_ref_with_prefix_module_id(instance_id),
                                 instance_id,
                             )
                             .await
@@ -789,10 +790,7 @@ async fn submit_module_consensus_items(
                     }
 
                     // Add a signature share for the client config hash
-                    let sig = dbtx
-                        .get_isolated()
-                        .get_value(&ClientConfigSignatureKey)
-                        .await;
+                    let sig = dbtx.dbtx_ref().get_value(&ClientConfigSignatureKey).await;
 
                     if sig.is_none() {
                         let timing = timing::TimeReporter::new("sign client config");
