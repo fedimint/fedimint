@@ -806,24 +806,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cln-rpc"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fc0228e674bd18614b04e56150f295ebeef4a0cfc1fd8d2a83feb70e9929f3e"
-dependencies = [
- "anyhow",
- "bitcoin 0.29.2",
- "bytes",
- "futures-util",
- "hex",
- "log",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -987,11 +969,11 @@ dependencies = [
  "axum",
  "bitcoincore-rpc",
  "clap",
- "cln-rpc",
  "fedimint-aead",
  "fedimint-bitcoind",
  "fedimint-cli",
  "fedimint-client",
+ "fedimint-cln-rpc",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-portalloc",
@@ -1292,6 +1274,24 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-test",
+]
+
+[[package]]
+name = "fedimint-cln-rpc"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9681acca141623ecceaae10f8e730efdd61fdeb1542df5bdea61a42da5fb8518"
+dependencies = [
+ "anyhow",
+ "bitcoin 0.29.2",
+ "bytes",
+ "futures-util",
+ "hex",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -1888,9 +1888,9 @@ dependencies = [
  "bitcoin 0.29.2",
  "bitcoincore-rpc",
  "clap",
- "cln-rpc",
  "fedimint-bitcoind",
  "fedimint-client",
+ "fedimint-cln-rpc",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-portalloc",
@@ -3236,10 +3236,10 @@ dependencies = [
  "bitcoin_hashes 0.11.0",
  "clap",
  "cln-plugin",
- "cln-rpc",
  "erased-serde",
  "fedimint-build",
  "fedimint-client",
+ "fedimint-cln-rpc",
  "fedimint-core",
  "fedimint-dummy-client",
  "fedimint-dummy-common",
