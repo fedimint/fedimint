@@ -5,8 +5,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin_hashes::sha256::HashEngine;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::sha256;
 use fedimint_aead::random_salt;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
@@ -18,7 +17,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
-use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
     GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
@@ -40,7 +38,7 @@ use tracing::error;
 use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::net::peers::DelayCalculator;
-use crate::{check_auth, ApiResult, HasApiContext};
+use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
 /// Serves the config gen API endpoints
 #[derive(Clone)]
@@ -527,23 +525,6 @@ impl ConfigGenState {
 
         Ok(ConfigGenParams { local, consensus })
     }
-}
-
-pub fn get_verification_hashes(config: &ServerConfig) -> BTreeMap<PeerId, sha256::Hash> {
-    let mut hashes = BTreeMap::new();
-    for (peer, cert) in config.consensus.tls_certs.iter() {
-        let mut engine = HashEngine::default();
-
-        config
-            .consensus
-            .consensus_encode(&mut engine)
-            .expect("hashes");
-        cert.consensus_encode(&mut engine).expect("hashes");
-
-        let hash = sha256::Hash::from_engine(engine);
-        hashes.insert(*peer, hash);
-    }
-    hashes
 }
 
 #[async_trait]

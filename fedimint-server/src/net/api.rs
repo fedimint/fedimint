@@ -43,7 +43,6 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
-use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::FundingVerifier;
@@ -52,7 +51,7 @@ use crate::db::{
     ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
 };
 use crate::fedimint_core::encoding::Encodable;
-use crate::{check_auth, ApiResult, HasApiContext};
+use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
