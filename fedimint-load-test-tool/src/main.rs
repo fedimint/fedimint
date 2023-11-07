@@ -29,7 +29,8 @@ use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
 use crate::common::{
-    build_client, do_spend_notes, remint_denomination, switch_default_gateway, try_get_notes_cli,
+    build_client, do_spend_notes, get_invite_code_cli, remint_denomination, switch_default_gateway,
+    try_get_notes_cli,
 };
 pub mod common;
 
@@ -107,7 +108,7 @@ struct LoadTestArgs {
 
     #[arg(
         long,
-        help = "Notes for the test. If none, will call fedimint-cli spend"
+        help = "Notes for the test. If none and no funds on archive, will call fedimint-cli spend"
     )]
     initial_notes: Option<OOBNotes>,
 
@@ -248,13 +249,14 @@ async fn main() -> anyhow::Result<()> {
             let invite_code = if let Some(invite_code) = args.invite_code {
                 Some(InviteCode::from_str(&invite_code).context("invalid invite code")?)
             } else {
-                None
-            };
-
-            let initial_notes = if let Some(initial_notes) = args.initial_notes {
-                initial_notes
-            } else {
-                try_get_notes_cli(&Amount::from_sats(2000), 5).await?
+                // Try to get an invite code through cli in a best effort basis
+                match get_invite_code_cli().await {
+                    Ok(invite_code) => Some(invite_code),
+                    Err(e) => {
+                        info!("No invite code provided and failed to get one with '{e}' error, will try to proceed without one...");
+                        None
+                    }
+                }
             };
 
             let gateway_id = if let Some(gateway_id) = args.gateway_id {
@@ -285,7 +287,7 @@ async fn main() -> anyhow::Result<()> {
                 opts.archive_dir,
                 opts.users,
                 invite_code,
-                initial_notes,
+                args.initial_notes,
                 args.generate_invoice_with,
                 args.invoices_per_user,
                 Duration::from_secs(args.ln_payment_sleep_secs),
@@ -323,7 +325,7 @@ async fn run_load_test(
     archive_dir: Option<PathBuf>,
     users: u16,
     invite_code: Option<InviteCode>,
-    initial_notes: OOBNotes,
+    initial_notes: Option<OOBNotes>,
     generate_invoice_with: Option<LnInvoiceGeneration>,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
@@ -360,6 +362,33 @@ async fn run_load_test(
         )
         .await?
     };
+    let minimum_notes = notes_per_user * users;
+    let minimum_amount_required = note_denomination * (minimum_notes as u64);
+
+    if let Some(notes) = initial_notes {
+        let amount = notes.total_amount();
+        info!("Reissuing initial notes, got {amount}");
+        reissue_notes(&coordinator, notes, &event_sender).await?;
+    }
+    let current_balance = coordinator.get_balance().await;
+    if current_balance < minimum_amount_required {
+        let diff = minimum_amount_required - current_balance;
+        info!("Current balance {current_balance} not enough, trying to get {diff} more through fedimint-cli");
+        let notes = try_get_notes_cli(&diff, 5).await?;
+        reissue_notes(&coordinator, notes, &event_sender).await?;
+    } else {
+        info!("Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}");
+    }
+
+    info!("Reminting notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
+    remint_denomination(&coordinator, note_denomination, minimum_notes).await?;
+
+    info!("Note summary:");
+    let summary = get_note_summary(&coordinator).await?;
+    for (k, v) in summary.iter() {
+        info!("{k}: {v}");
+    }
+
     let mut users_clients = Vec::with_capacity(users.into());
     for u in 0..users {
         let user_db = db_path
@@ -376,21 +405,6 @@ async fn run_load_test(
             switch_default_gateway(&client, gateway_id).await?;
         }
         users_clients.push(client);
-    }
-
-    let amount = initial_notes.total_amount();
-
-    info!("Reissuing initial notes: initial {amount}");
-    reissue_notes(&coordinator, initial_notes, &event_sender).await?;
-
-    info!("Reminting notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
-    let total_quantity_to_remint = notes_per_user * users;
-    remint_denomination(&coordinator, note_denomination, total_quantity_to_remint).await?;
-
-    info!("Note summary:");
-    let summary = get_note_summary(&coordinator).await?;
-    for (k, v) in summary.iter() {
-        info!("{k}: {v}");
     }
 
     let mut users_notes = HashMap::new();
