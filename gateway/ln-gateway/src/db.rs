@@ -1,4 +1,5 @@
 use bitcoin::Network;
+use bitcoin_hashes::sha256;
 use fedimint_core::api::InviteCode;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -15,6 +16,7 @@ pub enum DbKeyPrefix {
     FederationRegistration = 0x05,
     GatewayPublicKey = 0x06,
     GatewayConfiguration = 0x07,
+    PreimageAuthentication = 0x08,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -74,4 +76,15 @@ impl_db_record!(
     value = GatewayConfiguration,
     db_prefix = DbKeyPrefix::GatewayConfiguration,
     notify_on_modify = true,
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
+pub struct PreimageAuthentication {
+    pub payment_hash: sha256::Hash,
+}
+
+impl_db_record!(
+    key = PreimageAuthentication,
+    value = sha256::Hash,
+    db_prefix = DbKeyPrefix::PreimageAuthentication
 );

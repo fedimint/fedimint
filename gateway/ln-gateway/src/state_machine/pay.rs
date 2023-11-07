@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientArc, DynGlobalClientContext};
@@ -9,6 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, TransactionId};
+use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
@@ -22,6 +24,7 @@ use tokio_stream::StreamExt;
 use super::{
     GatewayClientContext, GatewayClientExt, GatewayClientStateMachines, GatewayExtReceiveStates,
 };
+use crate::db::PreimageAuthentication;
 use crate::fetch_lightning_node_info;
 use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 use crate::lnrpc_client::LightningRpcError;
@@ -147,6 +150,8 @@ pub enum OutgoingPaymentErrorType {
     InvalidOutgoingContract { error: OutgoingContractError },
     #[error("An error occurred while attempting direct swap between federations.")]
     SwapFailed { swap_error: String },
+    #[error("Invoice has already been paid")]
+    InvoiceAlreadyPaid,
 }
 
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -164,7 +169,7 @@ impl Display for OutgoingPaymentError {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct GatewayPayInvoice {
-    pub contract_id: ContractId,
+    pub pay_invoice_payload: PayInvoicePayload,
 }
 
 impl GatewayPayInvoice {
@@ -174,13 +179,19 @@ impl GatewayPayInvoice {
         context: GatewayClientContext,
         common: GatewayPayCommon,
     ) -> Vec<StateTransition<GatewayPayStateMachine>> {
+        let payload = self.pay_invoice_payload.clone();
         vec![StateTransition::new(
-            Self::await_get_payment_parameters(global_context, self.contract_id, context.clone()),
+            Self::await_get_payment_parameters(
+                global_context,
+                self.pay_invoice_payload.contract_id,
+                context.clone(),
+            ),
             move |_dbtx, result, _old_state| {
                 Box::pin(Self::transition_buy_preimage(
                     context.clone(),
                     result,
                     common.clone(),
+                    payload.clone(),
                 ))
             },
         )]
@@ -362,9 +373,30 @@ impl GatewayPayInvoice {
         context: GatewayClientContext,
         result: Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError>,
         common: GatewayPayCommon,
+        payload: PayInvoicePayload,
     ) -> GatewayPayStateMachine {
         match result {
             Ok((contract, payment_parameters)) => {
+                // Verify that this client is authorized to receive the preimage.
+                if let Err(err) = Self::verify_preimage_authentication(
+                    &context,
+                    payload.payment_hash,
+                    payload.preimage_auth,
+                    contract.clone(),
+                )
+                .await
+                {
+                    return GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract,
+                                error: err,
+                            },
+                        )),
+                    };
+                }
+
                 if let Some(client) = Self::check_swap_to_federation(
                     context.clone(),
                     payment_parameters.invoice.clone(),
@@ -402,6 +434,46 @@ impl GatewayPayInvoice {
                 },
             },
         }
+    }
+
+    /// Verifies that the supplied `preimage_auth` is the same as the
+    /// `preimage_auth` that initiated the payment. If it is not, then this
+    /// will return an error because this client is not authorized to receive
+    /// the preimage.
+    async fn verify_preimage_authentication(
+        context: &GatewayClientContext,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+        contract: OutgoingContractAccount,
+    ) -> Result<(), OutgoingPaymentError> {
+        let mut dbtx = context.gateway_db.begin_transaction().await;
+        if let Some(secret_hash) = dbtx
+            .get_value(&PreimageAuthentication { payment_hash })
+            .await
+        {
+            if secret_hash != preimage_auth {
+                return Err(OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    contract_id: contract.contract.contract_id(),
+                    contract: Some(contract),
+                });
+            }
+        } else {
+            // Committing the `preimage_auth` to the database can fail if two users try to
+            // pay the same invoice at the same time.
+            dbtx.insert_new_entry(&PreimageAuthentication { payment_hash }, &preimage_auth)
+                .await;
+            return dbtx
+                .commit_tx_result()
+                .await
+                .map_err(|_| OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    contract_id: contract.contract.contract_id(),
+                    contract: Some(contract),
+                });
+        }
+
+        Ok(())
     }
 
     async fn validate_outgoing_account(

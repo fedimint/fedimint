@@ -278,17 +278,14 @@ impl LightningClientExt for ClientArc {
         }
 
         // Verify that no previous payment attempt is still running
-        let prev_operation_id = lightning
-            .get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index)
-            .await;
+        let prev_operation_id =
+            lightning.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
         if self.has_active_states(prev_operation_id).await {
             return Err(anyhow::anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
         }
 
         let next_index = prev_payment_result.index + 1;
-        let operation_id = lightning
-            .get_payment_operation_id(invoice.payment_hash(), next_index)
-            .await;
+        let operation_id = lightning.get_payment_operation_id(invoice.payment_hash(), next_index);
 
         let new_payment_result = PaymentResult {
             index: next_index,
@@ -677,6 +674,13 @@ impl ExtendsCommonModuleInit for LightningClientGen {
     }
 }
 
+#[derive(Debug)]
+#[repr(u64)]
+pub enum LightningChildKeys {
+    RedeemKey = 0,
+    PreimageAuthentication = 1,
+}
+
 #[apply(async_trait_maybe_send!)]
 impl ClientModuleInit for LightningClientGen {
     type Module = LightningClientModule;
@@ -693,10 +697,14 @@ impl ClientModuleInit for LightningClientGen {
             notifier: args.notifier().clone(),
             redeem_key: args
                 .module_root_secret()
-                .child_key(ChildId(0))
+                .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
+                .to_secp_key(&secp),
+            module_api: args.module_api().clone(),
+            preimage_auth: args
+                .module_root_secret()
+                .child_key(ChildId(LightningChildKeys::PreimageAuthentication as u64))
                 .to_secp_key(&secp),
             secp,
-            module_api: args.module_api().clone(),
         })
     }
 }
@@ -708,6 +716,7 @@ pub struct LightningClientModule {
     redeem_key: KeyPair,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
+    preimage_auth: KeyPair,
 }
 
 impl ClientModule for LightningClientModule {
@@ -778,11 +787,7 @@ impl LightningClientModule {
         })
     }
 
-    async fn get_payment_operation_id(
-        &self,
-        payment_hash: &sha256::Hash,
-        index: u16,
-    ) -> OperationId {
+    fn get_payment_operation_id(&self, payment_hash: &sha256::Hash, index: u16) -> OperationId {
         // Copy the 32 byte payment hash and a 2 byte index to make every payment
         // attempt have a unique `OperationId`
         let mut bytes = [0; 34];
@@ -822,6 +827,17 @@ impl LightningClientModule {
         }
 
         Ok(())
+    }
+
+    /// Hashes the client's preimage authentication secret with the provided
+    /// `payment_hash`. The resulting hash is used when contacting the
+    /// gateway to determine if this client is allowed to be shown the
+    /// preimage.
+    fn get_preimage_authentication(&self, payment_hash: &sha256::Hash) -> sha256::Hash {
+        let mut bytes = [0; 64];
+        bytes[0..32].copy_from_slice(&payment_hash.into_inner());
+        bytes[32..64].copy_from_slice(&self.preimage_auth.secret_bytes());
+        Hash::hash(&bytes)
     }
 
     /// Create an output that incentivizes a Lightning gateway to pay an invoice
@@ -877,8 +893,10 @@ impl LightningClientModule {
 
         let user_sk = bitcoin::KeyPair::new(&self.secp, &mut rng);
 
+        let preimage_auth = self.get_preimage_authentication(invoice.payment_hash());
+        let payment_hash = *invoice.payment_hash();
         let contract = OutgoingContract {
-            hash: *invoice.payment_hash(),
+            hash: payment_hash,
             gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock as u32,
             user_key: user_sk.x_only_public_key().0,
@@ -903,6 +921,8 @@ impl LightningClientModule {
                         federation_id: fed_id,
                         contract: outgoing_payment.clone(),
                         gateway_fee: Amount::from_msats(base_fee + margin_fee),
+                        preimage_auth,
+                        payment_hash,
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
                         LightningPayCreatedOutgoingLnContract {

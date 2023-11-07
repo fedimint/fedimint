@@ -50,6 +50,7 @@ impl GatewayClientBuilder {
         all_clients: FederationToClientMap,
         all_scids: ScidToFederationMap,
         old_client: Option<fedimint_client::ClientArc>,
+        gateway_db: Database,
     ) -> Result<fedimint_client::ClientArc> {
         let FederationConfig {
             invite_code,
@@ -69,6 +70,7 @@ impl GatewayClientBuilder {
             fees,
             timelock_delta,
             mint_channel_id,
+            gateway_db,
         });
 
         let mut client_builder = ClientBuilder::default();

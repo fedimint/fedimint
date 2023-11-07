@@ -17,7 +17,7 @@ use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientCon
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
+use fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -28,6 +28,7 @@ use fedimint_ln_client::create_incoming_contract_output;
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
+use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
@@ -112,7 +113,7 @@ pub trait GatewayClientExt {
     /// Pay lightning invoice on behalf of federation user
     async fn gateway_pay_bolt11_invoice(
         &self,
-        contract_id: ContractId,
+        pay_invoice_payload: PayInvoicePayload,
     ) -> anyhow::Result<OperationId>;
 
     /// Subscribe to updates when the gateway is paying an invoice
@@ -154,21 +155,22 @@ impl GatewayClientExt for ClientArc {
     /// Pays a LN invoice with our available funds
     async fn gateway_pay_bolt11_invoice(
         &self,
-        contract_id: ContractId,
+        pay_invoice_payload: PayInvoicePayload,
     ) -> anyhow::Result<OperationId> {
         let (_, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let payload = pay_invoice_payload.clone();
 
         self.db()
             .autocommit(
                 |dbtx| {
-                    Box::pin(async move {
-                        let operation_id = OperationId(contract_id.into_inner());
+                    Box::pin(async {
+                        let operation_id = OperationId(payload.contract_id.into_inner());
 
                         let state_machines =
                             vec![GatewayClientStateMachines::Pay(GatewayPayStateMachine {
                                 common: GatewayPayCommon { operation_id },
                                 state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
-                                    contract_id,
+                                    pay_invoice_payload: payload.clone(),
                                 }),
                             })];
 
@@ -354,6 +356,7 @@ pub struct GatewayClientGen {
     pub timelock_delta: u64,
     pub mint_channel_id: u64,
     pub fees: RoutingFees,
+    pub gateway_db: Database,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -395,6 +398,7 @@ impl ClientModuleInit for GatewayClientGen {
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
             fees: self.fees,
+            gateway_db: self.gateway_db.clone(),
         })
     }
 }
@@ -409,6 +413,7 @@ pub struct GatewayClientContext {
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<DynGlobalClientContext, GatewayClientStateMachines>,
+    gateway_db: Database,
 }
 
 impl Context for GatewayClientContext {}
@@ -436,6 +441,7 @@ pub struct GatewayClientModule {
     mint_channel_id: u64,
     fees: RoutingFees,
     module_api: DynModuleApi,
+    gateway_db: Database,
 }
 
 impl ClientModule for GatewayClientModule {
@@ -453,6 +459,7 @@ impl ClientModule for GatewayClientModule {
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: self.decoder(),
             notifier: self.notifier.clone(),
+            gateway_db: self.gateway_db.clone(),
         }
     }
 
