@@ -310,7 +310,19 @@ impl ConfigGenApi {
     /// We have verified all our peer configs
     pub async fn verified_configs(&self) -> ApiResult<()> {
         {
-            let mut state = self.require_status(ServerStatus::VerifyingConfigs)?;
+            let mut state = self
+                .require_status(ServerStatus::VerifyingConfigs)
+                .or_else(|_| self.require_status(ServerStatus::VerifiedConfigs))
+                .map_err(|_| {
+                    ApiError::bad_request(format!(
+                        "Expected to be in {:?} or {:?} state",
+                        ServerStatus::VerifyingConfigs,
+                        ServerStatus::VerifiedConfigs
+                    ))
+                })?;
+            if state.status == ServerStatus::VerifiedConfigs {
+                return Ok(());
+            }
             state.status = ServerStatus::VerifiedConfigs;
         }
 
