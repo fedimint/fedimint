@@ -61,6 +61,12 @@ macro_rules! _dyn_newtype_define_inner {
 
         }
 
+        impl $name {
+            pub fn get_mut(&mut self) -> Option<&mut <Self as std::ops::Deref>::Target> {
+                Arc::get_mut(&mut self.inner)
+            }
+        }
+
         impl<I> From<I> for $name
         where
             I: $trait + $crate::task::MaybeSend + $crate::task::MaybeSync + 'static,

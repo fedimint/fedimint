@@ -109,7 +109,7 @@ use fedimint_core::{
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use futures::StreamExt;
-use module::DynClientModule;
+use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
@@ -495,7 +495,7 @@ impl Clone for ClientArc {
 }
 
 /// Like [`ClientArc`] but using a [`Weak`] handle to [`Client`]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClientWeak {
     inner: Weak<Client>,
 }
@@ -1547,6 +1547,8 @@ impl ClientBuilder {
         )
         .await?;
 
+        let final_client = FinalClient::default();
+
         let modules = {
             let mut modules = ClientModuleRegistry::default();
             for (module_instance, module_config) in config.modules.clone() {
@@ -1563,6 +1565,7 @@ impl ClientBuilder {
 
                 let module = module_init
                     .init(
+                        final_client.clone(),
                         config.global.federation_id,
                         module_config,
                         db.clone(),
@@ -1616,9 +1619,13 @@ impl ClientBuilder {
             client_count: AtomicUsize::new(1),
         });
 
-        Ok(ClientArc {
+        let client_arc = ClientArc {
             inner: client_inner,
-        })
+        };
+
+        final_client.set(client_arc.downgrade());
+
+        Ok(client_arc)
     }
 }
 

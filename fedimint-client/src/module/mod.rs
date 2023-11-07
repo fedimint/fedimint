@@ -17,14 +17,65 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+use futures::Future;
 
 use crate::sm::{Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput};
-use crate::{ClientArc, DynGlobalClientContext};
+use crate::{Client, ClientArc, ClientWeak, DynGlobalClientContext};
 
 pub mod init;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
+
+/// A final, fully initialized [`Client`]
+///
+/// Client modules need to be able to access a `Client` they are a part
+/// of. To break the circular dependency, the final `Client` is passed
+/// after `Client` was built via a shared state.
+#[derive(Clone, Default)]
+pub struct FinalClient(Arc<std::sync::OnceLock<ClientWeak>>);
+
+impl FinalClient {
+    /// Get a temporary [`ClientArc`]
+    ///
+    /// Care must be taken to not let the user take ownership of this value,
+    /// and not store it elsewhere permanently either, as it could prevent
+    /// the cleanup of the Client.
+    pub(crate) fn get(&self) -> ClientArc {
+        self.0
+            .get()
+            .expect("client must be already set")
+            .upgrade()
+            .expect("client module context must not be use past client shutdown")
+    }
+
+    pub(crate) fn set(&self, client: ClientWeak) {
+        self.0.set(client).expect("FinalLazyClient already set");
+    }
+}
+
+#[derive(Clone)]
+pub struct ClientContext {
+    client: FinalClient,
+}
+
+impl ClientContext {
+    /// Run `f` with a `Client` reference
+    ///
+    /// This uses a closure-API to prevent the caller from holding on to a
+    /// reference to the `Client`, preventing its cleanup.
+    pub async fn with_client<F>(self, f: impl FnOnce(&Client) -> F) -> <F as Future>::Output
+    where
+        F: Future,
+    {
+        f(&self.client.get()).await
+    }
+
+    /// Like [`Self::with_client`] but when `async` is not needed.
+    pub fn with_client_sync<R>(self, f: impl FnOnce(&Client) -> R) -> R {
+        f(&self.client.get())
+    }
+}
 
 /// Fedimint module client
 #[apply(async_trait_maybe_send!)]

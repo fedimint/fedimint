@@ -12,6 +12,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
 
+use super::{ClientContext, FinalClient};
 use crate::module::{ClientModule, DynClientModule};
 use crate::sm::{ModuleNotifier, Notifier};
 use crate::DynGlobalClientContext;
@@ -33,6 +34,7 @@ where
     >,
     api: DynGlobalApi,
     module_api: DynModuleApi,
+    context: ClientContext,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -77,6 +79,16 @@ where
     pub fn module_api(&self) -> &DynModuleApi {
         &self.module_api
     }
+
+    /// Get the [`ClientContext`] for later use
+    ///
+    /// Notably `ClientContext` can not be used during `ClientModuleInit::init`,
+    /// as the outer context is not yet complete. But it can be stored to be
+    /// used in the methods of [`ClientModule`], at which point it will be
+    /// ready.
+    pub fn context(&self) -> ClientContext {
+        self.context.clone()
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -105,6 +117,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
     #[allow(clippy::too_many_arguments)]
     async fn init(
         &self,
+        final_client: FinalClient,
         federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
@@ -140,6 +153,7 @@ where
 
     async fn init(
         &self,
+        final_client: FinalClient,
         federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
@@ -161,6 +175,9 @@ where
                 notifier: notifier.module_notifier(instance_id),
                 api: api.clone(),
                 module_api: api.with_module(instance_id),
+                context: ClientContext {
+                    client: final_client,
+                },
             })
             .await?
             .into())
