@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-derive-secret"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Fedimint derivable secret implementation"

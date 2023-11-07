@@ -1,6 +1,6 @@
 [package]
 name = "ln-gateway"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "ln-gateway is a core lightning plugin which allows a Lightning node operator to receive or pay Lightning invoices on behalf of fedimint users."

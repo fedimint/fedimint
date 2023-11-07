@@ -1,6 +1,6 @@
 [package]
 name = "hkdf"
-version = "0.1.0"
+version = "0.2.0-alpha"
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "RFC5869 HKDF implementation on top of bitcoin_hashes"
