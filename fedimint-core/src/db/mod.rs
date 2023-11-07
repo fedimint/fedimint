@@ -1,3 +1,39 @@
+//! Core Fedimint database traits and types
+//!
+//! # Isolation of database transactions
+//!
+//! Fedimint requires that the database implementation implement Snapshot
+//! Isolation. Snapshot Isolation is a database isolation level that guarantees
+//! consistent reads from the time that the snapshot was created (at transaction
+//! creation time). Transactions with Snapshot Isolation level will only commit
+//! if there has been no write to the modified keys since the snapshot (i.e.
+//! write-write conflicts are prevented).
+//!
+//! Specifically, Fedimint expects the database implementation to prevent the
+//! following anomalies:
+//!
+//! Non-Readable Write: TX1 writes (K1, V1) at time t but cannot read (K1, V1)
+//! at time (t + i)
+//!
+//! Dirty Read: TX1 is able to read TX2's uncommitted writes.
+//!
+//! Non-Repeatable Read: TX1 reads (K1, V1) at time t and retrieves (K1, V2) at
+//! time (t + i) where V1 != V2.
+//!
+//! Phantom Record: TX1 retrieves X number of records for a prefix at time t and
+//! retrieves Y number of records for the same prefix at time (t + i).
+//!
+//! Lost Writes: TX1 writes (K1, V1) at the same time as TX2 writes (K1, V2). V2
+//! overwrites V1 as the value for K1 (write-write conflict).
+//!
+//! | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom
+//! Record | Lost Writes | | -------- | ------------------ | ---------- |
+//! ------------------- | -------------- | ----------- | | MemoryDB | Prevented
+//! | Prevented  | Prevented           | Prevented      | Possible    |
+//! | RocksDB  | Prevented          | Prevented  | Prevented           |
+//! Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
+//! | Prevented           | Prevented      | Prevented   |
+
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Debug};
@@ -106,9 +142,20 @@ pub enum AutocommitError<E> {
     },
 }
 
+/// Raw database implementation
+///
+/// This and [`IRawDatabaseTransaction`] are meant to be implemented
+/// by crates like `fedimint-rocksdb` to provide a concrete implementation
+/// of a database to be used by Fedimint.
+///
+/// This is in contrast of [`IDatabase`] which includes extra
+/// functionality that Fedimint needs (and adds) on top of it.
 #[apply(async_trait_maybe_send!)]
 pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
+    /// A raw database transaction type
     type Transaction<'a>: IRawDatabaseTransaction;
+
+    /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
 }
 
@@ -124,6 +171,7 @@ where
     }
 }
 
+/// An extension trait with convenience operations on [`IRawDatabase`]
 pub trait IRawDatabaseExt: IRawDatabase + Sized {
     /// Convert to type implementing [`IRawDatabase`] into [`Database`].
     ///
@@ -144,11 +192,15 @@ where
     }
 }
 
-/// A database that on top of normal operation, can key change notifications
+/// A database that on top of a raw database operation, implements
+/// key notification system.
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
+    /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a>;
+    /// Register (and wait) for `key` updates
     async fn register(&self, key: &[u8]);
+    /// Notify about `key` update (creation, modification, deletion)
     async fn notify(&self, key: &[u8]);
 }
 
@@ -170,7 +222,7 @@ where
 
 /// Base functionality around [`IRawDatabase`] to make it a [`IDatabase`]
 ///
-/// Mostly notification system, but also run-time single-commit by value.
+/// Mostly notification system, but also run-time single-commit handling.
 struct BaseDatabase<RawDatabase> {
     notifications: Arc<Notifications>,
     raw: RawDatabase,
@@ -198,6 +250,11 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
     }
 }
 
+/// A public-facing newtype over `IDatabase`
+///
+/// Notably carries set of module decoders (`ModuleDecoderRegistry`)
+/// and implements common utility function for auto-commits, db isolation,
+/// and other.
 #[derive(Clone, Debug)]
 pub struct Database {
     inner: Arc<dyn IDatabase + 'static>,
@@ -208,7 +265,7 @@ impl Database {
     /// Creates a new Fedimint database from any object implementing
     /// [`IDatabase`].
     ///
-    /// For more flexibility see also [`Database::new_from_arc`].
+    /// See also [`Database::new_from_arc`].
     pub fn new(raw: impl IRawDatabase + 'static, module_decoders: ModuleDecoderRegistry) -> Self {
         let inner = BaseDatabase {
             raw,
@@ -220,6 +277,7 @@ impl Database {
         )
     }
 
+    /// Create [`Database`] from an already typed-erased `IDatabase`.
     pub fn new_from_arc(
         inner: Arc<dyn IDatabase + 'static>,
         module_decoders: ModuleDecoderRegistry,
@@ -230,9 +288,8 @@ impl Database {
         }
     }
 
-    pub fn with_prefix_module_id(&self, module_instance_id: ModuleInstanceId) -> Self {
-        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
-
+    /// Create [`Database`] isolated to a partition with a given `prefix`
+    pub fn with_prefix(&self, prefix: Vec<u8>) -> Self {
         Self {
             inner: Arc::new(PrefixDatabase {
                 inner: self.inner.clone(),
@@ -242,6 +299,13 @@ impl Database {
         }
     }
 
+    /// Create [`Database`] isolated to a partition with a prefix for a given
+    /// `module_instance_id`
+    pub fn with_prefix_module_id(&self, module_instance_id: ModuleInstanceId) -> Self {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        self.with_prefix(prefix)
+    }
+
     pub fn with_decoders(&self, module_decoders: ModuleDecoderRegistry) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -249,6 +313,7 @@ impl Database {
         }
     }
 
+    /// Begin a database transaction
     pub async fn begin_transaction<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx>
     where
         's: 'tx,
@@ -411,7 +476,7 @@ fn module_instance_id_to_byte_prefix(module_instance_id: u16) -> Vec<u8> {
 /// A database that wraps an `inner` one and adds a prefix to all operations,
 /// effectively creating an isolated partition.
 #[derive(Clone, Debug)]
-pub struct PrefixDatabase<Inner>
+struct PrefixDatabase<Inner>
 where
     Inner: Debug,
 {
@@ -545,7 +610,9 @@ where
     }
 }
 
-/// Core raw operations database transactions support
+/// Core raw a operations database transactions supports
+///
+/// Used to enforce the same signature on all types supporting it
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOpsCore: MaybeSend {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
@@ -638,7 +705,11 @@ where
     }
 }
 
-/// Additional operations (some) database transactions support
+/// Additional operations (only some) database transactions expose, on top of
+/// [`IDatabaseTransactionOpsCore`]
+///
+/// In certain contexts exposing these operations would be a problem, so they
+/// arem oved to a separate trait.
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {
     /// Create a savepoint during the transaction that can be rolled back to
@@ -683,6 +754,10 @@ where
 }
 
 /// Like [`IDatabaseTransactionOpsCore`], but typed
+///
+/// Implemented via blanket impl for everything that implements
+/// [`IDatabaseTransactionOpsCore`] that has decoders (implements
+/// [`WithDecoders`]).
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOpsCoreTyped<'a> {
     async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
@@ -746,6 +821,8 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
         KP: DatabaseLookup + MaybeSend + MaybeSync;
 }
 
+// blanket implementation of typed ops for anything that implements raw ops and
+// has decoders
 #[apply(async_trait_maybe_send!)]
 impl<'a, T> IDatabaseTransactionOpsCoreTyped<'a> for T
 where
@@ -887,46 +964,21 @@ where
     }
 }
 
-/// A type that hold decoders
+/// A database type that has decoders, which allows it to implement
+/// [`IDatabaseTransactionOpsCoreTyped`]
 pub trait WithDecoders {
     fn decoders(&self) -> &ModuleDecoderRegistry;
 }
-/// Fedimint requires that the database implementation implement Snapshot
-/// Isolation. Snapshot Isolation is a database isolation level that guarantees
-/// consistent reads from the time that the snapshot was created (at transaction
-/// creation time). Transactions with Snapshot Isolation level will only commit
-/// if there has been no write to the modified keys since the snapshot (i.e.
-/// write-write conflicts are prevented).
-///
-/// Specifically, Fedimint expects the database implementation to prevent the
-/// following anomalies:
-///
-/// Non-Readable Write: TX1 writes (K1, V1) at time t but cannot read (K1, V1)
-/// at time (t + i)
-///
-/// Dirty Read: TX1 is able to read TX2's uncommitted writes.
-///
-/// Non-Repeatable Read: TX1 reads (K1, V1) at time t and retrieves (K1, V2) at
-/// time (t + i) where V1 != V2.
-///
-/// Phantom Record: TX1 retrieves X number of records for a prefix at time t and
-/// retrieves Y number of records for the same prefix at time (t + i).
-///
-/// Lost Writes: TX1 writes (K1, V1) at the same time as TX2 writes (K1, V2). V2
-/// overwrites V1 as the value for K1 (write-write conflict).
-///
-/// | Type     | Non-Readable Write | Dirty Read | Non-Repeatable Read | Phantom
-/// Record | Lost Writes | | -------- | ------------------ | ---------- |
-/// ------------------- | -------------- | ----------- | | MemoryDB | Prevented
-/// | Prevented  | Prevented           | Prevented      | Possible    |
-/// | RocksDB  | Prevented          | Prevented  | Prevented           |
-/// Prevented      | Prevented   | | Sqlite   | Prevented          | Prevented
-/// | Prevented           | Prevented      | Prevented   |
+
+/// Raw database transaction (e.g. rocksdb implementation)
 #[apply(async_trait_maybe_send!)]
 pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
     async fn commit_tx(self) -> Result<()>;
 }
 
+/// Fedimint database transaction
+///
+/// See [`IDatabase`] for more info.
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
     async fn commit_tx(&mut self) -> Result<()>;
@@ -954,7 +1006,7 @@ where
 
 /// Struct that implements `ISingleUseDatabaseTransaction` and can be wrapped
 /// easier in other structs since it does not consumed `self` by move.
-pub struct BaseDatabaseTransaction<Tx> {
+struct BaseDatabaseTransaction<Tx> {
     // TODO: merge options
     raw: Option<Tx>,
     notify_queue: Option<NotifyQueue>,
@@ -965,7 +1017,7 @@ impl<Tx> BaseDatabaseTransaction<Tx>
 where
     Tx: IRawDatabaseTransaction,
 {
-    pub fn new(dbtx: Tx, notifications: Arc<Notifications>) -> BaseDatabaseTransaction<Tx> {
+    fn new(dbtx: Tx, notifications: Arc<Notifications>) -> BaseDatabaseTransaction<Tx> {
         BaseDatabaseTransaction {
             raw: Some(dbtx),
             notifications,
@@ -973,15 +1025,6 @@ where
         }
     }
 
-    /// Create a `BaseDatabaseTransaction`, with notifications disconnected from
-    /// any other database.
-    pub fn new_detached(dbtx: Tx) -> BaseDatabaseTransaction<Tx> {
-        BaseDatabaseTransaction {
-            raw: Some(dbtx),
-            notifications: Arc::new(Notifications::new()),
-            notify_queue: Some(NotifyQueue::new()),
-        }
-    }
     fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
         self.notify_queue
             .as_mut()
@@ -1085,12 +1128,15 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransacti
     }
 }
 
-// TODO: use macro again
-#[doc = " A handle to a type-erased database implementation"]
+/// A helper for tracking and logging on `Drop` any instances of uncommitted
+/// writes
 #[derive(Clone)]
-pub struct CommitTracker {
+struct CommitTracker {
+    /// Is the dbtx committed
     is_committed: bool,
+    /// Does the dbtx have any writes
     has_writes: bool,
+    /// Don't warn-log uncommitted writes
     ignore_uncommitted: bool,
 }
 
@@ -1158,17 +1204,7 @@ impl<'a> IDatabaseTransactionOpsCore for DatabaseTransactionRef<'a> {
     }
 }
 
-/// `DatabaseTransaction` is the parent-level database transaction that can
-/// modify the database. The owner of the `DatabaseTransaction` is responsible
-/// for managing the lifetime of the `DatabaseTransaction`, either by committing
-/// the modifications to the database or rolling back the transaction. From this
-/// parent-level `DatabaseTransaction`, a `ModuleDatabaseTransaction`
-/// can be created which operates like a child transaction where the child
-/// transaction only has access to the modules database namespace.
-///
-/// `DatabaseTransaction` is intended to be used for atomic database operations
-/// that span across modules.
-#[doc = " A handle to a type-erased database implementation"]
+/// A high level database transaction handle
 pub struct DatabaseTransaction<'tx> {
     tx: Box<dyn IDatabaseTransaction + 'tx>,
     decoders: ModuleDecoderRegistry,
