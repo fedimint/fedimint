@@ -183,6 +183,23 @@
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -197,6 +214,7 @@
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 
+<span class="kw">use super</span>::{ClientContext, FinalClient};
 <span class="kw">use </span><span class="kw">crate</span>::module::{ClientModule, DynClientModule};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ModuleNotifier, Notifier};
 <span class="kw">use </span><span class="kw">crate</span>::DynGlobalClientContext;
@@ -218,6 +236,7 @@
     &gt;,
     api: DynGlobalApi,
     module_api: DynModuleApi,
+    context: ClientContext,
 }
 
 <span class="kw">impl</span>&lt;C&gt; ClientModuleInitArgs&lt;C&gt;
@@ -262,6 +281,16 @@
     <span class="kw">pub fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynModuleApi {
         <span class="kw-2">&amp;</span><span class="self">self</span>.module_api
     }
+
+    <span class="doccomment">/// Get the [`ClientContext`] for later use
+    ///
+    /// Notably `ClientContext` can not be used during `ClientModuleInit::init`,
+    /// as the outer context is not yet complete. But it can be stored to be
+    /// used in the methods of [`ClientModule`], at which point it will be
+    /// ready.
+    </span><span class="kw">pub fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientContext {
+        <span class="self">self</span>.context.clone()
+    }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -290,6 +319,7 @@
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        final_client: FinalClient,
         federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
@@ -325,6 +355,7 @@
 
     <span class="kw">async fn </span>init(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        final_client: FinalClient,
         federation_id: FederationId,
         cfg: ClientModuleConfig,
         db: Database,
@@ -346,6 +377,9 @@
                 notifier: notifier.module_notifier(instance_id),
                 api: api.clone(),
                 module_api: api.with_module(instance_id),
+                context: ClientContext {
+                    client: final_client,
+                },
             })
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into())

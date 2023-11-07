@@ -1746,6 +1746,13 @@
 <a href="#1746" id="1746">1746</a>
 <a href="#1747" id="1747">1747</a>
 <a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1857,7 +1864,7 @@
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>module::DynClientModule;
+<span class="kw">use </span>module::{DynClientModule, FinalClient};
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
@@ -2243,7 +2250,7 @@
 }
 
 <span class="doccomment">/// Like [`ClientArc`] but using a [`Weak`] handle to [`Client`]
-</span><span class="attr">#[derive(Debug)]
+</span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>ClientWeak {
     inner: Weak&lt;Client&gt;,
 }
@@ -3295,6 +3302,8 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="kw">let </span>final_client = FinalClient::default();
+
         <span class="kw">let </span>modules = {
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();
             <span class="kw">for </span>(module_instance, module_config) <span class="kw">in </span>config.modules.clone() {
@@ -3311,6 +3320,7 @@
 
                 <span class="kw">let </span>module = module_init
                     .init(
+                        final_client.clone(),
                         config.global.federation_id,
                         module_config,
                         db.clone(),
@@ -3364,9 +3374,13 @@
             client_count: AtomicUsize::new(<span class="number">1</span>),
         });
 
-        <span class="prelude-val">Ok</span>(ClientArc {
+        <span class="kw">let </span>client_arc = ClientArc {
             inner: client_inner,
-        })
+        };
+
+        final_client.set(client_arc.downgrade());
+
+        <span class="prelude-val">Ok</span>(client_arc)
     }
 }
 
