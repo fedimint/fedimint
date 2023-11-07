@@ -719,6 +719,13 @@
 <a href="#719" id="719">719</a>
 <a href="#720" id="720">720</a>
 <a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -738,7 +745,7 @@
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, ModuleDatabaseTransaction};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -749,6 +756,7 @@
 <span class="kw">use </span>fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
+<span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
@@ -833,7 +841,7 @@
     <span class="doccomment">/// Pay lightning invoice on behalf of federation user
     </span><span class="kw">async fn </span>gateway_pay_bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        contract_id: ContractId,
+        pay_invoice_payload: PayInvoicePayload,
     ) -&gt; anyhow::Result&lt;OperationId&gt;;
 
     <span class="doccomment">/// Subscribe to updates when the gateway is paying an invoice
@@ -875,21 +883,22 @@
     <span class="doccomment">/// Pays a LN invoice with our available funds
     </span><span class="kw">async fn </span>gateway_pay_bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        contract_id: ContractId,
+        pay_invoice_payload: PayInvoicePayload,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="kw">let </span>(<span class="kw">_</span>, instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>payload = pay_invoice_payload.clone();
 
         <span class="self">self</span>.db()
             .autocommit(
                 |dbtx| {
-                    Box::pin(<span class="kw">async move </span>{
-                        <span class="kw">let </span>operation_id = OperationId(contract_id.into_inner());
+                    Box::pin(<span class="kw">async </span>{
+                        <span class="kw">let </span>operation_id = OperationId(payload.contract_id.into_inner());
 
                         <span class="kw">let </span>state_machines =
                             <span class="macro">vec!</span>[GatewayClientStateMachines::Pay(GatewayPayStateMachine {
                                 common: GatewayPayCommon { operation_id },
                                 state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
-                                    contract_id,
+                                    pay_invoice_payload: payload.clone(),
                                 }),
                             })];
 
@@ -1075,6 +1084,7 @@
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>mint_channel_id: u64,
     <span class="kw">pub </span>fees: RoutingFees,
+    <span class="kw">pub </span>gateway_db: Database,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1116,6 +1126,7 @@
             timelock_delta: <span class="self">self</span>.timelock_delta,
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
             fees: <span class="self">self</span>.fees,
+            gateway_db: <span class="self">self</span>.gateway_db.clone(),
         })
     }
 }
@@ -1130,6 +1141,7 @@
     secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
     <span class="kw">pub </span>ln_decoder: Decoder,
     notifier: ModuleNotifier&lt;DynGlobalClientContext, GatewayClientStateMachines&gt;,
+    gateway_db: Database,
 }
 
 <span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContext {}
@@ -1157,6 +1169,7 @@
     mint_channel_id: u64,
     fees: RoutingFees,
     module_api: DynModuleApi,
+    gateway_db: Database,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModule {
@@ -1174,6 +1187,7 @@
             secp: secp256k1_zkp::Secp256k1::new(),
             ln_decoder: <span class="self">self</span>.decoder(),
             notifier: <span class="self">self</span>.notifier.clone(),
+            gateway_db: <span class="self">self</span>.gateway_db.clone(),
         }
     }
 

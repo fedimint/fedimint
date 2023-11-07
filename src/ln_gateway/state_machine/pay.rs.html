@@ -726,10 +726,83 @@
 <a href="#726" id="726">726</a>
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput};
 <span class="kw">use </span>fedimint_client::{ClientArc, DynGlobalClientContext};
@@ -737,6 +810,7 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
@@ -750,6 +824,7 @@
 <span class="kw">use super</span>::{
     GatewayClientContext, GatewayClientExt, GatewayClientStateMachines, GatewayExtReceiveStates,
 };
+<span class="kw">use </span><span class="kw">crate</span>::db::PreimageAuthentication;
 <span class="kw">use </span><span class="kw">crate</span>::fetch_lightning_node_info;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::LightningRpcError;
@@ -875,6 +950,8 @@
     </span>InvalidOutgoingContract { error: OutgoingContractError },
     <span class="attr">#[error(<span class="string">&quot;An error occurred while attempting direct swap between federations.&quot;</span>)]
     </span>SwapFailed { swap_error: String },
+    <span class="attr">#[error(<span class="string">&quot;Invoice has already been paid&quot;</span>)]
+    </span>InvoiceAlreadyPaid,
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -892,7 +969,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>GatewayPayInvoice {
-    <span class="kw">pub </span>contract_id: ContractId,
+    <span class="kw">pub </span>pay_invoice_payload: PayInvoicePayload,
 }
 
 <span class="kw">impl </span>GatewayPayInvoice {
@@ -902,13 +979,19 @@
         context: GatewayClientContext,
         common: GatewayPayCommon,
     ) -&gt; Vec&lt;StateTransition&lt;GatewayPayStateMachine&gt;&gt; {
+        <span class="kw">let </span>payload = <span class="self">self</span>.pay_invoice_payload.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_get_payment_parameters(global_context, <span class="self">self</span>.contract_id, context.clone()),
+            <span class="self">Self</span>::await_get_payment_parameters(
+                global_context,
+                <span class="self">self</span>.pay_invoice_payload.contract_id,
+                context.clone(),
+            ),
             <span class="kw">move </span>|_dbtx, result, _old_state| {
                 Box::pin(<span class="self">Self</span>::transition_buy_preimage(
                     context.clone(),
                     result,
                     common.clone(),
+                    payload.clone(),
                 ))
             },
         )]
@@ -1090,9 +1173,30 @@
         context: GatewayClientContext,
         result: <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt;,
         common: GatewayPayCommon,
+        payload: PayInvoicePayload,
     ) -&gt; GatewayPayStateMachine {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>((contract, payment_parameters)) =&gt; {
+                <span class="comment">// Verify that this client is authorized to receive the preimage.
+                </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">Self</span>::verify_preimage_authentication(
+                    <span class="kw-2">&amp;</span>context,
+                    payload.payment_hash,
+                    payload.preimage_auth,
+                    contract.clone(),
+                )
+                .<span class="kw">await
+                </span>{
+                    <span class="kw">return </span>GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract,
+                                error: err,
+                            },
+                        )),
+                    };
+                }
+
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = <span class="self">Self</span>::check_swap_to_federation(
                     context.clone(),
                     payment_parameters.invoice.clone(),
@@ -1130,6 +1234,46 @@
                 },
             },
         }
+    }
+
+    <span class="doccomment">/// Verifies that the supplied `preimage_auth` is the same as the
+    /// `preimage_auth` that initiated the payment. If it is not, then this
+    /// will return an error because this client is not authorized to receive
+    /// the preimage.
+    </span><span class="kw">async fn </span>verify_preimage_authentication(
+        context: <span class="kw-2">&amp;</span>GatewayClientContext,
+        payment_hash: sha256::Hash,
+        preimage_auth: sha256::Hash,
+        contract: OutgoingContractAccount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), OutgoingPaymentError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.gateway_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx
+            .get_value(<span class="kw-2">&amp;</span>PreimageAuthentication { payment_hash })
+            .<span class="kw">await
+        </span>{
+            <span class="kw">if </span>secret_hash != preimage_auth {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    contract_id: contract.contract.contract_id(),
+                    contract: <span class="prelude-val">Some</span>(contract),
+                });
+            }
+        } <span class="kw">else </span>{
+            <span class="comment">// Committing the `preimage_auth` to the database can fail if two users try to
+            // pay the same invoice at the same time.
+            </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PreimageAuthentication { payment_hash }, <span class="kw-2">&amp;</span>preimage_auth)
+                .<span class="kw">await</span>;
+            <span class="kw">return </span>dbtx
+                .commit_tx_result()
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    contract_id: contract.contract.contract_id(),
+                    contract: <span class="prelude-val">Some</span>(contract),
+                });
+        }
+
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>validate_outgoing_account(

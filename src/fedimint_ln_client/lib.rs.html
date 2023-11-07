@@ -1316,6 +1316,26 @@
 <a href="#1316" id="1316">1316</a>
 <a href="#1317" id="1317">1317</a>
 <a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1596,17 +1616,14 @@
         }
 
         <span class="comment">// Verify that no previous payment attempt is still running
-        </span><span class="kw">let </span>prev_operation_id = lightning
-            .get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index)
-            .<span class="kw">await</span>;
+        </span><span class="kw">let </span>prev_operation_id =
+            lightning.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
         <span class="kw">if </span><span class="self">self</span>.has_active_states(prev_operation_id).<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}&quot;</span>));
         }
 
         <span class="kw">let </span>next_index = prev_payment_result.index + <span class="number">1</span>;
-        <span class="kw">let </span>operation_id = lightning
-            .get_payment_operation_id(invoice.payment_hash(), next_index)
-            .<span class="kw">await</span>;
+        <span class="kw">let </span>operation_id = lightning.get_payment_operation_id(invoice.payment_hash(), next_index);
 
         <span class="kw">let </span>new_payment_result = PaymentResult {
             index: next_index,
@@ -1995,6 +2012,13 @@
     }
 }
 
+<span class="attr">#[derive(Debug)]
+#[repr(u64)]
+</span><span class="kw">pub enum </span>LightningChildKeys {
+    RedeemKey = <span class="number">0</span>,
+    PreimageAuthentication = <span class="number">1</span>,
+}
+
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>LightningClientGen {
     <span class="kw">type </span>Module = LightningClientModule;
@@ -2011,10 +2035,14 @@
             notifier: args.notifier().clone(),
             redeem_key: args
                 .module_root_secret()
-                .child_key(ChildId(<span class="number">0</span>))
+                .child_key(ChildId(LightningChildKeys::RedeemKey <span class="kw">as </span>u64))
+                .to_secp_key(<span class="kw-2">&amp;</span>secp),
+            module_api: args.module_api().clone(),
+            preimage_auth: args
+                .module_root_secret()
+                .child_key(ChildId(LightningChildKeys::PreimageAuthentication <span class="kw">as </span>u64))
                 .to_secp_key(<span class="kw-2">&amp;</span>secp),
             secp,
-            module_api: args.module_api().clone(),
         })
     }
 }
@@ -2026,6 +2054,7 @@
     redeem_key: KeyPair,
     secp: Secp256k1&lt;All&gt;,
     module_api: DynModuleApi,
+    preimage_auth: KeyPair,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>LightningClientModule {
@@ -2096,11 +2125,7 @@
         })
     }
 
-    <span class="kw">async fn </span>get_payment_operation_id(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payment_hash: <span class="kw-2">&amp;</span>sha256::Hash,
-        index: u16,
-    ) -&gt; OperationId {
+    <span class="kw">fn </span>get_payment_operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: <span class="kw-2">&amp;</span>sha256::Hash, index: u16) -&gt; OperationId {
         <span class="comment">// Copy the 32 byte payment hash and a 2 byte index to make every payment
         // attempt have a unique `OperationId`
         </span><span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">34</span>];
@@ -2140,6 +2165,17 @@
         }
 
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Hashes the client&#39;s preimage authentication secret with the provided
+    /// `payment_hash`. The resulting hash is used when contacting the
+    /// gateway to determine if this client is allowed to be shown the
+    /// preimage.
+    </span><span class="kw">fn </span>get_preimage_authentication(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: <span class="kw-2">&amp;</span>sha256::Hash) -&gt; sha256::Hash {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">64</span>];
+        bytes[<span class="number">0</span>..<span class="number">32</span>].copy_from_slice(<span class="kw-2">&amp;</span>payment_hash.into_inner());
+        bytes[<span class="number">32</span>..<span class="number">64</span>].copy_from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.preimage_auth.secret_bytes());
+        Hash::hash(<span class="kw-2">&amp;</span>bytes)
     }
 
     <span class="doccomment">/// Create an output that incentivizes a Lightning gateway to pay an invoice
@@ -2195,8 +2231,10 @@
 
         <span class="kw">let </span>user_sk = bitcoin::KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;mut </span>rng);
 
+        <span class="kw">let </span>preimage_auth = <span class="self">self</span>.get_preimage_authentication(invoice.payment_hash());
+        <span class="kw">let </span>payment_hash = <span class="kw-2">*</span>invoice.payment_hash();
         <span class="kw">let </span>contract = OutgoingContract {
-            hash: <span class="kw-2">*</span>invoice.payment_hash(),
+            hash: payment_hash,
             gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock <span class="kw">as </span>u32,
             user_key: user_sk.x_only_public_key().<span class="number">0</span>,
@@ -2221,6 +2259,8 @@
                         federation_id: fed_id,
                         contract: outgoing_payment.clone(),
                         gateway_fee: Amount::from_msats(base_fee + margin_fee),
+                        preimage_auth,
+                        payment_hash,
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
                         LightningPayCreatedOutgoingLnContract {

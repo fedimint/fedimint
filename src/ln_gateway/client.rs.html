@@ -145,6 +145,8 @@
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -197,6 +199,7 @@
         all_clients: FederationToClientMap,
         all_scids: ScidToFederationMap,
         old_client: <span class="prelude-ty">Option</span>&lt;fedimint_client::ClientArc&gt;,
+        gateway_db: Database,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
         <span class="kw">let </span>FederationConfig {
             invite_code,
@@ -216,6 +219,7 @@
             fees,
             timelock_delta,
             mint_channel_id,
+            gateway_db,
         });
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();

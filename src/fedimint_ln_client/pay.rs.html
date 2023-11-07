@@ -518,12 +518,6 @@
 <a href="#518" id="518">518</a>
 <a href="#519" id="519">519</a>
 <a href="#520" id="520">520</a>
-<a href="#521" id="521">521</a>
-<a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a>
-<a href="#524" id="524">524</a>
-<a href="#525" id="525">525</a>
-<a href="#526" id="526">526</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -539,7 +533,7 @@
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractData;
-<span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
+<span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
 <span class="kw">use </span>fedimint_ln_common::{
     LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome,
 };
@@ -584,6 +578,8 @@
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract: OutgoingContractData,
     <span class="kw">pub </span>gateway_fee: Amount,
+    <span class="kw">pub </span>preimage_auth: sha256::Hash,
+    <span class="kw">pub </span>payment_hash: sha256::Hash,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
@@ -603,7 +599,7 @@
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) =&gt; {
-                created_outgoing_ln_contract.transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, context, global_context)
+                created_outgoing_ln_contract.transitions(context, global_context)
             }
             LightningPayStates::Canceled =&gt; {
                 <span class="macro">vec!</span>[]
@@ -640,13 +636,11 @@
 <span class="kw">impl </span>LightningPayCreatedOutgoingLnContract {
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        common: <span class="kw-2">&amp;</span>LightningPayCommon,
         context: <span class="kw-2">&amp;</span>LightningClientContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;LightningPayStateMachine&gt;&gt; {
         <span class="kw">let </span>txid = <span class="self">self</span>.funding_txid;
         <span class="kw">let </span>contract_id = <span class="self">self</span>.contract_id;
-        <span class="kw">let </span>funded_common = common.clone();
         <span class="kw">let </span>success_context = global_context.clone();
         <span class="kw">let </span>gateway = <span class="self">self</span>.gateway.clone();
         <span class="macro">vec!</span>[StateTransition::new(
@@ -660,8 +654,6 @@
                 Box::pin(<span class="self">Self</span>::transition_outgoing_contract_funded(
                     result,
                     old_state,
-                    funded_common.clone(),
-                    contract_id,
                     gateway.clone(),
                 ))
             },
@@ -696,8 +688,6 @@
     <span class="kw">async fn </span>transition_outgoing_contract_funded(
         result: <span class="prelude-ty">Result</span>&lt;u32, GatewayPayError&gt;,
         old_state: LightningPayStateMachine,
-        common: LightningPayCommon,
-        contract_id: ContractId,
         gateway: LightningGateway,
     ) -&gt; LightningPayStateMachine {
         <span class="macro">assert!</span>(<span class="macro">matches!</span>(
@@ -708,19 +698,14 @@
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(timelock) =&gt; {
                 <span class="comment">// Success case: funding transaction is accepted
-                </span><span class="kw">let </span>payload = PayInvoicePayload::new(common.federation_id, contract_id);
+                </span><span class="kw">let </span>common = old_state.common.clone();
+                <span class="kw">let </span>payload = PayInvoicePayload::new(common.clone());
                 LightningPayStateMachine {
                     common: old_state.common,
                     state: LightningPayStates::Funded(LightningPayFunded {
                         payload,
                         gateway,
                         timelock,
-                        payment_hash: <span class="kw-2">*</span>common
-                            .contract
-                            .contract_account
-                            .contract
-                            .invoice
-                            .payment_hash(),
                     }),
                 }
             }
@@ -740,7 +725,6 @@
     payload: PayInvoicePayload,
     gateway: LightningGateway,
     timelock: u32,
-    payment_hash: sha256::Hash,
 }
 
 <span class="attr">#[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -764,7 +748,7 @@
         <span class="kw">let </span>payload = <span class="self">self</span>.payload.clone();
         <span class="kw">let </span>contract_id = <span class="self">self</span>.payload.contract_id;
         <span class="kw">let </span>timelock = <span class="self">self</span>.timelock;
-        <span class="kw">let </span>payment_hash = <span class="self">self</span>.payment_hash;
+        <span class="kw">let </span>payment_hash = common.payment_hash;
         <span class="macro">vec!</span>[StateTransition::new(
             <span class="self">Self</span>::gateway_pay_invoice(gateway, payload),
             <span class="kw">move </span>|dbtx, result, old_state| {
@@ -1040,13 +1024,17 @@
 </span><span class="kw">pub struct </span>PayInvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract_id: ContractId,
+    <span class="kw">pub </span>preimage_auth: sha256::Hash,
+    <span class="kw">pub </span>payment_hash: sha256::Hash,
 }
 
 <span class="kw">impl </span>PayInvoicePayload {
-    <span class="kw">pub fn </span>new(federation_id: FederationId, contract_id: ContractId) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(common: LightningPayCommon) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            contract_id,
-            federation_id,
+            contract_id: common.contract.contract_account.contract.contract_id(),
+            federation_id: common.federation_id,
+            preimage_auth: common.preimage_auth,
+            payment_hash: common.payment_hash,
         }
     }
 }
