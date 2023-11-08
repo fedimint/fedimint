@@ -705,10 +705,10 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
     let lnd = fixtures.lnd().await;
     let cln = fixtures.cln().await;
 
-    let GetNodeInfoResponse { pub_key, alias: _ } = lnd.info().await?;
+    let GetNodeInfoResponse { pub_key, .. } = lnd.info().await?;
     let lnd_public_key = PublicKey::from_slice(&pub_key)?;
 
-    let GetNodeInfoResponse { pub_key, alias: _ } = cln.info().await?;
+    let GetNodeInfoResponse { pub_key, .. } = cln.info().await?;
     let cln_public_key = PublicKey::from_slice(&pub_key)?;
     let all_keys = [lnd_public_key, cln_public_key];
 
@@ -720,7 +720,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                 LightningNodeType::Ldk => unimplemented!("LDK Node is not supported as a gateway"),
             };
 
-            let GetNodeInfoResponse { pub_key, alias: _ } = gateway_ln.info().await?;
+            let GetNodeInfoResponse { pub_key, .. } = gateway_ln.info().await?;
             let public_key = PublicKey::from_slice(&pub_key)?;
 
             tracing::info!("Creating federation with gateway type {gateway_type}. Number of route hints: {num_route_hints}");
@@ -865,23 +865,22 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     // Verify old password no longer works
     verify_rpc(|| rpc_client.get_info(), StatusCode::UNAUTHORIZED).await;
 
-    // Verify the gateway's state is "Running" with default fee and network
-    // configurations
+    // Verify the gateway's state is "Running" with default fee and default or
+    // lightning node network
     let rpc_client = rpc_client.with_password(Some(test_password));
     let gw_info = rpc_client.get_info().await?;
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(DEFAULT_FEES));
     assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
-    // Verify we can change configuration when the gateway is running
+    // Verify we can change most configurations when the gateway is running
     let new_password = "new_password".to_string();
     let fee = "1000,2000".to_string();
-    let network = Network::Bitcoin;
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: Some(1),
         routing_fees: Some(fee.clone()),
-        network: Some(Network::Bitcoin),
+        network: None,
     };
     verify_rpc(
         || rpc_client.set_configuration(set_configuration_payload.clone()),
@@ -905,30 +904,37 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(GatewayFee::from_str(&fee)?.0));
-    assert_eq!(gw_info.network, Some(network));
+    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
-    // Verify we cant connect to a federation on a different network
-    // By default, test federations are on Regtest but we just configured the
-    // gateway to use mainnet (Network::Bitcoin)
-    verify_rpc(
-        || rpc_client.connect_federation(join_payload.clone()),
-        StatusCode::INTERNAL_SERVER_ERROR,
-    )
-    .await;
-
-    // Verify we can connect to a federation if the gateway is configured to use
-    // the same network
+    // Verify we can configure gateway to a network same as than the lightning nodes
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: None,
         routing_fees: None,
-        network: Some(Network::Regtest),
+        network: Some(DEFAULT_NETWORK), // Same as connected lightning node's network
     };
     verify_rpc(
         || rpc_client.set_configuration(set_configuration_payload.clone()),
         StatusCode::OK,
     )
     .await;
+
+    // Verify we cannot reconfigure gateway to a network different than the
+    // lightning nodes
+    let set_configuration_payload = SetConfigurationPayload {
+        password: Some(new_password.clone()),
+        num_route_hints: None,
+        routing_fees: None,
+        network: Some(Network::Testnet), // Different from connected lightning node's network
+    };
+    verify_rpc(
+        || rpc_client.set_configuration(set_configuration_payload.clone()),
+        StatusCode::INTERNAL_SERVER_ERROR,
+    )
+    .await;
+
+    // Verify we can connect to a federation if the gateway is configured to use
+    // the same network. Test federations are on Regtest by default
     verify_rpc(
         || rpc_client.connect_federation(join_payload.clone()),
         StatusCode::OK,
@@ -941,20 +947,6 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
             })
         },
         StatusCode::OK,
-    )
-    .await;
-
-    // Verify we cannot reconfigure the gateway network once it's connected to a
-    // federation
-    let set_configuration_payload = SetConfigurationPayload {
-        password: Some(new_password.clone()),
-        num_route_hints: None,
-        routing_fees: None,
-        network: Some(Network::Regtest),
-    };
-    verify_rpc(
-        || rpc_client.set_configuration(set_configuration_payload.clone()),
-        StatusCode::INTERNAL_SERVER_ERROR,
     )
     .await;
 
