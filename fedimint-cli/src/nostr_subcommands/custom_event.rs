@@ -1,8 +1,6 @@
 use clap::Args;
 use nostr_sdk::prelude::*;
 
-use crate::utils::{create_client, handle_keys};
-
 #[derive(Args, Clone, Debug)]
 pub struct CustomEventCommand {
     /// Event kind
@@ -31,10 +29,10 @@ pub struct CustomEventCommand {
 }
 
 pub fn create_custom_event(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &CustomEventCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &CustomEventCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

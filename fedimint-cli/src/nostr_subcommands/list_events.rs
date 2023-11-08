@@ -1,11 +1,5 @@
-use std::collections::{BTreeMap, HashMap};
-use std::str::FromStr;
-use std::time::Duration;
-
 use clap::Args;
 use nostr_sdk::prelude::*;
-
-use crate::utils::create_client;
 
 #[derive(Args, Debug, Clone)]
 pub struct ListEventsSubCommand {
@@ -47,7 +41,7 @@ pub struct ListEventsSubCommand {
     timeout: Option<u64>,
 }
 
-pub fn list_events(relays: Vec<String>, sub_command_args: &ListEventsSubCommand) -> Result<()> {
+pub fn list_events(_relays: Vec<String>, _sub_command_args: &ListEventsSubCommand) -> Result<()> {
     todo!()
     // if relays.is_empty() {
     //     panic!("No relays specified, at least one relay is required!")

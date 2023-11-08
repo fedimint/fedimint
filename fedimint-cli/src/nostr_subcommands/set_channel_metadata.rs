@@ -1,9 +1,5 @@
-use std::str::FromStr;
-
 use clap::Args;
 use nostr_sdk::prelude::*;
-
-use crate::utils::{create_client, handle_keys, parse_key};
 
 #[derive(Args, Debug, Clone)]
 pub struct SetChannelMetadataSubCommand {
@@ -28,10 +24,10 @@ pub struct SetChannelMetadataSubCommand {
 }
 
 pub fn set_channel_metadata(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &SetChannelMetadataSubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &SetChannelMetadataSubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

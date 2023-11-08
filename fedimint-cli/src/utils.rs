@@ -49,7 +49,7 @@ pub fn handle_keys(private_key: Option<String>, hex: bool, print_keys: bool) -> 
 }
 
 // Creates the websocket client that is used for communicating with relays
-pub fn create_client(keys: &Keys, relays: Vec<String>, difficulty: u8) -> Result<Client> {
+pub fn create_client(_keys: &Keys, _relays: Vec<String>, _difficulty: u8) -> Result<Client> {
     todo!()
     // let opts = Options::new().wait_for_send(true).difficulty(difficulty);
     // let client = Client::with_opts(keys, opts);

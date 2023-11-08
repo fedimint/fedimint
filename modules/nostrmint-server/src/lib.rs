@@ -356,11 +356,7 @@ impl ServerModule for Nostrmint {
                     dbtx.remove_entry(&MessageNonceRequest).await;
 
                     // If my nonce was included, submit a request to sign a share
-                    if nonces
-                        .into_iter()
-                        .find(|(key, _)| key.1 == my_peer_id)
-                        .is_some()
-                    {
+                    if nonces.into_iter().any(|(key, _)| key.1 == my_peer_id) {
                         dbtx.insert_new_entry(&MessageSignRequest, &msg.clone())
                             .await;
                     }
@@ -456,7 +452,7 @@ impl ServerModule for Nostrmint {
 
                     let send_result = self.nostr_client.send_event(signed_event.unwrap()).await;
                     info!("SendResult: {send_result:?}");
-                    let broadcasted_event = send_result.unwrap();
+                    let _broadcasted_event = send_result.unwrap();
 
                     // TODO: Write to database as OutputOutcome
                 }

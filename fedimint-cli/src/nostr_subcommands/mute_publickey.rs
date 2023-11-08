@@ -1,8 +1,6 @@
 use clap::Args;
 use nostr_sdk::prelude::*;
 
-use crate::utils::{create_client, handle_keys, parse_key};
-
 #[derive(Args, Clone, Debug)]
 pub struct MutePublickeySubCommand {
     /// Reason for muting
@@ -17,10 +15,10 @@ pub struct MutePublickeySubCommand {
 }
 
 pub fn mute_publickey(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &MutePublickeySubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &MutePublickeySubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

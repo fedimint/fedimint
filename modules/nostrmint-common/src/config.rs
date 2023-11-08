@@ -57,10 +57,10 @@ impl Encodable for NostrmintConfigConsensus {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let threshold_bytes = self.threshold.to_le_bytes();
         let frost_key_bytes = bincode::serialize(&self.frost_key).map_err(|_| {
-            std::io::Error::new(ErrorKind::Other, format!("Error serializing FrostKey"))
+            std::io::Error::new(ErrorKind::Other, "Error serializing FrostKey".to_string())
         })?;
-        writer.write(&threshold_bytes.as_slice())?;
-        writer.write(&frost_key_bytes.as_slice())?;
+        writer.write(threshold_bytes.as_slice())?;
+        writer.write(frost_key_bytes.as_slice())?;
         Ok(threshold_bytes.len() + frost_key_bytes.len())
     }
 }

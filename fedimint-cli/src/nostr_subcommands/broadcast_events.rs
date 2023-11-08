@@ -1,8 +1,6 @@
 use clap::Args;
 use nostr_sdk::prelude::*;
 
-use crate::utils::{create_client, handle_keys};
-
 #[derive(Args, Clone, Debug)]
 pub struct BroadcastEventsSubCommand {
     /// Input file path, should contain an array of JSON events
@@ -14,8 +12,8 @@ pub struct BroadcastEventsSubCommand {
 }
 
 pub fn broadcast_events(
-    relays: Vec<String>,
-    sub_command_args: &BroadcastEventsSubCommand,
+    _relays: Vec<String>,
+    _sub_command_args: &BroadcastEventsSubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

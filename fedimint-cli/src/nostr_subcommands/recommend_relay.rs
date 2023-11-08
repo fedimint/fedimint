@@ -1,8 +1,6 @@
 use clap::Args;
 use nostr_sdk::Result;
 
-use crate::utils::{create_client, handle_keys};
-
 #[derive(Args, Debug, Clone)]
 pub struct RecommendRelaySubCommand {
     /// Relay URL to recommend
@@ -14,10 +12,10 @@ pub struct RecommendRelaySubCommand {
 }
 
 pub fn recommend_relay(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &RecommendRelaySubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &RecommendRelaySubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

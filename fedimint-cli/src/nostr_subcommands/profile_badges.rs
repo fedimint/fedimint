@@ -1,9 +1,5 @@
-use std::time::Duration;
-
 use clap::Args;
 use nostr_sdk::prelude::*;
-
-use crate::utils::{create_client, handle_keys};
 
 #[derive(Args, Clone, Debug)]
 pub struct ProfileBadgesSubCommand {
@@ -19,10 +15,10 @@ pub struct ProfileBadgesSubCommand {
 }
 
 pub fn set_profile_badges(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &ProfileBadgesSubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &ProfileBadgesSubCommand,
 ) -> Result<()> {
     todo!();
     // if relays.is_empty() {

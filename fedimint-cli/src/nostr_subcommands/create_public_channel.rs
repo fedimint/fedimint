@@ -1,8 +1,6 @@
 use clap::Args;
 use nostr_sdk::prelude::*;
 
-use crate::utils::{create_client, handle_keys};
-
 #[derive(Args, Clone, Debug)]
 pub struct CreatePublicChannelSubCommand {
     /// Channel name
@@ -20,10 +18,10 @@ pub struct CreatePublicChannelSubCommand {
 }
 
 pub fn create_public_channel(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &CreatePublicChannelSubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &CreatePublicChannelSubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

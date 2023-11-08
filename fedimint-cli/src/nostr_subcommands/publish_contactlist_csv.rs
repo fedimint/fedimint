@@ -1,10 +1,6 @@
-use std::str::FromStr;
-
 use clap::Args;
 use nostr_sdk::prelude::*;
 use serde::Deserialize;
-
-use crate::utils::{create_client, handle_keys};
 
 #[derive(Args, Debug, Clone)]
 pub struct PublishContactListCsvSubCommand {
@@ -30,10 +26,10 @@ pub struct ContactListTag {
 }
 
 pub fn publish_contact_list_from_csv_file(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &PublishContactListCsvSubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &PublishContactListCsvSubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

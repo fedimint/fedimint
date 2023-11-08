@@ -1,8 +1,6 @@
 use clap::Args;
 use nostr_sdk::prelude::*;
 
-use crate::utils::{create_client, handle_keys, parse_key};
-
 #[derive(Args, Clone, Debug)]
 pub struct DeleteEventSubCommand {
     /// Event id to delete
@@ -17,10 +15,10 @@ pub struct DeleteEventSubCommand {
 }
 
 pub fn delete(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &DeleteEventSubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &DeleteEventSubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

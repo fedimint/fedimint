@@ -1,10 +1,7 @@
-use std::fs;
 use std::str::FromStr;
 
 use clap::Args;
 use nostr_sdk::prelude::*;
-
-use crate::utils::{handle_keys, parse_key};
 
 #[derive(Args, Clone, Debug)]
 pub struct CreateZapRequestCommand {
@@ -36,9 +33,9 @@ pub struct CreateZapRequestCommand {
 }
 
 pub fn create_zap_request(
-    private_key: Option<String>,
-    difficulty_target: u8,
-    sub_command_args: &CreateZapRequestCommand,
+    _private_key: Option<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &CreateZapRequestCommand,
 ) -> Result<()> {
     todo!()
     // let keys = handle_keys(private_key, sub_command_args.hex, true)?;

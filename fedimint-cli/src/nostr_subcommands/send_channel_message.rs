@@ -1,8 +1,6 @@
 use clap::Args;
 use nostr_sdk::prelude::*;
 
-use crate::utils::{create_client, handle_keys, parse_key};
-
 #[derive(Args, Debug, Clone)]
 pub struct SendChannelMessageSubCommand {
     /// Channel id to send message to
@@ -17,10 +15,10 @@ pub struct SendChannelMessageSubCommand {
 }
 
 pub fn send_channel_message(
-    private_key: Option<String>,
-    relays: Vec<String>,
-    difficulty_target: u8,
-    sub_command_args: &SendChannelMessageSubCommand,
+    _private_key: Option<String>,
+    _relays: Vec<String>,
+    _difficulty_target: u8,
+    _sub_command_args: &SendChannelMessageSubCommand,
 ) -> Result<()> {
     todo!()
     // if relays.is_empty() {

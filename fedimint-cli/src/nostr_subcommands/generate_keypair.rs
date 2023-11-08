@@ -8,7 +8,7 @@ pub struct GenerateKeypairSubCommand {
     print_hex: bool,
 }
 
-pub fn get_new_keypair(sub_command_args: &GenerateKeypairSubCommand) -> Result<()> {
+pub fn get_new_keypair(_sub_command_args: &GenerateKeypairSubCommand) -> Result<()> {
     todo!()
     // let keys = Keys::generate();
     // if sub_command_args.print_hex {
