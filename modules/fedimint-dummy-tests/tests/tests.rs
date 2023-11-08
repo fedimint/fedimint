@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
 use anyhow::bail;
-use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::config::ClientModuleConfig;
-use fedimint_core::core::{IntoDynInstance, ModuleKind};
+use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::module::ModuleConsensusVersion;
-use fedimint_core::{sats, Amount};
+use fedimint_core::{sats, Amount, OutPoint};
 use fedimint_dummy_client::states::DummyStateMachine;
 use fedimint_dummy_client::{DummyClientExt, DummyClientGen, DummyClientModule};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
-use fedimint_dummy_common::DummyOutput;
+use fedimint_dummy_common::{broken_fed_key_pair, DummyInput, DummyOutput, KIND};
 use fedimint_dummy_server::DummyGen;
 use fedimint_testing::fixtures::Fixtures;
 use secp256k1::Secp256k1;
-use tracing::debug;
 
 fn fixtures() -> Fixtures {
     Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default())
@@ -73,23 +72,42 @@ async fn client_ignores_unknown_module() {
 async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Result<()> {
     let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
-    // TODO: try to verify that the federation panics with something like
-    // "Balance sheet of the fed has gone negative, this should never happen!"
-    if let Ok(result @ (_, outpoint)) = client.print_liability(sats(1000)).await {
-        match client.receive_money(outpoint).await {
-            Ok(()) => {
-                bail!("Should have failed but was able to receive money, result was {result:?}")
-            }
-            Err(e) => {
-                // The federation panics processing the consensus outcome, not on accepting
-                // the transaction, so although print_liability may succeed the receive_money
-                // should always fail
-                debug!("Failed to receive money, this is expected: {e}");
-            }
+
+    let (panic_sender, panic_receiver) = std::sync::mpsc::channel::<()>();
+    let prev_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let panic_str = info.to_string();
+        if panic_str
+            .contains("Balance sheet of the fed has gone negative, this should never happen!")
+        {
+            // The first panic may lead to the receiver being dropped, so we have to swallow
+            // the error here
+            let _ = panic_sender.send(());
         }
-    } else {
-        debug!("Failed to print liability, this is good")
-    }
+
+        prev_panic_hook(info);
+    }));
+
+    let (_dummy, instance) = client.get_first_module::<DummyClientModule>(&KIND);
+    let op_id = OperationId(rand::random());
+    let account_kp = broken_fed_key_pair();
+    let input = ClientInput {
+        input: DummyInput {
+            amount: sats(1000),
+            account: account_kp.x_only_public_key().0,
+        },
+        keys: vec![account_kp],
+        state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
+    };
+
+    let tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
+    let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
+    client
+        .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
+        .await?;
+
+    // Make sure we panicked with the right message
+    panic_receiver.recv().expect("Sender not dropped");
 
     Ok(())
 }
