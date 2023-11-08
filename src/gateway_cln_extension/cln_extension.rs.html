@@ -641,6 +641,11 @@
 <a href="#641" id="641">641</a>
 <a href="#642" id="642">642</a>
 <a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -847,7 +852,7 @@
         })
     }
 
-    <span class="kw">pub async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String), ClnExtensionError&gt; {
+    <span class="kw">pub async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String, String), ClnExtensionError&gt; {
         <span class="self">self</span>.rpc_client()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.call(cln_rpc::Request::Getinfo(
@@ -856,10 +861,14 @@
             .<span class="kw">await
             </span>.map(|response| <span class="kw">match </span>response {
                 cln_rpc::Response::Getinfo(model::responses::GetinfoResponse {
-                    id, alias, ..
+                    id,
+                    alias,
+                    network,
+                    ..
                 }) =&gt; {
                     <span class="comment">// FIXME: How to handle missing alias?
-                    </span><span class="prelude-val">Ok</span>((id, alias.unwrap_or_default()))
+                    </span><span class="kw">let </span>alias = alias.unwrap_or_default();
+                    <span class="prelude-val">Ok</span>((id, alias, network))
                 }
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
             })
@@ -875,10 +884,11 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetNodeInfoResponse&gt;, Status&gt; {
         <span class="self">self</span>.info()
             .<span class="kw">await
-            </span>.map(|(pub_key, alias)| {
+            </span>.map(|(pub_key, alias, network)| {
                 tonic::Response::new(GetNodeInfoResponse {
                     pub_key: pub_key.serialize().to_vec(),
                     alias,
+                    network,
                 })
             })
             .map_err(|e| {

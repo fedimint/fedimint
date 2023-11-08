@@ -162,6 +162,7 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -265,6 +266,7 @@
         <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: <span class="self">self</span>.gateway_node_pub_key.serialize().to_vec(),
             alias: <span class="string">&quot;FakeLightningNode&quot;</span>.to_string(),
+            network: <span class="string">&quot;regtest&quot;</span>.to_string(),
         })
     }
 

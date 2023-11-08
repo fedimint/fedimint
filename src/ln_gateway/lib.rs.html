@@ -1275,6 +1275,35 @@
 <a href="#1275" id="1275">1275</a>
 <a href="#1276" id="1276">1276</a>
 <a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1467,6 +1496,7 @@
         lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
         lightning_public_key: PublicKey,
         lightning_alias: String,
+        lightning_network: Network,
     },
     Disconnected,
 }
@@ -1742,7 +1772,21 @@
                                 <span class="macro">info!</span>(<span class="string">&quot;Established HTLC stream&quot;</span>);
 
                                 <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias)) =&gt; {
+                                    <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network)) =&gt; {
+                                        <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = <span class="self">self</span>.get_gateway_configuration().<span class="kw">await </span>{
+                                            <span class="kw">if </span>config.network != lightning_network {
+                                                <span class="macro">warn!</span>(<span class="string">&quot;Lightning node does not match previously configured gateway network : ({:?})&quot;</span>, config.network);
+                                                <span class="macro">info!</span>(<span class="string">&quot;Changing gateway network to match lightning node network : ({:?})&quot;</span>, lightning_network);
+                                                <span class="self">self</span>.handle_set_configuration_msg(SetConfigurationPayload {
+                                                    password: <span class="prelude-val">Some</span>(config.password),
+                                                    network: <span class="prelude-val">Some</span>(lightning_network),
+                                                    num_route_hints: <span class="prelude-val">None</span>,
+                                                    routing_fees: <span class="prelude-val">None</span>,
+                                                }).<span class="kw">await</span>.expect(<span class="string">&quot;Failed to set gateway configuration&quot;</span>);
+                                                <span class="kw">continue</span>;
+                                            }
+                                        }
+
                                         <span class="self">self</span>.register_clients_timer(<span class="kw-2">&amp;mut </span>htlc_task_group).<span class="kw">await</span>;
                                         <span class="self">self</span>.load_clients(
                                             ln_client.clone(),
@@ -1757,6 +1801,7 @@
                                             lnrpc: ln_client,
                                             lightning_public_key,
                                             lightning_alias,
+                                            lightning_network
                                         }).<span class="kw">await</span>;
 
                                         <span class="comment">// Blocks until the connection to the lightning node breaks or we receive the shutdown signal
@@ -1801,12 +1846,7 @@
     }
 
     <span class="kw">pub async fn </span>handle_htlc_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>stream: RouteHtlcStream&lt;<span class="lifetime">&#39;_</span>&gt;, handle: TaskHandle) {
-        <span class="kw">let </span>GatewayState::Running {
-            lnrpc,
-            lightning_public_key: <span class="kw">_</span>,
-            lightning_alias: <span class="kw">_</span>,
-        } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone()
-        <span class="kw">else </span>{
+        <span class="kw">let </span>GatewayState::Running { lnrpc, .. } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() <span class="kw">else </span>{
             <span class="macro">panic!</span>(<span class="string">&quot;Gateway isn&#39;t in a running state&quot;</span>)
         };
         <span class="kw">loop </span>{
@@ -1869,6 +1909,7 @@
             lnrpc,
             lightning_public_key,
             lightning_alias,
+            ..
         } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone()
         {
             <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
@@ -1964,12 +2005,7 @@
     }
 
     <span class="kw">async fn </span>handle_pay_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: PayInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
-        <span class="kw">if let </span>GatewayState::Running {
-            lnrpc: <span class="kw">_</span>,
-            lightning_public_key: <span class="kw">_</span>,
-            lightning_alias: <span class="kw">_</span>,
-        } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone()
-        {
+        <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
             <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>operation_id = client.gateway_pay_bolt11_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client
@@ -2010,6 +2046,7 @@
             lnrpc,
             lightning_public_key,
             lightning_alias,
+            ..
         } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone()
         {
             <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>payload.invite_code).map_err(|e| {
@@ -2115,12 +2152,27 @@
         }: SetConfigurationPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>gw_state = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone();
-        <span class="kw">let </span>can_set_config = <span class="macro">matches!</span>(gw_state, GatewayState::Running { .. })
-            || <span class="macro">matches!</span>(gw_state, GatewayState::Configuring)
-            || <span class="macro">matches!</span>(gw_state, GatewayState::Connected);
-        <span class="kw">if </span>!can_set_config {
+        <span class="kw">if </span><span class="macro">matches!</span>(gw_state, GatewayState::Disconnected) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Disconnected);
         }
+
+        <span class="kw">let </span>lightning_network = <span class="kw">match </span>gw_state {
+            GatewayState::Running {
+                lightning_network, ..
+            } =&gt; {
+                <span class="kw">if </span>network.is_some() &amp;&amp; network != <span class="prelude-val">Some</span>(lightning_network) {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
+                        <span class="string">&quot;Cannot change network while connected to a lightning node&quot;</span>.to_string(),
+                    ));
+                }
+                lightning_network
+            }
+            <span class="comment">// In the case the gateway is not yet running and not yet connected to a lightning node,
+            // we start off with a default network configuration. This default gets replaced later
+            // when the gateway connects to a lightning node, or when a user sets a different
+            // configuration
+            </span><span class="kw">_ </span>=&gt; DEFAULT_NETWORK,
+        };
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
@@ -2158,7 +2210,7 @@
 
             GatewayConfiguration {
                 password: password.unwrap(),
-                network: DEFAULT_NETWORK,
+                network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
             }
@@ -2456,11 +2508,17 @@
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>fetch_lightning_node_info(
     lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String)&gt; {
-    <span class="kw">let </span>GetNodeInfoResponse { pub_key, alias } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
+) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String, Network)&gt; {
+    <span class="kw">let </span>GetNodeInfoResponse {
+        pub_key,
+        alias,
+        network,
+    } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid node pubkey {e}&quot;</span>)))<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>((node_pub_key, alias))
+    <span class="kw">let </span>network = Network::from_str(<span class="kw-2">&amp;</span>network)
+        .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">&quot;Invalid network {network}: {e}&quot;</span>)))<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>((node_pub_key, alias, network))
 }
 
 <span class="kw">async fn </span>wait_for_new_password(
