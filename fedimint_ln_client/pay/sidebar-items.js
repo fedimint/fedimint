@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayPayError","LightningPayStates"],"struct":["LightningPayCommon","LightningPayCreatedOutgoingLnContract","LightningPayFunded","LightningPayRefund","LightningPayRefundable","LightningPayStateMachine","PayInvoicePayload"]};
+window.SIDEBAR_ITEMS = {"constant":["GATEWAY_API_TIMEOUT","RETRY_DELAY"],"enum":["GatewayPayError","LightningPayStates"],"struct":["LightningPayCommon","LightningPayCreatedOutgoingLnContract","LightningPayFunded","LightningPayRefund","LightningPayRefundable","LightningPayStateMachine","PayInvoicePayload"]};

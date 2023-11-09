@@ -115,18 +115,45 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::Txid;
 <span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
+<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>fedimint_wallet_common::WalletOutputOutcome;
+<span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::WalletClientContext;
+
+<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="comment">// TODO: track tx confirmations
 </span><span class="attr">#[aquamarine::aquamarine]
@@ -154,6 +181,7 @@
                     await_withdraw_processed(
                         global_context.clone(),
                         context.clone(),
+                        <span class="self">self</span>.operation_id,
                         created.clone(),
                     ),
                     |_dbtx, res, old_state| Box::pin(transition_withdraw_processed(res, old_state)),
@@ -176,18 +204,36 @@
 <span class="kw">async fn </span>await_withdraw_processed(
     global_context: DynGlobalClientContext,
     context: WalletClientContext,
+    operation_id: OperationId,
     created: CreatedWithdrawState,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Txid, String&gt; {
     global_context
-        .api()
-        .await_output_outcome::&lt;WalletOutputOutcome&gt;(
-            created.fm_outpoint,
-            Duration::MAX,
-            <span class="kw-2">&amp;</span>context.wallet_decoder,
-        )
-        .<span class="kw">await
-        </span>.map(|outcome| outcome.<span class="number">0</span>)
-        .map_err(|e| e.to_string())
+        .await_tx_accepted(operation_id, created.fm_outpoint.txid)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">loop </span>{
+        <span class="kw">match </span>global_context
+            .api()
+            .await_output_outcome::&lt;WalletOutputOutcome&gt;(
+                created.fm_outpoint,
+                Duration::MAX,
+                <span class="kw-2">&amp;</span>context.wallet_decoder,
+            )
+            .<span class="kw">await
+        </span>{
+            <span class="prelude-val">Ok</span>(outcome) =&gt; {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(outcome.<span class="number">0</span>);
+            }
+            <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
+                <span class="macro">debug!</span>(
+                    <span class="string">&quot;Awaiting output outcome failed, retrying in {}s&quot;</span>,
+                    RETRY_DELAY.as_secs_f64()
+                );
+                sleep(RETRY_DELAY).<span class="kw">await</span>;
+            }
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
+        }
+    }
 }
 
 <span class="kw">async fn </span>transition_withdraw_processed(

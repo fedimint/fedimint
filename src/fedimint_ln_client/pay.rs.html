@@ -518,6 +518,65 @@
 <a href="#518" id="518">518</a>
 <a href="#519" id="519">519</a>
 <a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -525,7 +584,7 @@
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
+<span class="kw">use </span>fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -539,9 +598,12 @@
 };
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::{debug, error, warn};
 
 <span class="kw">use crate</span>::{set_payment_result, LightningClientStateMachines, PayType};
+
+<span class="kw">const </span>GATEWAY_API_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
+<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that requests the lightning gateway to pay an invoice on
@@ -667,21 +729,52 @@
         contract_id: ContractId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;u32, GatewayPayError&gt; {
         <span class="kw">let </span>out_point = OutPoint { txid, out_idx: <span class="number">0 </span>};
-        global_context
-            .api()
-            .await_output_outcome::&lt;LightningOutputOutcome&gt;(
-                out_point,
-                Duration::from_millis(i32::MAX <span class="kw">as </span>u64),
-                <span class="kw-2">&amp;</span>module_decoder,
-            )
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| GatewayPayError::OutgoingContractError)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>contract = global_context
-            .module_api()
-            .get_outgoing_contract(contract_id)
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| GatewayPayError::OutgoingContractError)<span class="question-mark">?</span>;
+        <span class="kw">loop </span>{
+            <span class="kw">match </span>global_context
+                .api()
+                .await_output_outcome::&lt;LightningOutputOutcome&gt;(
+                    out_point,
+                    Duration::from_millis(i32::MAX <span class="kw">as </span>u64),
+                    <span class="kw-2">&amp;</span>module_decoder,
+                )
+                .<span class="kw">await
+            </span>{
+                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
+                <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
+                    <span class="macro">debug!</span>(
+                        <span class="string">&quot;Awaiting output outcome failed, retrying in {}s&quot;</span>,
+                        RETRY_DELAY.as_secs_f64()
+                    );
+                    sleep(RETRY_DELAY).<span class="kw">await</span>;
+                }
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::OutgoingContractError);
+                }
+            }
+        }
+
+        <span class="kw">let </span>contract = <span class="kw">loop </span>{
+            <span class="kw">match </span>global_context
+                .module_api()
+                .get_outgoing_contract(contract_id)
+                .<span class="kw">await
+            </span>{
+                <span class="prelude-val">Ok</span>(contract) =&gt; {
+                    <span class="kw">break </span>contract;
+                }
+                <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
+                    <span class="macro">debug!</span>(
+                        <span class="string">&quot;Fetching contract failed, retrying in {}s&quot;</span>,
+                        RETRY_DELAY.as_secs_f64()
+                    );
+                    sleep(RETRY_DELAY).<span class="kw">await</span>;
+                }
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayPayError::OutgoingContractError);
+                }
+            }
+        };
         <span class="prelude-val">Ok</span>(contract.contract.timelock)
     }
 
@@ -766,6 +859,29 @@
     }
 
     <span class="kw">async fn </span>gateway_pay_invoice(
+        gateway: LightningGateway,
+        payload: PayInvoicePayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
+        <span class="comment">// Abort the payment if we can&#39;t reach the gateway within 30 seconds
+        // to prevent unexpected delays for the user.
+        </span><span class="kw">let </span>deadline = fedimint_core::time::now() + GATEWAY_API_TIMEOUT;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>last_error = <span class="prelude-val">None</span>;
+        <span class="kw">while </span>fedimint_core::time::now() &lt; deadline {
+            <span class="kw">match </span><span class="self">Self</span>::try_gateway_pay_invoice(gateway.clone(), payload.clone()).<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(preimage) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage),
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Error while trying to reach gateway: {}&quot;</span>, e);
+                    last_error = <span class="prelude-val">Some</span>(e);
+                    sleep(RETRY_DELAY).<span class="kw">await</span>;
+                }
+            }
+        }
+
+        <span class="prelude-val">Err</span>(last_error.expect(<span class="string">&quot;Error was set&quot;</span>))
+    }
+
+    <span class="kw">async fn </span>try_gateway_pay_invoice(
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
@@ -937,7 +1053,7 @@
                 }
             }
 
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            sleep(RETRY_DELAY).<span class="kw">await</span>;
         }
     }
 
@@ -952,7 +1068,7 @@
                 <span class="prelude-val">Err</span>(error) =&gt; <span class="macro">error!</span>(<span class="string">&quot;Error waiting for block height: {timelock} {error:?}&quot;</span>),
             }
 
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            sleep(RETRY_DELAY).<span class="kw">await</span>;
         }
     }
 }
@@ -988,7 +1104,9 @@
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        global_context
+        <span class="comment">// No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
+        </span>global_context
             .await_tx_accepted(common.operation_id, refund_txid)
             .<span class="kw">await
     </span>}

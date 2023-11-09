@@ -331,6 +331,14 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Add;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -352,6 +360,8 @@
 <span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
+
+<span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that waits on the receipt of a Lightning payment.
@@ -463,7 +473,9 @@
         operation_id: OperationId,
         txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        global_context.await_tx_accepted(operation_id, txid).<span class="kw">await
+        <span class="comment">// No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
+        </span>global_context.await_tx_accepted(operation_id, txid).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_confirmed_invoice(
@@ -538,12 +550,14 @@
                     <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(incoming_contract_account),
                     <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(LightningReceiveError::InvalidPreimage),
                 },
-                <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="comment">// FIXME: should we filter for retryable errors here to not swallow implementation
+                // bugs? (there exist more places like this)
+                </span><span class="prelude-val">Err</span>(error) =&gt; {
                     <span class="macro">error!</span>(<span class="string">&quot;External LN payment error waiting for preimage decryption: {error:?}&quot;</span>);
                 }
             }
 
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+            sleep(RETRY_DELAY).<span class="kw">await</span>;
         }
     }
 
@@ -638,7 +652,9 @@
         global_context: DynGlobalClientContext,
         txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        global_context.await_tx_accepted(operation_id, txid).<span class="kw">await
+        <span class="comment">// No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
+        </span>global_context.await_tx_accepted(operation_id, txid).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>transition_claim_success(

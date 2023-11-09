@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DummyError","DummyStateMachine"],"fn":["add_funds","await_dummy_output_outcome","await_tx_accepted"]};
+window.SIDEBAR_ITEMS = {"constant":["RETRY_DELAY"],"enum":["DummyError","DummyStateMachine"],"fn":["add_funds","await_dummy_output_outcome","await_tx_accepted"]};
