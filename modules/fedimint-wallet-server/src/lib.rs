@@ -70,7 +70,7 @@ use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use rand::rngs::OsRng;
 use secp256k1::{Message, Scalar};
 use strum::IntoEnumIterator;
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 #[derive(Debug, Clone)]
 pub struct WalletGen;
@@ -321,31 +321,52 @@ impl ServerModule for Wallet {
             .collect::<Vec<WalletConsensusItem>>()
             .await;
 
-        // TODO: We should not be panicking
-        let block_count = self.get_block_count().await.expect("bitcoind rpc failed");
-        let block_count_proposal = block_count.saturating_sub(self.cfg.consensus.finality_delay);
+        // If we are unable to get a block count from the node we skip adding a block
+        // count vote to consensus items.
+        //
+        // The potential impact of not including the latest block count from our peer's
+        // node is delayed processing of change outputs for the federation, which is an
+        // acceptable risk since subsequent rounds of consensus will reattempt to fetch
+        // the latest block count.
+        if let Ok(block_count) = self.get_block_count().await {
+            let block_count_proposal =
+                block_count.saturating_sub(self.cfg.consensus.finality_delay);
 
-        debug!(
-            ?block_count_proposal,
-            ?block_count,
-            "Considering proposing block count"
-        );
+            let current_vote = dbtx
+                .get_value(&BlockCountVoteKey(self.our_peer_id))
+                .await
+                .unwrap_or(0);
 
-        let current_vote = dbtx
-            .get_value(&BlockCountVoteKey(self.our_peer_id))
-            .await
-            .unwrap_or(0);
+            debug!(
+                ?current_vote,
+                ?block_count_proposal,
+                ?block_count,
+                "Considering proposing block count"
+            );
 
-        if current_vote < block_count_proposal {
-            items.push(WalletConsensusItem::BlockCount(block_count_proposal));
+            if current_vote < block_count_proposal {
+                items.push(WalletConsensusItem::BlockCount(block_count_proposal));
+            }
         }
 
         let current_fee_rate_vote = dbtx
             .get_value(&FeeRateVoteKey(self.our_peer_id))
             .await
             .unwrap_or(self.cfg.consensus.default_fee);
-        // TODO: We should not be panicking
-        let fee_rate_proposal = self.get_fee_rate().await.expect("bitcoind rpc failed");
+
+        // If there's an error getting the fee rate from the node we default to the most
+        // recent fee rate vote. Using an alternative fee rate may cause unwanted
+        // jitter.
+        let fee_rate_proposal = match self.get_fee_rate_opt().await {
+            Ok(fee_rate_opt) => fee_rate_opt.unwrap_or(self.cfg.consensus.default_fee),
+            Err(err) => {
+                error!(
+                    "Error while calling get_free_rate_opt, using most recent fee rate vote: {:?}",
+                    err
+                );
+                current_fee_rate_vote
+            }
+        };
 
         if fee_rate_proposal != current_fee_rate_vote {
             items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
@@ -380,7 +401,7 @@ impl ServerModule for Wallet {
                         ?block_count,
                         "Received redundant block count vote"
                     );
-                    bail!("Block height vote is redundant");
+                    bail!("Block count vote is redundant");
                 }
 
                 let old_consensus_block_count = self.consensus_block_count(dbtx).await;
@@ -851,8 +872,9 @@ impl Wallet {
             .await
             .and_then(|count| Ok(u32::try_from(count)?));
 
-        if let Ok(ref count) = res {
-            *self.block_count_local.lock().expect("Failed to lock") = Some(*count);
+        match res {
+            Ok(count) => *self.block_count_local.lock().expect("Failed to lock") = Some(count),
+            Err(ref err) => error!("Error while calling get_block_count: {:?}", err),
         }
 
         res
@@ -860,13 +882,6 @@ impl Wallet {
 
     pub async fn get_fee_rate_opt(&self) -> anyhow::Result<Option<Feerate>> {
         self.btc_rpc.get_fee_rate(CONFIRMATION_TARGET).await
-    }
-
-    pub async fn get_fee_rate(&self) -> anyhow::Result<Feerate> {
-        Ok(self
-            .get_fee_rate_opt()
-            .await?
-            .unwrap_or(self.cfg.consensus.default_fee))
     }
 
     pub async fn consensus_block_count(

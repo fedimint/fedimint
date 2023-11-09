@@ -380,10 +380,10 @@ impl ServerModule for Lightning {
             .collect()
             .await;
 
-        let block_count_vote = self.block_count().await;
-
-        if block_count_vote != self.consensus_block_count(dbtx).await {
-            items.push(LightningConsensusItem::BlockCount(block_count_vote));
+        if let Ok(block_count_vote) = self.block_count().await {
+            if block_count_vote != self.consensus_block_count(dbtx).await {
+                items.push(LightningConsensusItem::BlockCount(block_count_vote));
+            }
         }
 
         items
@@ -935,11 +935,12 @@ impl Lightning {
         Ok(Lightning { cfg, btc_rpc })
     }
 
-    async fn block_count(&self) -> u64 {
-        self.btc_rpc
-            .get_block_count()
-            .await
-            .expect("bitcoind rpc failed")
+    async fn block_count(&self) -> anyhow::Result<u64> {
+        let res = self.btc_rpc.get_block_count().await;
+        if let Err(ref err) = res {
+            error!("Error while calling get_block_count: {:?}", err);
+        }
+        res
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransactionRef<'_>) -> u64 {
