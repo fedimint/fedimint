@@ -1164,43 +1164,48 @@ impl Drop for CommitTracker {
 /// This is used in APIs that require logic to be a part of a larger
 /// database transaction, given that `commit_tx` takes `&mut self` (
 /// not `self`, due to trait/Sized and support for `&mut T` issues).
-pub struct DatabaseTransactionRef<'a>(DatabaseTransaction<'a>);
+pub struct DatabaseTransactionRef<'tx> {
+    tx: Box<dyn IDatabaseTransaction + 'tx>,
+    decoders: ModuleDecoderRegistry,
+    commit_tracker: &'tx mut CommitTracker,
+}
 
 impl<'a> WithDecoders for DatabaseTransactionRef<'a> {
     fn decoders(&self) -> &ModuleDecoderRegistry {
-        &self.0.decoders
+        &self.decoders
     }
 }
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransactionOpsCore for DatabaseTransactionRef<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.0.raw_insert_bytes(key, value).await
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_insert_bytes(key, value).await
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.0.raw_get_bytes(key).await
+        self.tx.raw_get_bytes(key).await
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.0.raw_remove_entry(key).await
+        self.tx.raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        self.0.raw_find_by_prefix(key_prefix).await
+        self.tx.raw_find_by_prefix(key_prefix).await
     }
 
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
     ) -> Result<PrefixStream<'_>> {
-        self.0
+        self.tx
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        self.0.raw_remove_by_prefix(key_prefix).await
+        self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
 
@@ -1286,14 +1291,12 @@ impl<'tx> DatabaseTransaction<'tx> {
         's: 'a,
     {
         let decoders = self.decoders.clone();
-        let commit_tracker = self.commit_tracker.clone();
 
-        DatabaseTransactionRef(DatabaseTransaction {
+        DatabaseTransactionRef {
             tx: Box::new(&mut self.tx),
             decoders,
-            commit_tracker,
-            on_commit_hooks: vec![],
-        })
+            commit_tracker: &mut self.commit_tracker,
+        }
     }
 
     /// Get [`DatabaseTransactionRef`] isolated to a `prefix` of `self`
@@ -1302,17 +1305,15 @@ impl<'tx> DatabaseTransaction<'tx> {
         'tx: 'a,
     {
         let decoders = self.decoders.clone();
-        let commit_tracker = self.commit_tracker.clone();
 
-        DatabaseTransactionRef(DatabaseTransaction {
+        DatabaseTransactionRef {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: &mut self.tx,
                 prefix,
             }),
             decoders,
-            commit_tracker,
-            on_commit_hooks: vec![],
-        })
+            commit_tracker: &mut self.commit_tracker,
+        }
     }
 
     pub fn dbtx_ref_with_prefix_module_id<'a>(
