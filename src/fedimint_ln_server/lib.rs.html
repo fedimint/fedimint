@@ -1723,6 +1723,7 @@
 <a href="#1723" id="1723">1723</a>
 <a href="#1724" id="1724">1724</a>
 <a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -2105,10 +2106,10 @@
             .collect()
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>block_count_vote = <span class="self">self</span>.block_count().<span class="kw">await</span>;
-
-        <span class="kw">if </span>block_count_vote != <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
-            items.push(LightningConsensusItem::BlockCount(block_count_vote));
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count_vote) = <span class="self">self</span>.block_count().<span class="kw">await </span>{
+            <span class="kw">if </span>block_count_vote != <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
+                items.push(LightningConsensusItem::BlockCount(block_count_vote));
+            }
         }
 
         items
@@ -2660,11 +2661,12 @@
         <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })
     }
 
-    <span class="kw">async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-        <span class="self">self</span>.btc_rpc
-            .get_block_count()
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>)
+    <span class="kw">async fn </span>block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
+        <span class="kw">let </span>res = <span class="self">self</span>.btc_rpc.get_block_count().<span class="kw">await</span>;
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(<span class="kw-2">ref </span>err) = res {
+            <span class="macro">error!</span>(<span class="string">&quot;Error while calling get_block_count: {:?}&quot;</span>, err);
+        }
+        res
     }
 
     <span class="kw">async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
