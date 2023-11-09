@@ -512,7 +512,7 @@ async fn set_config_gen_params(
             .ok()
             .unwrap_or_default(),
     )
-    .with_context(|| format!("Failed to parse {}", FM_EXTRA_DKG_META_VAR))
+    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_VAR}"))
     .expect("Failed");
     let mut meta = BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]);
     meta.append(&mut extra_meta_data);

@@ -311,6 +311,16 @@ impl std::ops::Mul<u64> for Amount {
     }
 }
 
+impl std::ops::Mul<Amount> for u64 {
+    type Output = Amount;
+
+    fn mul(self, rhs: Amount) -> Self::Output {
+        Amount {
+            msats: self * rhs.msats,
+        }
+    }
+}
+
 impl std::ops::Add for Amount {
     type Output = Amount;
 
@@ -410,4 +420,19 @@ impl Feerate {
 pub enum CoreError {
     #[error("Mismatching outcome variant: expected {0}, got {1}")]
     MismatchingVariant(&'static str, &'static str),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn amount_multiplication_by_scalar() {
+        assert_eq!(Amount::from_msats(1000) * 123, Amount::from_msats(123_000));
+    }
+
+    #[test]
+    fn scalar_multiplication_by_amount() {
+        assert_eq!(123 * Amount::from_msats(1000), Amount::from_msats(123_000));
+    }
 }
