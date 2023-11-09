@@ -356,8 +356,6 @@ pub struct ConfigGenParamsLocal {
     pub p2p_bind: SocketAddr,
     /// Bind address for API communication
     pub api_bind: SocketAddr,
-    /// Limit on the number of times a config download token can be used
-    pub download_token_limit: Option<u64>,
     /// How many API connections we will accept
     pub max_connections: u32,
 }
@@ -521,7 +519,6 @@ impl ConfigGenState {
             api_auth: self.auth()?,
             p2p_bind: self.settings.p2p_bind,
             api_bind: self.settings.api_bind,
-            download_token_limit: self.settings.download_token_limit,
             max_connections: self.settings.max_connections,
         };
 

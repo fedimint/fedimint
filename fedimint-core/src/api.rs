@@ -57,9 +57,9 @@ use crate::query::{
     DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
     UnionResponsesSingle,
 };
+use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction};
 use crate::util::SafeUrl;
-use crate::{serde_as_encodable_hex, task};
 
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, jsonrpsee_core::Error>;
@@ -587,15 +587,6 @@ pub struct InviteCode {
     /// Peer id of the host from the Url
     pub peer_id: PeerId,
 }
-
-/// Size of a download token
-const CONFIG_DOWNLOAD_TOKEN_BYTES: usize = 12;
-
-/// Allows a client to download the config
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, PartialOrd, Ord)]
-pub struct ClientConfigDownloadToken(pub [u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
-
-serde_as_encodable_hex!(ClientConfigDownloadToken);
 
 /// We can represent client invite code as a bech32 string for compactness and
 /// error-checking

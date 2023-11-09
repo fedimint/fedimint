@@ -8,8 +8,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::{
-    ClientConfigDownloadToken, FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus,
-    StatusResponse,
+    FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 use fedimint_core::block::{Block, SignedBlock};
@@ -34,7 +33,6 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{SerdeTransaction, Transaction};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
@@ -49,10 +47,7 @@ use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::FundingVerifier;
-use crate::db::{
-    AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix, SignedBlockKey,
-    SignedBlockPrefix,
-};
+use crate::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, ApiResult, HasApiContext};
 
@@ -75,104 +70,6 @@ impl<M> RpcHandlerCtx<M> {
 impl<M: Debug> Debug for RpcHandlerCtx<M> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("State { ... }")
-    }
-}
-
-/// Tracks the usage of invitiation code tokens
-///
-/// Mostly to serialize the database counter modifications, which would
-/// otherwise cause MVCC conflict.
-#[derive(Clone)]
-pub struct InvitationCodesTracker {
-    counts: Arc<tokio::sync::Mutex<BTreeMap<ClientConfigDownloadToken, u64>>>,
-    /// Notify on any change `counts` above.
-    ///
-    /// Multiple invitation codes are possible. Maintaining notifications
-    /// per-key seems like a pain, so instead we assume invitation codes are
-    /// not in thousands and let the worker task detect the changes against
-    /// a local copy.
-    ///
-    /// `watch` is used as it supports sender disconnection detection which
-    /// simplifies task termination.
-    counts_changed_tx: Arc<tokio::sync::watch::Sender<()>>,
-}
-
-impl InvitationCodesTracker {
-    pub async fn new(db: Database, tg: &mut TaskGroup) -> Self {
-        let counts: BTreeMap<_, _> = db
-            .begin_transaction()
-            .await
-            .find_by_prefix(&ClientConfigDownloadKeyPrefix)
-            .await
-            .map(|(k, v)| (k.0, v))
-            .collect()
-            .await;
-
-        let mut local_counts = counts.clone();
-        let counts = Arc::new(tokio::sync::Mutex::new(counts));
-
-        let (tx, mut rx) = tokio::sync::watch::channel(());
-
-        tg.spawn("invitation_codes_tracker", {
-            let counts = counts.clone();
-
-            |_| async move {
-                while let Ok(()) = rx.changed().await {
-                    let changed_counts: Vec<_> = counts
-                        .lock()
-                        .await
-                        .iter()
-                        .filter_map(|(token, count)| {
-                            if local_counts.get(token).copied().unwrap_or_default() != *count {
-                                Some((token.clone(), *count))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-
-                    let mut dbtx = db.begin_transaction().await;
-
-                    for (token, count) in changed_counts {
-                        dbtx.insert_entry(&ClientConfigDownloadKey(token.clone()), &count)
-                            .await;
-                        local_counts.insert(token, count);
-                    }
-
-                    dbtx.commit_tx().await;
-                }
-            }
-        })
-        .await;
-
-        Self {
-            counts,
-            counts_changed_tx: Arc::new(tx),
-        }
-    }
-
-    pub async fn use_token(
-        &self,
-        token: &ClientConfigDownloadToken,
-        limit: Option<u64>,
-    ) -> Result<(), ()> {
-        let mut lock = self.counts.lock().await;
-
-        let entry = lock.entry(token.clone()).or_default();
-
-        if limit.map(|limit| limit <= *entry).unwrap_or(false) {
-            return Err(());
-        }
-
-        *entry += 1;
-
-        drop(lock);
-
-        self.counts_changed_tx
-            .send(())
-            .expect("invitations code tracker task panicked");
-
-        Ok(())
     }
 }
 

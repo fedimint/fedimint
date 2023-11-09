@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
-use fedimint_core::api::{ClientConfigDownloadToken, InviteCode};
+use fedimint_core::api::InviteCode;
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
@@ -23,7 +23,6 @@ use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use rand::rngs::OsRng;
-use rand::Rng;
 use secp256k1_zkp::{PublicKey, Secp256k1, SecretKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -141,10 +140,6 @@ pub struct ServerConfigLocal {
     pub max_connections: u32,
     /// Non-consensus, non-private configuration from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
-    /// Required to download the client config
-    pub download_token: ClientConfigDownloadToken,
-    /// Limit on the number of times a config download token can be used
-    pub download_token_limit: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -223,8 +218,6 @@ impl ServerConfig {
             api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
-            download_token: ClientConfigDownloadToken(OsRng.gen()),
-            download_token_limit: params.local.download_token_limit,
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
