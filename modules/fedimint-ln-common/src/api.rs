@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_core::api::{
+    FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
+};
 use fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
     REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
@@ -47,12 +49,12 @@ pub trait LnFederationApi {
     async fn get_incoming_contract(
         &self,
         id: ContractId,
-    ) -> anyhow::Result<IncomingContractAccount>;
+    ) -> FederationResult<IncomingContractAccount>;
 
     async fn get_outgoing_contract(
         &self,
         id: ContractId,
-    ) -> anyhow::Result<OutgoingContractAccount>;
+    ) -> FederationResult<OutgoingContractAccount>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -166,28 +168,32 @@ where
     async fn get_incoming_contract(
         &self,
         id: ContractId,
-    ) -> anyhow::Result<IncomingContractAccount> {
+    ) -> FederationResult<IncomingContractAccount> {
         let account = self.wait_contract(id).await?;
         match account.contract {
             FundedContract::Incoming(c) => Ok(IncomingContractAccount {
                 amount: account.amount,
                 contract: c.contract,
             }),
-            _ => Err(anyhow::anyhow!("WrongAccountType")),
+            _ => Err(FederationError::general(anyhow::anyhow!(
+                "WrongAccountType"
+            ))),
         }
     }
 
     async fn get_outgoing_contract(
         &self,
         id: ContractId,
-    ) -> anyhow::Result<OutgoingContractAccount> {
+    ) -> FederationResult<OutgoingContractAccount> {
         let account = self.wait_contract(id).await?;
         match account.contract {
             FundedContract::Outgoing(c) => Ok(OutgoingContractAccount {
                 amount: account.amount,
                 contract: c,
             }),
-            _ => Err(anyhow::anyhow!("WrongAccountType")),
+            _ => Err(FederationError::general(anyhow::anyhow!(
+                "WrongAccountType"
+            ))),
         }
     }
 }

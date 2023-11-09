@@ -125,6 +125,13 @@ impl Display for FederationError {
 }
 
 impl FederationError {
+    pub fn general(e: impl Into<anyhow::Error>) -> FederationError {
+        FederationError {
+            general: Some(e.into()),
+            peers: Default::default(),
+        }
+    }
+
     pub fn is_retryable(&self) -> bool {
         self.peers.iter().any(|(_, e)| e.is_retryable())
     }

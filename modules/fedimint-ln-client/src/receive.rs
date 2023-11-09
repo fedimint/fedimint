@@ -20,6 +20,8 @@ use tracing::error;
 
 use crate::LightningClientStateMachines;
 
+const RETRY_DELAY: Duration = Duration::from_secs(1);
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that waits on the receipt of a Lightning payment.
 ///
@@ -130,6 +132,8 @@ impl LightningReceiveSubmittedOffer {
         operation_id: OperationId,
         txid: TransactionId,
     ) -> Result<(), String> {
+        // No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
         global_context.await_tx_accepted(operation_id, txid).await
     }
 
@@ -205,12 +209,14 @@ impl LightningReceiveConfirmedInvoice {
                     Some(_) => return Ok(incoming_contract_account),
                     None => return Err(LightningReceiveError::InvalidPreimage),
                 },
+                // FIXME: should we filter for retryable errors here to not swallow implementation
+                // bugs? (there exist more places like this)
                 Err(error) => {
                     error!("External LN payment error waiting for preimage decryption: {error:?}");
                 }
             }
 
-            sleep(Duration::from_secs(1)).await;
+            sleep(RETRY_DELAY).await;
         }
     }
 
@@ -305,6 +311,8 @@ impl LightningReceiveFunded {
         global_context: DynGlobalClientContext,
         txid: TransactionId,
     ) -> Result<(), String> {
+        // No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
         global_context.await_tx_accepted(operation_id, txid).await
     }
 

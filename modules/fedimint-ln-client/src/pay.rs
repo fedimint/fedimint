@@ -5,7 +5,7 @@ use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -19,9 +19,12 @@ use fedimint_ln_common::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::error;
+use tracing::{debug, error, warn};
 
 use crate::{set_payment_result, LightningClientStateMachines, PayType};
+
+const GATEWAY_API_TIMEOUT: Duration = Duration::from_secs(30);
+const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that requests the lightning gateway to pay an invoice on
@@ -147,21 +150,52 @@ impl LightningPayCreatedOutgoingLnContract {
         contract_id: ContractId,
     ) -> Result<u32, GatewayPayError> {
         let out_point = OutPoint { txid, out_idx: 0 };
-        global_context
-            .api()
-            .await_output_outcome::<LightningOutputOutcome>(
-                out_point,
-                Duration::from_millis(i32::MAX as u64),
-                &module_decoder,
-            )
-            .await
-            .map_err(|_| GatewayPayError::OutgoingContractError)?;
 
-        let contract = global_context
-            .module_api()
-            .get_outgoing_contract(contract_id)
-            .await
-            .map_err(|_| GatewayPayError::OutgoingContractError)?;
+        loop {
+            match global_context
+                .api()
+                .await_output_outcome::<LightningOutputOutcome>(
+                    out_point,
+                    Duration::from_millis(i32::MAX as u64),
+                    &module_decoder,
+                )
+                .await
+            {
+                Ok(_) => break,
+                Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+                    debug!(
+                        "Awaiting output outcome failed, retrying in {}s",
+                        RETRY_DELAY.as_secs_f64()
+                    );
+                    sleep(RETRY_DELAY).await;
+                }
+                Err(_) => {
+                    return Err(GatewayPayError::OutgoingContractError);
+                }
+            }
+        }
+
+        let contract = loop {
+            match global_context
+                .module_api()
+                .get_outgoing_contract(contract_id)
+                .await
+            {
+                Ok(contract) => {
+                    break contract;
+                }
+                Err(e) if e.is_retryable() => {
+                    debug!(
+                        "Fetching contract failed, retrying in {}s",
+                        RETRY_DELAY.as_secs_f64()
+                    );
+                    sleep(RETRY_DELAY).await;
+                }
+                Err(_) => {
+                    return Err(GatewayPayError::OutgoingContractError);
+                }
+            }
+        };
         Ok(contract.contract.timelock)
     }
 
@@ -246,6 +280,29 @@ impl LightningPayFunded {
     }
 
     async fn gateway_pay_invoice(
+        gateway: LightningGateway,
+        payload: PayInvoicePayload,
+    ) -> Result<String, GatewayPayError> {
+        // Abort the payment if we can't reach the gateway within 30 seconds
+        // to prevent unexpected delays for the user.
+        let deadline = fedimint_core::time::now() + GATEWAY_API_TIMEOUT;
+
+        let mut last_error = None;
+        while fedimint_core::time::now() < deadline {
+            match Self::try_gateway_pay_invoice(gateway.clone(), payload.clone()).await {
+                Ok(preimage) => return Ok(preimage),
+                Err(e) => {
+                    warn!("Error while trying to reach gateway: {}", e);
+                    last_error = Some(e);
+                    sleep(RETRY_DELAY).await;
+                }
+            }
+        }
+
+        Err(last_error.expect("Error was set"))
+    }
+
+    async fn try_gateway_pay_invoice(
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
@@ -417,7 +474,7 @@ impl LightningPayRefundable {
                 }
             }
 
-            sleep(Duration::from_secs(1)).await;
+            sleep(RETRY_DELAY).await;
         }
     }
 
@@ -432,7 +489,7 @@ impl LightningPayRefundable {
                 Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
             }
 
-            sleep(Duration::from_secs(1)).await;
+            sleep(RETRY_DELAY).await;
         }
     }
 }
@@ -468,6 +525,8 @@ impl LightningPayRefund {
         global_context: DynGlobalClientContext,
         refund_txid: TransactionId,
     ) -> Result<(), String> {
+        // No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
         global_context
             .await_tx_accepted(common.operation_id, refund_txid)
             .await
