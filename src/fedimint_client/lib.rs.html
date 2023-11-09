@@ -3065,7 +3065,7 @@
     }
 
     <span class="kw">pub fn </span>federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
-        <span class="self">self</span>.config.global.federation_id
+        <span class="self">self</span>.config.global.federation_id()
     }
 }
 
@@ -3303,7 +3303,7 @@
                 <span class="kw">let </span>module = module_init
                     .init(
                         final_client.clone(),
-                        config.global.federation_id,
+                        config.global.federation_id(),
                         module_config,
                         db.clone(),
                         module_instance,
@@ -3343,7 +3343,7 @@
             config: config.clone(),
             decoders,
             db: db.clone(),
-            federation_id: config.global.federation_id,
+            federation_id: config.global.federation_id(),
             federation_meta: config.global.meta,
             primary_module_instance,
             modules,

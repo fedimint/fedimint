@@ -729,88 +729,6 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
-<a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
-<a href="#793" id="793">793</a>
-<a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
-<a href="#800" id="800">800</a>
-<a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a>
-<a href="#806" id="806">806</a>
-<a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -818,7 +736,6 @@
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::{Receiver, Sender};
-<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, GlobalFederationApi, WsFederationApi};
 <span class="kw">use </span>fedimint_core::block::{AcceptedItem, Block, SchnorrSignature, SignedBlock};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
@@ -827,7 +744,7 @@
 };
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
-<span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
+<span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::registry::{
@@ -851,11 +768,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, ClientConfigSignatureKey, ClientConfigSignatureShareKey,
-    ClientConfigSignatureSharePrefix, SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+    AlephUnitsPrefix, SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
 };
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
+<span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
 <span class="kw">use crate</span>::{atomic_broadcast, LOG_CONSENSUS, LOG_CORE};
@@ -871,7 +787,6 @@
     db: Database,
     connections: ReconnectPeerConnections&lt;Message&gt;,
     keychain: Keychain,
-    client_cfg_hash: sha256::Hash,
     api_endpoints: Vec&lt;(PeerId, SafeUrl)&gt;,
     cfg: ServerConfig,
     submission_receiver: Receiver&lt;ConsensusItem&gt;,
@@ -979,7 +894,6 @@
 
         <span class="kw">let </span>consensus_api = ConsensusApi {
             cfg: cfg.clone(),
-            invitation_codes_tracker: InvitationCodesTracker::new(db.clone(), task_group).<span class="kw">await</span>,
             db: db.clone(),
             modules: modules.clone(),
             client_cfg: cfg.consensus.to_client_config(<span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>,
@@ -997,8 +911,6 @@
             task_group,
             db.clone(),
             modules.clone(),
-            cfg.clone(),
-            consensus_api.client_cfg.consensus_hash(),
             submission_sender.clone(),
         )
         .<span class="kw">await</span>;
@@ -1015,7 +927,6 @@
             connections,
             db,
             keychain,
-            client_cfg_hash: consensus_api.client_cfg.consensus_hash(),
             api_endpoints,
             cfg: cfg.clone(),
             submission_receiver,
@@ -1096,7 +1007,7 @@
         <span class="comment">// We need four peers to run the atomic broadcast
         </span><span class="macro">assert!</span>(<span class="self">self</span>.cfg.consensus.broadcast_public_keys.len() &gt;= <span class="number">4</span>);
 
-        <span class="self">self</span>.confirm_consensus_config_hash().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.confirm_server_config_consensus_hash().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self
@@ -1118,14 +1029,14 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>confirm_consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>confirm_server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
         <span class="kw">let </span>federation_api = WsFederationApi::new(<span class="self">self</span>.api_endpoints.clone());
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">&quot;Waiting for peers config {our_hash}&quot;</span>);
 
         <span class="kw">loop </span>{
-            <span class="kw">match </span>federation_api.consensus_config_hash().<span class="kw">await </span>{
+            <span class="kw">match </span>federation_api.server_config_consensus_hash().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(consensus_hash) =&gt; {
                     <span class="kw">if </span>consensus_hash != our_hash {
                         <span class="macro">bail!</span>(<span class="string">&quot;Our consensus config doesn&#39;t match peers!&quot;</span>)
@@ -1462,64 +1373,6 @@
 
                 <span class="prelude-val">Ok</span>(())
             }
-            ConsensusItem::ClientConfigSignatureShare(signature_share) =&gt; {
-                <span class="kw">if </span>dbtx
-                    .dbtx_ref()
-                    .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
-                    .<span class="kw">await
-                    </span>.is_some()
-                {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Client config is already signed&quot;</span>);
-                }
-
-                <span class="kw">if </span>dbtx
-                    .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureShareKey(peer_id))
-                    .<span class="kw">await
-                    </span>.is_some()
-                {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Already received a valid signature share for this peer&quot;</span>);
-                }
-
-                <span class="kw">let </span>pks = <span class="self">self</span>.cfg.consensus.auth_pk_set.clone();
-
-                <span class="kw">if </span>!pks
-                    .public_key_share(peer_id.to_usize())
-                    .verify(<span class="kw-2">&amp;</span>signature_share.<span class="number">0</span>, <span class="self">self</span>.client_cfg_hash)
-                {
-                    <span class="macro">bail!</span>(<span class="string">&quot;Client config signature share is invalid&quot;</span>);
-                }
-
-                <span class="comment">// we have received the first valid signature share for this peer
-                </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientConfigSignatureShareKey(peer_id), <span class="kw-2">&amp;</span>signature_share)
-                    .<span class="kw">await</span>;
-
-                <span class="comment">// collect all valid signature shares received previously
-                </span><span class="kw">let </span>signature_shares = dbtx
-                    .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigSignatureSharePrefix)
-                    .<span class="kw">await
-                    </span>.map(|(key, share)| (key.<span class="number">0</span>.to_usize(), share.<span class="number">0</span>))
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                    .<span class="kw">await</span>;
-
-                <span class="kw">if </span>signature_shares.len() &lt;= pks.threshold() {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                }
-
-                <span class="kw">let </span>threshold_signature = pks
-                    .combine_signatures(signature_shares.iter().map(|(peer, share)| (peer, share)))
-                    .expect(<span class="string">&quot;All signature shares are valid&quot;</span>);
-
-                dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>ClientConfigSignatureSharePrefix)
-                    .<span class="kw">await</span>;
-
-                dbtx.insert_entry(
-                    <span class="kw-2">&amp;</span>ClientConfigSignatureKey,
-                    <span class="kw-2">&amp;</span>SerdeSignature(threshold_signature),
-                )
-                .<span class="kw">await</span>;
-
-                <span class="prelude-val">Ok</span>(())
-            }
         }
     }
 
@@ -1573,8 +1426,6 @@
     task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     db: Database,
     modules: ServerModuleRegistry,
-    cfg: ServerConfig,
-    client_cfg_hash: sha256::Hash,
     submission_sender: Sender&lt;ConsensusItem&gt;,
 ) {
     task_group
@@ -1587,35 +1438,20 @@
                     <span class="comment">// We ignore any writes
                     </span>dbtx.ignore_uncommitted();
 
-                    <span class="kw">let </span><span class="kw-2">mut </span>consensus_items = Vec::new();
-
                     <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
-                        <span class="kw">let </span>items = module
+                        <span class="kw">let </span>module_consensus_items = module
                             .consensus_proposal(
                                 <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance_id),
                                 instance_id,
                             )
-                            .<span class="kw">await
-                            </span>.into_iter()
-                            .map(ConsensusItem::Module);
+                            .<span class="kw">await</span>;
 
-                        consensus_items.extend(items);
-                    }
-
-                    <span class="comment">// Add a signature share for the client config hash
-                    </span><span class="kw">let </span>sig = dbtx.dbtx_ref().get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey).<span class="kw">await</span>;
-
-                    <span class="kw">if </span>sig.is_none() {
-                        <span class="kw">let </span>timing = timing::TimeReporter::new(<span class="string">&quot;sign client config&quot;</span>);
-                        <span class="kw">let </span>share = cfg.private.auth_sks.<span class="number">0</span>.sign(client_cfg_hash);
-                        drop(timing);
-                        <span class="kw">let </span>item =
-                            ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
-                        consensus_items.push(item);
-                    }
-
-                    <span class="kw">for </span>item <span class="kw">in </span>consensus_items {
-                        submission_sender.send(item).<span class="kw">await</span>.ok();
+                        <span class="kw">for </span>item <span class="kw">in </span>module_consensus_items {
+                            submission_sender
+                                .send(ConsensusItem::Module(item))
+                                .<span class="kw">await
+                                </span>.ok();
+                        }
                     }
 
                     sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;

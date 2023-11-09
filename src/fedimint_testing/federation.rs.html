@@ -215,7 +215,6 @@
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
@@ -310,7 +309,7 @@
             .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
             .unwrap()
             .global
-            .federation_id
+            .federation_id()
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
@@ -418,7 +417,6 @@
                     api_auth: ApiAuth(<span class="string">&quot;pass&quot;</span>.to_string()),
                     p2p_bind: p2p_bind.parse().expect(<span class="string">&quot;Valid address&quot;</span>),
                     api_bind: api_bind.parse().expect(<span class="string">&quot;Valid address&quot;</span>),
-                    download_token_limit: <span class="prelude-val">None</span>,
                     max_connections: <span class="number">10</span>,
                 },
                 consensus: ConfigGenParamsConsensus {

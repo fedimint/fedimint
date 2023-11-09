@@ -142,8 +142,6 @@
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 
 <span class="kw">use </span>fedimint_core::core::DynModuleConsensusItem <span class="kw">as </span>ModuleConsensusItem;
@@ -159,8 +157,6 @@
 <span class="doccomment">/// All the items that may be produced during a consensus epoch
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, UnzipConsensus, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>ConsensusItem {
-    <span class="doccomment">/// Threshold sign the configs for verification via the API
-    </span>ClientConfigSignatureShare(SerdeSignatureShare),
     <span class="doccomment">/// Threshold sign the epoch history for verification via the API
     </span>Transaction(Transaction),
     <span class="doccomment">/// Any data that modules require consensus on

@@ -1000,7 +1000,7 @@
             gateway_id,
         );
 
-        <span class="kw">let </span>federation_id = <span class="self">self</span>.get_config().global.federation_id;
+        <span class="kw">let </span>federation_id = <span class="self">self</span>.get_config().global.federation_id();
         gateway
             .register_with_federation(federation_id, registration_info)
             .<span class="kw">await</span><span class="question-mark">?</span>;

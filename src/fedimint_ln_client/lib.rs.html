@@ -1668,7 +1668,7 @@
                     instance.api,
                     invoice.clone(),
                     active_gateway,
-                    <span class="self">self</span>.get_config().global.federation_id,
+                    <span class="self">self</span>.get_config().global.federation_id(),
                     rand::rngs::OsRng,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;

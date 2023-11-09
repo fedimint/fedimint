@@ -1758,7 +1758,6 @@
 <a href="#1758" id="1758">1758</a>
 <a href="#1759" id="1759">1759</a>
 <a href="#1760" id="1760">1760</a>
-<a href="#1761" id="1761">1761</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -3509,8 +3508,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>decoding_empty_oob_notes_fails() {
         <span class="kw">let </span>empty_oob_notes = OOBNotes {
-            federation_id_prefix: FederationId(threshold_crypto::SecretKey::random().public_key())
-                .to_prefix(),
+            federation_id_prefix: FederationId::dummy().to_prefix(),
             notes: Default::default(),
         };
         <span class="kw">let </span>oob_notes_string = empty_oob_notes.to_string();

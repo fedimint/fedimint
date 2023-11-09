@@ -1179,6 +1179,9 @@
 <a href="#1179" id="1179">1179</a>
 <a href="#1180" id="1180">1180</a>
 <a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1190,15 +1193,17 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, result};
 
-<span class="kw">use </span>anyhow::{anyhow, ensure};
+<span class="kw">use </span>anyhow::{anyhow, bail, ensure};
 <span class="kw">use </span>bech32::Variant::Bech32m;
 <span class="kw">use </span>bech32::{FromBase32, ToBase32};
 <span class="kw">use </span>bitcoin::secp256k1;
-<span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_BLOCK_ENDPOINT;
+<span class="kw">use </span>fedimint_core::endpoint_constants::{
+    AWAIT_BLOCK_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+};
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::module::SerdeModuleEncoding;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
@@ -1220,7 +1225,6 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>threshold_crypto::{PublicKey, PK_SIZE};
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::ClientBackupSnapshot;
@@ -1228,7 +1232,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::core::backup::SignedBackupRequest;
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
     FETCH_BLOCK_COUNT_ENDPOINT, RECOVER_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
     WAIT_TRANSACTION_ENDPOINT,
 };
@@ -1237,9 +1241,9 @@
     DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
     UnionResponsesSingle,
 };
+<span class="kw">use </span><span class="kw">crate</span>::task;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
-<span class="kw">use crate</span>::{serde_as_encodable_hex, task};
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
 <span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, jsonrpsee_core::Error&gt;;
@@ -1551,7 +1555,7 @@
     </span><span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt;;
 
     <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
-    </span><span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
+    </span><span class="kw">async fn </span>server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
 
     <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt;;
 
@@ -1657,33 +1661,53 @@
         </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
     </span>}
 
-    <span class="kw">async fn </span>download_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>, info: <span class="kw-2">&amp;</span>InviteCode) -&gt; FederationResult&lt;ClientConfig&gt; {
-        <span class="kw">let </span>id = info.id;
+    <span class="kw">async fn </span>download_client_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invite_code: <span class="kw-2">&amp;</span>InviteCode,
+    ) -&gt; FederationResult&lt;ClientConfig&gt; {
+        <span class="comment">// we have to download the api endpoints first
+        </span><span class="kw">let </span>id = invite_code.federation_id;
         <span class="kw">let </span>qs = FilterMap::new(
-            <span class="kw">move </span>|config: ClientConfigResponse| <span class="kw">match </span>id
-                .<span class="number">0
-                </span>.verify(<span class="kw-2">&amp;</span>config.signature.<span class="number">0</span>, config.client_config.consensus_hash())
-            {
-                <span class="bool-val">true </span>=&gt; <span class="prelude-val">Ok</span>(config),
-                <span class="bool-val">false </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Invalid signature&quot;</span>)),
+            <span class="kw">move </span>|cfg: ClientConfig| {
+                <span class="kw">if </span>id.<span class="number">0 </span>!= cfg.global.api_endpoints.consensus_hash() {
+                    <span class="macro">bail!</span>(<span class="string">&quot;Guardian api endpoint map does not hash to FederationId&quot;</span>)
+                }
+
+                <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
             },
             <span class="self">self</span>.all_peers().total(),
         )
-        <span class="comment">// downloading a config shouldn&#39;t take too long
+        <span class="comment">// downloading the endpoints shouldn&#39;t take too long
         </span>.with_request_timeout(Duration::from_secs(<span class="number">5</span>));
 
-        <span class="self">self</span>.request_with_strategy(
-            qs,
-            CONFIG_ENDPOINT.to_owned(),
-            ApiRequestErased::new(info.to_string()),
+        <span class="kw">let </span>api_endpoints = <span class="self">self
+            </span>.request_with_strategy(
+                qs,
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// now we can build an api for all guardians and download the client config
+        </span><span class="kw">let </span>api_endpoints = api_endpoints
+            .into_iter()
+            .map(|(peer, url)| (peer, url.url))
+            .collect();
+
+        WsFederationApi::new(api_endpoints)
+            .request_current_consensus(
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {
+        <span class="self">self</span>.request_current_consensus(
+            SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
         )
         .<span class="kw">await
-        </span>.map(|cfg: ClientConfigResponse| cfg.client_config)
-    }
-
-    <span class="kw">async fn </span>consensus_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt; {
-        <span class="self">self</span>.request_current_consensus(CONFIG_HASH_ENDPOINT.to_owned(), ApiRequestErased::default())
-            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt; {
@@ -1749,22 +1773,11 @@
 </span><span class="kw">pub struct </span>InviteCode {
     <span class="doccomment">/// URL to reach an API that we can download configs from
     </span><span class="kw">pub </span>url: SafeUrl,
-    <span class="doccomment">/// Config download token (might only be used a certain number of times)
-    </span><span class="kw">pub </span>download_token: ClientConfigDownloadToken,
     <span class="doccomment">/// Authentication id for the federation
-    </span><span class="kw">pub </span>id: FederationId,
+    </span><span class="kw">pub </span>federation_id: FederationId,
     <span class="doccomment">/// Peer id of the host from the Url
-    </span><span class="kw">pub </span>peer_id: PeerId,
+    </span><span class="kw">pub </span>peer: PeerId,
 }
-
-<span class="doccomment">/// Size of a download token
-</span><span class="kw">const </span>CONFIG_DOWNLOAD_TOKEN_BYTES: usize = <span class="number">12</span>;
-
-<span class="doccomment">/// Allows a client to download the config
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, PartialOrd, Ord)]
-</span><span class="kw">pub struct </span>ClientConfigDownloadToken(<span class="kw">pub </span>[u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
-
-<span class="macro">serde_as_encodable_hex!</span>(ClientConfigDownloadToken);
 
 <span class="doccomment">/// We can represent client invite code as a bech32 string for compactness and
 /// error-checking
@@ -1786,7 +1799,7 @@
 
         <span class="kw">let </span>bytes: Vec&lt;u8&gt; = Vec::&lt;u8&gt;::from_base32(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
-        <span class="kw">let </span><span class="kw-2">mut </span>id_bytes = [<span class="number">0</span>; PK_SIZE];
+        <span class="kw">let </span><span class="kw-2">mut </span>id_bytes = [<span class="number">0</span>; <span class="number">32</span>];
         cursor.read_exact(<span class="kw-2">&amp;mut </span>id_bytes)<span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>peer_id_bytes = [<span class="number">0</span>; <span class="number">2</span>];
         cursor.read_exact(<span class="kw-2">&amp;mut </span>peer_id_bytes)<span class="question-mark">?</span>;
@@ -1796,16 +1809,12 @@
         <span class="kw">let </span>url_len = u16::from_be_bytes(url_len).into();
         <span class="kw">let </span><span class="kw-2">mut </span>url_bytes = <span class="macro">vec!</span>[<span class="number">0</span>; url_len];
         cursor.read_exact(<span class="kw-2">&amp;mut </span>url_bytes)<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>download_token = [<span class="number">0</span>; CONFIG_DOWNLOAD_TOKEN_BYTES];
-        cursor.read_exact(<span class="kw-2">&amp;mut </span>download_token)<span class="question-mark">?</span>;
-
         <span class="kw">let </span>url = std::str::from_utf8(<span class="kw-2">&amp;</span>url_bytes)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             url: url.parse()<span class="question-mark">?</span>,
-            download_token: ClientConfigDownloadToken(download_token),
-            id: FederationId(PublicKey::from_bytes(id_bytes)<span class="question-mark">?</span>),
-            peer_id: PeerId(u16::from_be_bytes(peer_id_bytes)),
+            federation_id: FederationId::from_byte_array(id_bytes),
+            peer: PeerId(u16::from_be_bytes(peer_id_bytes)),
         })
     }
 }
@@ -1814,12 +1823,12 @@
 </span><span class="kw">impl </span>Display <span class="kw">for </span>InviteCode {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; fmt::Result {
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[];
-        data.extend(<span class="self">self</span>.id.<span class="number">0</span>.to_bytes());
-        data.extend(<span class="self">self</span>.peer_id.<span class="number">0</span>.to_be_bytes());
+        data.extend(<span class="self">self</span>.federation_id.<span class="number">0</span>.into_inner());
+        data.extend(<span class="self">self</span>.peer.<span class="number">0</span>.to_be_bytes());
         <span class="kw">let </span>url_bytes = <span class="self">self</span>.url.as_str().as_bytes();
         data.extend((url_bytes.len() <span class="kw">as </span>u16).to_be_bytes());
         data.extend(url_bytes);
-        data.extend(<span class="kw-2">&amp;</span><span class="self">self</span>.download_token.<span class="number">0</span>);
+
         <span class="kw">let </span>encode =
             bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|<span class="kw">_</span>| fmt::Error)<span class="question-mark">?</span>;
 
@@ -2125,8 +2134,6 @@
     <span class="kw">use </span>jsonrpsee_core::params::BatchRequestBuilder;
     <span class="kw">use </span>jsonrpsee_core::traits::ToRpcParams;
     <span class="kw">use </span>once_cell::sync::Lazy;
-    <span class="kw">use </span>rand::rngs::OsRng;
-    <span class="kw">use </span>rand::Rng;
     <span class="kw">use </span>serde::de::DeserializeOwned;
     <span class="kw">use </span>tracing::error;
 
@@ -2344,9 +2351,8 @@
     </span><span class="kw">fn </span>converts_invite_code() {
         <span class="kw">let </span>connect = InviteCode {
             url: <span class="string">&quot;ws://test1&quot;</span>.parse().unwrap(),
-            id: FederationId::dummy(),
-            peer_id: PeerId(<span class="number">1</span>),
-            download_token: ClientConfigDownloadToken(OsRng.gen()),
+            federation_id: FederationId::dummy(),
+            peer: PeerId(<span class="number">1</span>),
         };
 
         <span class="kw">let </span>bech32 = connect.to_string();

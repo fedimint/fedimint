@@ -817,16 +817,6 @@
 <a href="#817" id="817">817</a>
 <a href="#818" id="818">818</a>
 <a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
-<a href="#829" id="829">829</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -848,13 +838,12 @@
 <span class="kw">use </span>fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::admin_client::WsAdminClient;
 <span class="kw">use </span>fedimint_core::api::{
-    ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
-    IFederationApi, InviteCode, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
+    WsFederationApi,
 };
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::DatabaseValue;
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -870,7 +859,7 @@
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, info};
-<span class="kw">use </span>utils::{from_hex, parse_peer_id};
+<span class="kw">use </span>utils::parse_peer_id;
 
 <span class="kw">use </span><span class="kw">crate</span>::client::ClientCmd;
 
@@ -897,8 +886,7 @@
 
     DecodeInviteCode {
         url: SafeUrl,
-        download_token: String,
-        id: FederationId,
+        federation_id: FederationId,
     },
 
     JoinFederation {
@@ -1230,12 +1218,10 @@ Examples:
     </span>EncodeInviteCode {
         <span class="attr">#[clap(long = <span class="string">&quot;url&quot;</span>)]
         </span>url: SafeUrl,
-        <span class="attr">#[clap(long = <span class="string">&quot;download-token&quot;</span>, value_parser = from_hex::&lt;ClientConfigDownloadToken&gt;)]
-        </span>download_token: ClientConfigDownloadToken,
-        <span class="attr">#[clap(long = <span class="string">&quot;id&quot;</span>)]
-        </span>id: FederationId,
-        <span class="attr">#[clap(long = <span class="string">&quot;peer-id&quot;</span>)]
-        </span>peer_id: PeerId,
+        <span class="attr">#[clap(long = <span class="string">&quot;federation_id&quot;</span>)]
+        </span>federation_id: FederationId,
+        <span class="attr">#[clap(long = <span class="string">&quot;peer&quot;</span>)]
+        </span>peer: PeerId,
     },
 
     <span class="doccomment">/// Gets the current fedimint AlephBFT block count
@@ -1503,24 +1489,18 @@ Examples:
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) =&gt; {
                 <span class="prelude-val">Ok</span>(CliOutput::DecodeInviteCode {
                     url: invite_code.url,
-                    download_token: invite_code
-                        .download_token
-                        .consensus_encode_to_hex()
-                        .expect(<span class="string">&quot;encodes&quot;</span>),
-                    id: invite_code.id,
+                    federation_id: invite_code.federation_id,
                 })
             }
             Command::Dev(DevCmd::EncodeInviteCode {
                 url,
-                download_token,
-                id,
-                peer_id,
+                federation_id,
+                peer,
             }) =&gt; <span class="prelude-val">Ok</span>(CliOutput::InviteCode {
                 invite_code: InviteCode {
                     url,
-                    download_token,
-                    id,
-                    peer_id,
+                    federation_id,
+                    peer,
                 },
             }),
             Command::Dev(DevCmd::FedimintBlockCount) =&gt; {
