@@ -251,16 +251,11 @@ impl ServerConfig {
     }
 
     pub fn get_invite_code(&self) -> InviteCode {
-        let id = FederationId(self.consensus.api_endpoints.consensus_hash());
-        let url = self.consensus.api_endpoints[&self.local.identity]
-            .url
-            .clone();
-        let download_token = self.local.download_token.clone();
-
         InviteCode {
-            url,
-            download_token,
-            id,
+            url: self.consensus.api_endpoints[&self.local.identity]
+                .url
+                .clone(),
+            id: FederationId(self.consensus.api_endpoints.consensus_hash()),
             peer_id: self.local.identity,
         }
     }

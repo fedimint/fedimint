@@ -582,8 +582,6 @@ struct FederationPeer<C> {
 pub struct InviteCode {
     /// URL to reach an API that we can download configs from
     pub url: SafeUrl,
-    /// Config download token (might only be used a certain number of times)
-    pub download_token: ClientConfigDownloadToken,
     /// Authentication id for the federation
     pub id: FederationId,
     /// Peer id of the host from the Url
@@ -629,14 +627,10 @@ impl FromStr for InviteCode {
         let url_len = u16::from_be_bytes(url_len).into();
         let mut url_bytes = vec![0; url_len];
         cursor.read_exact(&mut url_bytes)?;
-        let mut download_token = [0; CONFIG_DOWNLOAD_TOKEN_BYTES];
-        cursor.read_exact(&mut download_token)?;
-
         let url = std::str::from_utf8(&url_bytes)?;
 
         Ok(Self {
             url: url.parse()?,
-            download_token: ClientConfigDownloadToken(download_token),
             id: FederationId::from_byte_array(id_bytes),
             peer_id: PeerId(u16::from_be_bytes(peer_id_bytes)),
         })
@@ -652,7 +646,7 @@ impl Display for InviteCode {
         let url_bytes = self.url.as_str().as_bytes();
         data.extend((url_bytes.len() as u16).to_be_bytes());
         data.extend(url_bytes);
-        data.extend(&self.download_token.0);
+
         let encode =
             bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
 
@@ -958,8 +952,6 @@ mod tests {
     use jsonrpsee_core::params::BatchRequestBuilder;
     use jsonrpsee_core::traits::ToRpcParams;
     use once_cell::sync::Lazy;
-    use rand::rngs::OsRng;
-    use rand::Rng;
     use serde::de::DeserializeOwned;
     use tracing::error;
 
@@ -1179,7 +1171,6 @@ mod tests {
             url: "ws://test1".parse().unwrap(),
             id: FederationId::dummy(),
             peer_id: PeerId(1),
-            download_token: ClientConfigDownloadToken(OsRng.gen()),
         };
 
         let bech32 = connect.to_string();

@@ -200,10 +200,6 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             "dev",
             "encode-invite-code",
             format!("--url={}", invite_code["url"].as_str().unwrap()),
-            format!(
-                "--download-token={}",
-                invite_code["download_token"].as_str().unwrap()
-            ),
             "--id={fed_id}",
             "--peer-id=0"
         )

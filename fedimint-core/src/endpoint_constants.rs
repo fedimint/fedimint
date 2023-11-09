@@ -15,7 +15,6 @@ pub const GET_CONFIG_GEN_PEERS_ENDPOINT: &str = "get_config_gen_peers";
 pub const GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT: &str = "get_consensus_config_gen_params";
 pub const GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT: &str = "get_default_config_gen_params";
 pub const GET_VERIFY_CONFIG_HASH_ENDPOINT: &str = "get_verify_config_hash";
-pub const INVITE_CODE_ENDPOINT: &str = "invite_code";
 pub const LIST_GATEWAYS_ENDPOINT: &str = "list_gateways";
 pub const MODULES_CONFIG_JSON_ENDPOINT: &str = "modules_config_json";
 pub const OFFER_ENDPOINT: &str = "offer";
