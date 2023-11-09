@@ -10,7 +10,7 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::{DynModuleApi, GlobalFederationApi};
+use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
 use fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::{
@@ -41,7 +41,6 @@ pub struct DummyClientModule {
     key: KeyPair,
     notifier: ModuleNotifier<DynGlobalClientContext, DummyStateMachine>,
     client_ctx: ClientContext,
-    module_api: DynModuleApi,
     db: Database,
 }
 
@@ -301,21 +300,9 @@ impl DummyClientModule {
         Ok(())
     }
 
-    /// Request the federation signs a message for us
-    pub async fn fed_signature(&self, message: &str) -> anyhow::Result<Signature> {
-        self.module_api.sign_message(message.to_string()).await?;
-        let sig = self.module_api.wait_signed(message.to_string()).await?;
-        Ok(sig.0)
-    }
-
     /// Return our account
     pub fn account(&self) -> XOnlyPublicKey {
         self.key.x_only_public_key().0
-    }
-
-    /// Return the fed's public key
-    pub fn fed_public_key(&self) -> PublicKey {
-        self.cfg.fed_public_key
     }
 }
 
@@ -375,7 +362,6 @@ impl ClientModuleInit for DummyClientInit {
                 .to_secp_key(&Secp256k1::new()),
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
-            module_api: args.module_api().clone(),
             db: args.db().clone(),
         })
     }

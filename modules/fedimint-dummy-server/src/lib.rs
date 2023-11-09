@@ -13,8 +13,8 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
+    ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError, ModuleConsensusVersion,
+    ModuleError, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
     SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
