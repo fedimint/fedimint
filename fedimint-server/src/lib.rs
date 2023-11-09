@@ -1,6 +1,7 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 extern crate fedimint_core;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
@@ -9,13 +10,17 @@ use std::time::Duration;
 
 use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::HashEngine;
+use bitcoin_hashes::{sha256, Hash};
 use config::io::PLAINTEXT_PASSWORD;
 use config::ServerConfig;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_core::task::TaskGroup;
+use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -299,4 +304,21 @@ pub fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
     } else {
         Ok(())
     }
+}
+
+pub fn get_verification_hashes(config: &ServerConfig) -> BTreeMap<PeerId, sha256::Hash> {
+    let mut hashes = BTreeMap::new();
+    for (peer, cert) in config.consensus.tls_certs.iter() {
+        let mut engine = HashEngine::default();
+
+        config
+            .consensus
+            .consensus_encode(&mut engine)
+            .expect("hashes");
+        cert.consensus_encode(&mut engine).expect("hashes");
+
+        let hash = sha256::Hash::from_engine(engine);
+        hashes.insert(*peer, hash);
+    }
+    hashes
 }
