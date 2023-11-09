@@ -146,7 +146,7 @@ impl Client {
             if module.supports_backup() {
                 let backup = module
                     .backup(
-                        &mut dbtx.with_module_prefix(id),
+                        &mut dbtx.dbtx_ref_with_prefix_module_id(id),
                         self.executor.clone(),
                         self.api.clone(),
                         id,
@@ -204,7 +204,11 @@ impl Client {
                 "Wiping module state"
             );
             module
-                .wipe(&mut dbtx.with_module_prefix(id), id, self.executor.clone())
+                .wipe(
+                    &mut dbtx.dbtx_ref_with_prefix_module_id(id),
+                    id,
+                    self.executor.clone(),
+                )
                 .await?;
         }
         dbtx.commit_tx().await;

@@ -15,7 +15,7 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientArc> 
     builder.with_module(WalletClientGen::default());
     builder.with_primary_module(1);
     builder.with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).await?);
-    builder.with_database(MemDatabase::default());
+    builder.with_raw_database(MemDatabase::default());
     let client_secret = match builder.load_decodable_client_secret::<[u8; 64]>().await {
         Ok(secret) => secret,
         Err(_) => {

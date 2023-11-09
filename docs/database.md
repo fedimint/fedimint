@@ -50,80 +50,77 @@ to reflect the new structure of the data. Then, the db/ folder at the root of th
 be run to re-generate the database backup. `test_migrations` will need to be updated to read the newly added/modified data.
 
 ### Interfaces
- - **ISingleUseDatabaseTransaction** - The interface that each adapter struct implements. The main difference with this interface is that commit_tx
-does not take self by move.
- - **IDatabaseTransaction** - The interface that each individual database must implement, such as `MemTransaction` and `RocksDbTransaction`.
+
+ - `IRawDatabase` and `IRawDatabaseTransaction` - The interfaces raw database crates implement.
+ - `IDatabase` and `IDatabaseTransaction` - The interfaces including key subscribe & notify functionality, added on top of databases.
+ - `IDatabaseTransactionOps` and `IDatabaseTransactionCoreOps` - The interfaces of database transaction operations
+ - `IDatabaseTransactionOpsCoreTyped` - Like `IDatabaseTransactionOps` but with typed keys and values. Implemented generically over everything implements `IDatabaseTransactionOps`.
 
 ### Structs
 #### Public
- - **DatabaseTransaction** - Public facing struct that can do atomic database transactions across modules.
- - **ModuleDatabaseTransaction** - Public facing struct that can only access the namespace of the module inside the database. This database transaction cannot
-commit and the lifetime of the transaction is always managed by a higher layer. `ModuleDatabaseTransaction` can be created by calling `with_module_prefix` on
-`DatabaseTransaction`.
+
+ - `Database` and `DatabaseTransaction` - Public facing newtypes over `IDatabase` and `IDatabaseTransaction` that also holds `decoders` and minor helper logic.
+ - `DatabaseTransactionRef` - A logical reference to `DatabaseTransaction` that does not expose the commit operation.
 
 #### Internal
- - **IsolatedDatabaseTransaction** - Internal wrapper struct that implements the isolation mechanism for preventing modules from reading/writing outside their 
-database namespace.
- - **CommittableIsolatedDatabaseTransaction** - Internal wrapper struct that wraps `IsolatedDatabaseTransaction`, but holds onto the transaction instead of holding
-onto a reference. This struct is always wrapped inside `DatabaseTransaction` and is used to expose the full interface to the developer (i.e `commit_tx`), but restrict the transaction
-from accessing keys/values outside of its database namespace.
- - **NotifyingTransaction** - Internal wrapper struct that implements the notification mechanism when values of specified keys change.
- - **SingleUseDatabaseTransaction** - Internal wrapper struct that holds an `Option<Tx>` which allows `commit_tx` to take `self` as a reference instead of by move.
 
-#### Base Implementations
- - **MemTransaction** - Base implementation of a memory database transaction.
- - **RocksDbTransaction** - Base implementation of a RocksDb database transaction. Uses optimistic transaction internally.
+ - `BaseDatabase` and `BaseDatabaseTransaction` - Adapter implementing `IDatabase` for `IRawDatabase`
+ - `PrefixDatabase` and `PrefixDatabaseTransaction` - Adapter over `IDatabase` and `IDatabaseTransaction` implementing key prefix handling to provide database partitioning/isolation.
+
+#### Raw Implementations
+
+ - `MemDatabase` and `MemDatabaseTransaction` - Base implementation of an in-memory database transaction.
+ - `RocksDbDatabase` and `RocksDbDatabaseTransaction` - Base implementation of a Rocksdb database. Uses optimistic transaction internally.
+ - `RocksDbReadOnly` and `RocksDbReadOnlyTransaction` - Base implementation of a Rocksdb read-only database. Will panic on writes.
 
 ```mermaid
 classDiagram
-    DatabaseTransaction --|> NotifyingTransaction
-    NotifyingTransaction --|> SingleUseDatabaseTransaction
-    DatabaseTransaction --|> CommittableIsolatedDatabaseTransaction : new_module_tx
-    CommittableIsolatedDatabaseTransaction --|> IsolatedDatabaseTransaction
-    DatabaseTransaction --|> ModuleDatabaseTransaction : with_module_prefix
-    ModuleDatabaseTransaction --|> IsolatedDatabaseTransaction
-    IsolatedDatabaseTransaction --|> NotifyingTransaction
-    SingleUseDatabaseTransaction --|> RocksDbTransaction
-    SingleUseDatabaseTransaction --|> MemTransaction
-    class DatabaseTransaction{
-      Box ISingleUseDatabaseTransaction tx
-      ModuleDecoderRegistry decoders
-      CommitTracker commit_tracker
-      with_module_prefix()
-      new_module_tx()
-      get_value()
-      insert_entry()
-      commit_tx()
+    DatabaseTransaction ..* IDatabaseTransaction : wraps
+    DatabaseTransactionRef ..* DatabaseTransaction : wraps
+    PrefixDatabaseTransaction ..|> IDatabaseTransaction : implements
+    PrefixDatabaseTransaction ..* IDatabaseTransaction : wraps
+    BaseDatabaseTransaction ..|> IDatabaseTransaction : implements
+    BaseDatabaseTransaction ..* IRawDatabaseTransaction : wraps
+    MemTransaction ..|> IRawDatabaseTransaction : implements
+    RocksDbTransaction ..|> IRawDatabaseTransaction : implements
+
+    DatabaseTransactionRef ..|> IDatabaseTransactionOpsCore : implements
+    DatabaseTransaction ..|> IDatabaseTransactionOpsCore : implements
+    BaseDatabaseTransaction ..|> IDatabaseTransactionOpsCore : implements
+    PrefixDatabaseTransaction ..|> IDatabaseTransactionOpsCore : implements
+    MemTransaction ..|> IDatabaseTransactionOpsCore : implements
+    RocksDbTransaction ..|> IDatabaseTransactionOpsCore : implements
+
+    class IDatabaseTransactionOpsCore {
+      <<interface>>
+      + raw_insert_bytes()
+      + raw_get_bytes()
+      + raw_remove()
     }
-    class CommittableIsolatedDatabaseTransaction{
-        <<interface ISingleUseDatabaseTransaction>>
-        Box ISingleUseDatabaseTransaction tx
-        ModuleInstanceId prefix
+
+    class IDatabaseTransaction {
+      <<interface>>
+      + commit_tx()
     }
-    class ModuleDatabaseTransaction{
-      &ISingleUseDatabaseTransaction tx_ref
-      &ModuleDecoderRegistry decoder_ref
-      &CommitTracker commit_tracker_ref
-      get_value()
-      insert_entry()
+
+    class DatabaseTransaction {
+      - IDatabaseTransaction
     }
-    class NotifyingTransaction{
-        <<interface ISingleUseDatabaseTransaction>>
-        Box ISingleUseDatabaseTransaction
+
+    class DatabaseTransactionRef {
+      - &DatabaseTransaction
     }
-    class SingleUseDatabaseTransaction{
-        <<interface ISingleUseDatabaseTransaction>>
-        Option tx
+
+    class PrefixDatabaseTransaction {
+      - IDatabaseTransaction
     }
-    class IsolatedDatabaseTransaction{
-        <<interface ISingleUseDatabaseTransaction>>
-        &ISingleUseDatabaseTransaction
+
+    class BaseDatabaseTransaction {
+      - IRawDatabaseTransaction
     }
-    class RocksDbTransaction{
-        <<interface IDatabaseTransaction>>
-        Transaction optimistic_tx
+
+    class RocksDbTransaction {
     }
-    class MemTransaction{
-        <<interface IDatabaseTransaction>>
-        BTreeMap tx_data
+
+    class MemTransaction {
     }

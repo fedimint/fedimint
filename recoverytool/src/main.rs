@@ -14,7 +14,7 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::transaction::Transaction;
@@ -139,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
             let db = if legacy {
                 db
             } else {
-                db.new_isolated(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+                db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             };
 
             let utxos: Vec<ImportableWallet> = db

@@ -131,9 +131,9 @@ pub async fn build_client(
         client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).await?);
     }
     if let Some(rocksdb) = rocksdb {
-        client_builder.with_database(fedimint_rocksdb::RocksDb::open(rocksdb)?)
+        client_builder.with_raw_database(fedimint_rocksdb::RocksDb::open(rocksdb)?)
     } else {
-        client_builder.with_database(fedimint_core::db::mem_impl::MemDatabase::new())
+        client_builder.with_raw_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
 
     let client_secret = match client_builder
@@ -255,7 +255,13 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
 pub async fn get_note_summary(client: &ClientArc) -> anyhow::Result<TieredSummary> {
     let (mint_client, _) = client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
     let summary = mint_client
-        .get_wallet_summary(&mut client.db().begin_transaction().await.with_module_prefix(1))
+        .get_wallet_summary(
+            &mut client
+                .db()
+                .begin_transaction()
+                .await
+                .dbtx_ref_with_prefix_module_id(1),
+        )
         .await;
     Ok(summary)
 }
@@ -268,7 +274,7 @@ pub async fn remint_denomination(
     let (mint_client, client_module_instance) =
         client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
     let mut dbtx = client.db().begin_transaction().await;
-    let mut module_transaction = dbtx.with_module_prefix(client_module_instance.id);
+    let mut module_transaction = dbtx.dbtx_ref_with_prefix_module_id(client_module_instance.id);
     let mut tx = TransactionBuilder::new();
     let operation_id = OperationId::new_random();
     for _ in 0..quantity {

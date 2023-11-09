@@ -7,7 +7,10 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::bail;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -935,7 +938,7 @@ mod tests {
     use fedimint_core::db::Database;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::task::{self};
+    use fedimint_core::task;
     use tokio::sync::broadcast::Sender;
     use tracing::{info, trace};
 

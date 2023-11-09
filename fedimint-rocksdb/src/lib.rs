@@ -4,8 +4,8 @@ use std::path::Path;
 use anyhow::Result;
 use async_trait::async_trait;
 use fedimint_core::db::{
-    IDatabase, IDatabaseTransaction, IDatabaseTransactionOps, ISingleUseDatabaseTransaction,
-    PrefixStream, SingleUseDatabaseTransaction,
+    IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
+    PrefixStream,
 };
 use futures::stream;
 pub use rocksdb;
@@ -13,8 +13,6 @@ use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOption
 
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);
-
-pub struct RocksDbReadOnly(rocksdb::DB);
 
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
@@ -29,6 +27,11 @@ impl RocksDb {
         &self.0
     }
 }
+
+#[derive(Debug)]
+pub struct RocksDbReadOnly(rocksdb::DB);
+
+pub struct RocksDbReadOnlyTransaction<'a>(&'a rocksdb::DB);
 
 impl RocksDbReadOnly {
     pub fn open_read_only(db_path: impl AsRef<Path>) -> Result<RocksDbReadOnly, rocksdb::Error> {
@@ -75,8 +78,9 @@ fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
 }
 
 #[async_trait]
-impl IDatabase for RocksDb {
-    async fn begin_transaction<'a>(&'a self) -> Box<dyn ISingleUseDatabaseTransaction<'a>> {
+impl IRawDatabase for RocksDb {
+    type Transaction<'a> = RocksDbTransaction<'a>;
+    async fn begin_transaction<'a>(&'a self) -> RocksDbTransaction {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
         let mut rocksdb_tx = RocksDbTransaction(
@@ -87,13 +91,21 @@ impl IDatabase for RocksDb {
             .set_tx_savepoint()
             .await
             .expect("setting tx savepoint failed");
-        let single_use = SingleUseDatabaseTransaction::new(rocksdb_tx);
-        Box::new(single_use)
+
+        rocksdb_tx
     }
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransactionOps<'a> for RocksDbTransaction<'a> {
+impl IRawDatabase for RocksDbReadOnly {
+    type Transaction<'a> = RocksDbReadOnlyTransaction<'a>;
+    async fn begin_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
+        RocksDbReadOnlyTransaction(&self.0)
+    }
+}
+
+#[async_trait]
+impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         fedimint_core::task::block_in_place(|| {
             let val = self.0.get(key).unwrap();
@@ -202,7 +214,10 @@ impl<'a> IDatabaseTransactionOps<'a> for RocksDbTransaction<'a> {
             Box::pin(stream::iter(rocksdb_iter))
         }))
     }
+}
 
+#[async_trait]
+impl<'a> IDatabaseTransactionOps for RocksDbTransaction<'a> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         Ok(fedimint_core::task::block_in_place(|| {
             self.0.rollback_to_savepoint()
@@ -217,7 +232,7 @@ impl<'a> IDatabaseTransactionOps<'a> for RocksDbTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
+impl<'a> IRawDatabaseTransaction for RocksDbTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
         fedimint_core::task::block_in_place(|| {
             self.0.commit()?;
@@ -227,7 +242,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
 }
 
 #[async_trait]
-impl IDatabaseTransactionOps<'_> for RocksDbReadOnly {
+impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
     async fn raw_insert_bytes(&mut self, _key: &[u8], _value: &[u8]) -> Result<Option<Vec<u8>>> {
         panic!("Cannot insert into a read only transaction");
     }
@@ -287,7 +302,10 @@ impl IDatabaseTransactionOps<'_> for RocksDbReadOnly {
             Box::pin(stream::iter(rocksdb_iter))
         }))
     }
+}
 
+#[async_trait]
+impl<'a> IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'a> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         panic!("Cannot rollback a read only transaction");
     }
@@ -298,7 +316,7 @@ impl IDatabaseTransactionOps<'_> for RocksDbReadOnly {
 }
 
 #[async_trait]
-impl IDatabaseTransaction<'_> for RocksDbReadOnly {
+impl<'a> IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
         panic!("Cannot commit a read only transaction");
     }
@@ -306,7 +324,7 @@ impl IDatabaseTransaction<'_> for RocksDbReadOnly {
 
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
-    use fedimint_core::db::{notifications, Database};
+    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::{impl_db_lookup, impl_db_record};
@@ -428,20 +446,9 @@ mod fedimint_rocksdb_tests {
 
         fedimint_core::db::verify_module_db(
             open_temp_db("fcb-rocksdb-test-module-db"),
-            module_db.new_isolated(module_instance_id),
+            module_db.with_prefix_module_id(module_instance_id),
         )
         .await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    #[should_panic(expected = "Cannot isolate and already isolated database.")]
-    async fn test_cannot_isolate_already_isolated_db() {
-        let module_instance_id = 1;
-        let db = open_temp_db("rocksdb-test-already-isolated").new_isolated(module_instance_id);
-
-        // try to isolate the database again
-        let module_instance_id = 2;
-        db.new_isolated(module_instance_id);
     }
 
     #[test]
@@ -555,13 +562,8 @@ mod fedimint_rocksdb_tests {
         }
         // Test readonly implementation
         let db_readonly = RocksDbReadOnly::open_read_only(path).unwrap();
-        let single_use = SingleUseDatabaseTransaction::new(db_readonly);
-        let notifications = notifications::Notifications::new();
-        let mut dbtx = fedimint_core::db::DatabaseTransaction::new(
-            Box::new(single_use),
-            ModuleDecoderRegistry::default(),
-            &notifications,
-        );
+        let db_readonly = Database::new(db_readonly, Default::default());
+        let mut dbtx = db_readonly.begin_transaction().await;
         let query = dbtx
             .find_by_prefix_sorted_descending(&DbPrefixTestPrefix)
             .await

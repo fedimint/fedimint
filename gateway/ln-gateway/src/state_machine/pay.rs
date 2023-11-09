@@ -8,6 +8,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientArc, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_client::pay::PayInvoicePayload;

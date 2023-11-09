@@ -59,7 +59,7 @@ impl FederationTest {
         client_builder.with_primary_module(self.primary_client);
         client_builder
             .with_federation_info(FederationInfo::from_config(client_config).await.unwrap());
-        client_builder.with_database(MemDatabase::new());
+        client_builder.with_raw_database(MemDatabase::new());
         let client_secret = match client_builder
             .load_decodable_client_secret::<[u8; 64]>()
             .await

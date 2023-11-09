@@ -7,8 +7,9 @@ use fedimint_client::db::ClientConfigKeyPrefix;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::notifications::Notifications;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
+use fedimint_core::db::{
+    Database, DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::SerdeSignatureShare;
 use fedimint_core::module::__reexports::serde_json;
@@ -36,9 +37,9 @@ impl SerdeWrapper {
 
 /// Structure to hold the deserialized structs from the database.
 /// Also includes metadata on which sections of the database to read.
-pub struct DatabaseDump<'a> {
+pub struct DatabaseDump {
     serialized: BTreeMap<String, Box<dyn Serialize>>,
-    read_only: DatabaseTransaction<'a>,
+    read_only: Database,
     modules: Vec<String>,
     prefixes: Vec<String>,
     cfg: Option<ServerConfig>,
@@ -47,7 +48,7 @@ pub struct DatabaseDump<'a> {
     client_module_inits: ClientModuleInitRegistry,
 }
 
-impl<'a> DatabaseDump<'a> {
+impl DatabaseDump {
     pub async fn new(
         cfg_dir: PathBuf,
         data_dir: String,
@@ -56,17 +57,13 @@ impl<'a> DatabaseDump<'a> {
         client_module_inits: ClientModuleInitRegistry,
         modules: Vec<String>,
         prefixes: Vec<String>,
-    ) -> anyhow::Result<DatabaseDump<'a>> {
+    ) -> anyhow::Result<DatabaseDump> {
         let read_only = match RocksDbReadOnly::open_read_only(data_dir.clone()) {
-            Ok(db) => db,
+            Ok(db) => Database::new(db, Default::default()),
             Err(_) => {
                 panic!("Error reading RocksDB database. Quitting...");
             }
         };
-        let single_use = SingleUseDatabaseTransaction::new(read_only);
-
-        // leak here is OK, it only happens once.
-        let notifications = Box::leak(Box::new(Notifications::new()));
 
         let (server_cfg, client_cfg, decoders) = if let Ok(cfg) =
             read_server_config(&password, cfg_dir).context("Failed to read server config")
@@ -81,19 +78,14 @@ impl<'a> DatabaseDump<'a> {
         } else {
             // Check if this database is a client database by reading the `ClientConfig`
             // from the database.
-            let read_only_client = match RocksDbReadOnly::open_read_only(data_dir) {
-                Ok(db) => db,
+            let db = match RocksDbReadOnly::open_read_only(data_dir) {
+                Ok(db) => Database::new(db, Default::default()),
                 Err(_) => {
                     panic!("Error reading RocksDB database. Quitting...");
                 }
             };
 
-            let single_use = SingleUseDatabaseTransaction::new(read_only_client);
-            let mut dbtx = DatabaseTransaction::new(
-                Box::new(single_use),
-                ModuleDecoderRegistry::default(),
-                notifications,
-            );
+            let mut dbtx = db.begin_transaction().await;
             let client_cfg = dbtx
                 .find_by_prefix(&ClientConfigKeyPrefix)
                 .await
@@ -114,11 +106,9 @@ impl<'a> DatabaseDump<'a> {
             }
         };
 
-        let dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
-
         Ok(DatabaseDump {
             serialized: BTreeMap::new(),
-            read_only: dbtx,
+            read_only: read_only.with_decoders(decoders),
             modules,
             prefixes,
             cfg: server_cfg,
@@ -129,7 +119,7 @@ impl<'a> DatabaseDump<'a> {
     }
 }
 
-impl<'a> DatabaseDump<'a> {
+impl DatabaseDump {
     /// Prints the contents of the BTreeMap to a pretty JSON string
     fn print_database(&self) {
         let json = serde_json::to_string_pretty(&self.serialized).unwrap();
@@ -145,7 +135,8 @@ impl<'a> DatabaseDump<'a> {
         if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
             return Ok(());
         }
-        let mut isolated_dbtx = self.read_only.with_module_prefix(*module_id);
+        let mut dbtx = self.read_only.begin_transaction().await;
+        let mut isolated_dbtx = dbtx.dbtx_ref_with_prefix_module_id(*module_id);
 
         match inits.get(kind) {
             None => {
@@ -200,7 +191,8 @@ impl<'a> DatabaseDump<'a> {
     }
 
     async fn serialize_gateway(&mut self) -> anyhow::Result<()> {
-        let mut dbtx = self.read_only.get_isolated();
+        let mut dbtx = self.read_only.begin_transaction().await;
+        let mut dbtx = dbtx.dbtx_ref();
         let gateway_serialized = Gateway::dump_database(&mut dbtx, self.prefixes.clone())
             .await
             .collect::<BTreeMap<String, _>>();
@@ -254,7 +246,8 @@ impl<'a> DatabaseDump<'a> {
     /// retrieves the corresponding data.
     async fn retrieve_consensus_data(&mut self) {
         let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let dbtx = &mut self.read_only;
+        let mut dbtx = self.read_only.begin_transaction().await;
+        let dbtx = &mut dbtx;
         let prefix_names = &self.prefixes;
 
         let filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|f| {

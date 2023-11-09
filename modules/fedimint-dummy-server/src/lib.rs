@@ -8,7 +8,9 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, MigrationMap, ModuleDatabaseTransaction};
+use fedimint_core::db::{
+    DatabaseTransactionRef, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+};
 use fedimint_core::endpoint_constants::{SIGN_MESSAGE_ENDPOINT, WAIT_SIGNED_ENDPOINT};
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
@@ -55,7 +57,7 @@ impl ExtendsCommonModuleInit for DummyGen {
     /// Dumps all database items for debugging
     async fn dump_database(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         // TODO: Boilerplate-code
@@ -240,7 +242,7 @@ impl ServerModule for Dummy {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
     ) -> Vec<DummyConsensusItem> {
         // Sign and send the print requests to consensus
         let sign_requests: Vec<_> = dbtx
@@ -261,7 +263,7 @@ impl ServerModule for Dummy {
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransactionRef<'b>,
         consensus_item: DummyConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -324,7 +326,7 @@ impl ServerModule for Dummy {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b DummyInput,
     ) -> Result<InputMeta, ModuleError> {
         let current_funds = dbtx
@@ -365,7 +367,7 @@ impl ServerModule for Dummy {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a DummyOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -388,7 +390,7 @@ impl ServerModule for Dummy {
 
     async fn output_status(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         out_point: OutPoint,
     ) -> Option<DummyOutputOutcome> {
         // check whether or not the output has been processed
@@ -397,7 +399,7 @@ impl ServerModule for Dummy {
 
     async fn audit(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {

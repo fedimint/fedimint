@@ -31,7 +31,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, ModuleDatabaseTransaction,
+    Database, DatabaseTransaction, DatabaseTransactionRef, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
@@ -80,7 +81,7 @@ impl ExtendsCommonModuleInit for WalletGen {
 
     async fn dump_database(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut wallet: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
@@ -306,7 +307,7 @@ impl ServerModule for Wallet {
 
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
     ) -> Vec<WalletConsensusItem> {
         let mut items = dbtx
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
@@ -355,7 +356,7 @@ impl ServerModule for Wallet {
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransactionRef<'b>,
         consensus_item: WalletConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -459,7 +460,7 @@ impl ServerModule for Wallet {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'c>,
+        dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b WalletInput,
     ) -> Result<InputMeta, ModuleError> {
         if !self.block_is_known(dbtx, input.proof_block()).await {
@@ -498,7 +499,7 @@ impl ServerModule for Wallet {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut ModuleDatabaseTransaction<'b>,
+        dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a WalletOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -575,7 +576,7 @@ impl ServerModule for Wallet {
 
     async fn output_status(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         out_point: OutPoint,
     ) -> Option<WalletOutputOutcome> {
         dbtx.get_value(&PegOutBitcoinTransaction(out_point)).await
@@ -583,7 +584,7 @@ impl ServerModule for Wallet {
 
     async fn audit(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -870,7 +871,7 @@ impl Wallet {
 
     pub async fn consensus_block_count(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
     ) -> Option<u32> {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
 
@@ -891,7 +892,7 @@ impl Wallet {
         counts[peer_count / 2]
     }
 
-    pub async fn consensus_fee_rate(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> Feerate {
+    pub async fn consensus_fee_rate(&self, dbtx: &mut DatabaseTransactionRef<'_>) -> Feerate {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
 
         let mut rates = dbtx
@@ -912,7 +913,7 @@ impl Wallet {
         rates[peer_count / 2]
     }
 
-    pub async fn consensus_nonce(&self, dbtx: &mut ModuleDatabaseTransaction<'_>) -> [u8; 32] {
+    pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransactionRef<'_>) -> [u8; 32] {
         let nonce = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
         dbtx.insert_entry(&PegOutNonceKey, &(nonce + 1)).await;
 
@@ -921,7 +922,7 @@ impl Wallet {
 
     async fn sync_up_to_consensus_height<'a>(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransactionRef<'a>,
         old_height: u32,
         new_height: u32,
     ) {
@@ -992,7 +993,7 @@ impl Wallet {
     /// in a block that we got consensus on.
     async fn recognize_change_utxo<'a>(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransactionRef<'a>,
         pending_tx: &PendingTransaction,
     ) {
         self.remove_rbf_transactions(dbtx, pending_tx).await;
@@ -1023,7 +1024,7 @@ impl Wallet {
     /// Removes the `PendingTransaction` and any transactions tied to it via RBF
     async fn remove_rbf_transactions<'a>(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransactionRef<'a>,
         pending_tx: &PendingTransaction,
     ) {
         let mut all_transactions: BTreeMap<Txid, PendingTransaction> = dbtx
@@ -1060,7 +1061,7 @@ impl Wallet {
 
     async fn block_is_known(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         block_hash: BlockHash,
     ) -> bool {
         dbtx.get_value(&BlockHashKey(block_hash)).await.is_some()
@@ -1068,7 +1069,7 @@ impl Wallet {
 
     async fn create_peg_out_tx(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
         output: &WalletOutput,
         change_tweak: &[u8; 32],
     ) -> Result<UnsignedTransaction, WalletError> {
@@ -1103,7 +1104,7 @@ impl Wallet {
 
     async fn available_utxos(
         &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransactionRef<'_>,
     ) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .await
@@ -1111,10 +1112,7 @@ impl Wallet {
             .await
     }
 
-    pub async fn get_wallet_value(
-        &self,
-        dbtx: &mut ModuleDatabaseTransaction<'_>,
-    ) -> bitcoin::Amount {
+    pub async fn get_wallet_value(&self, dbtx: &mut DatabaseTransactionRef<'_>) -> bitcoin::Amount {
         let sat_sum = self
             .available_utxos(dbtx)
             .await
@@ -1628,7 +1626,9 @@ mod fedimint_migration_tests {
         WPubkeyHash,
     };
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-    use fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    use fedimint_core::db::{
+        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
     use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, ServerModule, TransactionId};

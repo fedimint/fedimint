@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::util::broadcaststream::BroadcastStream;
 use fedimint_core::util::BoxStream;
 use futures::StreamExt;
