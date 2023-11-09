@@ -92,7 +92,7 @@ impl FederationTest {
             .to_client_config(&self.server_init)
             .unwrap()
             .global
-            .federation_id
+            .federation_id()
     }
 
     pub(crate) async fn new(

@@ -146,8 +146,6 @@ pub struct JsonClientConfig {
 /// Federation-wide client config
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GlobalClientConfig {
-    // Stable and unique id obtained from the hash of the api_endpoints below
-    pub federation_id: FederationId,
     /// API endpoints for each federation member
     #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
@@ -156,6 +154,12 @@ pub struct GlobalClientConfig {
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+}
+
+impl GlobalClientConfig {
+    pub fn federation_id(&self) -> FederationId {
+        FederationId(self.api_endpoints.consensus_hash())
+    }
 }
 
 impl ClientConfig {

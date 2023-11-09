@@ -1319,7 +1319,7 @@ impl FederationInfo {
     }
 
     pub fn federation_id(&self) -> FederationId {
-        self.config.global.federation_id
+        self.config.global.federation_id()
     }
 }
 
@@ -1557,7 +1557,7 @@ impl ClientBuilder {
                 let module = module_init
                     .init(
                         final_client.clone(),
-                        config.global.federation_id,
+                        config.global.federation_id(),
                         module_config,
                         db.clone(),
                         module_instance,
@@ -1597,7 +1597,7 @@ impl ClientBuilder {
             config: config.clone(),
             decoders,
             db: db.clone(),
-            federation_id: config.global.federation_id,
+            federation_id: config.global.federation_id(),
             federation_meta: config.global.meta,
             primary_module_instance,
             modules,

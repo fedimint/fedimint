@@ -328,7 +328,7 @@ impl LightningClientExt for ClientArc {
                     instance.api,
                     invoice.clone(),
                     active_gateway,
-                    self.get_config().global.federation_id,
+                    self.get_config().global.federation_id(),
                     rand::rngs::OsRng,
                 )
                 .await?;

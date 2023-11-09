@@ -170,7 +170,6 @@ impl ServerConfigConsensus {
     ) -> Result<ClientConfig, anyhow::Error> {
         let client = ClientConfig {
             global: GlobalClientConfig {
-                federation_id: self.federation_id(),
                 api_endpoints: self.api_endpoints.clone(),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
@@ -187,10 +186,6 @@ impl ServerConfigConsensus {
                 .collect::<anyhow::Result<BTreeMap<_, _>>>()?,
         };
         Ok(client)
-    }
-
-    pub fn federation_id(&self) -> FederationId {
-        FederationId(self.api_endpoints.consensus_hash())
     }
 }
 
