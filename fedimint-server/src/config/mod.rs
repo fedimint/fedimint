@@ -243,8 +243,8 @@ impl ServerConfig {
             url: self.consensus.api_endpoints[&self.local.identity]
                 .url
                 .clone(),
-            id: FederationId(self.consensus.api_endpoints.consensus_hash()),
-            peer_id: self.local.identity,
+            federation_id: FederationId(self.consensus.api_endpoints.consensus_hash()),
+            peer: self.local.identity,
         }
     }
 

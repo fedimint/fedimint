@@ -49,21 +49,38 @@ use crate::client::ClientCmd;
 #[serde(rename_all = "snake_case")]
 #[serde(untagged)]
 enum CliOutput {
-    VersionHash { hash: String },
+    VersionHash {
+        hash: String,
+    },
 
-    UntypedApiOutput { value: Value },
+    UntypedApiOutput {
+        value: Value,
+    },
 
-    WaitBlockCount { reached: u64 },
+    WaitBlockCount {
+        reached: u64,
+    },
 
-    InviteCode { invite_code: InviteCode },
+    InviteCode {
+        invite_code: InviteCode,
+    },
 
-    DecodeInviteCode { url: SafeUrl, id: FederationId },
+    DecodeInviteCode {
+        url: SafeUrl,
+        federation_id: FederationId,
+    },
 
-    JoinFederation { joined: String },
+    JoinFederation {
+        joined: String,
+    },
 
-    DecodeTransaction { transaction: String },
+    DecodeTransaction {
+        transaction: String,
+    },
 
-    EpochCount { count: u64 },
+    EpochCount {
+        count: u64,
+    },
 
     ConfigDecrypt,
 
@@ -382,10 +399,10 @@ Examples:
     EncodeInviteCode {
         #[clap(long = "url")]
         url: SafeUrl,
-        #[clap(long = "id")]
-        id: FederationId,
-        #[clap(long = "peer-id")]
-        peer_id: PeerId,
+        #[clap(long = "federation_id")]
+        federation_id: FederationId,
+        #[clap(long = "peer")]
+        peer: PeerId,
     },
 
     /// Gets the current fedimint AlephBFT block count
@@ -653,14 +670,20 @@ impl FedimintCli {
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
                 Ok(CliOutput::DecodeInviteCode {
                     url: invite_code.url,
-                    id: invite_code.id,
+                    federation_id: invite_code.federation_id,
                 })
             }
-            Command::Dev(DevCmd::EncodeInviteCode { url, id, peer_id }) => {
-                Ok(CliOutput::InviteCode {
-                    invite_code: InviteCode { url, id, peer_id },
-                })
-            }
+            Command::Dev(DevCmd::EncodeInviteCode {
+                url,
+                federation_id,
+                peer,
+            }) => Ok(CliOutput::InviteCode {
+                invite_code: InviteCode {
+                    url,
+                    federation_id,
+                    peer,
+                },
+            }),
             Command::Dev(DevCmd::FedimintBlockCount) => {
                 let count = cli
                     .build_client_ng(&self.module_inits, None)

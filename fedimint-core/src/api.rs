@@ -475,7 +475,7 @@ where
         invite_code: &InviteCode,
     ) -> FederationResult<ClientConfig> {
         // we have to download the api endpoints first
-        let id = invite_code.id;
+        let id = invite_code.federation_id;
         let qs = FilterMap::new(
             move |cfg: ClientConfig| {
                 if id.0 != cfg.global.api_endpoints.consensus_hash() {
@@ -583,9 +583,9 @@ pub struct InviteCode {
     /// URL to reach an API that we can download configs from
     pub url: SafeUrl,
     /// Authentication id for the federation
-    pub id: FederationId,
+    pub federation_id: FederationId,
     /// Peer id of the host from the Url
-    pub peer_id: PeerId,
+    pub peer: PeerId,
 }
 
 /// We can represent client invite code as a bech32 string for compactness and
@@ -622,8 +622,8 @@ impl FromStr for InviteCode {
 
         Ok(Self {
             url: url.parse()?,
-            id: FederationId::from_byte_array(id_bytes),
-            peer_id: PeerId(u16::from_be_bytes(peer_id_bytes)),
+            federation_id: FederationId::from_byte_array(id_bytes),
+            peer: PeerId(u16::from_be_bytes(peer_id_bytes)),
         })
     }
 }
@@ -632,8 +632,8 @@ impl FromStr for InviteCode {
 impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let mut data = vec![];
-        data.extend(self.id.0.into_inner());
-        data.extend(self.peer_id.0.to_be_bytes());
+        data.extend(self.federation_id.0.into_inner());
+        data.extend(self.peer.0.to_be_bytes());
         let url_bytes = self.url.as_str().as_bytes();
         data.extend((url_bytes.len() as u16).to_be_bytes());
         data.extend(url_bytes);
@@ -1160,8 +1160,8 @@ mod tests {
     fn converts_invite_code() {
         let connect = InviteCode {
             url: "ws://test1".parse().unwrap(),
-            id: FederationId::dummy(),
-            peer_id: PeerId(1),
+            federation_id: FederationId::dummy(),
+            peer: PeerId(1),
         };
 
         let bech32 = connect.to_string();
