@@ -3,7 +3,6 @@ use std::fmt;
 use config::DummyClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::SerdeSignatureShare;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
@@ -23,10 +22,7 @@ pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
 /// Non-transaction items that will be submitted to consensus
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub enum DummyConsensusItem {
-    /// User's message sign request signed by a single peer
-    Sign(String, SerdeSignatureShare),
-}
+pub struct DummyConsensusItem;
 
 /// Input for a fedimint transaction
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

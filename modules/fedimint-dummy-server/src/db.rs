@@ -1,7 +1,6 @@
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
 use futures::StreamExt;
 use secp256k1::XOnlyPublicKey;
 use serde::Serialize;
@@ -15,8 +14,6 @@ use crate::DummyOutputOutcome;
 pub enum DbKeyPrefix {
     Funds = 0x01,
     Outcome = 0x02,
-    SignatureShare = 0x03,
-    Signature = 0x04,
 }
 
 // TODO: Boilerplate-code
@@ -88,40 +85,3 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::Outcome,
 );
 impl_db_lookup!(key = DummyOutcomeKey, query_prefix = DummyOutcomePrefix);
-
-/// Lookup signature requests by key or prefix
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummySignatureShareKey(pub String, pub PeerId);
-
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummySignatureShareStringPrefix(pub String);
-
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummySignatureSharePrefix;
-
-impl_db_record!(
-    key = DummySignatureShareKey,
-    value = SerdeSignatureShare,
-    db_prefix = DbKeyPrefix::SignatureShare,
-);
-impl_db_lookup!(
-    key = DummySignatureShareKey,
-    query_prefix = DummySignatureShareStringPrefix,
-    query_prefix = DummySignatureSharePrefix
-);
-
-/// Lookup signature requests by key or prefix
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct DummySignatureKey(pub String);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct DummySignaturePrefix;
-
-impl_db_record!(
-    key = DummySignatureKey,
-    value = Option<SerdeSignature>,
-    db_prefix = DbKeyPrefix::Signature,
-    // Allows us to listen for notifications on this key
-    notify_on_modify = true
-);
-impl_db_lookup!(key = DummySignatureKey, query_prefix = DummySignaturePrefix);

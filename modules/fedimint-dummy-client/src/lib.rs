@@ -28,9 +28,7 @@ use futures::{pin_mut, StreamExt};
 use secp256k1::{Secp256k1, XOnlyPublicKey};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
-use threshold_crypto::{PublicKey, Signature};
 
-use crate::api::DummyFederationApi;
 use crate::db::DummyClientFundsKeyV0;
 
 pub mod api;

@@ -40,17 +40,6 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn can_threshold_sign_message() {
-    let fed = fixtures().new_fed().await;
-    let client = fed.new_client().await;
-    let dummy_module = client.get_first_module::<DummyClientModule>();
-
-    let message = "Hello fed!";
-    let sig = dummy_module.fed_signature(message).await.unwrap();
-    assert!(dummy_module.fed_public_key().verify(&sig, message));
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn client_ignores_unknown_module() {
     let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
@@ -63,7 +52,6 @@ async fn client_ignores_unknown_module() {
         ModuleConsensusVersion(0),
         DummyClientConfig {
             tx_fee: Amount::from_sats(1),
-            fed_public_key: threshold_crypto::SecretKey::random().public_key(),
         },
     )
     .unwrap();
