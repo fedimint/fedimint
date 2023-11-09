@@ -1120,6 +1120,9 @@
 <a href="#1120" id="1120">1120</a>
 <a href="#1121" id="1121">1121</a>
 <a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1129,7 +1132,10 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateJson;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -2057,7 +2063,7 @@
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>};
+    <span class="kw">use </span>fedimint_core::task;
     <span class="kw">use </span>tokio::sync::broadcast::Sender;
     <span class="kw">use </span>tracing::{info, trace};
 

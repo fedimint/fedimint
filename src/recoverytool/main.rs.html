@@ -460,7 +460,7 @@
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
@@ -585,7 +585,7 @@
             <span class="kw">let </span>db = <span class="kw">if </span>legacy {
                 db
             } <span class="kw">else </span>{
-                db.new_isolated(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+                db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             };
 
             <span class="kw">let </span>utxos: Vec&lt;ImportableWallet&gt; = db

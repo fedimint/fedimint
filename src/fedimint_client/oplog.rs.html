@@ -493,7 +493,7 @@
 
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>fedimint_core::core::OperationId;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -828,7 +828,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>fedimint_core::core::OperationId;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::db::{Database, IRawDatabaseExt};
     <span class="kw">use </span>futures::stream::StreamExt;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -911,7 +911,7 @@
     </span><span class="kw">async fn </span>test_operation_log_update_from_stream() {
         <span class="kw">let </span>op_id = OperationId([<span class="number">0x32</span>; <span class="number">32</span>]);
 
-        <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        <span class="kw">let </span>db = MemDatabase::new().into_database();
         <span class="kw">let </span>op_log = OperationLog::new(db.clone());
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;

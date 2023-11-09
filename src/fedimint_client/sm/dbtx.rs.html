@@ -32,8 +32,9 @@
 <a href="#32" id="32">32</a>
 <a href="#33" id="33">33</a>
 <a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
 
 <span class="doccomment">/// A transaction that acts as isolated for module code but can be accessed as a
 /// normal transaction in this crate.
@@ -54,8 +55,9 @@
     }
 
     <span class="doccomment">/// Returns the isolated database transaction for the module.
-    </span><span class="kw">pub fn </span>module_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="self">self</span>.dbtx.with_module_prefix(<span class="self">self</span>.module_instance)
+    </span><span class="kw">pub fn </span>module_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="self">self</span>.dbtx
+            .dbtx_ref_with_prefix_module_id(<span class="self">self</span>.module_instance)
     }
 
     <span class="doccomment">/// Returns the non-isolated database transaction only accessible to the

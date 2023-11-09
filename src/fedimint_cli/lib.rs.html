@@ -1153,7 +1153,7 @@
                     </span>.map_err_cli_general()<span class="question-mark">?</span>,
             );
         }
-        client_builder.with_database(db);
+        client_builder.with_raw_database(db);
 
         <span class="prelude-val">Ok</span>(client_builder)
     }

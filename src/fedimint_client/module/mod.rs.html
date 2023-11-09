@@ -538,6 +538,10 @@
 <a href="#538" id="538">538</a>
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Debug;
@@ -548,7 +552,7 @@
 <span class="kw">use </span>fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, OperationId,
 };
-<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{ModuleCommon, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -668,7 +672,7 @@
 
     <span class="kw">async fn </span>backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         _executor: Executor&lt;DynGlobalClientContext&gt;,
         _api: DynGlobalApi,
         _module_instance_id: ModuleInstanceId,
@@ -690,7 +694,7 @@
 
     <span class="kw">async fn </span>wipe(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor&lt;DynGlobalClientContext&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
@@ -728,7 +732,7 @@
     /// to create the requested input.
     </span><span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         _operation_id: OperationId,
         _min_amount: Amount,
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;&gt; {
@@ -746,7 +750,7 @@
     ///   of calling `create_change_output` and have to be injected later.
     </span><span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         _operation_id: OperationId,
         _amount: Amount,
     ) -&gt; Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt; {
@@ -767,7 +771,7 @@
 
     <span class="doccomment">/// Returns the balance held by this module and available for funding
     /// transactions.
-    </span><span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
+    </span><span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
         <span class="macro">unimplemented!</span>()
     }
 
@@ -834,7 +838,7 @@
     /// this should be done on per-module basis, to avoid mistakes.
     </span><span class="kw">async fn </span>leave(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor&lt;DynGlobalClientContext&gt;,
         _api: DynGlobalApi,
@@ -866,7 +870,7 @@
 
     <span class="kw">async fn </span>backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         executor: Executor&lt;DynGlobalClientContext&gt;,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
@@ -884,7 +888,7 @@
 
     <span class="kw">async fn </span>wipe(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
         executor: Executor&lt;DynGlobalClientContext&gt;,
     ) -&gt; anyhow::Result&lt;()&gt;;
@@ -973,7 +977,7 @@
 
     <span class="kw">async fn </span>backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         executor: Executor&lt;DynGlobalClientContext&gt;,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
@@ -995,7 +999,7 @@
 
     <span class="kw">async fn </span>wipe(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
         executor: Executor&lt;DynGlobalClientContext&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
@@ -1015,7 +1019,7 @@
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&gt;&gt; {
         <span class="prelude-val">Ok</span>(&lt;T <span class="kw">as </span>ClientModule&gt;::create_sufficient_input(
             <span class="self">self</span>,
-            <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
+            <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance),
             operation_id,
             min_amount,
         )
@@ -1034,7 +1038,7 @@
     ) -&gt; Vec&lt;ClientOutput&gt; {
         &lt;T <span class="kw">as </span>ClientModule&gt;::create_exact_output(
             <span class="self">self</span>,
-            <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance),
+            <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance),
             operation_id,
             amount,
         )
@@ -1057,7 +1061,11 @@
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Amount {
-        &lt;T <span class="kw">as </span>ClientModule&gt;::get_balance(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance)).<span class="kw">await
+        &lt;T <span class="kw">as </span>ClientModule&gt;::get_balance(
+            <span class="self">self</span>,
+            <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>subscribe_balance_changes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">&#39;static</span>, ()&gt; {

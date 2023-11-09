@@ -180,6 +180,9 @@
 <a href="#180" id="180">180</a>
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::PathBuf;
 
@@ -189,7 +192,7 @@
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleInit};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
-<span class="kw">use </span>fedimint_core::db::IDatabase;
+<span class="kw">use </span>fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
 <span class="kw">use </span>fedimint_core::module::DynServerModuleInit;
 <span class="kw">use </span>fedimint_ln_client::LightningClientGen;
 <span class="kw">use </span>fedimint_ln_server::LightningGen;
@@ -273,8 +276,9 @@
 
     <span class="kw">match </span>options.command {
         DbCommand::List { prefix } =&gt; {
-            <span class="kw">let </span>rocksdb: Box&lt;<span class="kw">dyn </span>IDatabase&gt; =
-                Box::new(fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database).unwrap());
+            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                .unwrap()
+                .into_database();
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
             <span class="kw">let </span>prefix_iter = dbtx
                 .raw_find_by_prefix(<span class="kw-2">&amp;</span>prefix)
@@ -284,25 +288,27 @@
             <span class="kw">for </span>(key, value) <span class="kw">in </span>prefix_iter {
                 print_kv(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value);
             }
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;Error committing to RocksDb&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
         DbCommand::Write { key, value } =&gt; {
-            <span class="kw">let </span>rocksdb: Box&lt;<span class="kw">dyn </span>IDatabase&gt; =
-                Box::new(fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database).unwrap());
+            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                .unwrap()
+                .into_database();
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
             dbtx.raw_insert_bytes(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>value)
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Error inserting entry into RocksDb&quot;</span>);
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;Error committing to RocksDb&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
         DbCommand::Delete { key } =&gt; {
-            <span class="kw">let </span>rocksdb: Box&lt;<span class="kw">dyn </span>IDatabase&gt; =
-                Box::new(fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database).unwrap());
+            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                .unwrap()
+                .into_database();
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
             dbtx.raw_remove_entry(<span class="kw-2">&amp;</span>key)
                 .<span class="kw">await
                 </span>.expect(<span class="string">&quot;Error removing entry from RocksDb&quot;</span>);
-            dbtx.commit_tx().<span class="kw">await</span>.expect(<span class="string">&quot;Error committing to RocksDb&quot;</span>);
+            dbtx.commit_tx().<span class="kw">await</span>;
         }
         DbCommand::Dump {
             cfg_dir,

@@ -308,6 +308,12 @@
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -441,9 +447,9 @@
         client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>);
     }
     <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
-        client_builder.with_database(fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>)
+        client_builder.with_raw_database(fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>)
     } <span class="kw">else </span>{
-        client_builder.with_database(fedimint_core::db::mem_impl::MemDatabase::new())
+        client_builder.with_raw_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
 
     <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
@@ -565,7 +571,13 @@
 <span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientArc) -&gt; anyhow::Result&lt;TieredSummary&gt; {
     <span class="kw">let </span>(mint_client, <span class="kw">_</span>) = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
     <span class="kw">let </span>summary = mint_client
-        .get_wallet_summary(<span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>))
+        .get_wallet_summary(
+            <span class="kw-2">&amp;mut </span>client
+                .db()
+                .begin_transaction()
+                .<span class="kw">await
+                </span>.dbtx_ref_with_prefix_module_id(<span class="number">1</span>),
+        )
         .<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(summary)
 }
@@ -578,7 +590,7 @@
     <span class="kw">let </span>(mint_client, client_module_instance) =
         client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.with_module_prefix(client_module_instance.id);
+    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.dbtx_ref_with_prefix_module_id(client_module_instance.id);
     <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::new();
     <span class="kw">let </span>operation_id = OperationId::new_random();
     <span class="kw">for _ in </span><span class="number">0</span>..quantity {

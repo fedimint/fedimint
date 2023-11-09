@@ -130,7 +130,7 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::ModuleDatabaseTransaction;
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_dummy_common::DummyOutputOutcome;
@@ -205,7 +205,7 @@
     }
 }
 
-<span class="kw">async fn </span>add_funds(amount: Amount, <span class="kw-2">mut </span>dbtx: ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+<span class="kw">async fn </span>add_funds(amount: Amount, <span class="kw-2">mut </span>dbtx: DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) {
     <span class="kw">let </span>funds = get_funds(<span class="kw-2">&amp;mut </span>dbtx).<span class="kw">await </span>+ amount;
     dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV0, <span class="kw-2">&amp;</span>funds).<span class="kw">await</span>;
 }

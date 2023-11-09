@@ -156,7 +156,7 @@
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{get_config_from_db, ClientBuilder, FederationInfo};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::thread_rng;
@@ -245,7 +245,7 @@
             <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
                 GatewayError::DatabaseError(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Error opening rocksdb: {e:?}&quot;</span>))
             })<span class="question-mark">?</span>;
-            client_builder.with_database(rocksdb);
+            client_builder.with_raw_database(rocksdb);
         }
 
         <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder

@@ -590,14 +590,16 @@
 <a href="#590" id="590">590</a>
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::db::{
-    IDatabase, IDatabaseTransaction, IDatabaseTransactionOps, ISingleUseDatabaseTransaction,
-    PrefixStream, SingleUseDatabaseTransaction,
+    IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
+    PrefixStream,
 };
 <span class="kw">use </span>futures::stream;
 <span class="kw">pub use </span>rocksdb;
@@ -605,8 +607,6 @@
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>RocksDb(rocksdb::OptimisticTransactionDB);
-
-<span class="kw">pub struct </span>RocksDbReadOnly(rocksdb::DB);
 
 <span class="kw">pub struct </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(rocksdb::Transaction&lt;<span class="lifetime">&#39;a</span>, rocksdb::OptimisticTransactionDB&gt;);
 
@@ -621,6 +621,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
     </span>}
 }
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>RocksDbReadOnly(rocksdb::DB);
+
+<span class="kw">pub struct </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>rocksdb::DB);
 
 <span class="kw">impl </span>RocksDbReadOnly {
     <span class="kw">pub fn </span>open_read_only(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;RocksDbReadOnly, rocksdb::Error&gt; {
@@ -667,8 +672,9 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>IDatabase <span class="kw">for </span>RocksDb {
-    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ISingleUseDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
+</span><span class="kw">impl </span>IRawDatabase <span class="kw">for </span>RocksDb {
+    <span class="kw">type </span>Transaction&lt;<span class="lifetime">&#39;a</span>&gt; = RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt;;
+    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; RocksDbTransaction {
         <span class="kw">let </span><span class="kw-2">mut </span>optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(<span class="bool-val">true</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>rocksdb_tx = RocksDbTransaction(
@@ -679,13 +685,21 @@
             .set_tx_savepoint()
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;setting tx savepoint failed&quot;</span>);
-        <span class="kw">let </span>single_use = SingleUseDatabaseTransaction::new(rocksdb_tx);
-        Box::new(single_use)
+
+        rocksdb_tx
     }
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl </span>IRawDatabase <span class="kw">for </span>RocksDbReadOnly {
+    <span class="kw">type </span>Transaction&lt;<span class="lifetime">&#39;a</span>&gt; = RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt;;
+    <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+        RocksDbReadOnlyTransaction(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
+    }
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         fedimint_core::task::block_in_place(|| {
             <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.get(key).unwrap();
@@ -794,7 +808,10 @@
             Box::pin(stream::iter(rocksdb_iter))
         }))
     }
+}
 
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="prelude-val">Ok</span>(fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.rollback_to_savepoint()
@@ -809,7 +826,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         fedimint_core::task::block_in_place(|| {
             <span class="self">self</span>.<span class="number">0</span>.commit()<span class="question-mark">?</span>;
@@ -819,7 +836,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>IDatabaseTransactionOps&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>RocksDbReadOnly {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key: <span class="kw-2">&amp;</span>[u8], _value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot insert into a read only transaction&quot;</span>);
     }
@@ -879,7 +896,10 @@
             Box::pin(stream::iter(rocksdb_iter))
         }))
     }
+}
 
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot rollback a read only transaction&quot;</span>);
     }
@@ -890,7 +910,7 @@
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>IDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>RocksDbReadOnly {
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">panic!</span>(<span class="string">&quot;Cannot commit a read only transaction&quot;</span>);
     }
@@ -898,7 +918,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>fedimint_rocksdb_tests {
-    <span class="kw">use </span>fedimint_core::db::{notifications, Database};
+    <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
@@ -1020,20 +1040,9 @@
 
         fedimint_core::db::verify_module_db(
             open_temp_db(<span class="string">&quot;fcb-rocksdb-test-module-db&quot;</span>),
-            module_db.new_isolated(module_instance_id),
+            module_db.with_prefix_module_id(module_instance_id),
         )
         .<span class="kw">await</span>;
-    }
-
-    <span class="attr">#[tokio::test(flavor = <span class="string">&quot;multi_thread&quot;</span>)]
-    #[should_panic(expected = <span class="string">&quot;Cannot isolate and already isolated database.&quot;</span>)]
-    </span><span class="kw">async fn </span>test_cannot_isolate_already_isolated_db() {
-        <span class="kw">let </span>module_instance_id = <span class="number">1</span>;
-        <span class="kw">let </span>db = open_temp_db(<span class="string">&quot;rocksdb-test-already-isolated&quot;</span>).new_isolated(module_instance_id);
-
-        <span class="comment">// try to isolate the database again
-        </span><span class="kw">let </span>module_instance_id = <span class="number">2</span>;
-        db.new_isolated(module_instance_id);
     }
 
     <span class="attr">#[test]
@@ -1147,13 +1156,8 @@
         }
         <span class="comment">// Test readonly implementation
         </span><span class="kw">let </span>db_readonly = RocksDbReadOnly::open_read_only(path).unwrap();
-        <span class="kw">let </span>single_use = SingleUseDatabaseTransaction::new(db_readonly);
-        <span class="kw">let </span>notifications = notifications::Notifications::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = fedimint_core::db::DatabaseTransaction::new(
-            Box::new(single_use),
-            ModuleDecoderRegistry::default(),
-            <span class="kw-2">&amp;</span>notifications,
-        );
+        <span class="kw">let </span>db_readonly = Database::new(db_readonly, Default::default());
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db_readonly.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>query = dbtx
             .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
             .<span class="kw">await

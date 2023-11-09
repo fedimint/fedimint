@@ -1711,6 +1711,18 @@
 <a href="#1711" id="1711">1711</a>
 <a href="#1712" id="1712">1712</a>
 <a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1722,7 +1734,9 @@
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
-<span class="kw">use </span>fedimint_core::db::{DatabaseVersion, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    DatabaseTransactionRef, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
@@ -1829,7 +1843,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>lightning: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
@@ -2080,7 +2094,7 @@
 
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;LightningConsensusItem&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;LightningConsensusItem&gt; = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
@@ -2102,7 +2116,7 @@
 
     <span class="kw">async fn </span>process_consensus_item&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
         consensus_item: LightningConsensusItem,
         peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
@@ -2254,7 +2268,7 @@
 
     <span class="kw">async fn </span>process_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>LightningInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>account = dbtx
@@ -2341,7 +2355,7 @@
 
     <span class="kw">async fn </span>process_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>LightningOutput,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
@@ -2540,7 +2554,7 @@
 
     <span class="kw">async fn </span>output_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningOutputOutcome&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point)).<span class="kw">await
@@ -2548,7 +2562,7 @@
 
     <span class="kw">async fn </span>audit(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         audit: <span class="kw-2">&amp;mut </span>Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -2653,7 +2667,7 @@
             </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>)
     }
 
-    <span class="kw">async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
+    <span class="kw">async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; u64 {
         <span class="kw">let </span>peer_count = <span class="number">3 </span>* (<span class="self">self</span>.cfg.consensus.threshold() / <span class="number">2</span>) + <span class="number">1</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
@@ -2674,7 +2688,7 @@
         counts[peer_count / <span class="number">2</span>]
     }
 
-    <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+    <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">while </span>block_height &gt;= <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
             sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
         }
@@ -2695,7 +2709,7 @@
 
     <span class="kw">async fn </span>get_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>OfferKey(payment_hash)).<span class="kw">await
@@ -2712,7 +2726,7 @@
 
     <span class="kw">async fn </span>get_contract_account(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         contract_id: ContractId,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
         dbtx.get_value(<span class="kw-2">&amp;</span>ContractKey(contract_id)).<span class="kw">await
@@ -2785,7 +2799,7 @@
 
     <span class="kw">async fn </span>list_gateways(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
         <span class="kw">let </span>stream = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
         stream
@@ -2805,7 +2819,7 @@
 
     <span class="kw">async fn </span>register_gateway(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         gateway: LightningGatewayAnnouncement,
     ) {
         <span class="comment">// Garbage collect expired gateways (since we&#39;re already writing to the DB)
@@ -2822,7 +2836,7 @@
         .<span class="kw">await</span>;
     }
 
-    <span class="kw">async fn </span>delete_expired_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+    <span class="kw">async fn </span>delete_expired_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="kw">let </span>expired_gateway_keys = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
             .<span class="kw">await
@@ -2849,7 +2863,7 @@
     <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
     <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
     <span class="kw">use </span>fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -2942,7 +2956,11 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
         server
-            .process_output(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(<span class="number">42</span>), <span class="kw-2">&amp;</span>output, out_point)
+            .process_output(
+                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(<span class="number">42</span>),
+                <span class="kw-2">&amp;</span>output,
+                out_point,
+            )
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;First time works&quot;</span>);
 
@@ -2961,7 +2979,11 @@
 
         <span class="macro">assert_matches!</span>(
             server
-                .process_output(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(<span class="number">42</span>), <span class="kw-2">&amp;</span>output2, out_point2)
+                .process_output(
+                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(<span class="number">42</span>),
+                    <span class="kw-2">&amp;</span>output2,
+                    out_point2
+                )
                 .<span class="kw">await</span>,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>)
         );
@@ -2972,7 +2994,7 @@
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(<span class="number">42</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.dbtx_ref_with_prefix_module_id(<span class="number">42</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
         <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;mut </span>tg).unwrap();
 
@@ -3037,7 +3059,7 @@
         <span class="kw">let </span>(server_cfg, <span class="kw">_</span>) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.with_module_prefix(<span class="number">42</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.dbtx_ref_with_prefix_module_id(<span class="number">42</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
         <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;mut </span>tg).unwrap();
 
@@ -3100,7 +3122,9 @@
     <span class="kw">use </span>anyhow::{ensure, Context};
     <span class="kw">use </span>bitcoin_hashes::Hash;
     <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_LN;
-    <span class="kw">use </span>fedimint_core::db::{apply_migrations, DatabaseTransaction};
+    <span class="kw">use </span>fedimint_core::db::{
+        apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    };
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, DynServerModuleInit};

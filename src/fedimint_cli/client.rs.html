@@ -522,6 +522,12 @@
 <a href="#522" id="522">522</a>
 <a href="#523" id="523">523</a>
 <a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -1005,7 +1011,13 @@
     <span class="kw">let </span>(wallet_client, <span class="kw">_</span>) =
         client.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_wallet_client::KIND);
     <span class="kw">let </span>summary = mint_client
-        .get_wallet_summary(<span class="kw-2">&amp;mut </span>client.db().begin_transaction().<span class="kw">await</span>.with_module_prefix(<span class="number">1</span>))
+        .get_wallet_summary(
+            <span class="kw-2">&amp;mut </span>client
+                .db()
+                .begin_transaction()
+                .<span class="kw">await
+                </span>.dbtx_ref_with_prefix_module_id(<span class="number">1</span>),
+        )
         .<span class="kw">await</span>;
     <span class="prelude-val">Ok</span>(serde_json::to_value(InfoResponse {
         federation_id: client.federation_id(),

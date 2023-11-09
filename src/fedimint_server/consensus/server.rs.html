@@ -822,7 +822,9 @@
 <span class="kw">use </span>fedimint_core::api::{FederationApiExt, GlobalFederationApi, WsFederationApi};
 <span class="kw">use </span>fedimint_core::block::{AcceptedItem, Block, SchnorrSignature, SignedBlock};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
-<span class="kw">use </span>fedimint_core::db::{apply_migrations, Database, DatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    apply_migrations, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
@@ -931,7 +933,7 @@
             <span class="macro">info!</span>(target: LOG_CORE,
                 module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">&quot;Init module&quot;</span>);
 
-            <span class="kw">let </span>isolated_db = db.new_isolated(<span class="kw-2">*</span>module_id);
+            <span class="kw">let </span>isolated_db = db.with_prefix_module_id(<span class="kw-2">*</span>module_id);
 
             apply_migrations(
                 <span class="kw-2">&amp;</span>isolated_db,
@@ -1399,7 +1401,7 @@
         <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
             module
                 .audit(
-                    <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id),
+                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
                     <span class="kw-2">&amp;mut </span>audit,
                     module_instance_id,
                 )
@@ -1429,7 +1431,8 @@
 
         <span class="kw">match </span>consensus_item {
             ConsensusItem::Module(module_item) =&gt; {
-                <span class="kw">let </span>moduletx = <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_item.module_instance_id());
+                <span class="kw">let </span>moduletx =
+                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_item.module_instance_id());
 
                 <span class="self">self</span>.modules
                     .get_expect(module_item.module_instance_id())
@@ -1461,7 +1464,7 @@
             }
             ConsensusItem::ClientConfigSignatureShare(signature_share) =&gt; {
                 <span class="kw">if </span>dbtx
-                    .get_isolated()
+                    .dbtx_ref()
                     .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
                     .<span class="kw">await
                     </span>.is_some()
@@ -1589,7 +1592,7 @@
                     <span class="kw">for </span>(instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
                         <span class="kw">let </span>items = module
                             .consensus_proposal(
-                                <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance_id),
+                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance_id),
                                 instance_id,
                             )
                             .<span class="kw">await
@@ -1600,10 +1603,7 @@
                     }
 
                     <span class="comment">// Add a signature share for the client config hash
-                    </span><span class="kw">let </span>sig = dbtx
-                        .get_isolated()
-                        .get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey)
-                        .<span class="kw">await</span>;
+                    </span><span class="kw">let </span>sig = dbtx.dbtx_ref().get_value(<span class="kw-2">&amp;</span>ClientConfigSignatureKey).<span class="kw">await</span>;
 
                     <span class="kw">if </span>sig.is_none() {
                         <span class="kw">let </span>timing = timing::TimeReporter::new(<span class="string">&quot;sign client config&quot;</span>);

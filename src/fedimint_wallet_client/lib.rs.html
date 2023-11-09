@@ -742,6 +742,8 @@
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>client_db;
@@ -768,7 +770,9 @@
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
@@ -885,7 +889,7 @@
                         <span class="kw">let </span>(operation_id, sm, address) = wallet_client
                             .get_deposit_address(
                                 valid_until,
-                                <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance.id),
+                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance.id),
                             )
                             .<span class="kw">await</span>;
 
@@ -1185,7 +1189,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>wallet_client_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
@@ -1328,7 +1332,7 @@
     <span class="kw">pub async fn </span>get_deposit_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         valid_until: SystemTime,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; (OperationId, WalletClientStates, Address) {
         <span class="kw">let </span>tweak_key = <span class="self">self
             </span>.module_root_secret
@@ -1433,7 +1437,7 @@
 }
 
 <span class="doccomment">/// Returns the child index to derive the next peg-in tweak key from.
-</span><span class="kw">async fn </span>get_next_peg_in_tweak_child_id(dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; ChildId {
+</span><span class="kw">async fn </span>get_next_peg_in_tweak_child_id(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; ChildId {
     <span class="kw">let </span>index = dbtx.get_value(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
     dbtx.insert_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>(index + <span class="number">1</span>))
         .<span class="kw">await</span>;

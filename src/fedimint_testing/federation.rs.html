@@ -277,7 +277,7 @@
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);
         client_builder
             .with_federation_info(FederationInfo::from_config(client_config).<span class="kw">await</span>.unwrap());
-        client_builder.with_database(MemDatabase::new());
+        client_builder.with_raw_database(MemDatabase::new());
         <span class="kw">let </span>client_secret = <span class="kw">match </span>client_builder
             .load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;()
             .<span class="kw">await

@@ -1758,6 +1758,7 @@
 <a href="#1758" id="1758">1758</a>
 <a href="#1759" id="1759">1759</a>
 <a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -1792,7 +1793,9 @@
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, ModuleDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
@@ -2147,7 +2150,7 @@
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>(operation_id, states, notes) = mint
                             .spend_notes_oob(
-                                <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(instance.id),
+                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance.id),
                                 notes_selector,
                                 requested_amount,
                                 try_cancel_after,
@@ -2342,7 +2345,7 @@
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>mint_client_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
@@ -2546,7 +2549,7 @@
 
     <span class="kw">async fn </span>backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         executor: Executor&lt;DynGlobalClientContext&gt;,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
@@ -2567,9 +2570,11 @@
         api: DynGlobalApi,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if </span>!<span class="self">Self</span>::get_all_spendable_notes(<span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(module_instance_id))
-            .<span class="kw">await
-            </span>.is_empty()
+        <span class="kw">if </span>!<span class="self">Self</span>::get_all_spendable_notes(
+            <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+        )
+        .<span class="kw">await
+        </span>.is_empty()
         {
             <span class="macro">warn!</span>(
                 target: LOG_TARGET,
@@ -2626,7 +2631,7 @@
 
     <span class="kw">async fn </span>wipe(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor&lt;DynGlobalClientContext&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
@@ -2642,7 +2647,7 @@
 
     <span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
@@ -2651,7 +2656,7 @@
 
     <span class="kw">async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         amount: Amount,
     ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
@@ -2667,7 +2672,7 @@
         <span class="self">self</span>.await_output_finalized(operation_id, out_point).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
+    <span class="kw">async fn </span>get_balance(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
         <span class="self">self</span>.get_wallet_summary(dbtx).<span class="kw">await</span>.total_amount()
     }
 
@@ -2707,7 +2712,7 @@
 
     <span class="kw">async fn </span>leave(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
         executor: Executor&lt;DynGlobalClientContext&gt;,
         _api: DynGlobalApi,
@@ -2731,10 +2736,7 @@
 
 <span class="kw">impl </span>MintClientModule {
     <span class="doccomment">/// Returns the number of held e-cash notes per denomination
-    </span><span class="kw">pub async fn </span>get_wallet_summary(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; TieredSummary {
+    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; TieredSummary {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
             .<span class="kw">await
             </span>.fold(
@@ -2753,7 +2755,7 @@
     /// e-cash note denomination held.
     </span><span class="kw">pub async fn </span>create_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
@@ -2847,7 +2849,7 @@
     </span><span class="doccomment">/// Creates a mint input of at least `min_amount`.
     </span><span class="kw">pub async fn </span>create_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         operation_id: OperationId,
         min_amount: Amount,
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
@@ -2918,7 +2920,7 @@
 
     <span class="kw">async fn </span>spend_notes_oob(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
         requested_amount: Amount,
         try_cancel_after: Duration,
@@ -3016,7 +3018,7 @@
 
     <span class="doccomment">/// Select notes with `requested_amount` using `notes_selector`.
     </span><span class="kw">async fn </span>select_notes(
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
         requested_amount: Amount,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
@@ -3030,7 +3032,7 @@
     </span>}
 
     <span class="kw">async fn </span>get_all_spendable_notes(
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; TieredMulti&lt;SpendableNote&gt; {
         TieredMulti::from_iter(
             (dbtx
@@ -3043,7 +3045,7 @@
         )
     }
 
-    <span class="kw">async fn </span>wipe_all_spendable_notes(dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;) {
+    <span class="kw">async fn </span>wipe_all_spendable_notes(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) {
         <span class="macro">debug!</span>(target: LOG_TARGET, <span class="string">&quot;Wiping all spendable notes&quot;</span>);
         dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix).<span class="kw">await</span>;
         <span class="macro">assert!</span>(<span class="self">Self</span>::get_all_spendable_notes(dbtx).<span class="kw">await</span>.is_empty());
@@ -3051,7 +3053,7 @@
 
     <span class="kw">async fn </span>get_next_note_index(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         amount: Amount,
     ) -&gt; NoteIndex {
         NoteIndex(
@@ -3095,7 +3097,7 @@
     </span><span class="kw">async fn </span>new_note_secret(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; DerivableSecret {
         <span class="kw">let </span>new_idx = <span class="self">self</span>.get_next_note_index(dbtx, amount).<span class="kw">await</span>;
         dbtx.insert_entry(<span class="kw-2">&amp;</span>NextECashNoteIndexKey(amount), <span class="kw-2">&amp;</span>new_idx.next().as_u64())
@@ -3106,7 +3108,7 @@
     <span class="kw">pub async fn </span>new_ecash_note(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; (NoteIssuanceRequest, BlindNonce) {
         <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(amount, dbtx).<span class="kw">await</span>;
         NoteIssuanceRequest::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, secret)

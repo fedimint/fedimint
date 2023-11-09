@@ -267,6 +267,10 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 
@@ -275,7 +279,11 @@
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="kw">use </span><span class="kw">crate</span>::db::{DatabaseKey, DatabaseLookup, DatabaseRecord, ModuleDatabaseTransaction};
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    DatabaseKey, DatabaseLookup, DatabaseRecord, DatabaseTransactionRef,
+    IDatabaseTransactionOpsCoreTyped,
+};
+<span class="kw">use </span><span class="kw">crate</span>::task::{MaybeSend, MaybeSync};
 
 <span class="attr">#[derive(Default)]
 </span><span class="kw">pub struct </span>Audit {
@@ -293,12 +301,12 @@
 
     <span class="kw">pub async fn </span>add_items&lt;KP, F&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>ModuleDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         module_instance_id: ModuleInstanceId,
         key_prefix: <span class="kw-2">&amp;</span>KP,
         to_milli_sat: F,
     ) <span class="kw">where
-        </span>KP: DatabaseLookup + <span class="lifetime">&#39;static</span>,
+        </span>KP: DatabaseLookup + <span class="lifetime">&#39;static </span>+ MaybeSend + MaybeSync,
         KP::Record: DatabaseKey,
         F: Fn(KP::Record, &lt;&lt;KP <span class="kw">as </span>DatabaseLookup&gt;::Record <span class="kw">as </span>DatabaseRecord&gt;::Value) -&gt; i64,
     {

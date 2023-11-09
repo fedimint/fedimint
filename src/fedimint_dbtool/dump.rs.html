@@ -334,13 +334,6 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -350,8 +343,9 @@
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
-<span class="kw">use </span>fedimint_core::db::notifications::Notifications;
-<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersionKey, SingleUseDatabaseTransaction};
+<span class="kw">use </span>fedimint_core::db::{
+    Database, DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::SerdeSignatureShare;
 <span class="kw">use </span>fedimint_core::module::__reexports::serde_json;
@@ -379,9 +373,9 @@
 
 <span class="doccomment">/// Structure to hold the deserialized structs from the database.
 /// Also includes metadata on which sections of the database to read.
-</span><span class="kw">pub struct </span>DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt; {
+</span><span class="kw">pub struct </span>DatabaseDump {
     serialized: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt;,
-    read_only: DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+    read_only: Database,
     modules: Vec&lt;String&gt;,
     prefixes: Vec&lt;String&gt;,
     cfg: <span class="prelude-ty">Option</span>&lt;ServerConfig&gt;,
@@ -390,7 +384,7 @@
     client_module_inits: ClientModuleInitRegistry,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl </span>DatabaseDump {
     <span class="kw">pub async fn </span>new(
         cfg_dir: PathBuf,
         data_dir: String,
@@ -399,17 +393,13 @@
         client_module_inits: ClientModuleInitRegistry,
         modules: Vec&lt;String&gt;,
         prefixes: Vec&lt;String&gt;,
-    ) -&gt; anyhow::Result&lt;DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt;&gt; {
+    ) -&gt; anyhow::Result&lt;DatabaseDump&gt; {
         <span class="kw">let </span>read_only = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir.clone()) {
-            <span class="prelude-val">Ok</span>(db) =&gt; db,
+            <span class="prelude-val">Ok</span>(db) =&gt; Database::new(db, Default::default()),
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                 <span class="macro">panic!</span>(<span class="string">&quot;Error reading RocksDB database. Quitting...&quot;</span>);
             }
         };
-        <span class="kw">let </span>single_use = SingleUseDatabaseTransaction::new(read_only);
-
-        <span class="comment">// leak here is OK, it only happens once.
-        </span><span class="kw">let </span>notifications = Box::leak(Box::new(Notifications::new()));
 
         <span class="kw">let </span>(server_cfg, client_cfg, decoders) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfg) =
             read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).context(<span class="string">&quot;Failed to read server config&quot;</span>)
@@ -424,19 +414,14 @@
         } <span class="kw">else </span>{
             <span class="comment">// Check if this database is a client database by reading the `ClientConfig`
             // from the database.
-            </span><span class="kw">let </span>read_only_client = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir) {
-                <span class="prelude-val">Ok</span>(db) =&gt; db,
+            </span><span class="kw">let </span>db = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir) {
+                <span class="prelude-val">Ok</span>(db) =&gt; Database::new(db, Default::default()),
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                     <span class="macro">panic!</span>(<span class="string">&quot;Error reading RocksDB database. Quitting...&quot;</span>);
                 }
             };
 
-            <span class="kw">let </span>single_use = SingleUseDatabaseTransaction::new(read_only_client);
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = DatabaseTransaction::new(
-                Box::new(single_use),
-                ModuleDecoderRegistry::default(),
-                notifications,
-            );
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
             <span class="kw">let </span>client_cfg = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefix)
                 .<span class="kw">await
@@ -457,11 +442,9 @@
             }
         };
 
-        <span class="kw">let </span>dbtx = DatabaseTransaction::new(Box::new(single_use), decoders, notifications);
-
         <span class="prelude-val">Ok</span>(DatabaseDump {
             serialized: BTreeMap::new(),
-            read_only: dbtx,
+            read_only: read_only.with_decoders(decoders),
             modules,
             prefixes,
             cfg: server_cfg,
@@ -472,7 +455,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; DatabaseDump&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl </span>DatabaseDump {
     <span class="doccomment">/// Prints the contents of the BTreeMap to a pretty JSON string
     </span><span class="kw">fn </span>print_database(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>json = serde_json::to_string_pretty(<span class="kw-2">&amp;</span><span class="self">self</span>.serialized).unwrap();
@@ -488,7 +471,8 @@
         <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; !<span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span>kind.to_string()) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
-        <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = <span class="self">self</span>.read_only.with_module_prefix(<span class="kw-2">*</span>module_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = dbtx.dbtx_ref_with_prefix_module_id(<span class="kw-2">*</span>module_id);
 
         <span class="kw">match </span>inits.get(kind) {
             <span class="prelude-val">None </span>=&gt; {
@@ -543,7 +527,8 @@
     }
 
     <span class="kw">async fn </span>serialize_gateway(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.get_isolated();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = dbtx.dbtx_ref();
         <span class="kw">let </span>gateway_serialized = Gateway::dump_database(<span class="kw-2">&amp;mut </span>dbtx, <span class="self">self</span>.prefixes.clone())
             .<span class="kw">await
             </span>.collect::&lt;BTreeMap&lt;String, <span class="kw">_</span>&gt;&gt;();
@@ -597,7 +582,8 @@
     /// retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_consensus_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>consensus: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
-        <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span><span class="self">self</span>.read_only;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span>dbtx;
         <span class="kw">let </span>prefix_names = <span class="kw-2">&amp;</span><span class="self">self</span>.prefixes;
 
         <span class="kw">let </span>filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|f| {

@@ -203,7 +203,7 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
 
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::util::broadcaststream::BroadcastStream;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>futures::StreamExt;

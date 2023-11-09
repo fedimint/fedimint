@@ -114,7 +114,7 @@
         <span class="kw">let </span>meta = modules
             .get_expect(input.module_instance_id())
             .process_input(
-                <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(input.module_instance_id()),
+                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(input.module_instance_id()),
                 input,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -129,7 +129,7 @@
         <span class="kw">let </span>amount = modules
             .get_expect(output.module_instance_id())
             .process_output(
-                <span class="kw-2">&amp;mut </span>dbtx.with_module_prefix(output.module_instance_id()),
+                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(output.module_instance_id()),
                 output,
                 OutPoint { txid, out_idx },
             )

@@ -1744,15 +1744,6 @@
 <a href="#1744" id="1744">1744</a>
 <a href="#1745" id="1745">1745</a>
 <a href="#1746" id="1746">1746</a>
-<a href="#1747" id="1747">1747</a>
-<a href="#1748" id="1748">1748</a>
-<a href="#1749" id="1749">1749</a>
-<a href="#1750" id="1750">1750</a>
-<a href="#1751" id="1751">1751</a>
-<a href="#1752" id="1752">1752</a>
-<a href="#1753" id="1753">1753</a>
-<a href="#1754" id="1754">1754</a>
-<a href="#1755" id="1755">1755</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1846,7 +1837,9 @@
 <span class="kw">use </span>fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
-<span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, IDatabase};
+<span class="kw">use </span>fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabase,
+};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
@@ -2721,7 +2714,7 @@
             .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;Module is not of type {}&quot;</span>, std::any::type_name::&lt;M&gt;()));
         <span class="kw">let </span>instance = ClientModuleInstance {
             id,
-            db: <span class="self">self</span>.db().new_isolated(id),
+            db: <span class="self">self</span>.db().with_prefix_module_id(id),
             api: <span class="self">self</span>.api().with_module(id),
         };
         (module, instance)
@@ -3085,7 +3078,7 @@
 }
 
 <span class="kw">pub enum </span>DatabaseSource {
-    Fresh(Box&lt;<span class="kw">dyn </span>IDatabase&gt;),
+    Fresh(Database),
     Reuse(ClientArc),
 }
 
@@ -3140,13 +3133,13 @@
     // TODO: impl config from federation
 
     </span><span class="doccomment">/// Uses this database to store the client state
-    </span><span class="kw">pub fn </span>with_database&lt;D: IDatabase + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: D) {
-        <span class="self">self</span>.with_dyn_database(Box::new(db));
+    </span><span class="kw">pub fn </span>with_raw_database&lt;D: IRawDatabase + <span class="lifetime">&#39;static</span>&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: D) {
+        <span class="self">self</span>.with_database(db.into());
     }
 
-    <span class="doccomment">/// Uses this database to store the client state, allowing for flexibility
-    /// on the caller side by accepting a type-erased trait object.
-    </span><span class="kw">pub fn </span>with_dyn_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: Box&lt;<span class="kw">dyn </span>IDatabase&gt;) {
+    <span class="comment">// /// Uses this database to store the client state, allowing for flexibility
+    // /// on the caller side by accepting a type-erased trait object.
+    </span><span class="kw">pub fn </span>with_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: Database) {
         <span class="kw">let </span>was_replaced = <span class="self">self</span>.db.replace(DatabaseSource::Fresh(db)).is_some();
         <span class="macro">assert!</span>(
             !was_replaced,
@@ -3173,14 +3166,9 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         secret: T,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>fake_notifications = Default::default();
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
-            DatabaseSource::Fresh(db) =&gt; DatabaseTransaction::new(
-                db.begin_transaction().<span class="kw">await</span>,
-                Default::default(),
-                <span class="kw-2">&amp;</span>fake_notifications,
-            ),
-            DatabaseSource::Reuse(db) =&gt; db.db().begin_transaction().<span class="kw">await</span>,
+            DatabaseSource::Fresh(db) =&gt; db.begin_transaction().<span class="kw">await</span>,
+            DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
         };
 
         <span class="comment">// Don&#39;t overwrite an existing secret
@@ -3197,14 +3185,9 @@
     }
 
     <span class="kw">pub async fn </span>load_decodable_client_secret&lt;T: Decodable&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
-        <span class="kw">let </span>fake_notifications = Default::default();
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="kw">match </span><span class="self">self</span>.db.as_ref().ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database provided&quot;</span>))<span class="question-mark">? </span>{
-            DatabaseSource::Fresh(db) =&gt; DatabaseTransaction::new(
-                db.begin_transaction().<span class="kw">await</span>,
-                Default::default(),
-                <span class="kw-2">&amp;</span>fake_notifications,
-            ),
-            DatabaseSource::Reuse(db) =&gt; db.db().begin_transaction().<span class="kw">await</span>,
+            DatabaseSource::Fresh(db) =&gt; db.begin_transaction().<span class="kw">await</span>,
+            DatabaseSource::Reuse(client) =&gt; client.db().begin_transaction().<span class="kw">await</span>,
         };
 
         <span class="kw">let </span>client_secret = dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await</span>;
@@ -3255,7 +3238,6 @@
     </span><span class="kw">pub async fn </span>build_stopped(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientArc&gt; {
         <span class="kw">let </span>(config, decoders, db) = <span class="kw">match </span><span class="self">self</span>.db.ok_or(<span class="macro">anyhow!</span>(<span class="string">&quot;No database was provided&quot;</span>))<span class="question-mark">? </span>{
             DatabaseSource::Fresh(db) =&gt; {
-                <span class="kw">let </span>db = Database::new_from_box(db, ModuleDecoderRegistry::default());
                 <span class="kw">let </span>config = get_config(<span class="kw-2">&amp;</span>db, <span class="self">self</span>.config.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
@@ -3272,7 +3254,7 @@
                     ModuleKind::from_static_str(<span class="string">&quot;tx_submission&quot;</span>),
                     tx_submission_sm_decoder(),
                 );
-                <span class="kw">let </span>db = db.new_with_decoders(decoders.clone());
+                <span class="kw">let </span>db = db.with_decoders(decoders.clone());
 
                 (config, decoders, db)
             }
