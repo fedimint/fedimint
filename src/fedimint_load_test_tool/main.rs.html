@@ -792,6 +792,20 @@
 <a href="#792" id="792">792</a>
 <a href="#793" id="793">793</a>
 <a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -823,7 +837,8 @@
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::common::{
-    build_client, do_spend_notes, remint_denomination, switch_default_gateway, try_get_notes_cli,
+    build_client, do_spend_notes, get_invite_code_cli, remint_denomination, switch_default_gateway,
+    try_get_notes_cli,
 };
 <span class="kw">pub mod </span>common;
 
@@ -901,7 +916,7 @@
 
     <span class="attr">#[arg(
         long,
-        help = <span class="string">&quot;Notes for the test. If none, will call fedimint-cli spend&quot;
+        help = <span class="string">&quot;Notes for the test. If none and no funds on archive, will call fedimint-cli spend&quot;
     </span>)]
     </span>initial_notes: <span class="prelude-ty">Option</span>&lt;OOBNotes&gt;,
 
@@ -1042,14 +1057,15 @@
             <span class="kw">let </span>invite_code = <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = args.invite_code {
                 <span class="prelude-val">Some</span>(InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">&quot;invalid invite code&quot;</span>)<span class="question-mark">?</span>)
             } <span class="kw">else </span>{
-                <span class="prelude-val">None
-            </span>};
-
-            <span class="kw">let </span>initial_notes = <span class="kw">if let </span><span class="prelude-val">Some</span>(initial_notes) = args.initial_notes {
-                initial_notes
-            } <span class="kw">else </span>{
-                try_get_notes_cli(<span class="kw-2">&amp;</span>Amount::from_sats(<span class="number">2000</span>), <span class="number">5</span>).<span class="kw">await</span><span class="question-mark">?
-            </span>};
+                <span class="comment">// Try to get an invite code through cli in a best effort basis
+                </span><span class="kw">match </span>get_invite_code_cli().<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(invite_code) =&gt; <span class="prelude-val">Some</span>(invite_code),
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;No invite code provided and failed to get one with &#39;{e}&#39; error, will try to proceed without one...&quot;</span>);
+                        <span class="prelude-val">None
+                    </span>}
+                }
+            };
 
             <span class="kw">let </span>gateway_id = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_id) = args.gateway_id {
                 <span class="prelude-val">Some</span>(gateway_id)
@@ -1079,7 +1095,7 @@
                 opts.archive_dir,
                 opts.users,
                 invite_code,
-                initial_notes,
+                args.initial_notes,
                 args.generate_invoice_with,
                 args.invoices_per_user,
                 Duration::from_secs(args.ln_payment_sleep_secs),
@@ -1117,7 +1133,7 @@
     archive_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
     users: u16,
     invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
-    initial_notes: OOBNotes,
+    initial_notes: <span class="prelude-ty">Option</span>&lt;OOBNotes&gt;,
     generate_invoice_with: <span class="prelude-ty">Option</span>&lt;LnInvoiceGeneration&gt;,
     generated_invoices_per_user: u16,
     ln_payment_sleep: Duration,
@@ -1154,6 +1170,33 @@
         )
         .<span class="kw">await</span><span class="question-mark">?
     </span>};
+    <span class="kw">let </span>minimum_notes = notes_per_user * users;
+    <span class="kw">let </span>minimum_amount_required = note_denomination * (minimum_notes <span class="kw">as </span>u64);
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(notes) = initial_notes {
+        <span class="kw">let </span>amount = notes.total_amount();
+        <span class="macro">info!</span>(<span class="string">&quot;Reissuing initial notes, got {amount}&quot;</span>);
+        reissue_notes(<span class="kw-2">&amp;</span>coordinator, notes, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="kw">let </span>current_balance = coordinator.get_balance().<span class="kw">await</span>;
+    <span class="kw">if </span>current_balance &lt; minimum_amount_required {
+        <span class="kw">let </span>diff = minimum_amount_required - current_balance;
+        <span class="macro">info!</span>(<span class="string">&quot;Current balance {current_balance} not enough, trying to get {diff} more through fedimint-cli&quot;</span>);
+        <span class="kw">let </span>notes = try_get_notes_cli(<span class="kw-2">&amp;</span>diff, <span class="number">5</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        reissue_notes(<span class="kw-2">&amp;</span>coordinator, notes, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
+    } <span class="kw">else </span>{
+        <span class="macro">info!</span>(<span class="string">&quot;Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}&quot;</span>);
+    }
+
+    <span class="macro">info!</span>(<span class="string">&quot;Reminting notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)&quot;</span>);
+    remint_denomination(<span class="kw-2">&amp;</span>coordinator, note_denomination, minimum_notes).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">info!</span>(<span class="string">&quot;Note summary:&quot;</span>);
+    <span class="kw">let </span>summary = get_note_summary(<span class="kw-2">&amp;</span>coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>(k, v) <span class="kw">in </span>summary.iter() {
+        <span class="macro">info!</span>(<span class="string">&quot;{k}: {v}&quot;</span>);
+    }
+
     <span class="kw">let </span><span class="kw-2">mut </span>users_clients = Vec::with_capacity(users.into());
     <span class="kw">for </span>u <span class="kw">in </span><span class="number">0</span>..users {
         <span class="kw">let </span>user_db = db_path
@@ -1170,21 +1213,6 @@
             switch_default_gateway(<span class="kw-2">&amp;</span>client, gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         users_clients.push(client);
-    }
-
-    <span class="kw">let </span>amount = initial_notes.total_amount();
-
-    <span class="macro">info!</span>(<span class="string">&quot;Reissuing initial notes: initial {amount}&quot;</span>);
-    reissue_notes(<span class="kw-2">&amp;</span>coordinator, initial_notes, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="macro">info!</span>(<span class="string">&quot;Reminting notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)&quot;</span>);
-    <span class="kw">let </span>total_quantity_to_remint = notes_per_user * users;
-    remint_denomination(<span class="kw-2">&amp;</span>coordinator, note_denomination, total_quantity_to_remint).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="macro">info!</span>(<span class="string">&quot;Note summary:&quot;</span>);
-    <span class="kw">let </span>summary = get_note_summary(<span class="kw-2">&amp;</span>coordinator).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">for </span>(k, v) <span class="kw">in </span>summary.iter() {
-        <span class="macro">info!</span>(<span class="string">&quot;{k}: {v}&quot;</span>);
     }
 
     <span class="kw">let </span><span class="kw-2">mut </span>users_notes = HashMap::new();

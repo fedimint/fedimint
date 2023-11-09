@@ -314,6 +314,14 @@
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -343,6 +351,14 @@
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::MetricEvent;
+
+<span class="kw">pub async fn </span>get_invite_code_cli() -&gt; anyhow::Result&lt;InviteCode&gt; {
+    <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;invite-code&quot;</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">&quot;invite_code&quot;</span>]
+        .as_str()
+        .map(InviteCode::from_str)
+        .transpose()<span class="question-mark">?
+        </span>.context(<span class="string">&quot;missing invite code&quot;</span>)
+}
 
 <span class="kw">pub async fn </span>get_notes_cli(amount: <span class="kw-2">&amp;</span>Amount) -&gt; anyhow::Result&lt;OOBNotes&gt; {
     <span class="macro">cmd!</span>(FedimintCli, <span class="string">&quot;spend&quot;</span>, amount.msats.to_string())
