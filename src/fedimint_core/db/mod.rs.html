@@ -2658,6 +2658,7 @@
 <a href="#2658" id="2658">2658</a>
 <a href="#2659" id="2659">2659</a>
 <a href="#2660" id="2660">2660</a>
+<a href="#2661" id="2661">2661</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -3824,43 +3825,48 @@
 /// This is used in APIs that require logic to be a part of a larger
 /// database transaction, given that `commit_tx` takes `&amp;mut self` (
 /// not `self`, due to trait/Sized and support for `&amp;mut T` issues).
-</span><span class="kw">pub struct </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt;(DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;);
+</span><span class="kw">pub struct </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;tx</span>&gt; {
+    tx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">&#39;tx</span>&gt;,
+    decoders: ModuleDecoderRegistry,
+    commit_tracker: <span class="kw-2">&amp;</span><span class="lifetime">&#39;tx </span><span class="kw-2">mut </span>CommitTracker,
+}
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; WithDecoders <span class="kw">for </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.decoders
+        <span class="kw-2">&amp;</span><span class="self">self</span>.decoders
     }
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.raw_insert_bytes(key, value).<span class="kw">await
+        <span class="self">self</span>.commit_tracker.has_writes = <span class="bool-val">true</span>;
+        <span class="self">self</span>.tx.raw_insert_bytes(key, value).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.raw_get_bytes(key).<span class="kw">await
+        <span class="self">self</span>.tx.raw_get_bytes(key).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.raw_remove_entry(key).<span class="kw">await
+        <span class="self">self</span>.tx.raw_remove_entry(key).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.raw_find_by_prefix(key_prefix).<span class="kw">await
+        <span class="self">self</span>.tx.raw_find_by_prefix(key_prefix).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_find_by_prefix_sorted_descending(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         key_prefix: <span class="kw-2">&amp;</span>[u8],
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
-        <span class="self">self</span>.<span class="number">0
-            </span>.raw_find_by_prefix_sorted_descending(key_prefix)
+        <span class="self">self</span>.tx
+            .raw_find_by_prefix_sorted_descending(key_prefix)
             .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>raw_remove_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.raw_remove_by_prefix(key_prefix).<span class="kw">await
+        <span class="self">self</span>.tx.raw_remove_by_prefix(key_prefix).<span class="kw">await
     </span>}
 }
 
@@ -3946,14 +3952,12 @@
         <span class="lifetime">&#39;s</span>: <span class="lifetime">&#39;a</span>,
     {
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
-        <span class="kw">let </span>commit_tracker = <span class="self">self</span>.commit_tracker.clone();
 
-        DatabaseTransactionRef(DatabaseTransaction {
+        DatabaseTransactionRef {
             tx: Box::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.tx),
             decoders,
-            commit_tracker,
-            on_commit_hooks: <span class="macro">vec!</span>[],
-        })
+            commit_tracker: <span class="kw-2">&amp;mut </span><span class="self">self</span>.commit_tracker,
+        }
     }
 
     <span class="doccomment">/// Get [`DatabaseTransactionRef`] isolated to a `prefix` of `self`
@@ -3962,17 +3966,15 @@
         </span><span class="lifetime">&#39;tx</span>: <span class="lifetime">&#39;a</span>,
     {
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders.clone();
-        <span class="kw">let </span>commit_tracker = <span class="self">self</span>.commit_tracker.clone();
 
-        DatabaseTransactionRef(DatabaseTransaction {
+        DatabaseTransactionRef {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: <span class="kw-2">&amp;mut </span><span class="self">self</span>.tx,
                 prefix,
             }),
             decoders,
-            commit_tracker,
-            on_commit_hooks: <span class="macro">vec!</span>[],
-        })
+            commit_tracker: <span class="kw-2">&amp;mut </span><span class="self">self</span>.commit_tracker,
+        }
     }
 
     <span class="kw">pub fn </span>dbtx_ref_with_prefix_module_id&lt;<span class="lifetime">&#39;a</span>&gt;(
