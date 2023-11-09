@@ -6,7 +6,6 @@ use crate::ConsensusItem;
 
 pub fn item_message(item: &ConsensusItem) -> String {
     match item {
-        ConsensusItem::ClientConfigSignatureShare(_) => "Client Config Signature".to_string(),
         // TODO: make this nice again
         ConsensusItem::Module(mci) => {
             format!("Module CI: module={} ci={}", mci.module_instance_id(), mci)

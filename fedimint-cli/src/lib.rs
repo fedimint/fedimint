@@ -19,13 +19,12 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{get_invite_code_from_db, ClientBuilder, FederationInfo};
 use fedimint_core::admin_client::WsAdminClient;
 use fedimint_core::api::{
-    ClientConfigDownloadToken, FederationApiExt, FederationError, GlobalFederationApi,
-    IFederationApi, InviteCode, WsFederationApi,
+    FederationApiExt, FederationError, GlobalFederationApi, IFederationApi, InviteCode,
+    WsFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseValue;
-use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::ThresholdConsensus;
 use fedimint_core::util::SafeUrl;
@@ -41,7 +40,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tracing::{debug, info};
-use utils::{from_hex, parse_peer_id};
+use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
 
@@ -68,8 +67,7 @@ enum CliOutput {
 
     DecodeInviteCode {
         url: SafeUrl,
-        download_token: String,
-        id: FederationId,
+        federation_id: FederationId,
     },
 
     JoinFederation {
@@ -401,12 +399,10 @@ Examples:
     EncodeInviteCode {
         #[clap(long = "url")]
         url: SafeUrl,
-        #[clap(long = "download-token", value_parser = from_hex::<ClientConfigDownloadToken>)]
-        download_token: ClientConfigDownloadToken,
-        #[clap(long = "id")]
-        id: FederationId,
-        #[clap(long = "peer-id")]
-        peer_id: PeerId,
+        #[clap(long = "federation_id")]
+        federation_id: FederationId,
+        #[clap(long = "peer")]
+        peer: PeerId,
     },
 
     /// Gets the current fedimint AlephBFT block count
@@ -674,24 +670,18 @@ impl FedimintCli {
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
                 Ok(CliOutput::DecodeInviteCode {
                     url: invite_code.url,
-                    download_token: invite_code
-                        .download_token
-                        .consensus_encode_to_hex()
-                        .expect("encodes"),
-                    id: invite_code.id,
+                    federation_id: invite_code.federation_id,
                 })
             }
             Command::Dev(DevCmd::EncodeInviteCode {
                 url,
-                download_token,
-                id,
-                peer_id,
+                federation_id,
+                peer,
             }) => Ok(CliOutput::InviteCode {
                 invite_code: InviteCode {
                     url,
-                    download_token,
-                    id,
-                    peer_id,
+                    federation_id,
+                    peer,
                 },
             }),
             Command::Dev(DevCmd::FedimintBlockCount) => {

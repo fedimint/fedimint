@@ -5,7 +5,6 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
-use bitcoin_hashes::sha256;
 use fedimint_core::api::{FederationApiExt, GlobalFederationApi, WsFederationApi};
 use fedimint_core::block::{AcceptedItem, Block, SchnorrSignature, SignedBlock};
 use fedimint_core::config::ServerModuleInitRegistry;
@@ -14,7 +13,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_BLOCK_ENDPOINT;
-use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
+use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{
@@ -38,11 +37,10 @@ use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
 use crate::db::{
     get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, ClientConfigSignatureKey, ClientConfigSignatureShareKey,
-    ClientConfigSignatureSharePrefix, SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
+    AlephUnitsPrefix, SignedBlockKey, SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
 };
 use crate::fedimint_core::encoding::Encodable;
-use crate::net::api::{ConsensusApi, ExpiringCache, InvitationCodesTracker};
+use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
 use crate::{atomic_broadcast, LOG_CONSENSUS, LOG_CORE};
@@ -58,7 +56,6 @@ pub struct ConsensusServer {
     db: Database,
     connections: ReconnectPeerConnections<Message>,
     keychain: Keychain,
-    client_cfg_hash: sha256::Hash,
     api_endpoints: Vec<(PeerId, SafeUrl)>,
     cfg: ServerConfig,
     submission_receiver: Receiver<ConsensusItem>,
@@ -166,7 +163,6 @@ impl ConsensusServer {
 
         let consensus_api = ConsensusApi {
             cfg: cfg.clone(),
-            invitation_codes_tracker: InvitationCodesTracker::new(db.clone(), task_group).await,
             db: db.clone(),
             modules: modules.clone(),
             client_cfg: cfg.consensus.to_client_config(&module_inits)?,
@@ -184,8 +180,6 @@ impl ConsensusServer {
             task_group,
             db.clone(),
             modules.clone(),
-            cfg.clone(),
-            consensus_api.client_cfg.consensus_hash(),
             submission_sender.clone(),
         )
         .await;
@@ -202,7 +196,6 @@ impl ConsensusServer {
             connections,
             db,
             keychain,
-            client_cfg_hash: consensus_api.client_cfg.consensus_hash(),
             api_endpoints,
             cfg: cfg.clone(),
             submission_receiver,
@@ -283,7 +276,7 @@ impl ConsensusServer {
         // We need four peers to run the atomic broadcast
         assert!(self.cfg.consensus.broadcast_public_keys.len() >= 4);
 
-        self.confirm_consensus_config_hash().await?;
+        self.confirm_server_config_consensus_hash().await?;
 
         while !task_handle.is_shutting_down() {
             let session_index = self
@@ -305,14 +298,14 @@ impl ConsensusServer {
         Ok(())
     }
 
-    async fn confirm_consensus_config_hash(&self) -> anyhow::Result<()> {
+    async fn confirm_server_config_consensus_hash(&self) -> anyhow::Result<()> {
         let our_hash = self.cfg.consensus.consensus_hash();
         let federation_api = WsFederationApi::new(self.api_endpoints.clone());
 
         info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
 
         loop {
-            match federation_api.consensus_config_hash().await {
+            match federation_api.server_config_consensus_hash().await {
                 Ok(consensus_hash) => {
                     if consensus_hash != our_hash {
                         bail!("Our consensus config doesn't match peers!")
@@ -649,64 +642,6 @@ impl ConsensusServer {
 
                 Ok(())
             }
-            ConsensusItem::ClientConfigSignatureShare(signature_share) => {
-                if dbtx
-                    .dbtx_ref()
-                    .get_value(&ClientConfigSignatureKey)
-                    .await
-                    .is_some()
-                {
-                    bail!("Client config is already signed");
-                }
-
-                if dbtx
-                    .get_value(&ClientConfigSignatureShareKey(peer_id))
-                    .await
-                    .is_some()
-                {
-                    bail!("Already received a valid signature share for this peer");
-                }
-
-                let pks = self.cfg.consensus.auth_pk_set.clone();
-
-                if !pks
-                    .public_key_share(peer_id.to_usize())
-                    .verify(&signature_share.0, self.client_cfg_hash)
-                {
-                    bail!("Client config signature share is invalid");
-                }
-
-                // we have received the first valid signature share for this peer
-                dbtx.insert_new_entry(&ClientConfigSignatureShareKey(peer_id), &signature_share)
-                    .await;
-
-                // collect all valid signature shares received previously
-                let signature_shares = dbtx
-                    .find_by_prefix(&ClientConfigSignatureSharePrefix)
-                    .await
-                    .map(|(key, share)| (key.0.to_usize(), share.0))
-                    .collect::<Vec<_>>()
-                    .await;
-
-                if signature_shares.len() <= pks.threshold() {
-                    return Ok(());
-                }
-
-                let threshold_signature = pks
-                    .combine_signatures(signature_shares.iter().map(|(peer, share)| (peer, share)))
-                    .expect("All signature shares are valid");
-
-                dbtx.remove_by_prefix(&ClientConfigSignatureSharePrefix)
-                    .await;
-
-                dbtx.insert_entry(
-                    &ClientConfigSignatureKey,
-                    &SerdeSignature(threshold_signature),
-                )
-                .await;
-
-                Ok(())
-            }
         }
     }
 
@@ -760,8 +695,6 @@ async fn submit_module_consensus_items(
     task_group: &mut TaskGroup,
     db: Database,
     modules: ServerModuleRegistry,
-    cfg: ServerConfig,
-    client_cfg_hash: sha256::Hash,
     submission_sender: Sender<ConsensusItem>,
 ) {
     task_group
@@ -774,35 +707,20 @@ async fn submit_module_consensus_items(
                     // We ignore any writes
                     dbtx.ignore_uncommitted();
 
-                    let mut consensus_items = Vec::new();
-
                     for (instance_id, _, module) in modules.iter_modules() {
-                        let items = module
+                        let module_consensus_items = module
                             .consensus_proposal(
                                 &mut dbtx.dbtx_ref_with_prefix_module_id(instance_id),
                                 instance_id,
                             )
-                            .await
-                            .into_iter()
-                            .map(ConsensusItem::Module);
+                            .await;
 
-                        consensus_items.extend(items);
-                    }
-
-                    // Add a signature share for the client config hash
-                    let sig = dbtx.dbtx_ref().get_value(&ClientConfigSignatureKey).await;
-
-                    if sig.is_none() {
-                        let timing = timing::TimeReporter::new("sign client config");
-                        let share = cfg.private.auth_sks.0.sign(client_cfg_hash);
-                        drop(timing);
-                        let item =
-                            ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(share));
-                        consensus_items.push(item);
-                    }
-
-                    for item in consensus_items {
-                        submission_sender.send(item).await.ok();
+                        for item in module_consensus_items {
+                            submission_sender
+                                .send(ConsensusItem::Module(item))
+                                .await
+                                .ok();
+                        }
                     }
 
                     sleep(Duration::from_secs(1)).await;

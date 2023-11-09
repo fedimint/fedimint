@@ -228,7 +228,7 @@ impl Federation {
             .await
             .unwrap()
             .global
-            .federation_id
+            .federation_id()
             .to_string()
     }
 

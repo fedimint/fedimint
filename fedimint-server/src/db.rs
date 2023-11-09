@@ -1,12 +1,10 @@
 use std::fmt::Debug;
 
-use fedimint_core::api::ClientConfigDownloadToken;
 use fedimint_core::block::{AcceptedItem, SignedBlock};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseVersion, MigrationMap, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -19,9 +17,6 @@ pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
     SignedBlock = 0x04,
     AlephUnits = 0x05,
-    ClientConfigSignature = 0x07,
-    ClientConfigSignatureShare = 0x3,
-    ClientConfigDownload = 0x09,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -90,49 +85,6 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientConfigSignatureKey;
-
-impl_db_record!(
-    key = ClientConfigSignatureKey,
-    value = SerdeSignature,
-    db_prefix = DbKeyPrefix::ClientConfigSignature,
-    notify_on_modify = true
-);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientConfigSignatureShareKey(pub PeerId);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct ClientConfigSignatureSharePrefix;
-
-impl_db_record!(
-    key = ClientConfigSignatureShareKey,
-    value = SerdeSignatureShare,
-    db_prefix = DbKeyPrefix::ClientConfigSignatureShare,
-);
-
-impl_db_lookup!(
-    key = ClientConfigSignatureShareKey,
-    query_prefix = ClientConfigSignatureSharePrefix
-);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientConfigDownloadKeyPrefix;
-
-#[derive(Debug, Encodable, Decodable, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ClientConfigDownloadKey(pub ClientConfigDownloadToken);
-
-impl_db_record!(
-    key = ClientConfigDownloadKey,
-    value = u64,
-    db_prefix = DbKeyPrefix::ClientConfigDownload
-);
-impl_db_lookup!(
-    key = ClientConfigDownloadKey,
-    query_prefix = ClientConfigDownloadKeyPrefix
-);
-
 pub fn get_global_database_migrations<'a>() -> MigrationMap<'a> {
     MigrationMap::new()
 }
@@ -145,13 +97,12 @@ mod fedimint_migration_tests {
     use anyhow::{ensure, Context};
     use bitcoin::{secp256k1, KeyPair};
     use bitcoin_hashes::Hash;
-    use fedimint_core::api::ClientConfigDownloadToken;
     use fedimint_core::block::{Block, SignedBlock};
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         apply_migrations, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::epoch::{ConsensusItem, SerdeSignature, SerdeSignatureShare};
+    use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::transaction::Transaction;
@@ -160,20 +111,14 @@ mod fedimint_migration_tests {
     use fedimint_dummy_server::Dummy;
     use fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     use futures::StreamExt;
-    use rand::distributions::{Distribution, Standard};
     use rand::rngs::OsRng;
-    use rand::Rng;
     use secp256k1_zkp::Message;
     use strum::IntoEnumIterator;
-    use threshold_crypto::SignatureShare;
 
-    use super::{
-        AcceptedTransactionKey, ClientConfigSignatureKey, ClientConfigSignatureSharePrefix,
-    };
+    use super::AcceptedTransactionKey;
     use crate::db::{
         get_global_database_migrations, AcceptedItem, AcceptedItemKey, AcceptedItemPrefix,
-        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, ClientConfigDownloadKey,
-        ClientConfigDownloadKeyPrefix, ClientConfigSignatureShareKey, DbKeyPrefix, SignedBlockKey,
+        AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedBlockKey,
         SignedBlockPrefix, GLOBAL_DATABASE_VERSION,
     };
 
@@ -237,29 +182,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&AlephUnitsKey(0), &vec![42, 42, 42])
             .await;
 
-        let sig_share = SignatureShare(Standard.sample(&mut OsRng));
-
-        let _consensus_items = vec![
-            ConsensusItem::ClientConfigSignatureShare(SerdeSignatureShare(sig_share.clone())),
-            ConsensusItem::Transaction(transaction),
-        ];
-
-        let serde_sig = SerdeSignature(Standard.sample(&mut OsRng));
-        dbtx.insert_new_entry(&ClientConfigSignatureKey, &serde_sig)
-            .await;
-
-        let serde_sig_share = SerdeSignatureShare(Standard.sample(&mut OsRng));
-        dbtx.insert_new_entry(
-            &ClientConfigSignatureShareKey(PeerId::from(0)),
-            &serde_sig_share,
-        )
-        .await;
-
-        dbtx.insert_new_entry(
-            &ClientConfigDownloadKey(ClientConfigDownloadToken(OsRng.gen())),
-            &0,
-        )
-        .await;
+        let _consensus_items = vec![ConsensusItem::Transaction(transaction)];
 
         dbtx.commit_tx().await;
     }
@@ -311,74 +234,44 @@ mod fedimint_migration_tests {
                                 .await;
                             let accepted_items = accepted_items.len();
                             ensure!(
-                                    accepted_items > 0,
-                                    "validate_migrations was not able to read any AcceptedItems"
-                                );
-                        },
-                        DbKeyPrefix::AcceptedTransaction => {
-                                let accepted_transactions = dbtx
-                                    .find_by_prefix(&AcceptedTransactionKeyPrefix)
-                                    .await
-                                    .collect::<Vec<_>>()
-                                    .await;
-                                let num_accepted_transactions = accepted_transactions.len();
-                                ensure!(
-                                    num_accepted_transactions > 0,
-                                    "validate_migrations was not able to read any AcceptedTransactions"
-                                );
-                            }
-                        DbKeyPrefix::SignedBlock => {
-                                let signed_blocks = dbtx
-                                    .find_by_prefix(&SignedBlockPrefix)
-                                    .await
-                                    .collect::<Vec<_>>()
-                                    .await;
-                                let num_signed_blocks = signed_blocks.len();
-                                ensure!(
-                                    num_signed_blocks > 0,
-                                    "validate_migrations was not able to read any SignedBlocks"
-                                );
-                        }
-                        DbKeyPrefix::AlephUnits => {
-                                let aleph_units = dbtx
-                                    .find_by_prefix(&AlephUnitsPrefix)
-                                    .await
-                                    .collect::<Vec<_>>()
-                                    .await;
-                                let num_aleph_units = aleph_units.len();
-                                ensure!(
-                                    num_aleph_units > 0,
-                                    "validate_migrations was not able to read any AlephUnits"
-                                );
-                        }
-                        DbKeyPrefix::ClientConfigSignature => {
-                            dbtx
-                                .get_value(&ClientConfigSignatureKey)
-                                .await
-                                .expect("validate_migrations was not able to read the ClientConfigSignature");
-                        }
-                        DbKeyPrefix::ClientConfigSignatureShare => {
-                            let signature_shares = dbtx
-                                .find_by_prefix(&ClientConfigSignatureSharePrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_signature_shares = signature_shares.len();
-                            ensure!(
-                                num_signature_shares > 0,
-                                "validate_migrations was not able to read any ClientConfigSignatureShares"
+                                accepted_items > 0,
+                                "validate_migrations was not able to read any AcceptedItems"
                             );
                         }
-                        DbKeyPrefix::ClientConfigDownload => {
-                            let downloads = dbtx
-                                .find_by_prefix(&ClientConfigDownloadKeyPrefix)
+                        DbKeyPrefix::AcceptedTransaction => {
+                            let accepted_transactions = dbtx
+                                .find_by_prefix(&AcceptedTransactionKeyPrefix)
                                 .await
                                 .collect::<Vec<_>>()
                                 .await;
-                            let downloads_len = downloads.len();
+                            let num_accepted_transactions = accepted_transactions.len();
                             ensure!(
-                                downloads_len > 0,
-                                "validate_migrations was not able to read any ClientConfigDownloadKey"
+                                num_accepted_transactions > 0,
+                                "validate_migrations was not able to read any AcceptedTransactions"
+                            );
+                        }
+                        DbKeyPrefix::SignedBlock => {
+                            let signed_blocks = dbtx
+                                .find_by_prefix(&SignedBlockPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_signed_blocks = signed_blocks.len();
+                            ensure!(
+                                num_signed_blocks > 0,
+                                "validate_migrations was not able to read any SignedBlocks"
+                            );
+                        }
+                        DbKeyPrefix::AlephUnits => {
+                            let aleph_units = dbtx
+                                .find_by_prefix(&AlephUnitsPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_aleph_units = aleph_units.len();
+                            ensure!(
+                                num_aleph_units > 0,
+                                "validate_migrations was not able to read any AlephUnits"
                             );
                         }
                         // Module prefix is reserved for modules, no migration testing is needed

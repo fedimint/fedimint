@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
-use fedimint_core::api::{ClientConfigDownloadToken, InviteCode};
+use fedimint_core::api::InviteCode;
 use fedimint_core::cancellable::Cancelled;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
@@ -22,10 +22,7 @@ use fedimint_core::task::{timeout, Elapsed, TaskGroup};
 use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
-use hbbft::crypto::serde_impl::SerdeSecret;
-use hbbft::NetworkInfo;
 use rand::rngs::OsRng;
-use rand::Rng;
 use secp256k1_zkp::{PublicKey, Secp256k1, SecretKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -33,7 +30,7 @@ use tokio_rustls::rustls;
 use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
-use crate::config::distributedgen::{DkgRunner, PeerHandleOps, ThresholdKeys};
+use crate::config::distributedgen::{DkgRunner, PeerHandleOps};
 use crate::config::io::CODE_VERSION;
 use crate::fedimint_core::encoding::Encodable;
 use crate::fedimint_core::NumPeers;
@@ -102,15 +99,6 @@ pub struct ServerConfigPrivate {
     pub tls_key: rustls::PrivateKey,
     /// Secret key for the atomic broadcast to sign messages
     pub broadcast_secret_key: SecretKey,
-    /// Secret key for contributing to threshold auth key
-    #[serde(with = "serde_binary_human_readable")]
-    pub auth_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
-    /// Secret key for contributing to HBBFT consensus
-    #[serde(with = "serde_binary_human_readable")]
-    pub hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
-    /// Secret key for signing consensus epochs
-    #[serde(with = "serde_binary_human_readable")]
-    pub epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
     /// Secret material from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
@@ -123,15 +111,6 @@ pub struct ServerConfigConsensus {
     pub version: CoreConsensusVersion,
     /// Public keys for the atomic broadcast to authenticate messages
     pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
-    /// Public keys authenticating members of the federation and the configs
-    #[serde(with = "serde_binary_human_readable")]
-    pub auth_pk_set: hbbft::crypto::PublicKeySet,
-    /// Public keys for HBBFT consensus from all peers
-    #[serde(with = "serde_binary_human_readable")]
-    pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
-    /// Public keys for signing consensus epochs from all peers
-    #[serde(with = "serde_binary_human_readable")]
-    pub epoch_pk_set: hbbft::crypto::PublicKeySet,
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Certs for TLS communication, required for peer authentication
@@ -161,10 +140,6 @@ pub struct ServerConfigLocal {
     pub max_connections: u32,
     /// Non-consensus, non-private configuration from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
-    /// Required to download the client config
-    pub download_token: ClientConfigDownloadToken,
-    /// Limit on the number of times a config download token can be used
-    pub download_token_limit: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -190,8 +165,6 @@ impl ServerConfigConsensus {
     ) -> Result<ClientConfig, anyhow::Error> {
         let client = ClientConfig {
             global: GlobalClientConfig {
-                federation_id: self.federation_id(),
-                epoch_pk: self.epoch_pk_set.public_key(),
                 api_endpoints: self.api_endpoints.clone(),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
@@ -208,10 +181,6 @@ impl ServerConfigConsensus {
                 .collect::<anyhow::Result<BTreeMap<_, _>>>()?,
         };
         Ok(client)
-    }
-
-    pub fn federation_id(&self) -> FederationId {
-        FederationId(self.auth_pk_set.public_key())
     }
 }
 
@@ -234,18 +203,12 @@ impl ServerConfig {
         identity: PeerId,
         broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
         broadcast_secret_key: SecretKey,
-        auth_keys: ThresholdKeys,
-        epoch_keys: ThresholdKeys,
-        hbbft_keys: ThresholdKeys,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
     ) -> Self {
         let private = ServerConfigPrivate {
             api_auth: params.local.api_auth.clone(),
             tls_key: params.local.our_private_key.clone(),
             broadcast_secret_key,
-            auth_sks: auth_keys.secret_key_share,
-            hbbft_sks: hbbft_keys.secret_key_share,
-            epoch_sks: epoch_keys.secret_key_share,
             modules: Default::default(),
         };
         let local = ServerConfigLocal {
@@ -255,16 +218,11 @@ impl ServerConfig {
             api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             modules: Default::default(),
-            download_token: ClientConfigDownloadToken(OsRng.gen()),
-            download_token_limit: params.local.download_token_limit,
         };
         let consensus = ServerConfigConsensus {
             code_version: CODE_VERSION.to_string(),
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
-            auth_pk_set: auth_keys.public_key_set,
-            hbbft_pk_set: hbbft_keys.public_key_set,
-            epoch_pk_set: epoch_keys.public_key_set,
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),
@@ -281,17 +239,12 @@ impl ServerConfig {
     }
 
     pub fn get_invite_code(&self) -> InviteCode {
-        let id = FederationId(self.consensus.auth_pk_set.public_key());
-        let url = self.consensus.api_endpoints[&self.local.identity]
-            .url
-            .clone();
-        let download_token = self.local.download_token.clone();
-
         InviteCode {
-            url,
-            download_token,
-            id,
-            peer_id: self.local.identity,
+            url: self.consensus.api_endpoints[&self.local.identity]
+                .url
+                .clone(),
+            federation_id: FederationId(self.consensus.api_endpoints.consensus_hash()),
+            peer: self.local.identity,
         }
     }
 
@@ -381,18 +334,11 @@ impl ServerConfig {
         let peers = self.local.p2p_endpoints.clone();
         let consensus = self.consensus.clone();
         let private = self.private.clone();
-        let id = identity.to_usize();
 
         let my_public_key = private.broadcast_secret_key.public_key(&Secp256k1::new());
 
         if Some(&my_public_key) != consensus.broadcast_public_keys.get(identity) {
             bail!("Broadcast secret key doesn't match corresponding public key");
-        }
-        if private.epoch_sks.public_key_share() != consensus.epoch_pk_set.public_key_share(id) {
-            bail!("Epoch private key doesn't match pubkey share");
-        }
-        if private.hbbft_sks.public_key_share() != consensus.hbbft_pk_set.public_key_share(id) {
-            bail!("HBBFT private key doesn't match pubkey share");
         }
         if peers.keys().max().copied().map(|id| id.to_usize()) != Some(peers.len() - 1) {
             bail!("Peer ids are not indexed from 0");
@@ -422,7 +368,6 @@ impl ServerConfig {
         params: &HashMap<PeerId, ConfigGenParams>,
         registry: ServerModuleInitRegistry,
     ) -> BTreeMap<PeerId, Self> {
-        let mut rng = OsRng;
         let peer0 = &params[&PeerId::from(0)];
 
         let mut broadcast_pks = BTreeMap::new();
@@ -432,13 +377,6 @@ impl ServerConfig {
             broadcast_pks.insert(peer_id, broadcast_pk);
             broadcast_sks.insert(peer_id, broadcast_sk);
         }
-
-        let netinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
-            .expect("Could not generate HBBFT netinfo");
-        let epochinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
-            .expect("Could not generate HBBFT netinfo");
-        let authinfo = NetworkInfo::generate_map(peer0.peer_ids(), &mut rng)
-            .expect("Could not generate HBBFT netinfo");
 
         let modules = peer0.consensus.modules.iter_modules();
         let module_configs: BTreeMap<_, _> = modules
@@ -453,17 +391,15 @@ impl ServerConfig {
             })
             .collect();
 
-        let server_config: BTreeMap<_, _> = netinfo
+        let server_config: BTreeMap<_, _> = peer0
+            .peer_ids()
             .iter()
-            .map(|(&id, _netinf)| {
+            .map(|&id| {
                 let config = ServerConfig::from(
                     params[&id].clone(),
                     id,
                     broadcast_pks.clone(),
                     *broadcast_sks.get(&id).expect("We created this entry"),
-                    Self::extract_keys(authinfo.get(&id).expect("peer exists")),
-                    Self::extract_keys(epochinfo.get(&id).expect("peer exists")),
-                    Self::extract_keys(netinfo.get(&id).expect("peer exists")),
                     module_configs
                         .iter()
                         .map(|(module_id, cfgs)| (*module_id, cfgs[&id].clone()))
@@ -474,13 +410,6 @@ impl ServerConfig {
             .collect();
 
         server_config
-    }
-
-    fn extract_keys(info: &NetworkInfo<PeerId>) -> ThresholdKeys {
-        ThresholdKeys {
-            public_key_set: info.public_key_set().clone(),
-            secret_key_share: SerdeSecret(info.secret_key_share().unwrap().clone()),
-        }
     }
 
     /// Runs the distributed key gen algorithm
@@ -531,12 +460,6 @@ impl ServerConfig {
         let mut dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
         dkg.add(KeyType::Auth, peers.threshold());
         dkg.add(KeyType::Epoch, peers.threshold());
-
-        // run DKG for epoch and hbbft keys
-        let keys = dkg.run_g1(MODULE_INSTANCE_ID_GLOBAL, &connections).await?;
-        let auth_keys = keys[&KeyType::Auth].threshold_crypto();
-        let hbbft_keys = keys[&KeyType::Hbbft].threshold_crypto();
-        let epoch_keys = keys[&KeyType::Epoch].threshold_crypto();
 
         let mut registered_modules = registry.kinds();
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
@@ -610,9 +533,6 @@ impl ServerConfig {
             *our_id,
             broadcast_public_keys,
             broadcast_sk,
-            auth_keys,
-            epoch_keys,
-            hbbft_keys,
             module_cfgs,
         );
 

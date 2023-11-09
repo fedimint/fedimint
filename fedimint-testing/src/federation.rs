@@ -92,7 +92,7 @@ impl FederationTest {
             .to_client_config(&self.server_init)
             .unwrap()
             .global
-            .federation_id
+            .federation_id()
     }
 
     pub(crate) async fn new(
@@ -200,7 +200,6 @@ pub fn local_config_gen_params(
                     api_auth: ApiAuth("pass".to_string()),
                     p2p_bind: p2p_bind.parse().expect("Valid address"),
                     api_bind: api_bind.parse().expect("Valid address"),
-                    download_token_limit: None,
                     max_connections: 10,
                 },
                 consensus: ConfigGenParamsConsensus {

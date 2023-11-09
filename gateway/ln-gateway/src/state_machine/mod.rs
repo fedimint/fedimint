@@ -272,7 +272,7 @@ impl GatewayClientExt for ClientArc {
             gateway_id,
         );
 
-        let federation_id = self.get_config().global.federation_id;
+        let federation_id = self.get_config().global.federation_id();
         gateway
             .register_with_federation(federation_id, registration_info)
             .await?;

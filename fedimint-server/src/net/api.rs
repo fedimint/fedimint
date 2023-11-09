@@ -8,12 +8,11 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
 use fedimint_core::api::{
-    ClientConfigDownloadToken, FederationStatus, InviteCode, PeerConnectionStatus, PeerStatus,
-    ServerStatus, StatusResponse,
+    FederationStatus, PeerConnectionStatus, PeerStatus, ServerStatus, StatusResponse,
 };
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 use fedimint_core::block::{Block, SignedBlock};
-use fedimint_core::config::{ClientConfig, ClientConfigResponse, JsonWithKind};
+use fedimint_core::config::{ClientConfig, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{
@@ -21,9 +20,9 @@ use fedimint_core::db::{
 };
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_BLOCK_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
-    FETCH_BLOCK_COUNT_ENDPOINT, GET_VERIFY_CONFIG_HASH_ENDPOINT, INVITE_CODE_ENDPOINT,
-    MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
+    AWAIT_SIGNED_BLOCK_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
+    FETCH_BLOCK_COUNT_ENDPOINT, GET_VERIFY_CONFIG_HASH_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
+    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
     VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
@@ -34,7 +33,6 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{SerdeTransaction, Transaction};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
@@ -49,10 +47,7 @@ use crate::config::api::get_verification_hashes;
 use crate::config::ServerConfig;
 use crate::consensus::server::LatestContributionByPeer;
 use crate::consensus::FundingVerifier;
-use crate::db::{
-    AcceptedTransactionKey, ClientConfigDownloadKey, ClientConfigDownloadKeyPrefix,
-    ClientConfigSignatureKey, SignedBlockKey, SignedBlockPrefix,
-};
+use crate::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, ApiResult, HasApiContext};
 
@@ -78,111 +73,12 @@ impl<M: Debug> Debug for RpcHandlerCtx<M> {
     }
 }
 
-/// Tracks the usage of invitiation code tokens
-///
-/// Mostly to serialize the database counter modifications, which would
-/// otherwise cause MVCC conflict.
-#[derive(Clone)]
-pub struct InvitationCodesTracker {
-    counts: Arc<tokio::sync::Mutex<BTreeMap<ClientConfigDownloadToken, u64>>>,
-    /// Notify on any change `counts` above.
-    ///
-    /// Multiple invitation codes are possible. Maintaining notifications
-    /// per-key seems like a pain, so instead we assume invitation codes are
-    /// not in thousands and let the worker task detect the changes against
-    /// a local copy.
-    ///
-    /// `watch` is used as it supports sender disconnection detection which
-    /// simplifies task termination.
-    counts_changed_tx: Arc<tokio::sync::watch::Sender<()>>,
-}
-
-impl InvitationCodesTracker {
-    pub async fn new(db: Database, tg: &mut TaskGroup) -> Self {
-        let counts: BTreeMap<_, _> = db
-            .begin_transaction()
-            .await
-            .find_by_prefix(&ClientConfigDownloadKeyPrefix)
-            .await
-            .map(|(k, v)| (k.0, v))
-            .collect()
-            .await;
-
-        let mut local_counts = counts.clone();
-        let counts = Arc::new(tokio::sync::Mutex::new(counts));
-
-        let (tx, mut rx) = tokio::sync::watch::channel(());
-
-        tg.spawn("invitation_codes_tracker", {
-            let counts = counts.clone();
-
-            |_| async move {
-                while let Ok(()) = rx.changed().await {
-                    let changed_counts: Vec<_> = counts
-                        .lock()
-                        .await
-                        .iter()
-                        .filter_map(|(token, count)| {
-                            if local_counts.get(token).copied().unwrap_or_default() != *count {
-                                Some((token.clone(), *count))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-
-                    let mut dbtx = db.begin_transaction().await;
-
-                    for (token, count) in changed_counts {
-                        dbtx.insert_entry(&ClientConfigDownloadKey(token.clone()), &count)
-                            .await;
-                        local_counts.insert(token, count);
-                    }
-
-                    dbtx.commit_tx().await;
-                }
-            }
-        })
-        .await;
-
-        Self {
-            counts,
-            counts_changed_tx: Arc::new(tx),
-        }
-    }
-
-    pub async fn use_token(
-        &self,
-        token: &ClientConfigDownloadToken,
-        limit: Option<u64>,
-    ) -> Result<(), ()> {
-        let mut lock = self.counts.lock().await;
-
-        let entry = lock.entry(token.clone()).or_default();
-
-        if limit.map(|limit| limit <= *entry).unwrap_or(false) {
-            return Err(());
-        }
-
-        *entry += 1;
-
-        drop(lock);
-
-        self.counts_changed_tx
-            .send(())
-            .expect("invitations code tracker task panicked");
-
-        Ok(())
-    }
-}
-
 #[derive(Clone)]
 pub struct ConsensusApi {
     /// Our server configuration
     pub cfg: ServerConfig,
     /// Database for serving the API
     pub db: Database,
-    pub invitation_codes_tracker: InvitationCodesTracker,
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Cached client config
@@ -311,36 +207,6 @@ impl ConsensusApi {
             .wait_key_check(&SignedBlockKey(index), std::convert::identity)
             .await
             .0
-    }
-
-    pub async fn download_client_config(&self, info: InviteCode) -> ApiResult<ClientConfig> {
-        let token = self.cfg.local.download_token.clone();
-
-        if self.cfg.consensus.federation_id() != info.id {
-            return Err(ApiError::bad_request("Wrong Federation Id".to_string()));
-        }
-
-        if self.cfg.local.identity != info.peer_id {
-            return Err(ApiError::bad_request("Wrong Peer Id".to_string()));
-        }
-        if info.download_token != token {
-            return Err(ApiError::bad_request(
-                "Download token not found".to_string(),
-            ));
-        }
-
-        if self
-            .invitation_codes_tracker
-            .use_token(&token, self.cfg.local.download_token_limit)
-            .await
-            .is_err()
-        {
-            return Err(ApiError::bad_request(
-                "Download token used too many times".to_string(),
-            ));
-        }
-
-        Ok(self.client_cfg.clone())
     }
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
@@ -544,27 +410,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            INVITE_CODE_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
-                Ok(fedimint.cfg.get_invite_code().to_string())
+            CLIENT_CONFIG_ENDPOINT,
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> ClientConfig {
+                Ok(fedimint.client_cfg.clone())
             }
         },
         api_endpoint! {
-            CONFIG_ENDPOINT,
-            async |fedimint: &ConsensusApi, context, invite_code: String| -> ClientConfigResponse {
-                let info = invite_code.parse()
-                    .map_err(|_| ApiError::bad_request("Could not parse invite code".to_string()))?;
-                let future = context.wait_key_exists(ClientConfigSignatureKey);
-                let signature = future.await;
-                let client_config = fedimint.download_client_config(info).await?;
-                Ok(ClientConfigResponse{
-                    client_config,
-                    signature
-                })
-            }
-        },
-        api_endpoint! {
-            CONFIG_HASH_ENDPOINT,
+            SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
                 Ok(fedimint.cfg.consensus.consensus_hash())
             }

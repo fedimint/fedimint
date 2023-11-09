@@ -13,7 +13,6 @@ use bitcoin_hashes::{hex, sha256};
 use fedimint_core::cancellable::Cancelled;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
-use fedimint_core::epoch::SerdeSignature;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
@@ -147,18 +146,20 @@ pub struct JsonClientConfig {
 /// Federation-wide client config
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GlobalClientConfig {
-    // Stable and unique id and threshold pubkey of the federation for authenticating configs
-    pub federation_id: FederationId,
     /// API endpoints for each federation member
     #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
-    /// Threshold pubkey for authenticating epoch history
-    pub epoch_pk: threshold_crypto::PublicKey,
     /// Core consensus version
     pub consensus_version: CoreConsensusVersion,
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+}
+
+impl GlobalClientConfig {
+    pub fn federation_id(&self) -> FederationId {
+        FederationId(self.api_endpoints.consensus_hash())
+    }
 }
 
 impl ClientConfig {
@@ -176,15 +177,6 @@ impl ClientConfig {
             ..self
         })
     }
-}
-
-/// The API response for client config requests, signed by the Federation
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ClientConfigResponse {
-    /// The client config
-    pub client_config: ClientConfig,
-    /// Auth key signature over the `client_config`
-    pub signature: SerdeSignature,
 }
 
 /// The federation id is a copy of the authentication threshold public key of
@@ -206,7 +198,7 @@ pub struct ClientConfigResponse {
     Ord,
     PartialOrd,
 )]
-pub struct FederationId(pub threshold_crypto::PublicKey);
+pub struct FederationId(pub sha256::Hash);
 
 #[derive(
     Debug,
@@ -231,7 +223,7 @@ pub struct FederationIdPrefix([u8; 4]);
 
 impl Display for FederationId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        format_hex(&self.0.to_bytes(), f)
+        format_hex(&self.0, f)
     }
 }
 
@@ -239,16 +231,15 @@ impl Display for FederationId {
 impl FederationId {
     /// Random dummy id for testing
     pub fn dummy() -> Self {
-        let rand_pk = threshold_crypto::SecretKey::random().public_key();
-        Self(rand_pk)
+        Self(sha256::Hash::from_inner([42; 32]))
     }
 
-    fn try_from_bytes(bytes: [u8; 48]) -> Option<Self> {
-        Some(Self(threshold_crypto::PublicKey::from_bytes(bytes).ok()?))
+    pub(crate) fn from_byte_array(bytes: [u8; 32]) -> Self {
+        Self(sha256::Hash::from_inner(bytes))
     }
 
     pub fn to_prefix(&self) -> FederationIdPrefix {
-        FederationIdPrefix(self.0.to_bytes()[..4].try_into().expect("can't fail"))
+        FederationIdPrefix(self.0[..4].try_into().expect("can't fail"))
     }
 
     /// Converts a federation id to a public key to which we know but discard
@@ -264,8 +255,7 @@ impl FederationId {
         &self,
         secp: &secp256k1::Secp256k1<secp256k1_zkp::All>,
     ) -> anyhow::Result<secp256k1::PublicKey> {
-        let bytes = <Sha256 as bitcoin_hashes::Hash>::hash(&self.0.to_bytes()[..]);
-        let sk = secp256k1::SecretKey::from_slice(&bytes)?;
+        let sk = secp256k1::SecretKey::from_slice(&self.0)?;
         Ok(secp256k1::PublicKey::from_secret_key(secp, &sk))
     }
 }
@@ -274,12 +264,11 @@ impl FromStr for FederationId {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::try_from_bytes(
+        Ok(Self::from_byte_array(
             Vec::from_hex(s)?
                 .try_into()
-                .map_err(|bytes: Vec<u8>| hex::Error::InvalidLength(48, bytes.len()))?,
-        )
-        .ok_or_else::<anyhow::Error, _>(|| format_err!("Invalid FederationId pubkey"))
+                .map_err(|bytes: Vec<u8>| hex::Error::InvalidLength(32, bytes.len()))?,
+        ))
     }
 }
 

@@ -9,15 +9,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, result};
 
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin::secp256k1;
-use bitcoin_hashes::sha256;
-use fedimint_core::config::{ClientConfig, ClientConfigResponse, FederationId};
+use bitcoin_hashes::{sha256, Hash};
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::endpoint_constants::AWAIT_BLOCK_ENDPOINT;
+use fedimint_core::endpoint_constants::{
+    AWAIT_BLOCK_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+};
 use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::task::{MaybeSend, MaybeSync, RwLock, RwLockWriteGuard};
@@ -39,7 +41,6 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use threshold_crypto::{PublicKey, PK_SIZE};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::backup::ClientBackupSnapshot;
@@ -47,7 +48,7 @@ use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CONFIG_ENDPOINT, CONFIG_HASH_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
     FETCH_BLOCK_COUNT_ENDPOINT, RECOVER_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
     WAIT_TRANSACTION_ENDPOINT,
 };
@@ -56,9 +57,9 @@ use crate::query::{
     DiscoverApiVersionSet, FilterMap, QueryStep, QueryStrategy, ThresholdConsensus,
     UnionResponsesSingle,
 };
+use crate::task;
 use crate::transaction::{SerdeTransaction, Transaction};
 use crate::util::SafeUrl;
-use crate::{serde_as_encodable_hex, task};
 
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, jsonrpsee_core::Error>;
@@ -370,7 +371,7 @@ pub trait GlobalFederationApi {
     async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig>;
 
     /// Fetches the server consensus hash if enough peers agree on it
-    async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash>;
+    async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash>;
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()>;
 
@@ -476,33 +477,53 @@ where
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?
     }
 
-    async fn download_client_config(&self, info: &InviteCode) -> FederationResult<ClientConfig> {
-        let id = info.id;
+    async fn download_client_config(
+        &self,
+        invite_code: &InviteCode,
+    ) -> FederationResult<ClientConfig> {
+        // we have to download the api endpoints first
+        let id = invite_code.federation_id;
         let qs = FilterMap::new(
-            move |config: ClientConfigResponse| match id
-                .0
-                .verify(&config.signature.0, config.client_config.consensus_hash())
-            {
-                true => Ok(config),
-                false => Err(anyhow!("Invalid signature")),
+            move |cfg: ClientConfig| {
+                if id.0 != cfg.global.api_endpoints.consensus_hash() {
+                    bail!("Guardian api endpoint map does not hash to FederationId")
+                }
+
+                Ok(cfg.global.api_endpoints)
             },
             self.all_peers().total(),
         )
-        // downloading a config shouldn't take too long
+        // downloading the endpoints shouldn't take too long
         .with_request_timeout(Duration::from_secs(5));
 
-        self.request_with_strategy(
-            qs,
-            CONFIG_ENDPOINT.to_owned(),
-            ApiRequestErased::new(info.to_string()),
-        )
-        .await
-        .map(|cfg: ClientConfigResponse| cfg.client_config)
+        let api_endpoints = self
+            .request_with_strategy(
+                qs,
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        // now we can build an api for all guardians and download the client config
+        let api_endpoints = api_endpoints
+            .into_iter()
+            .map(|(peer, url)| (peer, url.url))
+            .collect();
+
+        WsFederationApi::new(api_endpoints)
+            .request_current_consensus(
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await
     }
 
-    async fn consensus_config_hash(&self) -> FederationResult<sha256::Hash> {
-        self.request_current_consensus(CONFIG_HASH_ENDPOINT.to_owned(), ApiRequestErased::default())
-            .await
+    async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash> {
+        self.request_current_consensus(
+            SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+        )
+        .await
     }
 
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
@@ -568,22 +589,11 @@ struct FederationPeer<C> {
 pub struct InviteCode {
     /// URL to reach an API that we can download configs from
     pub url: SafeUrl,
-    /// Config download token (might only be used a certain number of times)
-    pub download_token: ClientConfigDownloadToken,
     /// Authentication id for the federation
-    pub id: FederationId,
+    pub federation_id: FederationId,
     /// Peer id of the host from the Url
-    pub peer_id: PeerId,
+    pub peer: PeerId,
 }
-
-/// Size of a download token
-const CONFIG_DOWNLOAD_TOKEN_BYTES: usize = 12;
-
-/// Allows a client to download the config
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, PartialOrd, Ord)]
-pub struct ClientConfigDownloadToken(pub [u8; CONFIG_DOWNLOAD_TOKEN_BYTES]);
-
-serde_as_encodable_hex!(ClientConfigDownloadToken);
 
 /// We can represent client invite code as a bech32 string for compactness and
 /// error-checking
@@ -605,7 +615,7 @@ impl FromStr for InviteCode {
 
         let bytes: Vec<u8> = Vec::<u8>::from_base32(&data)?;
         let mut cursor = Cursor::new(bytes);
-        let mut id_bytes = [0; PK_SIZE];
+        let mut id_bytes = [0; 32];
         cursor.read_exact(&mut id_bytes)?;
         let mut peer_id_bytes = [0; 2];
         cursor.read_exact(&mut peer_id_bytes)?;
@@ -615,16 +625,12 @@ impl FromStr for InviteCode {
         let url_len = u16::from_be_bytes(url_len).into();
         let mut url_bytes = vec![0; url_len];
         cursor.read_exact(&mut url_bytes)?;
-        let mut download_token = [0; CONFIG_DOWNLOAD_TOKEN_BYTES];
-        cursor.read_exact(&mut download_token)?;
-
         let url = std::str::from_utf8(&url_bytes)?;
 
         Ok(Self {
             url: url.parse()?,
-            download_token: ClientConfigDownloadToken(download_token),
-            id: FederationId(PublicKey::from_bytes(id_bytes)?),
-            peer_id: PeerId(u16::from_be_bytes(peer_id_bytes)),
+            federation_id: FederationId::from_byte_array(id_bytes),
+            peer: PeerId(u16::from_be_bytes(peer_id_bytes)),
         })
     }
 }
@@ -633,12 +639,12 @@ impl FromStr for InviteCode {
 impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let mut data = vec![];
-        data.extend(self.id.0.to_bytes());
-        data.extend(self.peer_id.0.to_be_bytes());
+        data.extend(self.federation_id.0.into_inner());
+        data.extend(self.peer.0.to_be_bytes());
         let url_bytes = self.url.as_str().as_bytes();
         data.extend((url_bytes.len() as u16).to_be_bytes());
         data.extend(url_bytes);
-        data.extend(&self.download_token.0);
+
         let encode =
             bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
 
@@ -944,8 +950,6 @@ mod tests {
     use jsonrpsee_core::params::BatchRequestBuilder;
     use jsonrpsee_core::traits::ToRpcParams;
     use once_cell::sync::Lazy;
-    use rand::rngs::OsRng;
-    use rand::Rng;
     use serde::de::DeserializeOwned;
     use tracing::error;
 
@@ -1163,9 +1167,8 @@ mod tests {
     fn converts_invite_code() {
         let connect = InviteCode {
             url: "ws://test1".parse().unwrap(),
-            id: FederationId::dummy(),
-            peer_id: PeerId(1),
-            download_token: ClientConfigDownloadToken(OsRng.gen()),
+            federation_id: FederationId::dummy(),
+            peer: PeerId(1),
         };
 
         let bech32 = connect.to_string();

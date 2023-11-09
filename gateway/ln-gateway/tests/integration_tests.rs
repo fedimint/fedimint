@@ -943,7 +943,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     verify_rpc(
         || {
             rpc_client.get_balance(BalancePayload {
-                federation_id: fed.invite_code().id,
+                federation_id: fed.invite_code().federation_id,
             })
         },
         StatusCode::OK,
@@ -969,7 +969,7 @@ async fn test_gateway_supports_connecting_multiple_federations() -> anyhow::Resu
                 .await
                 .unwrap();
 
-            assert_eq!(info.federation_id, invite1.id);
+            assert_eq!(info.federation_id, invite1.federation_id);
 
             let invite2 = fed2.invite_code();
             let info = rpc
@@ -978,7 +978,7 @@ async fn test_gateway_supports_connecting_multiple_federations() -> anyhow::Resu
                 })
                 .await
                 .unwrap();
-            assert_eq!(info.federation_id, invite2.id);
+            assert_eq!(info.federation_id, invite2.federation_id);
             drop(gateway); // keep until the end to avoid the gateway shutting down too early
             Ok(())
         },
@@ -993,8 +993,8 @@ async fn test_gateway_shows_info_about_all_connected_federations() -> anyhow::Re
         |gateway, rpc, fed1, fed2, _| async move {
             assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
 
-            let id1 = fed1.invite_code().id;
-            let id2 = fed2.invite_code().id;
+            let id1 = fed1.invite_code().federation_id;
+            let id2 = fed2.invite_code().federation_id;
 
             connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
 
@@ -1021,8 +1021,8 @@ async fn test_gateway_shows_balance_for_any_connected_federation() -> anyhow::Re
     multi_federation_test(
         LightningNodeType::Lnd,
         |gateway, rpc, fed1, fed2, _| async move {
-            let id1 = fed1.invite_code().id;
-            let id2 = fed2.invite_code().id;
+            let id1 = fed1.invite_code().federation_id;
+            let id2 = fed2.invite_code().federation_id;
 
             connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
 
@@ -1048,8 +1048,8 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
     multi_federation_test(
         LightningNodeType::Lnd,
         |gateway, rpc, fed1, fed2, _| async move {
-            let id1 = fed1.invite_code().id;
-            let id2 = fed2.invite_code().id;
+            let id1 = fed1.invite_code().federation_id;
+            let id2 = fed2.invite_code().federation_id;
 
             let client1 = fed1.new_client().await;
             let client2 = fed2.new_client().await;
