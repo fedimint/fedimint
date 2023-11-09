@@ -1,6 +1,6 @@
 use std::env;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
@@ -417,7 +417,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
 
-    // Assert balances changed by 3000 msat (amount sent) + 30 msat (fee)
+    // Assert balances changed by 3000 msat (amount sent) + 0 msat (fee)
     let final_cln_outgoing_client_balance = fed.client_balance().await?;
     let final_cln_outgoing_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
         .out_json()
@@ -425,7 +425,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
 
-    let expected_diff = 3030;
+    let expected_diff = 3000;
     anyhow::ensure!(
         initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
         "Client balance changed by {} on CLN outgoing payment, expected {expected_diff}",
@@ -535,7 +535,7 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
     ));
 
-    // Assert balances changed by 1000 msat (amount sent) + 10 msat (fee)
+    // Assert balances changed by 1000 msat (amount sent) + 0 msat (fee)
     let final_lnd_outgoing_client_balance = fed.client_balance().await?;
     let final_lnd_outgoing_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
         .out_json()
@@ -543,13 +543,13 @@ async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 1010,
-        "Client balance changed by {} on LND outgoing payment, expected 1010",
+        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 1000,
+        "Client balance changed by {} on LND outgoing payment, expected 1000",
         final_cln_incoming_client_balance - final_lnd_outgoing_client_balance
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 1010,
-        "LND Gateway balance changed by {} on LND outgoing payment, expected 1010",
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 1000,
+        "LND Gateway balance changed by {} on LND outgoing payment, expected 1000",
         final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance
     );
 
@@ -677,6 +677,12 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed.fed.pegin(10_000).await?;
     let invite_code = dev_fed.fed.invite_code()?;
+    run_standard_load_test(&load_test_temp, &invite_code).await?;
+    run_ln_circular_load_test(&load_test_temp, &invite_code).await?;
+    Ok(())
+}
+
+async fn run_standard_load_test(load_test_temp: &Path, invite_code: &str) -> anyhow::Result<()> {
     let output = cmd!(
         "fedimint-load-test-tool",
         "--archive-dir",
@@ -689,7 +695,7 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
         "--generate-invoice-with",
         "cln-lightning-cli",
         "--invite-code",
-        invite_code.clone()
+        invite_code
     )
     .out_string()
     .await?;
@@ -728,6 +734,88 @@ async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     anyhow::ensure!(
         output.contains("1 gateway_pay_invoice"),
         "paid different number of invoices than expected"
+    );
+    Ok(())
+}
+
+async fn run_ln_circular_load_test(load_test_temp: &Path, invite_code: &str) -> anyhow::Result<()> {
+    info!("Testing ln-circular-load-test with 'two-gateways' strategy");
+    let output = cmd!(
+        "fedimint-load-test-tool",
+        "--archive-dir",
+        load_test_temp.display(),
+        "--users",
+        "1",
+        "ln-circular-load-test",
+        "--strategy",
+        "two-gateways",
+        "--test-duration-secs",
+        "2",
+        "--invite-code",
+        invite_code
+    )
+    .out_string()
+    .await?;
+    println!("{output}");
+    anyhow::ensure!(
+        output.contains("gateway_create_invoice"),
+        "missing invoice creation"
+    );
+    anyhow::ensure!(
+        output.contains("gateway_pay_invoice"),
+        "missing invoice payment"
+    );
+
+    info!("Testing ln-circular-load-test with 'partner-ping-pong' strategy");
+    // Note invite code isn't required because we already have an archive dir
+    let output = cmd!(
+        "fedimint-load-test-tool",
+        "--archive-dir",
+        load_test_temp.display(),
+        "--users",
+        "1",
+        "ln-circular-load-test",
+        "--strategy",
+        "partner-ping-pong",
+        "--test-duration-secs",
+        "2",
+    )
+    .out_string()
+    .await?;
+    println!("{output}");
+    anyhow::ensure!(
+        output.contains("gateway_create_invoice"),
+        "missing invoice creation"
+    );
+    anyhow::ensure!(
+        output.contains("gateway_pay_invoice"),
+        "missing invoice payment"
+    );
+
+    info!("Testing ln-circular-load-test with 'self-payment' strategy");
+    // Note invite code isn't required because we already have an archive dir
+    let output = cmd!(
+        "fedimint-load-test-tool",
+        "--archive-dir",
+        load_test_temp.display(),
+        "--users",
+        "1",
+        "ln-circular-load-test",
+        "--strategy",
+        "self-payment",
+        "--test-duration-secs",
+        "2",
+    )
+    .out_string()
+    .await?;
+    println!("{output}");
+    anyhow::ensure!(
+        output.contains("gateway_create_invoice"),
+        "missing invoice creation"
+    );
+    anyhow::ensure!(
+        output.contains("gateway_pay_invoice"),
+        "missing invoice payment"
     );
     Ok(())
 }

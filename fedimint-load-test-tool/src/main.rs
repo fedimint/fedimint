@@ -8,8 +8,8 @@ use std::vec;
 use anyhow::{bail, Context};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use common::{
-    cln_create_invoice, cln_wait_invoice_payment, gateway_pay_invoice, get_note_summary,
-    lnd_create_invoice, lnd_wait_invoice_payment, reissue_notes,
+    cln_create_invoice, cln_pay_invoice, cln_wait_invoice_payment, gateway_pay_invoice,
+    get_note_summary, lnd_create_invoice, lnd_pay_invoice, lnd_wait_invoice_payment, reissue_notes,
 };
 use devimint::cmd;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
@@ -20,7 +20,9 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::spawn;
 use fedimint_core::util::{BoxFuture, SafeUrl};
 use fedimint_core::Amount;
+use fedimint_ln_client::{LightningClientExt, LnReceiveState};
 use fedimint_mint_client::OOBNotes;
+use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use tokio::fs::OpenOptions;
@@ -96,6 +98,12 @@ enum Command {
         about = "Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway"
     )]
     LoadTest(LoadTestArgs),
+    /// Run a load test where many users in parallel will receive then send a
+    /// payment through lightning.
+    /// It's 'circular' because the funds always come back to the same user then
+    /// we can keep making the payments in a loop
+    #[command()]
+    LnCircularLoadTest(LnCircularLoadTestArgs),
 }
 
 #[derive(Args, Clone)]
@@ -104,7 +112,7 @@ struct LoadTestArgs {
         long,
         help = "Federation invite code. If none given, we assume the client already has a config downloaded in DB"
     )]
-    invite_code: Option<String>,
+    invite_code: Option<InviteCode>,
 
     #[arg(
         long,
@@ -164,6 +172,70 @@ struct LoadTestArgs {
         default_value = "1000"
     )]
     invoice_amount: Amount,
+}
+
+#[derive(Args, Clone)]
+struct LnCircularLoadTestArgs {
+    #[arg(
+        long,
+        help = "Federation invite code. If none given, we assume the client already has a config downloaded in DB"
+    )]
+    invite_code: Option<InviteCode>,
+
+    #[arg(
+        long,
+        help = "Notes for the test. If none and no funds on archive, will call fedimint-cli spend"
+    )]
+    initial_notes: Option<OOBNotes>,
+
+    #[arg(
+        long,
+        default_value = "60",
+        help = "For how many seconds to run the test"
+    )]
+    test_duration_secs: u64,
+
+    #[arg(
+        long,
+        default_value = "0",
+        help = "How many seconds to sleep between LN payments"
+    )]
+    ln_payment_sleep_secs: u64,
+
+    #[arg(
+        long,
+        help = "How many notes to distribute to each user",
+        default_value = "1"
+    )]
+    notes_per_user: u16,
+
+    #[arg(
+        long,
+        help = "Note denomination to use for the test",
+        default_value = "1024"
+    )]
+    note_denomination: Amount,
+
+    #[arg(
+        long,
+        help = "Invoice amount when generating one",
+        default_value = "1000"
+    )]
+    invoice_amount: Amount,
+
+    #[arg(long)]
+    strategy: LnCircularStrategy,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum LnCircularStrategy {
+    /// The user will pay its own invoice
+    SelfPayment,
+    /// One gateway will pay/receive to/from the other, then they will swap
+    /// places
+    TwoGateways,
+    /// Two clients will pay to each other using the same gateway
+    PartnerPingPong,
 }
 
 #[derive(Debug, Clone)]
@@ -246,18 +318,7 @@ async fn main() -> anyhow::Result<()> {
             test_download_config(invite_code, opts.users, event_sender.clone()).await?
         }
         Command::LoadTest(args) => {
-            let invite_code = if let Some(invite_code) = args.invite_code {
-                Some(InviteCode::from_str(&invite_code).context("invalid invite code")?)
-            } else {
-                // Try to get an invite code through cli in a best effort basis
-                match get_invite_code_cli().await {
-                    Ok(invite_code) => Some(invite_code),
-                    Err(e) => {
-                        info!("No invite code provided and failed to get one with '{e}' error, will try to proceed without one...");
-                        None
-                    }
-                }
-            };
+            let invite_code = invite_code_or_fallback(args.invite_code).await;
 
             let gateway_id = if let Some(gateway_id) = args.gateway_id {
                 Some(gateway_id)
@@ -300,6 +361,23 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?
         }
+        Command::LnCircularLoadTest(args) => {
+            let invite_code = invite_code_or_fallback(args.invite_code).await;
+            run_ln_circular_load_test(
+                opts.archive_dir,
+                opts.users,
+                invite_code,
+                args.initial_notes,
+                Duration::from_secs(args.test_duration_secs),
+                Duration::from_secs(args.ln_payment_sleep_secs),
+                args.notes_per_user,
+                args.note_denomination,
+                args.invoice_amount,
+                args.strategy,
+                event_sender.clone(),
+            )
+            .await?
+        }
     };
 
     let result = futures::future::join_all(futures).await;
@@ -320,6 +398,21 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn invite_code_or_fallback(invite_code: Option<InviteCode>) -> Option<InviteCode> {
+    if let Some(invite_code) = invite_code {
+        Some(invite_code)
+    } else {
+        // Try to get an invite code through cli in a best effort basis
+        match get_invite_code_cli().await {
+            Ok(invite_code) => Some(invite_code),
+            Err(e) => {
+                info!("No invite code provided and failed to get one with '{e}' error, will try to proceed without one...");
+                None
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_load_test(
     archive_dir: Option<PathBuf>,
@@ -336,8 +429,165 @@ async fn run_load_test(
     invoice_amount: Amount,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let db_path = archive_dir.as_ref().map(|p| p.join("db"));
-    let coordinator = if let Some(db_path) = &db_path {
+    let db_path = get_db_path(archive_dir);
+    let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
+    let minimum_notes = notes_per_user * users;
+    let minimum_amount_required = note_denomination * (minimum_notes as u64);
+
+    reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
+    get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
+
+    info!("Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
+    remint_denomination(&coordinator, note_denomination, minimum_notes).await?;
+
+    print_coordinator_notes(&coordinator).await?;
+
+    let users_clients = get_users_clients(users, db_path, invite_code, gateway_id).await?;
+
+    let mut users_notes =
+        get_notes_for_users(users, notes_per_user, coordinator, note_denomination).await?;
+    let mut users_invoices = HashMap::new();
+    let mut user = 0;
+    // Distribute invoices to users in a round robin fashion
+    for invoice in invoices_from_file {
+        users_invoices
+            .entry(user)
+            .or_insert_with(Vec::new)
+            .push(invoice);
+        user = (user + 1) % users;
+    }
+
+    info!("Starting user tasks");
+    let futures = users_clients
+        .into_iter()
+        .enumerate()
+        .map(|(u, client)| {
+            let u = u as u16;
+            let oob_notes = users_notes.remove(&u).unwrap();
+            let invoices = users_invoices.remove(&u).unwrap_or_default();
+            let event_sender = event_sender.clone();
+            let f: BoxFuture<_> = Box::pin(do_load_test_user_task(
+                format!("User {u}:"),
+                client,
+                oob_notes,
+                generated_invoices_per_user,
+                ln_payment_sleep,
+                invoice_amount,
+                invoices,
+                generate_invoice_with,
+                event_sender,
+            ));
+            f
+        })
+        .collect::<Vec<_>>();
+
+    Ok(futures)
+}
+
+async fn get_notes_for_users(
+    users: u16,
+    notes_per_user: u16,
+    coordinator: ClientArc,
+    note_denomination: Amount,
+) -> anyhow::Result<HashMap<u16, Vec<OOBNotes>>> {
+    let mut users_notes = HashMap::new();
+    for u in 0..users {
+        users_notes.insert(u, Vec::with_capacity(notes_per_user.into()));
+        for _ in 0..notes_per_user {
+            let (_, oob_notes) = do_spend_notes(&coordinator, note_denomination).await?;
+            let user_amount = oob_notes.total_amount();
+            info!("Giving {user_amount} to user {u}");
+            users_notes.get_mut(&u).unwrap().push(oob_notes);
+        }
+    }
+    Ok(users_notes)
+}
+
+async fn get_users_clients(
+    n: u16,
+    db_path: Option<PathBuf>,
+    invite_code: Option<InviteCode>,
+    gateway_id: Option<String>,
+) -> anyhow::Result<Vec<ClientArc>> {
+    let mut users_clients = Vec::with_capacity(n.into());
+    for u in 0..n {
+        let (client, _) = get_user_client(u, &db_path, &invite_code, &gateway_id).await?;
+        users_clients.push(client);
+    }
+    Ok(users_clients)
+}
+
+async fn get_user_client(
+    user_index: u16,
+    db_path: &Option<PathBuf>,
+    invite_code: &Option<InviteCode>,
+    gateway_id: &Option<String>,
+) -> anyhow::Result<(ClientArc, Option<InviteCode>)> {
+    let user_db = db_path
+        .as_ref()
+        .map(|db_path| db_path.join(format!("user_{user_index}.db")));
+    let user_invite_code = if user_db.as_ref().map_or(false, |db| db.exists()) {
+        None
+    } else {
+        invite_code.clone()
+    };
+    let (client, invite_code) = build_client(user_invite_code, user_db.as_ref()).await?;
+    if let Some(gateway_id) = gateway_id {
+        switch_default_gateway(&client, gateway_id).await?;
+    }
+    Ok((client, invite_code))
+}
+
+async fn print_coordinator_notes(coordinator: &ClientArc) -> anyhow::Result<()> {
+    info!("Note summary:");
+    let summary = get_note_summary(coordinator).await?;
+    for (k, v) in summary.iter() {
+        info!("{k}: {v}");
+    }
+    Ok(())
+}
+
+async fn get_required_notes(
+    coordinator: &ClientArc,
+    minimum_amount_required: Amount,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+) -> anyhow::Result<()> {
+    let current_balance = coordinator.get_balance().await;
+    if current_balance < minimum_amount_required {
+        let diff = minimum_amount_required - current_balance;
+        info!("Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli");
+        match try_get_notes_cli(&diff, 5).await {
+            Ok(notes) => {
+                reissue_notes(coordinator, notes, event_sender).await?;
+            }
+            Err(e) => {
+                info!("Unable to get more notes: '{e}', will try to proceed without them");
+            }
+        };
+    } else {
+        info!("Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}");
+    }
+    Ok(())
+}
+
+async fn reissue_initial_notes(
+    initial_notes: Option<OOBNotes>,
+    coordinator: &ClientArc,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+) -> anyhow::Result<()> {
+    if let Some(notes) = initial_notes {
+        let amount = notes.total_amount();
+        info!("Reissuing initial notes, got {amount}");
+        reissue_notes(coordinator, notes, event_sender).await?;
+    }
+    Ok(())
+}
+
+async fn get_coordinator_client(
+    db_path: &Option<PathBuf>,
+    invite_code: &Option<InviteCode>,
+) -> anyhow::Result<(ClientArc, Option<InviteCode>)> {
+    let (client, invite_code) = if let Some(db_path) = db_path {
         let coordinator_db = db_path.join("coordinator.db");
         if coordinator_db.exists() {
             build_client(None, Some(&coordinator_db)).await?
@@ -362,100 +612,16 @@ async fn run_load_test(
         )
         .await?
     };
-    let minimum_notes = notes_per_user * users;
-    let minimum_amount_required = note_denomination * (minimum_notes as u64);
+    Ok((client, invite_code))
+}
 
-    if let Some(notes) = initial_notes {
-        let amount = notes.total_amount();
-        info!("Reissuing initial notes, got {amount}");
-        reissue_notes(&coordinator, notes, &event_sender).await?;
-    }
-    let current_balance = coordinator.get_balance().await;
-    if current_balance < minimum_amount_required {
-        let diff = minimum_amount_required - current_balance;
-        info!("Current balance {current_balance} not enough, trying to get {diff} more through fedimint-cli");
-        let notes = try_get_notes_cli(&diff, 5).await?;
-        reissue_notes(&coordinator, notes, &event_sender).await?;
-    } else {
-        info!("Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}");
-    }
-
-    info!("Reminting notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
-    remint_denomination(&coordinator, note_denomination, minimum_notes).await?;
-
-    info!("Note summary:");
-    let summary = get_note_summary(&coordinator).await?;
-    for (k, v) in summary.iter() {
-        info!("{k}: {v}");
-    }
-
-    let mut users_clients = Vec::with_capacity(users.into());
-    for u in 0..users {
-        let user_db = db_path
-            .as_ref()
-            .map(|db_path| db_path.join(format!("user_{u}.db")));
-
-        let user_invite_code = if user_db.as_ref().map_or(false, |db| db.exists()) {
-            None
-        } else {
-            invite_code.clone()
-        };
-        let client = build_client(user_invite_code, user_db.as_ref()).await?;
-        if let Some(gateway_id) = &gateway_id {
-            switch_default_gateway(&client, gateway_id).await?;
-        }
-        users_clients.push(client);
-    }
-
-    let mut users_notes = HashMap::new();
-    for u in 0..users {
-        users_notes.insert(u, Vec::with_capacity(notes_per_user.into()));
-        for _ in 0..notes_per_user {
-            let (_, oob_notes) = do_spend_notes(&coordinator, note_denomination).await?;
-            let user_amount = oob_notes.total_amount();
-            info!("Giving {user_amount} to user {u}");
-            users_notes.get_mut(&u).unwrap().push(oob_notes);
-        }
-    }
-    let mut users_invoices = HashMap::new();
-    let mut user = 0;
-    // Distribute invoices to users in a round robin fashion
-    for invoice in invoices_from_file {
-        users_invoices
-            .entry(user)
-            .or_insert_with(Vec::new)
-            .push(invoice);
-        user = (user + 1) % users;
-    }
-
-    info!("Starting user tasks");
-    let futures = users_clients
-        .into_iter()
-        .enumerate()
-        .map(|(u, client)| {
-            let u = u as u16;
-            let oob_notes = users_notes.remove(&u).unwrap();
-            let invoices = users_invoices.remove(&u).unwrap_or_default();
-            let event_sender = event_sender.clone();
-            let f: BoxFuture<_> = Box::pin(do_user_task(
-                client,
-                oob_notes,
-                generated_invoices_per_user,
-                ln_payment_sleep,
-                invoice_amount,
-                invoices,
-                generate_invoice_with,
-                event_sender,
-            ));
-            f
-        })
-        .collect::<Vec<_>>();
-
-    Ok(futures)
+fn get_db_path(archive_dir: Option<PathBuf>) -> Option<PathBuf> {
+    archive_dir.as_ref().map(|p| p.join("db"))
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn do_user_task(
+async fn do_load_test_user_task(
+    prefix: String,
     client: ClientArc,
     oob_notes: Vec<OOBNotes>,
     generated_invoices_per_user: u16,
@@ -480,12 +646,12 @@ async fn do_user_task(
             match generate_invoice_with {
                 Some(LnInvoiceGeneration::ClnLightningCli) => {
                     let (invoice, label) = cln_create_invoice(invoice_amount).await?;
-                    gateway_pay_invoice(&client, invoice, &event_sender).await?;
+                    gateway_pay_invoice(&prefix, &client, invoice, &event_sender).await?;
                     cln_wait_invoice_payment(&label).await?;
                 }
                 Some(LnInvoiceGeneration::LnCli) => {
                     let (invoice, r_hash) = lnd_create_invoice(invoice_amount).await?;
-                    gateway_pay_invoice(&client, invoice, &event_sender).await?;
+                    gateway_pay_invoice(&prefix, &client, invoice, &event_sender).await?;
                     lnd_wait_invoice_payment(r_hash).await?;
                 }
                 None if additional_invoices.is_empty() => {
@@ -512,7 +678,7 @@ async fn do_user_task(
         } else if invoice_amount == Amount::ZERO {
             warn!("Can't pay invoice {invoice}, amount is zero");
         } else {
-            gateway_pay_invoice(&client, invoice, &event_sender).await?;
+            gateway_pay_invoice(&prefix, &client, invoice, &event_sender).await?;
             if additional_invoices.peek().is_some() {
                 // Only sleep while there are more invoices to pay
                 fedimint_core::task::sleep(ln_payment_sleep).await;
@@ -520,6 +686,266 @@ async fn do_user_task(
         }
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_ln_circular_load_test(
+    archive_dir: Option<PathBuf>,
+    users: u16,
+    invite_code: Option<InviteCode>,
+    initial_notes: Option<OOBNotes>,
+    test_duration: Duration,
+    ln_payment_sleep: Duration,
+    notes_per_user: u16,
+    note_denomination: Amount,
+    invoice_amount: Amount,
+    strategy: LnCircularStrategy,
+    event_sender: mpsc::UnboundedSender<MetricEvent>,
+) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
+    let db_path = get_db_path(archive_dir);
+    let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
+    let minimum_notes = notes_per_user * users;
+    let minimum_amount_required = note_denomination * (minimum_notes as u64);
+
+    reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
+    get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
+
+    info!("Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
+    remint_denomination(&coordinator, note_denomination, minimum_notes).await?;
+
+    print_coordinator_notes(&coordinator).await?;
+
+    let users_clients = get_users_clients(users, db_path, invite_code.clone(), None).await?;
+
+    let mut users_notes =
+        get_notes_for_users(users, notes_per_user, coordinator, note_denomination).await?;
+
+    info!("Starting user tasks");
+    let futures = users_clients
+        .into_iter()
+        .enumerate()
+        .map(|(u, client)| {
+            let u = u as u16;
+            let oob_notes = users_notes.remove(&u).unwrap();
+            let event_sender = event_sender.clone();
+            let f: BoxFuture<_> = Box::pin(do_ln_circular_test_user_task(
+                format!("User {u}:"),
+                client,
+                invite_code.clone(),
+                oob_notes,
+                test_duration,
+                ln_payment_sleep,
+                invoice_amount,
+                strategy,
+                event_sender,
+            ));
+            f
+        })
+        .collect::<Vec<_>>();
+
+    Ok(futures)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn do_ln_circular_test_user_task(
+    prefix: String,
+    client: ClientArc,
+    invite_code: Option<InviteCode>,
+    oob_notes: Vec<OOBNotes>,
+    test_duration: Duration,
+    ln_payment_sleep: Duration,
+    invoice_amount: Amount,
+    strategy: LnCircularStrategy,
+    event_sender: mpsc::UnboundedSender<MetricEvent>,
+) -> anyhow::Result<()> {
+    for oob_note in oob_notes {
+        let amount = oob_note.total_amount();
+        reissue_notes(&client, oob_note, &event_sender)
+            .await
+            .map_err(|e| anyhow::anyhow!("while reissuing initial {amount}: {e}"))?;
+    }
+    let initial_time = fedimint_core::time::now();
+    let still_ontime = || async {
+        fedimint_core::time::now()
+            .duration_since(initial_time)
+            .expect("time to work")
+            <= test_duration
+    };
+    let sleep_a_bit = || async {
+        if still_ontime().await {
+            fedimint_core::task::sleep(ln_payment_sleep).await;
+        }
+    };
+    match strategy {
+        LnCircularStrategy::TwoGateways => {
+            let mut invoice_generation = LnInvoiceGeneration::LnCli;
+            while still_ontime().await {
+                let gateway_id = get_gateway_id(invoice_generation).await?;
+                switch_default_gateway(&client, &gateway_id).await?;
+                run_two_gateways_strategy(
+                    &prefix,
+                    &mut invoice_generation,
+                    &invoice_amount,
+                    &event_sender,
+                    &client,
+                )
+                .await?;
+                sleep_a_bit().await;
+            }
+        }
+        LnCircularStrategy::SelfPayment => {
+            while still_ontime().await {
+                do_self_payment(&prefix, &client, invoice_amount, &event_sender).await?;
+                sleep_a_bit().await;
+            }
+        }
+        LnCircularStrategy::PartnerPingPong => {
+            let (partner, _) = build_client(invite_code, None).await?;
+            while still_ontime().await {
+                do_partner_ping_pong(&prefix, &client, &partner, invoice_amount, &event_sender)
+                    .await?;
+                sleep_a_bit().await;
+            }
+        }
+    }
+    Ok(())
+}
+
+const GATEWAY_CREATE_INVOICE: &str = "gateway_create_invoice";
+
+async fn run_two_gateways_strategy(
+    prefix: &str,
+    invoice_generation: &mut LnInvoiceGeneration,
+    invoice_amount: &Amount,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+    client: &ClientArc,
+) -> Result<(), anyhow::Error> {
+    let create_invoice_time = fedimint_core::time::now();
+    match *invoice_generation {
+        LnInvoiceGeneration::ClnLightningCli => {
+            let (invoice, label) = cln_create_invoice(*invoice_amount).await?;
+            event_sender.send(MetricEvent {
+                name: GATEWAY_CREATE_INVOICE.into(),
+                duration: create_invoice_time.elapsed()?,
+            })?;
+            gateway_pay_invoice(prefix, client, invoice, event_sender).await?;
+            cln_wait_invoice_payment(&label).await?;
+            let (operation_id, invoice) =
+                client_create_invoice(client, *invoice_amount, event_sender).await?;
+            let pay_invoice_time = fedimint_core::time::now();
+            cln_pay_invoice(invoice).await?;
+            wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time)
+                .await?;
+            *invoice_generation = LnInvoiceGeneration::LnCli;
+        }
+        LnInvoiceGeneration::LnCli => {
+            let (invoice, r_hash) = lnd_create_invoice(*invoice_amount).await?;
+            event_sender.send(MetricEvent {
+                name: GATEWAY_CREATE_INVOICE.into(),
+                duration: create_invoice_time.elapsed()?,
+            })?;
+            gateway_pay_invoice(prefix, client, invoice, event_sender).await?;
+            lnd_wait_invoice_payment(r_hash).await?;
+            let (operation_id, invoice) =
+                client_create_invoice(client, *invoice_amount, event_sender).await?;
+            let pay_invoice_time = fedimint_core::time::now();
+            lnd_pay_invoice(invoice).await?;
+            wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time)
+                .await?;
+            *invoice_generation = LnInvoiceGeneration::ClnLightningCli;
+        }
+    };
+    Ok(())
+}
+
+async fn do_self_payment(
+    prefix: &str,
+    client: &ClientArc,
+    invoice_amount: Amount,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+) -> anyhow::Result<()> {
+    let (operation_id, invoice) =
+        client_create_invoice(client, invoice_amount, event_sender).await?;
+    let pay_invoice_time = fedimint_core::time::now();
+    client.pay_bolt11_invoice(invoice).await?;
+    wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).await?;
+    Ok(())
+}
+
+async fn do_partner_ping_pong(
+    prefix: &str,
+    client: &ClientArc,
+    partner: &ClientArc,
+    invoice_amount: Amount,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+) -> anyhow::Result<()> {
+    // Ping (partner creates invoice, client pays)
+    let (operation_id, invoice) =
+        client_create_invoice(partner, invoice_amount, event_sender).await?;
+    let pay_invoice_time = fedimint_core::time::now();
+    client.pay_bolt11_invoice(invoice).await?;
+    wait_invoice_payment(
+        prefix,
+        partner,
+        operation_id,
+        event_sender,
+        pay_invoice_time,
+    )
+    .await?;
+    // Pong (client creates invoice, partner pays)
+    let (operation_id, invoice) =
+        client_create_invoice(client, invoice_amount, event_sender).await?;
+    let pay_invoice_time = fedimint_core::time::now();
+    partner.pay_bolt11_invoice(invoice).await?;
+    wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).await?;
+    Ok(())
+}
+
+async fn wait_invoice_payment(
+    prefix: &str,
+    client: &ClientArc,
+    operation_id: fedimint_core::core::OperationId,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+    pay_invoice_time: std::time::SystemTime,
+) -> anyhow::Result<()> {
+    let mut updates = client
+        .subscribe_ln_receive(operation_id)
+        .await?
+        .into_stream();
+    while let Some(update) = updates.next().await {
+        info!("{prefix} Update: {:?}", update);
+        match update {
+            LnReceiveState::Claimed => {
+                break;
+            }
+            LnReceiveState::Canceled { reason } => {
+                warn!("Invoice was cancelled: {reason}");
+                break;
+            }
+            _ => {}
+        }
+    }
+    event_sender.send(MetricEvent {
+        name: "gateway_pay_invoice".into(),
+        duration: pay_invoice_time.elapsed()?,
+    })?;
+    Ok(())
+}
+
+async fn client_create_invoice(
+    client: &ClientArc,
+    invoice_amount: Amount,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+) -> anyhow::Result<(fedimint_core::core::OperationId, Bolt11Invoice)> {
+    let create_invoice_time = fedimint_core::time::now();
+    let (operation_id, invoice) = client
+        .create_bolt11_invoice(invoice_amount, "".into(), None, ())
+        .await?;
+    event_sender.send(MetricEvent {
+        name: GATEWAY_CREATE_INVOICE.into(),
+        duration: create_invoice_time.elapsed()?,
+    })?;
+    Ok((operation_id, invoice))
 }
 
 async fn test_download_config(
