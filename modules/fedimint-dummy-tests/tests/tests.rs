@@ -8,7 +8,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{sats, Amount, OutPoint};
 use fedimint_dummy_client::states::DummyStateMachine;
-use fedimint_dummy_client::{DummyClientExt, DummyClientGen, DummyClientModule};
+use fedimint_dummy_client::{DummyClientGen, DummyClientModule};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
 use fedimint_dummy_common::{broken_fed_key_pair, DummyInput, DummyOutput, KIND};
 use fedimint_dummy_server::DummyGen;
@@ -24,12 +24,16 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     let fed = fixtures().new_fed().await;
     let (client1, client2) = fed.two_clients().await;
 
-    let (_, outpoint) = client1.print_money(sats(1000)).await?;
-    client1.receive_money(outpoint).await?;
+    let (client1_dummy_module, _instance) = client1.get_first_module::<DummyClientModule>();
+    let (client2_dummy_module, _instance) = client2.get_first_module::<DummyClientModule>();
+    let (_, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
+    client1_dummy_module.receive_money(outpoint).await?;
     assert_eq!(client1.get_balance().await, sats(1000));
 
-    let outpoint = client1.send_money(client2.account(), sats(250)).await?;
-    client2.receive_money(outpoint).await?;
+    let outpoint = client1_dummy_module
+        .send_money(client2_dummy_module.account(), sats(250))
+        .await?;
+    client2_dummy_module.receive_money(outpoint).await?;
     assert_eq!(client1.get_balance().await, sats(750));
     assert_eq!(client2.get_balance().await, sats(250));
     Ok(())
@@ -39,10 +43,11 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
 async fn can_threshold_sign_message() {
     let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
+    let (dummy_module, _instance) = client.get_first_module::<DummyClientModule>();
 
     let message = "Hello fed!";
-    let sig = client.fed_signature(message).await.unwrap();
-    assert!(client.fed_public_key().verify(&sig, message));
+    let sig = dummy_module.fed_signature(message).await.unwrap();
+    assert!(dummy_module.fed_public_key().verify(&sig, message));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -88,7 +93,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
         prev_panic_hook(info);
     }));
 
-    let (_dummy, instance) = client.get_first_module::<DummyClientModule>(&KIND);
+    let (_dummy, instance) = client.get_first_module::<DummyClientModule>();
     let op_id = OperationId(rand::random());
     let account_kp = broken_fed_key_pair();
     let input = ClientInput {
@@ -121,12 +126,11 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
 
-    let (_dummy, instance) =
-        client.get_first_module::<DummyClientModule>(&fedimint_dummy_common::KIND);
+    let (dummy_module, instance) = client.get_first_module::<DummyClientModule>();
     let output = ClientOutput {
         output: DummyOutput {
             amount: sats(1000),
-            account: client.account(),
+            account: dummy_module.account(),
         },
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
     };

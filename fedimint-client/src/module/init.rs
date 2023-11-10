@@ -177,6 +177,7 @@ where
                 module_api: api.with_module(instance_id),
                 context: ClientContext {
                     client: final_client,
+                    module_instance_id: instance_id,
                 },
             })
             .await?

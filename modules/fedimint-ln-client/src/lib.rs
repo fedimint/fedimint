@@ -49,7 +49,7 @@ use fedimint_ln_common::contracts::{
 use fedimint_ln_common::{
     ln_operation, ContractOutput, LightningClientContext, LightningCommonGen, LightningGateway,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
-    LightningOutput, KIND,
+    LightningOutput,
 };
 use futures::StreamExt;
 use incoming::IncomingSmError;
@@ -223,7 +223,7 @@ async fn invoice_routes_back_to_federation(
 #[apply(async_trait_maybe_send!)]
 impl LightningClientExt for ClientArc {
     async fn select_active_gateway(&self) -> anyhow::Result<LightningGateway> {
-        let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let (_lightning, instance) = self.get_first_module::<LightningClientModule>();
         let mut dbtx = instance.db.begin_transaction().await;
         match dbtx.get_value(&LightningGatewayKey).await {
             Some(active_gateway) => Ok(active_gateway.info),
@@ -239,7 +239,7 @@ impl LightningClientExt for ClientArc {
 
     /// Switches the clients active gateway to a registered gateway.
     async fn set_active_gateway(&self, gateway_id: &secp256k1::PublicKey) -> anyhow::Result<()> {
-        let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let (_lightning, instance) = self.get_first_module::<LightningClientModule>();
         let mut dbtx = instance.db.begin_transaction().await;
 
         let gateways = self.fetch_registered_gateways().await?;
@@ -261,7 +261,7 @@ impl LightningClientExt for ClientArc {
     }
 
     async fn fetch_registered_gateways(&self) -> anyhow::Result<Vec<LightningGatewayAnnouncement>> {
-        let (_lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let (_lightning, instance) = self.get_first_module::<LightningClientModule>();
         Ok(instance.api.fetch_gateways().await?)
     }
 
@@ -269,7 +269,7 @@ impl LightningClientExt for ClientArc {
         &self,
         invoice: Bolt11Invoice,
     ) -> anyhow::Result<OutgoingLightningPayment> {
-        let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let (lightning, instance) = self.get_first_module::<LightningClientModule>();
         let mut dbtx = instance.db.begin_transaction().await;
         let prev_payment_result = lightning
             .get_prev_payment_result(invoice.payment_hash(), &mut dbtx)
@@ -395,7 +395,7 @@ impl LightningClientExt for ClientArc {
         expiry_time: Option<u64>,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice)> {
-        let (lightning, instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let (lightning, instance) = self.get_first_module::<LightningClientModule>();
         let (src_node_id, short_channel_id, route_hints) = match self.select_active_gateway().await
         {
             Ok(active_gateway) => (
@@ -472,7 +472,7 @@ impl LightningClientExt for ClientArc {
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
                 let lightning = client
-                    .get_first_module::<LightningClientModule>(&KIND)
+                    .get_first_module::<LightningClientModule>()
                     .0;
 
                 yield LnReceiveState::Created;
@@ -525,7 +525,7 @@ impl LightningClientExt for ClientArc {
 
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
-                let lightning = client.get_first_module::<LightningClientModule>(&KIND).0;
+                let lightning = client.get_first_module::<LightningClientModule>().0;
 
                 yield LnPayState::Created;
 
@@ -580,7 +580,7 @@ impl LightningClientExt for ClientArc {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<InternalPayState>> {
-        let (lightning, _instance) = self.get_first_module::<LightningClientModule>(&KIND);
+        let (lightning, _instance) = self.get_first_module::<LightningClientModule>();
 
         let operation = ln_operation(self, operation_id).await?;
         let mut stream = lightning.notifier.subscribe(operation_id).await;
@@ -722,6 +722,7 @@ pub struct LightningClientModule {
 }
 
 impl ClientModule for LightningClientModule {
+    type Init = LightningClientGen;
     type Common = LightningModuleTypes;
     type ModuleStateMachineContext = LightningClientContext;
     type States = LightningClientStateMachines;

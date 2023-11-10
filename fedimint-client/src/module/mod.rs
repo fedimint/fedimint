@@ -1,3 +1,4 @@
+use core::fmt;
 use std::any::Any;
 use std::ffi;
 use std::fmt::Debug;
@@ -6,28 +7,30 @@ use std::sync::Arc;
 use anyhow::bail;
 use fedimint_core::api::DynGlobalApi;
 use fedimint_core::core::{
-    Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, OperationId,
+    Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
 use fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::{ModuleCommon, TransactionItemAmount};
+use fedimint_core::module::{
+    CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, TransactionItemAmount,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
-use futures::Future;
 
+use self::init::ClientModuleInit;
 use crate::sm::{Context, DynContext, DynState, Executor, State};
-use crate::transaction::{ClientInput, ClientOutput};
-use crate::{Client, ClientArc, ClientWeak, DynGlobalClientContext};
+use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use crate::{ClientArc, ClientWeak, DynGlobalClientContext, TransactionUpdates};
 
 pub mod init;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
 
-/// A final, fully initialized [`Client`]
+/// A final, fully initialized [`crate::Client`]
 ///
 /// Client modules need to be able to access a `Client` they are a part
 /// of. To break the circular dependency, the final `Client` is passed
@@ -57,29 +60,70 @@ impl FinalClient {
 #[derive(Clone)]
 pub struct ClientContext {
     client: FinalClient,
+    module_instance_id: ModuleInstanceId,
+}
+
+impl fmt::Debug for ClientContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ClientContext")
+    }
 }
 
 impl ClientContext {
-    /// Run `f` with a `Client` reference
-    ///
-    /// This uses a closure-API to prevent the caller from holding on to a
-    /// reference to the `Client`, preventing its cleanup.
-    pub async fn with_client<F>(self, f: impl FnOnce(&Client) -> F) -> <F as Future>::Output
+    /// See [`crate::Client::finalize_and_submit_transaction`]
+    pub async fn finalize_and_submit_transaction<F, M>(
+        &self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: F,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
-        F: Future,
+        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
+        M: serde::Serialize + MaybeSend,
     {
-        f(&self.client.get()).await
+        self.client
+            .get()
+            .finalize_and_submit_transaction(
+                operation_id,
+                operation_type,
+                operation_meta,
+                tx_builder,
+            )
+            .await
     }
 
-    /// Like [`Self::with_client`] but when `async` is not needed.
-    pub fn with_client_sync<R>(self, f: impl FnOnce(&Client) -> R) -> R {
-        f(&self.client.get())
+    /// See [`crate::Client::transaction_updates`]
+    pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
+        self.client.get().transaction_updates(operation_id).await
+    }
+
+    /// See [`crate::Client::await_primary_module_outputs`]
+    pub async fn await_primary_module_outputs(
+        &self,
+        operation_id: OperationId,
+        outputs: Vec<OutPoint>,
+    ) -> anyhow::Result<Amount> {
+        self.client
+            .get()
+            .await_primary_module_outputs(operation_id, outputs)
+            .await
+    }
+
+    pub fn global_api(&self) -> DynGlobalApi {
+        self.client.get().api_clone()
+    }
+
+    pub fn module_instance_id(&self) -> ModuleInstanceId {
+        self.module_instance_id
     }
 }
 
 /// Fedimint module client
 #[apply(async_trait_maybe_send!)]
 pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
+    type Init: ClientModuleInit;
+
     /// Common module types shared between client and server
     type Common: ModuleCommon;
 
@@ -97,6 +141,10 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         let mut decoder_builder = Self::Common::decoder_builder();
         decoder_builder.with_decodable_type::<Self::States>();
         decoder_builder.build()
+    }
+
+    fn kind() -> ModuleKind {
+        <<<Self as ClientModule>::Init as ExtendsCommonModuleInit>::Common as CommonModuleInit>::KIND
     }
 
     fn context(&self) -> Self::ModuleStateMachineContext;

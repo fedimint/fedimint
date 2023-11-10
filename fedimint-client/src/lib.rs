@@ -607,6 +607,10 @@ impl Client {
         self.api.as_ref()
     }
 
+    pub fn api_clone(&self) -> DynGlobalApi {
+        self.api.clone()
+    }
+
     pub async fn start_executor(self: &Arc<Self>) {
         debug!(
             "Starting fedimint client executor (version: {})",
@@ -953,12 +957,10 @@ impl Client {
     }
 
     /// Returns a reference to a typed module client instance by kind
-    pub fn get_first_module<M: ClientModule>(
-        &self,
-        module_kind: &ModuleKind,
-    ) -> (&M, ClientModuleInstance) {
+    pub fn get_first_module<M: ClientModule>(&self) -> (&M, ClientModuleInstance) {
+        let module_kind = M::kind();
         let id = self
-            .get_first_instance(module_kind)
+            .get_first_instance(&module_kind)
             .unwrap_or_else(|| panic!("No modules found of kind {module_kind}"));
         let module: &M = self
             .try_get_module(id)

@@ -132,8 +132,7 @@ impl WalletClientExt for ClientArc {
         &self,
         valid_until: SystemTime,
     ) -> anyhow::Result<(OperationId, Address)> {
-        let (wallet_client, instance) =
-            self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
+        let (wallet_client, instance) = self.get_first_module::<WalletClientModule>();
 
         let (operation_id, address) = self
             .db()
@@ -188,8 +187,7 @@ impl WalletClientExt for ClientArc {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<DepositState>> {
-        let (wallet_client, _) =
-            self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
+        let (wallet_client, _) = self.get_first_module::<WalletClientModule>();
 
         let operation_log_entry = self
             .operation_log()
@@ -270,8 +268,7 @@ impl WalletClientExt for ClientArc {
         address: Address,
         amount: bitcoin::Amount,
     ) -> anyhow::Result<PegOutFees> {
-        let (wallet_client, _) =
-            self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
+        let (wallet_client, _) = self.get_first_module::<WalletClientModule>();
 
         wallet_client.get_withdraw_fees(address, amount).await
     }
@@ -282,8 +279,7 @@ impl WalletClientExt for ClientArc {
         amount: bitcoin::Amount,
         fee: PegOutFees,
     ) -> anyhow::Result<OperationId> {
-        let (wallet_client, instance) =
-            self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
+        let (wallet_client, instance) = self.get_first_module::<WalletClientModule>();
 
         let operation_id = OperationId(thread_rng().gen());
 
@@ -310,8 +306,7 @@ impl WalletClientExt for ClientArc {
     }
 
     async fn rbf_withdraw(&self, rbf: Rbf) -> anyhow::Result<OperationId> {
-        let (wallet_client, instance) =
-            self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
+        let (wallet_client, instance) = self.get_first_module::<WalletClientModule>();
 
         let operation_id = OperationId(thread_rng().gen());
 
@@ -339,8 +334,7 @@ impl WalletClientExt for ClientArc {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<WithdrawState>> {
-        let (wallet_client, _) =
-            self.get_first_module::<WalletClientModule>(&WalletCommonGen::KIND);
+        let (wallet_client, _) = self.get_first_module::<WalletClientModule>();
 
         let operation = self
             .operation_log()
@@ -523,6 +517,7 @@ pub struct WalletClientModule {
 }
 
 impl ClientModule for WalletClientModule {
+    type Init = WalletClientGen;
     type Common = WalletModuleTypes;
     type ModuleStateMachineContext = WalletClientContext;
     type States = WalletClientStates;

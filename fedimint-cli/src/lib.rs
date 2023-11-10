@@ -651,8 +651,7 @@ impl FedimintCli {
                 task::timeout(Duration::from_secs(30), async move {
                     let client = cli.build_client_ng(&self.module_inits, None).await?;
                     loop {
-                        let (_, instance) = client
-                            .get_first_module::<WalletClientModule>(&fedimint_wallet_client::KIND);
+                        let (_, instance) = client.get_first_module::<WalletClientModule>();
                         let count = client
                             .api()
                             .with_module(instance.id)

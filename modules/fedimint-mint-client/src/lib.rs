@@ -256,7 +256,7 @@ impl MintClientExt for ClientArc {
         oob_notes: OOBNotes,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
-        let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let (mint, instance) = self.get_first_module::<MintClientModule>();
         let OOBNotes {
             federation_id_prefix,
             notes,
@@ -326,7 +326,7 @@ impl MintClientExt for ClientArc {
 
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
-                let mint = client.get_first_module::<MintClientModule>(&KIND).0;
+                let mint = client.get_first_module::<MintClientModule>().0;
 
                 yield ReissueExternalNotesState::Created;
 
@@ -378,7 +378,7 @@ impl MintClientExt for ClientArc {
         try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
-        let (mint, instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let (mint, instance) = self.get_first_module::<MintClientModule>();
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientExt::spend_notes extra_meta is serializable");
 
@@ -437,7 +437,7 @@ impl MintClientExt for ClientArc {
     }
 
     async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount> {
-        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let (mint, _instance) = self.get_first_module::<MintClientModule>();
         let OOBNotes {
             federation_id_prefix,
             notes,
@@ -468,7 +468,7 @@ impl MintClientExt for ClientArc {
     }
 
     async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
-        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let (mint, _instance) = self.get_first_module::<MintClientModule>();
 
         // TODO: make robust by writing to the DB, this can fail
         let _ = mint.cancel_oob_payment_bc.send(operation_id);
@@ -490,7 +490,7 @@ impl MintClientExt for ClientArc {
 
         Ok(operation.outcome_or_updates(self.db(), operation_id, || {
             stream! {
-                let mint = client.get_first_module::<MintClientModule>(&KIND).0;
+                let mint = client.get_first_module::<MintClientModule>().0;
 
                 yield SpendOOBState::Created;
 
@@ -535,7 +535,7 @@ impl MintClientExt for ClientArc {
 
     /// Waits for the mint backup restoration to finish
     async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
-        let (mint, _instance) = self.get_first_module::<MintClientModule>(&KIND);
+        let (mint, _instance) = self.get_first_module::<MintClientModule>();
         mint.await_restore_finished().await
     }
 }
@@ -699,6 +699,7 @@ impl Context for MintClientContext {}
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for MintClientModule {
+    type Init = MintClientGen;
     type Common = MintModuleTypes;
     type ModuleStateMachineContext = MintClientContext;
     type States = MintClientStateMachines;

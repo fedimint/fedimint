@@ -477,9 +477,8 @@ pub async fn handle_command(
 }
 
 async fn get_note_summary(client: &ClientArc) -> anyhow::Result<serde_json::Value> {
-    let (mint_client, _) = client.get_first_module::<MintClientModule>(&fedimint_mint_client::KIND);
-    let (wallet_client, _) =
-        client.get_first_module::<WalletClientModule>(&fedimint_wallet_client::KIND);
+    let (mint_client, _) = client.get_first_module::<MintClientModule>();
+    let (wallet_client, _) = client.get_first_module::<WalletClientModule>();
     let summary = mint_client
         .get_wallet_summary(
             &mut client
