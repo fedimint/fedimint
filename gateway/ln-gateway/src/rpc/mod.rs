@@ -9,7 +9,7 @@ use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::Amount;
+use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};
@@ -53,28 +53,6 @@ pub struct WithdrawPayload {
     pub federation_id: FederationId,
     pub amount: BitcoinAmountOrAll,
     pub address: Address,
-}
-
-/// Amount of bitcoin to send, or "all" to send all available funds
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum BitcoinAmountOrAll {
-    Amount(#[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount),
-    All,
-}
-
-impl FromStr for BitcoinAmountOrAll {
-    type Err = bitcoin::util::amount::ParseAmountError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        if s == "all" {
-            Ok(BitcoinAmountOrAll::All)
-        } else {
-            bitcoin::Amount::from_str(s)
-                .map(BitcoinAmountOrAll::Amount)
-                .map_err(|_| bitcoin::util::amount::ParseAmountError::InvalidFormat)
-        }
-    }
 }
 
 /// Information about one of the feds we are connected to

@@ -2,11 +2,12 @@ use bitcoin::{Address, Amount};
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::BitcoinAmountOrAll;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, BitcoinAmountOrAll, ConnectFedPayload, DepositAddressPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
+    SetConfigurationPayload, WithdrawPayload,
 };
 use serde::Serialize;
 

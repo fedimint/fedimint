@@ -43,7 +43,7 @@ use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{push_db_pair_items, Amount};
+use fedimint_core::{push_db_pair_items, Amount, BitcoinAmountOrAll};
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
@@ -59,7 +59,7 @@ use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning_invoice::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
-use rpc::{BitcoinAmountOrAll, FederationInfo, SetConfigurationPayload};
+use rpc::{FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
@@ -675,9 +675,9 @@ impl Gateway {
             federation_id,
         } = payload;
         let client = self.select_client(federation_id).await?;
+        let wallet_module = client.get_first_module::<WalletClientModule>();
 
         // TODO: Fees should probably be passed in as a parameter
-        let wallet_module = client.get_first_module::<WalletClientModule>();
         let (amount, fees) = match amount {
             // If the amount is "all", then we need to subtract the fees from
             // the amount we are withdrawing
