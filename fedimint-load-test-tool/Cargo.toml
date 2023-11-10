@@ -24,8 +24,8 @@ fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 futures = "0.3"
-jsonrpsee-core = { version = "0.18.0", features = [ "client" ] }
-jsonrpsee-types = { version = "0.18.0" }
+jsonrpsee-core = { version = "0.20.0", features = [ "client" ] }
+jsonrpsee-types = { version = "0.20.0" }
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
@@ -35,7 +35,7 @@ tracing = "0.1"
 url = { version = "2.3.1", features = ["serde"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.18.0", features = ["webpki-tls"], default-features = false }
+jsonrpsee-ws-client = { version = "0.20.0", features = ["webpki-tls"], default-features = false }
 
 [build-dependencies]
 fedimint-build = { path = "../fedimint-build" }

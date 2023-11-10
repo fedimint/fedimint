@@ -726,13 +726,13 @@ impl JsonRpcClient for WsClient {
         return WsClientBuilder::default()
             .use_webpki_rustls()
             .max_concurrent_requests(u16::MAX as usize)
-            .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
+            .build(url.as_str())
             .await;
 
         #[cfg(target_family = "wasm")]
         WsClientBuilder::default()
             .max_concurrent_requests(u16::MAX as usize)
-            .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
+            .build(url.as_str())
             .await
     }
 
@@ -860,24 +860,6 @@ impl<C: JsonRpcClient> FederationPeer<C> {
             }
         })
     }
-}
-
-/// `jsonrpsee` converts the `SafeUrl` to a `&str` internally and then parses it
-/// as an `Uri`. Unfortunately the underlying `Url` type swallows ports that it
-/// considers default ports (e.g. 80 and 443 for HTTP(S)) which makes the `Uri`
-/// parsing fail in these cases. This function works around this limitation in a
-/// limited way (not fully standard compliant, but work for our use case).
-///
-/// See <https://github.com/paritytech/jsonrpsee/issues/554#issue-1048646896>
-fn url_to_string_with_default_port(url: &SafeUrl) -> String {
-    format!(
-        "{}://{}:{}{}",
-        url.scheme(),
-        url.host().expect("Asserted on construction"),
-        url.port_or_known_default()
-            .expect("Asserted on construction"),
-        url.path()
-    )
 }
 
 impl<C: JsonRpcClient> WsFederationApi<C> {}
