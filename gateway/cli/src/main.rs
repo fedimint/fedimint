@@ -5,7 +5,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    AmountOrAll, BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload,
+    BackupPayload, BalancePayload, BitcoinAmountOrAll, ConnectFedPayload, DepositAddressPayload,
     RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 use serde::Serialize;
@@ -45,7 +45,7 @@ pub enum Commands {
         federation_id: FederationId,
         /// The amount to withdraw
         #[clap(long)]
-        amount: AmountOrAll,
+        amount: BitcoinAmountOrAll,
         /// The address to send the funds to
         #[clap(long)]
         address: Address,
