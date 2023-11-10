@@ -97,6 +97,8 @@ impl ClientModule for DummyClientModule {
         id: OperationId,
         amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>> {
+        dbtx.ensure_isolated().expect("must be isolated");
+
         // Check and subtract from our funds
         let funds = get_funds(dbtx).await;
         if funds < amount {
@@ -237,6 +239,7 @@ impl DummyClientModule {
         account: XOnlyPublicKey,
         amount: Amount,
     ) -> anyhow::Result<OutPoint> {
+        self.db.ensure_isolated().expect("must be isolated");
         let mut dbtx = self.db.begin_transaction().await;
         let op_id = OperationId(rand::random());
 
