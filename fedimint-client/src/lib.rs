@@ -466,7 +466,24 @@ fn states_add_instance(
 /// methods live.
 #[derive(Debug)]
 pub struct ClientArc {
+    // Use [`ClientArc::new`] instead
     inner: Arc<Client>,
+
+    __use_constructor_to_create: (),
+}
+
+impl ClientArc {
+    /// Create
+    fn new(inner: Arc<Client>) -> Self {
+        inner
+            .client_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self {
+            inner,
+            // this is the constructor
+            __use_constructor_to_create: (),
+        }
+    }
 }
 
 impl ops::Deref for ClientArc {
@@ -487,12 +504,7 @@ impl ClientArc {
 
 impl Clone for ClientArc {
     fn clone(&self) -> Self {
-        self.inner
-            .client_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        ClientArc {
-            inner: self.inner.clone(),
-        }
+        ClientArc::new(self.inner.clone())
     }
 }
 
@@ -504,7 +516,7 @@ pub struct ClientWeak {
 
 impl ClientWeak {
     pub fn upgrade(&self) -> Option<ClientArc> {
-        Weak::upgrade(&self.inner).map(|inner| ClientArc { inner })
+        Weak::upgrade(&self.inner).map(ClientArc::new)
     }
 }
 
@@ -1622,12 +1634,10 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
-            client_count: AtomicUsize::new(1),
+            client_count: Default::default(),
         });
 
-        let client_arc = ClientArc {
-            inner: client_inner,
-        };
+        let client_arc = ClientArc::new(client_inner);
 
         final_client.set(client_arc.downgrade());
 
