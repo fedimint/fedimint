@@ -3,12 +3,16 @@ use std::time::Duration;
 use bitcoin::Txid;
 use fedimint_client::sm::{OperationId, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::api::GlobalFederationApi;
+use fedimint_core::api::{GlobalFederationApi, OutputOutcomeError};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::task::sleep;
 use fedimint_core::OutPoint;
 use fedimint_wallet_common::WalletOutputOutcome;
+use tracing::debug;
 
 use crate::WalletClientContext;
+
+const RETRY_DELAY: Duration = Duration::from_secs(1);
 
 // TODO: track tx confirmations
 #[aquamarine::aquamarine]
@@ -36,6 +40,7 @@ impl State for WithdrawStateMachine {
                     await_withdraw_processed(
                         global_context.clone(),
                         context.clone(),
+                        self.operation_id,
                         created.clone(),
                     ),
                     |_dbtx, res, old_state| Box::pin(transition_withdraw_processed(res, old_state)),
@@ -58,18 +63,37 @@ impl State for WithdrawStateMachine {
 async fn await_withdraw_processed(
     global_context: DynGlobalClientContext,
     context: WalletClientContext,
+    operation_id: OperationId,
     created: CreatedWithdrawState,
 ) -> Result<Txid, String> {
     global_context
-        .api()
-        .await_output_outcome::<WalletOutputOutcome>(
-            created.fm_outpoint,
-            Duration::MAX,
-            &context.wallet_decoder,
-        )
+        .await_tx_accepted(operation_id, created.fm_outpoint.txid)
         .await
-        .map(|outcome| outcome.0)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    loop {
+        match global_context
+            .api()
+            .await_output_outcome::<WalletOutputOutcome>(
+                created.fm_outpoint,
+                Duration::MAX,
+                &context.wallet_decoder,
+            )
+            .await
+        {
+            Ok(outcome) => {
+                return Ok(outcome.0);
+            }
+            Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
+                debug!(
+                    "Awaiting output outcome failed, retrying in {}s",
+                    RETRY_DELAY.as_secs_f64()
+                );
+                sleep(RETRY_DELAY).await;
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+    }
 }
 
 async fn transition_withdraw_processed(

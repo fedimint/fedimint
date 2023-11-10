@@ -19,6 +19,8 @@ use thiserror::Error;
 use crate::api::LnFederationApi;
 use crate::{LightningClientContext, LightningClientStateMachines};
 
+const RETRY_DELAY: Duration = Duration::from_secs(1);
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that waits on the receipt of a Lightning payment.
 ///
@@ -128,6 +130,8 @@ impl LightningReceiveSubmittedOffer {
         operation_id: OperationId,
         txid: TransactionId,
     ) -> Result<(), TxSubmissionError> {
+        // No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
         global_context.await_tx_accepted(operation_id, txid).await
     }
 
@@ -212,7 +216,7 @@ impl LightningReceiveConfirmedInvoice {
                 }
             }
 
-            sleep(Duration::from_secs(1)).await;
+            sleep(RETRY_DELAY).await;
         }
     }
 
@@ -301,6 +305,8 @@ impl LightningReceiveFunded {
         global_context: DynGlobalClientContext,
         txid: TransactionId,
     ) -> Result<(), TxSubmissionError> {
+        // No network calls are done here, we just await other state machines, so no
+        // retry logic is needed
         global_context.await_tx_accepted(operation_id, txid).await
     }
 
