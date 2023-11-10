@@ -75,7 +75,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let (client2_dummy_module, _instance) = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -130,7 +130,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let (client2_dummy_module, _instance) = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -190,8 +190,8 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
     let gw = gateway(&fixtures, &fed).await;
-    let (client1_dummy_module, _instance) = client1.get_first_module::<DummyClientModule>();
-    let (client2_dummy_module, _instance) = client2.get_first_module::<DummyClientModule>();
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client1
     let (op, outpoint) = client1_dummy_module.print_money(sats(10000)).await?;
@@ -250,7 +250,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
     let gw = gateway(&fixtures, &fed).await;
-    let (dummy_module, _instance) = client.get_first_module::<DummyClientModule>();
+    let dummy_module = client.get_first_module::<DummyClientModule>();
 
     // Print money for client
     let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -309,7 +309,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let (client2_dummy_module, _instance) = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;

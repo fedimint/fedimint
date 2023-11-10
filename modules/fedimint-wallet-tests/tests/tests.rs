@@ -83,11 +83,11 @@ async fn peg_in<'a>(
 }
 
 async fn await_consensus_to_catch_up(client: &ClientArc, block_count: u64) -> anyhow::Result<u64> {
-    let (_, instance) = client.get_first_module::<WalletClientModule>();
+    let wallet = client.get_first_module::<WalletClientModule>();
     loop {
         let current_consensus = client
             .api()
-            .with_module(instance.id)
+            .with_module(wallet.id)
             .fetch_consensus_block_count()
             .await?;
         if current_consensus < block_count {

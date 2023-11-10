@@ -24,8 +24,8 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     let fed = fixtures().new_fed().await;
     let (client1, client2) = fed.two_clients().await;
 
-    let (client1_dummy_module, _instance) = client1.get_first_module::<DummyClientModule>();
-    let (client2_dummy_module, _instance) = client2.get_first_module::<DummyClientModule>();
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
     let (_, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1_dummy_module.receive_money(outpoint).await?;
     assert_eq!(client1.get_balance().await, sats(1000));
@@ -43,7 +43,7 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
 async fn can_threshold_sign_message() {
     let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
-    let (dummy_module, _instance) = client.get_first_module::<DummyClientModule>();
+    let dummy_module = client.get_first_module::<DummyClientModule>();
 
     let message = "Hello fed!";
     let sig = dummy_module.fed_signature(message).await.unwrap();
@@ -93,7 +93,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
         prev_panic_hook(info);
     }));
 
-    let (_dummy, instance) = client.get_first_module::<DummyClientModule>();
+    let dummy = client.get_first_module::<DummyClientModule>();
     let op_id = OperationId(rand::random());
     let account_kp = broken_fed_key_pair();
     let input = ClientInput {
@@ -105,7 +105,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
     };
 
-    let tx = TransactionBuilder::new().with_input(input.into_dyn(instance.id));
+    let tx = TransactionBuilder::new().with_input(input.into_dyn(dummy.id));
     let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
     client
         .finalize_and_submit_transaction(op_id, KIND.as_str(), outpoint, tx)
@@ -126,7 +126,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let fed = fixtures().new_fed().await;
     let client = fed.new_client().await;
 
-    let (dummy_module, instance) = client.get_first_module::<DummyClientModule>();
+    let dummy_module = client.get_first_module::<DummyClientModule>();
     let output = ClientOutput {
         output: DummyOutput {
             amount: sats(1000),
@@ -134,7 +134,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
         },
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
     };
-    let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+    let tx = TransactionBuilder::new().with_output(output.into_dyn(dummy_module.id));
     let (tx, _) = tx.build(&Secp256k1::new(), rand::thread_rng());
     let result = client.api().submit_transaction(tx).await;
     match result {

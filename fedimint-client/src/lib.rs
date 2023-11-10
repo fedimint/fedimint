@@ -564,13 +564,26 @@ const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
 pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 
 /// Resources particular to a module instance
-pub struct ClientModuleInstance {
+pub struct ClientModuleInstance<'m, M: ClientModule> {
     /// Instance id of the module
     pub id: ModuleInstanceId,
     /// Module-specific DB
     pub db: Database,
     /// Module-specific API
     pub api: DynModuleApi,
+
+    module: &'m M,
+}
+
+impl<'m, M> ops::Deref for ClientModuleInstance<'m, M>
+where
+    M: ClientModule,
+{
+    type Target = M;
+
+    fn deref(&self) -> &Self::Target {
+        self.module
+    }
 }
 
 pub struct Client {
@@ -957,7 +970,7 @@ impl Client {
     }
 
     /// Returns a reference to a typed module client instance by kind
-    pub fn get_first_module<M: ClientModule>(&self) -> (&M, ClientModuleInstance) {
+    pub fn get_first_module<M: ClientModule>(&self) -> ClientModuleInstance<M> {
         let module_kind = M::kind();
         let id = self
             .get_first_instance(&module_kind)
@@ -968,12 +981,12 @@ impl Client {
             .as_any()
             .downcast_ref::<M>()
             .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
-        let instance = ClientModuleInstance {
+        ClientModuleInstance {
             id,
             db: self.db().with_prefix_module_id(id),
             api: self.api().with_module(id),
-        };
-        (module, instance)
+            module,
+        }
     }
 
     pub fn get_module_client_dyn(

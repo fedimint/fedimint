@@ -261,7 +261,7 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
 }
 
 pub async fn get_note_summary(client: &ClientArc) -> anyhow::Result<TieredSummary> {
-    let (mint_client, _) = client.get_first_module::<MintClientModule>();
+    let mint_client = client.get_first_module::<MintClientModule>();
     let summary = mint_client
         .get_wallet_summary(
             &mut client
@@ -279,9 +279,9 @@ pub async fn remint_denomination(
     denomination: Amount,
     quantity: u16,
 ) -> anyhow::Result<()> {
-    let (mint_client, client_module_instance) = client.get_first_module::<MintClientModule>();
+    let mint_client = client.get_first_module::<MintClientModule>();
     let mut dbtx = client.db().begin_transaction().await;
-    let mut module_transaction = dbtx.dbtx_ref_with_prefix_module_id(client_module_instance.id);
+    let mut module_transaction = dbtx.dbtx_ref_with_prefix_module_id(mint_client.id);
     let mut tx = TransactionBuilder::new();
     let operation_id = OperationId::new_random();
     for _ in 0..quantity {
@@ -289,7 +289,7 @@ pub async fn remint_denomination(
             .create_output(&mut module_transaction, operation_id, 1, denomination)
             .await
             .into_iter()
-            .map(|output| output.into_dyn(client_module_instance.id))
+            .map(|output| output.into_dyn(mint_client.id))
             .collect();
 
         tx = tx.with_outputs(outputs);
