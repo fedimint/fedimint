@@ -1,4 +1,4 @@
-use bitcoin::{Address, Amount};
+use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;

@@ -3,7 +3,6 @@ pub mod rpc_server;
 
 use std::borrow::Cow;
 use std::io::Cursor;
-use std::str::FromStr;
 
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
