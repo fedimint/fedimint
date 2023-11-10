@@ -24,56 +24,46 @@ pub struct UpdateMetadataSubCommand {
 }
 
 pub fn update_metadata(
-    _private_key: Option<String>,
-    _relays: Vec<String>,
-    _difficulty_target: u8,
-    _sub_command_args: &UpdateMetadataSubCommand,
-) -> Result<()> {
-    todo!()
-    // if relays.is_empty() {
-    //     panic!("No relays specified, at least one relay is required!")
-    // }
+    // _difficulty_target: u8,
+    sub_command_args: &UpdateMetadataSubCommand,
+    pubkey: XOnlyPublicKey,
+) -> anyhow::Result<UnsignedEvent> {
+    let mut metadata = Metadata::new();
 
-    // let keys = handle_keys(private_key, sub_command_args.hex, true)?;
-    // let client = create_client(&keys, relays, difficulty_target)?;
+    // Name
+    if let Some(name) = &sub_command_args.name {
+        metadata = metadata.name(name);
+    }
 
-    // let mut metadata = Metadata::new();
+    // About
+    if let Some(about) = &sub_command_args.about {
+        metadata = metadata.about(about);
+    }
 
-    // // Name
-    // if let Some(name) = &sub_command_args.name {
-    //     metadata = metadata.name(name);
-    // }
+    // Picture URL
+    if let Some(picture_url) = &sub_command_args.picture {
+        let url = Url::parse(picture_url)?;
+        metadata = metadata.picture(url);
+    };
 
-    // // About
-    // if let Some(about) = &sub_command_args.about {
-    //     metadata = metadata.about(about);
-    // }
+    // NIP-05 identifier
+    if let Some(nip05_identifier) = &sub_command_args.nip05 {
+        // Check if the nip05 is valid
+        nip05::verify(pubkey, nip05_identifier.as_str(), None);
+        metadata = metadata.nip05(nip05_identifier);
+    }
 
-    // // Picture URL
-    // if let Some(picture_url) = &sub_command_args.picture {
-    //     let url = Url::parse(picture_url)?;
-    //     metadata = metadata.picture(url);
-    // };
+    // LUD-06 string
+    if let Some(lud06) = &sub_command_args.lud06 {
+        metadata = metadata.lud06(lud06);
+    }
 
-    // // NIP-05 identifier
-    // if let Some(nip05_identifier) = &sub_command_args.nip05 {
-    //     // Check if the nip05 is valid
-    //     // nip05::verify_blocking(keys.public_key(),
-    // nip05_identifier.as_str(), None)?;     metadata =
-    // metadata.nip05(nip05_identifier); }
+    // LUD-16 string
+    if let Some(lud16) = &sub_command_args.lud16 {
+        metadata = metadata.lud16(lud16);
+    }
 
-    // // LUD-06 string
-    // if let Some(lud06) = &sub_command_args.lud06 {
-    //     metadata = metadata.lud06(lud06);
-    // }
+    let builder = EventBuilder::set_metadata(metadata);
 
-    // // LUD-16 string
-    // if let Some(lud16) = &sub_command_args.lud16 {
-    //     metadata = metadata.lud16(lud16);
-    // }
-
-    // let event_id = client.set_metadata(metadata)?;
-    // println!("Metadata updated ({})", event_id.to_bech32()?);
-
-    // Ok(())
+    Ok(builder.to_unsigned_event(pubkey))
 }

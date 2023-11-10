@@ -141,6 +141,11 @@ pub enum ClientCmd {
     Nostr {
         #[clap(subcommand)]
         nostr_command: NostrCommands,
+        // TODO: impl PoW nostr
+        // difficulty_target: u8
+        // TODO: Get this from the client DB
+        #[clap(long)]
+        peer_id: PeerId,
     },
 }
 
@@ -482,14 +487,17 @@ pub async fn handle_command(
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
         }
-        ClientCmd::Nostr { nostr_command } => {
+        ClientCmd::Nostr {
+            nostr_command,
+            peer_id,
+        } => {
             match &nostr_command {
-                NostrCommands::CreateNote { msg, peer_id } => {
+                NostrCommands::CreateNote { msg } => {
                     let pubkey = client.get_npub().await?;
                     let unsigned_event =
                         nostr_sdk::EventBuilder::new_text_note(msg, &[]).to_unsigned_event(pubkey);
                     client
-                        .request_sign_event(unsigned_event.clone(), *peer_id, opts.auth()?)
+                        .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
                         .await?;
 
                     let note_id = format!("{}", unsigned_event.id);
@@ -499,11 +507,11 @@ pub async fn handle_command(
                     let note_requests = client.list_note_requests().await?;
                     Ok(json!(note_requests))
                 }
-                NostrCommands::SignNote { event_id, peer_id } => {
+                NostrCommands::SignNote { event_id } => {
                     let note_requests = client.list_note_requests().await?;
                     if let Some((unsigned_event, _count)) = note_requests.get(event_id) {
                         client
-                            .request_sign_event(unsigned_event.clone().0, *peer_id, opts.auth()?)
+                            .request_sign_event(unsigned_event.clone().0, peer_id, opts.auth()?)
                             .await?;
                         return Ok(json!("SigningEvent"));
                     }
@@ -515,14 +523,18 @@ pub async fn handle_command(
                     let npub = pubkey.to_bech32()?;
                     Ok(json!(npub))
                 }
-                NostrCommands::UpdateMetadata(_sub_command_args) => {
-                    todo!()
-                    // nostr_subcommands::update_metadata::update_metadata(
-                    //     args.private_key,
-                    //     args.relays,
-                    //     args.difficulty_target,
-                    //     sub_command_args,
-                    // )
+                NostrCommands::UpdateMetadata(sub_command_args) => {
+                    // TODO: store pubkey client side in config or something
+                    let pubkey = client.get_npub().await?;
+                    let unsigned_event = nostr_subcommands::update_metadata::update_metadata(
+                        sub_command_args,
+                        pubkey,
+                    )
+                    .expect("Failed to draft metadata event");
+                    client
+                        .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
+                        .await?;
+                    Ok(json!("UnsignedEventSubmitted"))
                 }
                 NostrCommands::TextNote(sub_command_args) => {
                     let pubkey = client.get_npub().await?;
@@ -532,11 +544,7 @@ pub async fn handle_command(
                     )
                     .to_unsigned_event(pubkey);
                     client
-                        .request_sign_event(
-                            unsigned_event.clone(),
-                            sub_command_args.peer_id(),
-                            opts.auth()?,
-                        )
+                        .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
                         .await?;
 
                     let note_id = format!("{}", unsigned_event.id);
@@ -729,17 +737,11 @@ pub enum NostrCommands {
     CreateNote {
         #[clap(long)]
         msg: String,
-
-        #[clap(long)]
-        peer_id: PeerId,
     },
     ListNoteRequests,
     SignNote {
         #[clap(long)]
         event_id: String,
-
-        #[clap(long)]
-        peer_id: PeerId,
     },
     GetNpub,
     /// Update metadata

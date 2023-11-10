@@ -5,8 +5,6 @@ use nostr_sdk::EventId;
 
 #[derive(Args, Clone, Debug)]
 pub struct TextNoteSubCommand {
-    #[arg(short, long)]
-    peer_id: PeerId,
     /// Text note content
     #[arg(short, long)]
     content: String,
