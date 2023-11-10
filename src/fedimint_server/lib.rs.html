@@ -300,9 +300,32 @@
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
@@ -311,13 +334,17 @@
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, Context};
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>config::io::PLAINTEXT_PASSWORD;
 <span class="kw">use </span>config::ServerConfig;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -601,5 +628,22 @@
     } <span class="kw">else </span>{
         <span class="prelude-val">Ok</span>(())
     }
+}
+
+<span class="kw">pub fn </span>get_verification_hashes(config: <span class="kw-2">&amp;</span>ServerConfig) -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>hashes = BTreeMap::new();
+    <span class="kw">for </span>(peer, cert) <span class="kw">in </span>config.consensus.tls_certs.iter() {
+        <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
+
+        config
+            .consensus
+            .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
+            .expect(<span class="string">&quot;hashes&quot;</span>);
+        cert.consensus_encode(<span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;hashes&quot;</span>);
+
+        <span class="kw">let </span>hash = sha256::Hash::from_engine(engine);
+        hashes.insert(<span class="kw-2">*</span>peer, hash);
+    }
+    hashes
 }
 </code></pre></div></section></main></body></html>

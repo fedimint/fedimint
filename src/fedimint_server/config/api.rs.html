@@ -995,13 +995,6 @@
 <a href="#995" id="995">995</a>
 <a href="#996" id="996">996</a>
 <a href="#997" id="997">997</a>
-<a href="#998" id="998">998</a>
-<a href="#999" id="999">999</a>
-<a href="#1000" id="1000">1000</a>
-<a href="#1001" id="1001">1001</a>
-<a href="#1002" id="1002">1002</a>
-<a href="#1003" id="1003">1003</a>
-<a href="#1004" id="1004">1004</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1009,8 +1002,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_aead::random_salt;
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
@@ -1022,7 +1014,6 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
     GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
@@ -1044,7 +1035,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
-<span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
+<span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
 <span class="doccomment">/// Serves the config gen API endpoints
 </span><span class="attr">#[derive(Clone)]
@@ -1316,7 +1307,19 @@
     <span class="doccomment">/// We have verified all our peer configs
     </span><span class="kw">pub async fn </span>verified_configs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;()&gt; {
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::VerifyingConfigs)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self
+                </span>.require_status(ServerStatus::VerifyingConfigs)
+                .or_else(|<span class="kw">_</span>| <span class="self">self</span>.require_status(ServerStatus::VerifiedConfigs))
+                .map_err(|<span class="kw">_</span>| {
+                    ApiError::bad_request(<span class="macro">format!</span>(
+                        <span class="string">&quot;Expected to be in {:?} or {:?} state&quot;</span>,
+                        ServerStatus::VerifyingConfigs,
+                        ServerStatus::VerifiedConfigs
+                    ))
+                })<span class="question-mark">?</span>;
+            <span class="kw">if </span>state.status == ServerStatus::VerifiedConfigs {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
             state.status = ServerStatus::VerifiedConfigs;
         }
 
@@ -1528,23 +1531,6 @@
 
         <span class="prelude-val">Ok</span>(ConfigGenParams { local, consensus })
     }
-}
-
-<span class="kw">pub fn </span>get_verification_hashes(config: <span class="kw-2">&amp;</span>ServerConfig) -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>hashes = BTreeMap::new();
-    <span class="kw">for </span>(peer, cert) <span class="kw">in </span>config.consensus.tls_certs.iter() {
-        <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
-
-        config
-            .consensus
-            .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
-            .expect(<span class="string">&quot;hashes&quot;</span>);
-        cert.consensus_encode(<span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;hashes&quot;</span>);
-
-        <span class="kw">let </span>hash = sha256::Hash::from_engine(engine);
-        hashes.insert(<span class="kw-2">*</span>peer, hash);
-    }
-    hashes
 }
 
 <span class="attr">#[async_trait]

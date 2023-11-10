@@ -565,7 +565,6 @@
 <a href="#565" id="565">565</a>
 <a href="#566" id="566">566</a>
 <a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -611,13 +610,12 @@
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">super</span>::peers::PeerStatusChannels;
-<span class="kw">use </span><span class="kw">crate</span>::config::api::get_verification_hashes;
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::FundingVerifier;
 <span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
+<span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
 
 <span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;DynOutputOutcome&gt;;
 

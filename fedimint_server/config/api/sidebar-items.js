@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_verification_hashes","server_endpoints"],"struct":["ConfigGenApi","ConfigGenLocalConnection","ConfigGenParamsLocal","ConfigGenSettings","ConfigGenState"]};
+window.SIDEBAR_ITEMS = {"fn":["server_endpoints"],"struct":["ConfigGenApi","ConfigGenLocalConnection","ConfigGenParamsLocal","ConfigGenSettings","ConfigGenState"]};
