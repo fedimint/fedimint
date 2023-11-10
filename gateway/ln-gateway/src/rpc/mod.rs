@@ -3,6 +3,7 @@ pub mod rpc_server;
 
 use std::borrow::Cow;
 use std::io::Cursor;
+use std::str::FromStr;
 
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
@@ -50,9 +51,29 @@ pub struct DepositAddressPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WithdrawPayload {
     pub federation_id: FederationId,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
+    pub amount: AmountOrAll,
     pub address: Address,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum AmountOrAll {
+    Amount(#[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount),
+    All,
+}
+
+impl FromStr for AmountOrAll {
+    type Err = bitcoin::util::amount::ParseAmountError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        if s == "all" {
+            Ok(AmountOrAll::All)
+        } else {
+            bitcoin::Amount::from_str(s)
+                .map(AmountOrAll::Amount)
+                .map_err(|_| bitcoin::util::amount::ParseAmountError::InvalidFormat)
+        }
+    }
 }
 
 /// Information about one of the feds we are connected to

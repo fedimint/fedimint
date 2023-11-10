@@ -50,14 +50,16 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonGen;
 use fedimint_mint_client::{MintClientGen, MintCommonGen};
-use fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
+use fedimint_wallet_client::{
+    PegOutFees, WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState,
+};
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning_invoice::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
-use rpc::{FederationInfo, SetConfigurationPayload};
+use rpc::{AmountOrAll, FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
@@ -670,8 +672,13 @@ impl Gateway {
             address,
             federation_id,
         } = payload;
-
         let client = self.select_client(federation_id).await?;
+
+        let amount: bitcoin::Amount = match amount {
+            AmountOrAll::All => bitcoin::Amount::from_sat(client.get_balance().await.msats * 1000),
+            AmountOrAll::Amount(amount) => amount.into(),
+        };
+
         // TODO: This should probably be passed in as a parameter
         let fees = client.get_withdraw_fee(address.clone(), amount).await?;
 
