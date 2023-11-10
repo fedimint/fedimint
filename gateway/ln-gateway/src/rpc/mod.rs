@@ -51,26 +51,27 @@ pub struct DepositAddressPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WithdrawPayload {
     pub federation_id: FederationId,
-    pub amount: AmountOrAll,
+    pub amount: BitcoinAmountOrAll,
     pub address: Address,
 }
 
+/// Amount of bitcoin to send, or "all" to send all available funds
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum AmountOrAll {
+pub enum BitcoinAmountOrAll {
     Amount(#[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount),
     All,
 }
 
-impl FromStr for AmountOrAll {
+impl FromStr for BitcoinAmountOrAll {
     type Err = bitcoin::util::amount::ParseAmountError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         if s == "all" {
-            Ok(AmountOrAll::All)
+            Ok(BitcoinAmountOrAll::All)
         } else {
             bitcoin::Amount::from_str(s)
-                .map(AmountOrAll::Amount)
+                .map(BitcoinAmountOrAll::Amount)
                 .map_err(|_| bitcoin::util::amount::ParseAmountError::InvalidFormat)
         }
     }

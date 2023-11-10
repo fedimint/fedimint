@@ -59,7 +59,7 @@ use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
 use lightning_invoice::RoutingFees;
 use lnrpc_client::{ILnRpcClient, LightningBuilder, LightningRpcError, RouteHtlcStream};
 use rand::rngs::OsRng;
-use rpc::{AmountOrAll, FederationInfo, SetConfigurationPayload};
+use rpc::{BitcoinAmountOrAll, FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
@@ -674,15 +674,22 @@ impl Gateway {
         } = payload;
         let client = self.select_client(federation_id).await?;
 
-        let amount: bitcoin::Amount = match amount {
-            AmountOrAll::All => bitcoin::Amount::from_sat(client.get_balance().await.msats * 1000),
-            AmountOrAll::Amount(amount) => amount.into(),
+        // TODO: Fees should probably be passed in as a parameter
+        let (amount, fee) = match amount {
+            // If the amount is "all", then we need to subtract the fees from
+            // the amount we are withdrawing
+            BitcoinAmountOrAll::All => {
+                let balance = bitcoin::Amount::from_sat(client.get_balance().await.msats * 1000);
+                let fees = client.get_withdraw_fee(address.clone(), balance).await?;
+                (balance - fees.amount(), fees)
+            }
+            BitcoinAmountOrAll::Amount(amount) => (
+                amount,
+                client.get_withdraw_fee(address.clone(), amount).await?,
+            ),
         };
 
-        // TODO: This should probably be passed in as a parameter
-        let fees = client.get_withdraw_fee(address.clone(), amount).await?;
-
-        let operation_id = client.withdraw(address, amount, fees).await?;
+        let operation_id = client.withdraw(address, amount, fee).await?;
         let mut updates = client
             .subscribe_withdraw_updates(operation_id)
             .await?
