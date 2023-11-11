@@ -176,9 +176,9 @@ impl std::fmt::Display for WalletOutputOutcome {
 }
 
 #[derive(Debug)]
-pub struct WalletCommonGen;
+pub struct WalletCommonInit;
 
-impl CommonModuleInit for WalletCommonGen {
+impl CommonModuleInit for WalletCommonInit {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 

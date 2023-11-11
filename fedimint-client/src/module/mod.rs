@@ -11,9 +11,7 @@ use fedimint_core::core::{
 };
 use fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::{
-    CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, TransactionItemAmount,
-};
+use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
@@ -144,7 +142,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     }
 
     fn kind() -> ModuleKind {
-        <<<Self as ClientModule>::Init as ExtendsCommonModuleInit>::Common as CommonModuleInit>::KIND
+        <<<Self as ClientModule>::Init as ModuleInit>::Common as CommonModuleInit>::KIND
     }
 
     fn context(&self) -> Self::ModuleStateMachineContext;

@@ -20,7 +20,7 @@ use common::db::{
 };
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, PendingTransaction,
-    ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonGen,
+    ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
     WalletConsensusItem, WalletError, WalletInput, WalletModuleTypes, WalletOutput,
     WalletOutputOutcome, CONFIRMATION_TARGET,
 };
@@ -40,8 +40,8 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -73,11 +73,11 @@ use strum::IntoEnumIterator;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 #[derive(Debug, Clone)]
-pub struct WalletGen;
+pub struct WalletInit;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for WalletGen {
-    type Common = WalletCommonGen;
+impl ModuleInit for WalletInit {
+    type Common = WalletCommonInit;
 
     async fn dump_database(
         &self,
@@ -178,7 +178,7 @@ impl ExtendsCommonModuleInit for WalletGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ServerModuleInit for WalletGen {
+impl ServerModuleInit for WalletInit {
     type Params = WalletGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -303,7 +303,7 @@ impl ServerModuleInit for WalletGen {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Wallet {
     type Common = WalletModuleTypes;
-    type Gen = WalletGen;
+    type Init = WalletInit;
 
     async fn consensus_proposal<'a>(
         &'a self,
@@ -1658,7 +1658,7 @@ mod fedimint_migration_tests {
         UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
     };
     use fedimint_wallet_common::{
-        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction, WalletCommonGen,
+        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
         WalletOutputOutcome,
     };
     use futures::StreamExt;
@@ -1666,7 +1666,7 @@ mod fedimint_migration_tests {
     use secp256k1::Message;
     use strum::IntoEnumIterator;
 
-    use crate::{Wallet, WalletGen};
+    use crate::{Wallet, WalletInit};
 
     /// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -1834,7 +1834,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-                WalletCommonGen::KIND,
+                WalletCommonInit::KIND,
                 <Wallet as ServerModule>::decoder(),
             )]),
         )
@@ -1846,7 +1846,7 @@ mod fedimint_migration_tests {
         validate_migrations(
             "wallet",
             |db| async move {
-                let module = DynServerModuleInit::from(WalletGen);
+                let module = DynServerModuleInit::from(WalletInit);
                 apply_migrations(
                     &db,
                     module.module_kind().to_string(),
@@ -1971,7 +1971,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-                WalletCommonGen::KIND,
+                WalletCommonInit::KIND,
                 <Wallet as ServerModule>::decoder(),
             )]),
         )

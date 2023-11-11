@@ -14,12 +14,12 @@ use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{
-    LightningClientExt, LightningClientGen, LnPayState, OutgoingLightningPayment,
+    LightningClientExt, LightningClientInit, LnPayState, OutgoingLightningPayment,
 };
 use fedimint_mint_client::{
-    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, OOBNotes,
+    MintClientExt, MintClientInit, MintClientModule, MintCommonInit, OOBNotes,
 };
-use fedimint_wallet_client::WalletClientGen;
+use fedimint_wallet_client::WalletClientInit;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
 use rand::thread_rng;
@@ -131,9 +131,9 @@ pub async fn build_client(
     rocksdb: Option<&PathBuf>,
 ) -> anyhow::Result<ClientArc> {
     let mut client_builder = ClientBuilder::default();
-    client_builder.with_module(MintClientGen);
-    client_builder.with_module(LightningClientGen);
-    client_builder.with_module(WalletClientGen::default());
+    client_builder.with_module(MintClientInit);
+    client_builder.with_module(LightningClientInit);
+    client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module(1);
     if let Some(invite_code) = invite_code {
         client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).await?);
@@ -299,7 +299,7 @@ pub async fn remint_denomination(
     let (txid, _) = client
         .finalize_and_submit_transaction(
             operation_id,
-            MintCommonGen::KIND.as_str(),
+            MintCommonInit::KIND.as_str(),
             operation_meta_gen,
             tx,
         )

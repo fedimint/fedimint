@@ -6,7 +6,7 @@ use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, IDynCommonModuleInit, MultiApiVersion,
+    ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define};
@@ -24,7 +24,7 @@ where
     C: ClientModuleInit,
 {
     federation_id: FederationId,
-    cfg: <<C as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig,
+    cfg: <<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig,
     db: Database,
     api_version: ApiVersion,
     module_root_secret: DerivableSecret,
@@ -45,9 +45,7 @@ where
         &self.federation_id
     }
 
-    pub fn cfg(
-        &self,
-    ) -> &<<C as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig {
+    pub fn cfg(&self) -> &<<C as ModuleInit>::Common as CommonModuleInit>::ClientConfig {
         &self.cfg
     }
 
@@ -92,7 +90,7 @@ where
 }
 
 #[apply(async_trait_maybe_send!)]
-pub trait ClientModuleInit: ExtendsCommonModuleInit + Sized {
+pub trait ClientModuleInit: ModuleInit + Sized {
     type Module: ClientModule;
 
     /// Api versions of the corresponding server side module's API
@@ -140,7 +138,7 @@ where
     }
 
     fn module_kind(&self) -> ModuleKind {
-        <Self as ExtendsCommonModuleInit>::Common::KIND
+        <Self as ModuleInit>::Common::KIND
     }
 
     fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static) {
@@ -164,7 +162,7 @@ where
         notifier: Notifier<DynGlobalClientContext>,
         api: DynGlobalApi,
     ) -> anyhow::Result<DynClientModule> {
-        let typed_cfg: &<<T as fedimint_core::module::ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
+        let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
             .init(&ClientModuleInitArgs {
                 federation_id,

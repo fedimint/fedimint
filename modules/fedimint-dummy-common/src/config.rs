@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::{PublicKey, PublicKeySet, SecretKeyShare};
 
-use crate::DummyCommonGen;
+use crate::DummyCommonInit;
 
 /// Parameters necessary to generate this module's configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,7 +75,7 @@ pub struct DummyConfigPrivate {
 
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
-    DummyCommonGen,
+    DummyCommonInit,
     DummyGenParams,
     DummyGenParamsLocal,
     DummyGenParamsConsensus,

@@ -29,12 +29,12 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::query::ThresholdConsensus;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, PeerId, TieredMulti};
-use fedimint_ln_client::LightningClientGen;
+use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_client::{MintClientExt, MintClientGen, SpendableNote};
+use fedimint_mint_client::{MintClientExt, MintClientInit, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::{WalletClientGen, WalletClientModule};
+use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -485,9 +485,9 @@ impl FedimintCli {
     }
 
     pub fn with_default_modules(self) -> Self {
-        self.with_module(LightningClientGen)
-            .with_module(MintClientGen)
-            .with_module(WalletClientGen::default())
+        self.with_module(LightningClientInit)
+            .with_module(MintClientInit)
+            .with_module(WalletClientInit::default())
     }
 
     pub async fn run(&mut self) {

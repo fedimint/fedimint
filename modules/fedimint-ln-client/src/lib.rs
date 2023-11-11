@@ -30,8 +30,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
-    TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::task::timeout;
 use fedimint_core::{
@@ -47,7 +46,7 @@ use fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
 };
 use fedimint_ln_common::{
-    ln_operation, ContractOutput, LightningClientContext, LightningCommonGen, LightningGateway,
+    ln_operation, ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
     LightningOutput,
 };
@@ -376,7 +375,7 @@ impl LightningClientExt for ClientArc {
 
         self.finalize_and_submit_transaction(
             operation_id,
-            LightningCommonGen::KIND.as_str(),
+            LightningCommonInit::KIND.as_str(),
             operation_meta_gen,
             tx,
         )
@@ -432,7 +431,7 @@ impl LightningClientExt for ClientArc {
         let (txid, _) = self
             .finalize_and_submit_transaction(
                 operation_id,
-                LightningCommonGen::KIND.as_str(),
+                LightningCommonInit::KIND.as_str(),
                 operation_meta_gen,
                 tx,
             )
@@ -630,11 +629,11 @@ pub enum LightningOperationMeta {
 }
 
 #[derive(Debug, Clone)]
-pub struct LightningClientGen;
+pub struct LightningClientInit;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for LightningClientGen {
-    type Common = LightningCommonGen;
+impl ModuleInit for LightningClientInit {
+    type Common = LightningCommonInit;
 
     async fn dump_database(
         &self,
@@ -684,7 +683,7 @@ pub enum LightningChildKeys {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleInit for LightningClientGen {
+impl ClientModuleInit for LightningClientInit {
     type Module = LightningClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
@@ -722,7 +721,7 @@ pub struct LightningClientModule {
 }
 
 impl ClientModule for LightningClientModule {
-    type Init = LightningClientGen;
+    type Init = LightningClientInit;
     type Common = LightningModuleTypes;
     type ModuleStateMachineContext = LightningClientContext;
     type States = LightningClientStateMachines;

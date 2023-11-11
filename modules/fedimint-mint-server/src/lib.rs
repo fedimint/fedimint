@@ -13,8 +13,8 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -34,7 +34,7 @@ use fedimint_mint_common::db::{
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
-    MintCommonGen, MintConsensusItem, MintError, MintInput, MintModuleTypes, MintOutput,
+    MintCommonInit, MintConsensusItem, MintError, MintInput, MintModuleTypes, MintOutput,
     MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
 };
 use fedimint_server::config::distributedgen::{scalar, PeerHandleOps};
@@ -50,11 +50,11 @@ use threshold_crypto::group::Curve;
 use tracing::{debug, info};
 
 #[derive(Debug, Clone)]
-pub struct MintGen;
+pub struct MintInit;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for MintGen {
-    type Common = MintCommonGen;
+impl ModuleInit for MintInit {
+    type Common = MintCommonInit;
 
     async fn dump_database(
         &self,
@@ -108,7 +108,7 @@ impl ExtendsCommonModuleInit for MintGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ServerModuleInit for MintGen {
+impl ServerModuleInit for MintInit {
     type Params = MintGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -298,7 +298,7 @@ pub struct Mint {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Mint {
     type Common = MintModuleTypes;
-    type Gen = MintGen;
+    type Init = MintInit;
 
     async fn consensus_proposal(
         &self,
@@ -576,15 +576,15 @@ mod test {
 
     use crate::common::config::MintGenParamsConsensus;
     use crate::{
-        Mint, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate, MintGen,
-        MintGenParams,
+        Mint, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate, MintGenParams,
+        MintInit,
     };
 
     const MINTS: usize = 5;
 
     fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-        let mint_cfg = MintGen.trusted_dealer_gen(
+        let mint_cfg = MintInit.trusted_dealer_gen(
             &peers,
             &ConfigGenModuleParams::from_typed(MintGenParams {
                 local: Default::default(),
@@ -594,9 +594,9 @@ mod test {
         );
         let client_cfg = ClientModuleConfig::from_typed(
             0,
-            MintGen::kind(),
+            MintInit::kind(),
             ModuleConsensusVersion(0),
-            MintGen
+            MintInit
                 .get_client_config(&mint_cfg[&PeerId::from(0)].consensus)
                 .unwrap(),
         )
@@ -713,7 +713,7 @@ mod fedimint_migration_tests {
         MintAuditItemKey, MintAuditItemKeyPrefix, MintOutputOutcomeKey, MintOutputOutcomePrefix,
         NonceKey, NonceKeyPrefix,
     };
-    use fedimint_mint_common::{MintCommonGen, MintOutputOutcome, Nonce};
+    use fedimint_mint_common::{MintCommonInit, MintOutputOutcome, Nonce};
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8,
     };
@@ -724,7 +724,7 @@ mod fedimint_migration_tests {
         blind_message, sign_blinded_msg, BlindingKey, FromRandom, Message, Scalar, SecretKeyShare,
     };
 
-    use crate::{Mint, MintGen};
+    use crate::{Mint, MintInit};
 
     /// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -788,7 +788,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                MintCommonGen::KIND,
+                MintCommonInit::KIND,
                 <Mint as ServerModule>::decoder(),
             )]),
         )
@@ -800,7 +800,7 @@ mod fedimint_migration_tests {
         validate_migrations(
             "mint",
             |db| async move {
-                let module = DynServerModuleInit::from(MintGen);
+                let module = DynServerModuleInit::from(MintInit);
                 apply_migrations(
                     &db,
                     module.module_kind().to_string(),
@@ -871,7 +871,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                MintCommonGen::KIND,
+                MintCommonInit::KIND,
                 <Mint as ServerModule>::decoder(),
             )]),
         )

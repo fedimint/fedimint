@@ -15,7 +15,7 @@ use tracing::info;
 
 use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 use crate::lnrpc_client::ILnRpcClient;
-use crate::state_machine::GatewayClientGen;
+use crate::state_machine::GatewayClientInit;
 use crate::{FederationToClientMap, GatewayError, Result, ScidToFederationMap};
 
 #[derive(Debug, Clone)]
@@ -61,7 +61,7 @@ impl GatewayClientBuilder {
         let federation_id = invite_code.federation_id;
 
         let mut registry = self.registry.clone();
-        registry.attach(GatewayClientGen {
+        registry.attach(GatewayClientInit {
             lnrpc,
             all_clients,
             all_scids,

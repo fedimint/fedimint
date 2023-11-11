@@ -94,9 +94,9 @@ pub struct Nonce(pub secp256k1_zkp::XOnlyPublicKey);
 pub struct BlindNonce(pub tbs::BlindedMessage);
 
 #[derive(Debug)]
-pub struct MintCommonGen;
+pub struct MintCommonInit;
 
-impl CommonModuleInit for MintCommonGen {
+impl CommonModuleInit for MintCommonInit {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 

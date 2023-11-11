@@ -3,16 +3,16 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::FederationInfo;
 use fedimint_core::api::InviteCode;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_ln_client::LightningClientGen;
-use fedimint_mint_client::MintClientGen;
-use fedimint_wallet_client::WalletClientGen;
+use fedimint_ln_client::LightningClientInit;
+use fedimint_mint_client::MintClientInit;
+use fedimint_wallet_client::WalletClientInit;
 use rand::thread_rng;
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientArc> {
     let mut builder = fedimint_client::ClientBuilder::default();
-    builder.with_module(LightningClientGen);
-    builder.with_module(MintClientGen);
-    builder.with_module(WalletClientGen::default());
+    builder.with_module(LightningClientInit);
+    builder.with_module(MintClientInit);
+    builder.with_module(WalletClientInit::default());
     builder.with_primary_module(1);
     builder.with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).await?);
     builder.with_raw_database(MemDatabase::default());

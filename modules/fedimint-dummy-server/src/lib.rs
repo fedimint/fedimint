@@ -15,8 +15,8 @@ use fedimint_core::endpoint_constants::{SIGN_MESSAGE_ENDPOINT, WAIT_SIGNED_ENDPO
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -26,7 +26,7 @@ use fedimint_dummy_common::config::{
     DummyGenParams,
 };
 use fedimint_dummy_common::{
-    broken_fed_public_key, fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError,
+    broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyError,
     DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
@@ -47,12 +47,12 @@ mod db;
 
 /// Generates the module
 #[derive(Debug, Clone)]
-pub struct DummyGen;
+pub struct DummyInit;
 
 // TODO: Boilerplate-code
 #[async_trait]
-impl ExtendsCommonModuleInit for DummyGen {
-    type Common = DummyCommonGen;
+impl ModuleInit for DummyInit {
+    type Common = DummyCommonInit;
 
     /// Dumps all database items for debugging
     async fn dump_database(
@@ -117,7 +117,7 @@ impl ExtendsCommonModuleInit for DummyGen {
 
 /// Implementation of server module non-consensus functions
 #[async_trait]
-impl ServerModuleInit for DummyGen {
+impl ServerModuleInit for DummyInit {
     type Params = DummyGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
@@ -238,7 +238,7 @@ pub struct Dummy {
 impl ServerModule for Dummy {
     /// Define the consensus types
     type Common = DummyModuleTypes;
-    type Gen = DummyGen;
+    type Init = DummyInit;
 
     async fn consensus_proposal(
         &self,

@@ -70,9 +70,9 @@ plugin_types_trait_impl_common!(
 );
 
 #[derive(Debug)]
-pub struct DummyCommonGen;
+pub struct DummyCommonInit;
 
-impl CommonModuleInit for DummyCommonGen {
+impl CommonModuleInit for DummyCommonInit {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 

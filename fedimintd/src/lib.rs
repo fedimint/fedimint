@@ -10,13 +10,13 @@ use fedimint_core::util::SafeUrl;
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
-use fedimint_ln_server::LightningGen;
+use fedimint_ln_server::LightningInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
-use fedimint_mint_server::MintGen;
+use fedimint_mint_server::MintInit;
 use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
-use fedimint_wallet_server::WalletGen;
+use fedimint_wallet_server::WalletInit;
 
 /// Module for creating `fedimintd` binary with custom modules
 pub mod fedimintd;
@@ -31,7 +31,7 @@ pub fn attach_default_module_init_params(
     module_init_params
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-            WalletGen::kind(),
+            WalletInit::kind(),
             WalletGenParams {
                 local: WalletGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
@@ -47,7 +47,7 @@ pub fn attach_default_module_init_params(
         )
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
-            MintGen::kind(),
+            MintInit::kind(),
             MintGenParams {
                 local: Default::default(),
                 consensus: MintGenParamsConsensus::new(2),
@@ -55,7 +55,7 @@ pub fn attach_default_module_init_params(
         )
         .attach_config_gen_params(
             LEGACY_HARDCODED_INSTANCE_ID_LN,
-            LightningGen::kind(),
+            LightningInit::kind(),
             LightningGenParams {
                 local: LightningGenParamsLocal { bitcoin_rpc },
                 consensus: LightningGenParamsConsensus { network },

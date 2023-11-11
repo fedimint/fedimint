@@ -8,7 +8,7 @@ use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId, Tiered};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, PublicKeyShare};
 
-use crate::MintCommonGen;
+use crate::MintCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintGenParams {
@@ -99,7 +99,7 @@ impl std::fmt::Display for MintClientConfig {
 
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
-    MintCommonGen,
+    MintCommonInit,
     MintGenParams,
     EmptyGenParams,
     MintGenParamsConsensus,

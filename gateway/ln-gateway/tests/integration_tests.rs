@@ -16,12 +16,12 @@ use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{NextOrPending, SafeUrl};
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
-use fedimint_dummy_client::{DummyClientGen, DummyClientModule};
+use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
-use fedimint_dummy_server::DummyGen;
+use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_client::{
-    LightningClientExt, LightningClientGen, LightningClientModule, LightningClientStateMachines,
+    LightningClientExt, LightningClientInit, LightningClientModule, LightningClientStateMachines,
     LightningOperationMeta, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::api::LnFederationApi;
@@ -30,7 +30,7 @@ use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage};
 use fedimint_ln_common::{LightningInput, LightningOutput};
-use fedimint_ln_server::LightningGen;
+use fedimint_ln_server::LightningInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::federation::FederationTest;
@@ -54,9 +54,9 @@ use tracing::info;
 
 fn fixtures() -> Fixtures {
     info!(target: LOG_TEST, "Setting up fixtures");
-    let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    fixtures.with_module(LightningClientGen, LightningGen, ln_params)
+    fixtures.with_module(LightningClientInit, LightningInit, ln_params)
 }
 
 async fn single_federation_test<B>(

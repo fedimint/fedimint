@@ -16,13 +16,13 @@ use fedimint_core::module::ServerModuleInit;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
 use fedimint_core::util::{write_overwrite, SafeUrl};
-use fedimint_ln_server::LightningGen;
+use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_server::MintGen;
+use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{CODE_VERSION, DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::FedimintServer;
-use fedimint_wallet_server::WalletGen;
+use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
 use tokio::select;
 use tracing::{debug, error, info, warn};
@@ -109,9 +109,9 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 /// Example:
 ///
 /// ```
-/// use fedimint_ln_server::LightningGen;
-/// use fedimint_mint_server::MintGen;
-/// use fedimint_wallet_server::WalletGen;
+/// use fedimint_ln_server::LightningInit;
+/// use fedimint_mint_server::MintInit;
+/// use fedimint_wallet_server::WalletInit;
 /// use fedimintd::fedimintd::Fedimintd;
 ///
 /// // Note: not called `main` to avoid rustdoc executing it
@@ -120,9 +120,9 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 ///     Fedimintd::new()?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
-///         .with_module(WalletGen)
-///         .with_module(MintGen)
-///         .with_module(LightningGen)
+///         .with_module(WalletInit)
+///         .with_module(MintInit)
+///         .with_module(LightningInit)
 ///         .run()
 ///         .await
 /// }
@@ -173,9 +173,9 @@ impl Fedimintd {
     }
 
     pub fn with_default_modules(self) -> Self {
-        self.with_module(LightningGen)
-            .with_module(MintGen)
-            .with_module(WalletGen)
+        self.with_module(LightningInit)
+            .with_module(MintInit)
+            .with_module(WalletInit)
     }
 
     pub async fn run(self) -> ! {

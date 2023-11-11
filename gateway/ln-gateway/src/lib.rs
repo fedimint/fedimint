@@ -48,9 +48,9 @@ use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_ln_common::LightningCommonGen;
-use fedimint_mint_client::{MintClientGen, MintCommonGen};
-use fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
+use fedimint_ln_common::LightningCommonInit;
+use fedimint_mint_client::{MintClientInit, MintCommonInit};
+use fedimint_wallet_client::{WalletClientExt, WalletClientInit, WalletCommonInit, WithdrawState};
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
@@ -101,8 +101,8 @@ pub type Result<T> = std::result::Result<T, GatewayError>;
 const DB_FILE: &str = "gatewayd.db";
 
 const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
-    (LEGACY_HARDCODED_INSTANCE_ID_MINT, &MintCommonGen::KIND),
-    (LEGACY_HARDCODED_INSTANCE_ID_WALLET, &WalletCommonGen::KIND),
+    (LEGACY_HARDCODED_INSTANCE_ID_MINT, &MintCommonInit::KIND),
+    (LEGACY_HARDCODED_INSTANCE_ID_WALLET, &WalletCommonInit::KIND),
 ];
 
 #[derive(Parser)]
@@ -293,8 +293,8 @@ impl Gateway {
         // Gateway module will be attached when the federation clients are created
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
-        registry.attach(MintClientGen);
-        registry.attach(WalletClientGen::default());
+        registry.attach(MintClientInit);
+        registry.attach(WalletClientInit::default());
 
         let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().cloned())?;
 
@@ -1179,7 +1179,7 @@ impl Gateway {
             .config
             .modules
             .values()
-            .find(|m| LightningCommonGen::KIND == m.kind.clone())
+            .find(|m| LightningCommonInit::KIND == m.kind.clone())
             .ok_or_else(|| {
                 GatewayError::InvalidMetadata(format!(
                     "Federation {} does not have a lightning module",

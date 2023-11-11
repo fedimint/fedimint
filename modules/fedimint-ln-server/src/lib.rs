@@ -20,8 +20,8 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, CoreConsensusVersion, ExtendsCommonModuleInit,
-    InputMeta, IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, CoreConsensusVersion, InputMeta,
+    IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -48,7 +48,7 @@ use fedimint_ln_common::db::{
     OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 use fedimint_ln_common::{
-    ContractAccount, LightningCommonGen, LightningConsensusItem, LightningError,
+    ContractAccount, LightningCommonInit, LightningConsensusItem, LightningError,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningModuleTypes, LightningOutput, LightningOutputOutcome,
 };
@@ -110,11 +110,11 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone)]
-pub struct LightningGen;
+pub struct LightningInit;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for LightningGen {
-    type Common = LightningCommonGen;
+impl ModuleInit for LightningInit {
+    type Common = LightningCommonInit;
 
     async fn dump_database(
         &self,
@@ -226,7 +226,7 @@ impl ExtendsCommonModuleInit for LightningGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ServerModuleInit for LightningGen {
+impl ServerModuleInit for LightningInit {
     type Params = LightningGenParams;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -365,7 +365,7 @@ pub struct Lightning {
 #[apply(async_trait_maybe_send!)]
 impl ServerModule for Lightning {
     type Common = LightningModuleTypes;
-    type Gen = LightningGen;
+    type Init = LightningInit;
 
     async fn consensus_proposal(
         &self,
@@ -1161,14 +1161,14 @@ mod tests {
     use rand::rngs::OsRng;
     use secp256k1::{generate_keypair, XOnlyPublicKey};
 
-    use crate::{Lightning, LightningGen};
+    use crate::{Lightning, LightningInit};
 
     const MINTS: usize = 4;
 
     fn build_configs() -> (Vec<LightningConfig>, LightningClientConfig) {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
         let server_cfg = ServerModuleInit::trusted_dealer_gen(
-            &LightningGen,
+            &LightningInit,
             &peers,
             &ConfigGenModuleParams::from_typed(LightningGenParams {
                 local: LightningGenParamsLocal {
@@ -1185,7 +1185,7 @@ mod tests {
         );
 
         let client_cfg = ServerModuleInit::get_client_config(
-            &LightningGen,
+            &LightningInit,
             &server_cfg[&PeerId::from(0)].consensus,
         )
         .unwrap();
@@ -1421,7 +1421,7 @@ mod fedimint_migration_tests {
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
-    use fedimint_ln_common::{LightningCommonGen, LightningGateway};
+    use fedimint_ln_common::{LightningCommonInit, LightningGateway};
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64,
     };
@@ -1434,7 +1434,7 @@ mod fedimint_migration_tests {
     use threshold_crypto::G1Projective;
 
     use crate::{
-        ContractAccount, Lightning, LightningGatewayRegistration, LightningGen,
+        ContractAccount, Lightning, LightningGatewayRegistration, LightningInit,
         LightningOutputOutcome,
     };
 
@@ -1573,7 +1573,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
-                LightningCommonGen::KIND,
+                LightningCommonInit::KIND,
                 <Lightning as ServerModule>::decoder(),
             )]),
         )
@@ -1585,7 +1585,7 @@ mod fedimint_migration_tests {
         validate_migrations(
             "lightning",
             |db| async move {
-                let module = DynServerModuleInit::from(LightningGen);
+                let module = DynServerModuleInit::from(LightningInit);
                 apply_migrations(
                     &db,
                     module.module_kind().to_string(),
@@ -1717,7 +1717,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_LN,
-                LightningCommonGen::KIND,
+                LightningCommonInit::KIND,
                 <Lightning as ServerModule>::decoder(),
             )]),
         )
