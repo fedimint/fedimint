@@ -26,6 +26,7 @@
             overlays = [
               (final: prev: {
                 cargo-udeps = pkgs-unstable.cargo-udeps;
+                cargo-deny = pkgs-unstable.cargo-deny;
                 wasm-bindgen-cli = pkgs-unstable.wasm-bindgen-cli;
 
                 clightning = prev.clightning.overrideAttrs (oldAttrs: {
@@ -175,6 +176,7 @@
                   pkgs.cargo-llvm-cov
                   pkgs.cargo-udeps
                   pkgs.cargo-audit
+                  pkgs.cargo-deny
                   pkgs.parallel
                   pkgs.just
 
