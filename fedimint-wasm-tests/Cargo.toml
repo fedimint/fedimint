@@ -6,6 +6,8 @@ license = "MIT"
 
 [lib]
 crate-type = [ "rlib", "cdylib" ]
+name = "fedimint_wasm_tests"
+path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.69"

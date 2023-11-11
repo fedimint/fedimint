@@ -6,6 +6,10 @@ license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "fedimint_bip39"
+path = "./src/lib.rs"
+
 [dependencies]
 bip39 = { version = "2.0.0", features = ["rand"] }
 fedimint-client = { path = "../fedimint-client" }
