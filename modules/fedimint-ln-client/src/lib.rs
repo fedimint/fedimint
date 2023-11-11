@@ -30,8 +30,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
-    TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::task::timeout;
 use fedimint_core::{
@@ -633,7 +632,7 @@ pub enum LightningOperationMeta {
 pub struct LightningClientGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for LightningClientGen {
+impl ModuleInit for LightningClientGen {
     type Common = LightningCommonGen;
 
     async fn dump_database(

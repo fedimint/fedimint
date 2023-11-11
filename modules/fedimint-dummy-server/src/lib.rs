@@ -15,8 +15,8 @@ use fedimint_core::endpoint_constants::{SIGN_MESSAGE_ENDPOINT, WAIT_SIGNED_ENDPO
 use fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -51,7 +51,7 @@ pub struct DummyGen;
 
 // TODO: Boilerplate-code
 #[async_trait]
-impl ExtendsCommonModuleInit for DummyGen {
+impl ModuleInit for DummyGen {
     type Common = DummyCommonGen;
 
     /// Dumps all database items for debugging

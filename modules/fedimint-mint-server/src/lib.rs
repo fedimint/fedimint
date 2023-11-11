@@ -13,8 +13,8 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -53,7 +53,7 @@ use tracing::{debug, info};
 pub struct MintGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for MintGen {
+impl ModuleInit for MintGen {
     type Common = MintCommonGen;
 
     async fn dump_database(

@@ -38,8 +38,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
-    TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
@@ -579,7 +578,7 @@ pub enum MintOperationMetaVariants {
 pub struct MintClientGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for MintClientGen {
+impl ModuleInit for MintClientGen {
     type Common = MintCommonGen;
 
     async fn dump_database(

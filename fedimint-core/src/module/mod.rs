@@ -438,8 +438,9 @@ pub trait IDynCommonModuleInit: Debug {
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
 
+/// Trait implemented by every `*ModuleInit` (server or client side)
 #[apply(async_trait_maybe_send!)]
-pub trait ExtendsCommonModuleInit: Debug + Clone + Send + Sync + 'static {
+pub trait ModuleInit: Debug + Clone + Send + Sync + 'static {
     type Common: CommonModuleInit;
 
     async fn dump_database(
@@ -452,7 +453,7 @@ pub trait ExtendsCommonModuleInit: Debug + Clone + Send + Sync + 'static {
 #[apply(async_trait_maybe_send!)]
 impl<T> IDynCommonModuleInit for T
 where
-    T: ExtendsCommonModuleInit,
+    T: ModuleInit,
 {
     fn decoder(&self) -> Decoder {
         T::Common::decoder()
@@ -471,7 +472,7 @@ where
         dbtx: &mut DatabaseTransactionRef<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        <Self as ExtendsCommonModuleInit>::dump_database(self, dbtx, prefix_names).await
+        <Self as ModuleInit>::dump_database(self, dbtx, prefix_names).await
     }
 }
 
@@ -559,6 +560,7 @@ impl AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static> for DynServerModule
     }
 }
 
+/// Logic and constant common between server side and client side modules
 #[apply(async_trait_maybe_send!)]
 pub trait CommonModuleInit: Debug + Sized {
     const CONSENSUS_VERSION: ModuleConsensusVersion;
@@ -608,7 +610,7 @@ where
 /// For examples, take a look at one of the `MintConfigGenerator`,
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
-pub trait ServerModuleInit: ExtendsCommonModuleInit + Sized {
+pub trait ServerModuleInit: ModuleInit + Sized {
     type Params: ModuleInitParams;
 
     /// This represents the module's database version that the current code is
@@ -636,7 +638,7 @@ pub trait ServerModuleInit: ExtendsCommonModuleInit + Sized {
     fn supported_api_versions(&self) -> SupportedModuleApiVersions;
 
     fn kind() -> ModuleKind {
-        <Self as ExtendsCommonModuleInit>::Common::KIND
+        <Self as ModuleInit>::Common::KIND
     }
 
     /// Initialize the [`DynServerModule`] instance from its config
@@ -671,7 +673,7 @@ pub trait ServerModuleInit: ExtendsCommonModuleInit + Sized {
     fn get_client_config(
         &self,
         config: &ServerModuleConsensusConfig,
-    ) -> anyhow::Result<<<Self as ExtendsCommonModuleInit>::Common as CommonModuleInit>::ClientConfig>;
+    ) -> anyhow::Result<<<Self as ModuleInit>::Common as CommonModuleInit>::ClientConfig>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -786,7 +788,7 @@ pub trait ServerModule: Debug + Sized {
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
         // allocate
-        <Self::Gen as ExtendsCommonModuleInit>::Common::KIND
+        <Self::Gen as ModuleInit>::Common::KIND
     }
 
     /// Returns a decoder for the following associated types of this module:

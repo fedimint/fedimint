@@ -19,9 +19,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransactionRef};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{
-    ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
-};
+use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::incoming::{
@@ -358,7 +356,7 @@ pub struct GatewayClientGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for GatewayClientGen {
+impl ModuleInit for GatewayClientGen {
     type Common = LightningCommonGen;
 
     async fn dump_database(

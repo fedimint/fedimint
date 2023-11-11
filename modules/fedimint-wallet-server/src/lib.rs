@@ -40,8 +40,8 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
@@ -76,7 +76,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 pub struct WalletGen;
 
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for WalletGen {
+impl ModuleInit for WalletGen {
     type Common = WalletCommonGen;
 
     async fn dump_database(

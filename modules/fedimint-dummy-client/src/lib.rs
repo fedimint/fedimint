@@ -14,8 +14,7 @@ use fedimint_core::api::{DynModuleApi, GlobalFederationApi};
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
 use fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
-    TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
@@ -332,7 +331,7 @@ pub struct DummyClientGen;
 
 // TODO: Boilerplate-code
 #[apply(async_trait_maybe_send!)]
-impl ExtendsCommonModuleInit for DummyClientGen {
+impl ModuleInit for DummyClientGen {
     type Common = DummyCommonGen;
 
     async fn dump_database(
