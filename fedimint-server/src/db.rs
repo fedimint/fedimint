@@ -107,7 +107,7 @@ mod fedimint_migration_tests {
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::transaction::Transaction;
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
-    use fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
+    use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
     use fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     use futures::StreamExt;
@@ -198,7 +198,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 0,
-                DummyCommonGen::KIND,
+                DummyCommonInit::KIND,
                 <Dummy as ServerModule>::decoder(),
             )]),
         )
@@ -282,7 +282,7 @@ mod fedimint_migration_tests {
             },
             ModuleDecoderRegistry::from_iter([(
                 0,
-                DummyCommonGen::KIND,
+                DummyCommonInit::KIND,
                 <Dummy as ServerModule>::decoder(),
             )]),
         )

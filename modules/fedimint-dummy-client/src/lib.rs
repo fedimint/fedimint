@@ -21,7 +21,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
-    fed_key_pair, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
+    fed_key_pair, DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
     KIND,
 };
 use futures::{pin_mut, StreamExt};
@@ -58,7 +58,7 @@ impl Context for DummyClientContext {}
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for DummyClientModule {
-    type Init = DummyClientGen;
+    type Init = DummyClientInit;
     type Common = DummyModuleTypes;
     type ModuleStateMachineContext = DummyClientContext;
     type States = DummyStateMachine;
@@ -271,7 +271,7 @@ impl DummyClientModule {
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let (txid, _) = self
             .client_ctx
-            .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, DummyCommonInit::KIND.as_str(), outpoint, tx)
             .await?;
 
         let tx_subscription = self.client_ctx.transaction_updates(op_id).await;
@@ -327,12 +327,12 @@ async fn get_funds(dbtx: &mut DatabaseTransactionRef<'_>) -> Amount {
 }
 
 #[derive(Debug, Clone)]
-pub struct DummyClientGen;
+pub struct DummyClientInit;
 
 // TODO: Boilerplate-code
 #[apply(async_trait_maybe_send!)]
-impl ModuleInit for DummyClientGen {
-    type Common = DummyCommonGen;
+impl ModuleInit for DummyClientInit {
+    type Common = DummyCommonInit;
 
     async fn dump_database(
         &self,
@@ -360,7 +360,7 @@ impl ModuleInit for DummyClientGen {
 
 /// Generates the client module
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleInit for DummyClientGen {
+impl ClientModuleInit for DummyClientInit {
     type Module = DummyClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {

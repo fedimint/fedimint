@@ -9,13 +9,13 @@ use fedimint_client::module::init::{ClientModuleInitRegistry, DynClientModuleIni
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
 use fedimint_core::module::DynServerModuleInit;
-use fedimint_ln_client::LightningClientGen;
-use fedimint_ln_server::LightningGen;
+use fedimint_ln_client::LightningClientInit;
+use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_client::MintClientGen;
-use fedimint_mint_server::MintGen;
-use fedimint_wallet_client::WalletClientGen;
-use fedimint_wallet_server::WalletGen;
+use fedimint_mint_client::MintClientInit;
+use fedimint_mint_server::MintInit;
+use fedimint_wallet_client::WalletClientInit;
+use fedimint_wallet_server::WalletInit;
 use futures::StreamExt;
 
 use crate::dump::DatabaseDump;
@@ -151,9 +151,9 @@ async fn main() -> Result<()> {
                 vec![]
             } else {
                 vec![
-                    DynServerModuleInit::from(WalletGen),
-                    DynServerModuleInit::from(MintGen),
-                    DynServerModuleInit::from(LightningGen),
+                    DynServerModuleInit::from(WalletInit),
+                    DynServerModuleInit::from(MintInit),
+                    DynServerModuleInit::from(LightningInit),
                 ]
             });
 
@@ -161,9 +161,9 @@ async fn main() -> Result<()> {
                 vec![]
             } else {
                 vec![
-                    DynClientModuleInit::from(WalletClientGen::default()),
-                    DynClientModuleInit::from(MintClientGen),
-                    DynClientModuleInit::from(LightningClientGen),
+                    DynClientModuleInit::from(WalletClientInit::default()),
+                    DynClientModuleInit::from(MintClientInit),
+                    DynClientModuleInit::from(LightningClientInit),
                 ]
             });
 

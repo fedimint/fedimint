@@ -689,7 +689,7 @@ mod tests {
     use fedimint_dummy_common::config::{
         DummyConfig, DummyGenParams, DummyGenParamsConsensus, DummyGenParamsLocal,
     };
-    use fedimint_dummy_server::DummyGen;
+    use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
@@ -729,7 +729,7 @@ mod tests {
                 .parse()
                 .expect("parses");
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(0, DummyGen::kind(), DummyGenParams::default());
+            modules.attach_config_gen_params(0, DummyInit::kind(), DummyGenParams::default());
 
             let default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
@@ -743,7 +743,9 @@ mod tests {
                 api_url: api_url.clone(),
                 default_params,
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-                registry: ServerModuleInitRegistry::from(vec![DynServerModuleInit::from(DummyGen)]),
+                registry: ServerModuleInitRegistry::from(vec![DynServerModuleInit::from(
+                    DummyInit,
+                )]),
             };
             let dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
@@ -824,7 +826,7 @@ mod tests {
             let mut modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(
                 0,
-                DummyGen::kind(),
+                DummyInit::kind(),
                 DummyGenParams {
                     local: DummyGenParamsLocal(self.name.clone()),
                     consensus: DummyGenParamsConsensus {

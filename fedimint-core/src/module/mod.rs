@@ -783,12 +783,12 @@ pub trait ModuleCommon {
 pub trait ServerModule: Debug + Sized {
     type Common: ModuleCommon;
 
-    type Gen: ServerModuleInit;
+    type Init: ServerModuleInit;
 
     fn module_kind() -> ModuleKind {
         // Note: All modules should define kinds as &'static str, so this doesn't
         // allocate
-        <Self::Gen as ModuleInit>::Common::KIND
+        <Self::Init as ModuleInit>::Common::KIND
     }
 
     /// Returns a decoder for the following associated types of this module:

@@ -4,25 +4,25 @@ use anyhow::bail;
 use assert_matches::assert_matches;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
-use fedimint_dummy_client::{DummyClientGen, DummyClientModule};
+use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
-use fedimint_dummy_server::DummyGen;
+use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
-    InternalPayState, LightningClientExt, LightningClientGen, LightningOperationMeta, LnPayState,
+    InternalPayState, LightningClientExt, LightningClientInit, LightningOperationMeta, LnPayState,
     LnReceiveState, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::ln_operation;
-use fedimint_ln_server::LightningGen;
+use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use lightning_invoice::Bolt11Invoice;
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    fixtures.with_module(LightningClientGen, LightningGen, ln_params)
+    fixtures.with_module(LightningClientInit, LightningInit, ln_params)
 }
 
 /// Setup a gateway connected to the fed and client

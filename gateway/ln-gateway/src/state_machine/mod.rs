@@ -26,13 +26,13 @@ use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 use fedimint_ln_client::pay::PayInvoicePayload;
-use fedimint_ln_client::{create_incoming_contract_output, LightningClientGen};
+use fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    ln_operation, LightningClientContext, LightningCommonGen, LightningGateway,
+    ln_operation, LightningClientContext, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, KIND,
 };
 use futures::StreamExt;
@@ -343,7 +343,7 @@ impl GatewayClientExt for ClientArc {
 }
 
 #[derive(Debug, Clone)]
-pub struct GatewayClientGen {
+pub struct GatewayClientInit {
     pub lnrpc: Arc<dyn ILnRpcClient>,
     pub all_clients: FederationToClientMap,
     pub all_scids: ScidToFederationMap,
@@ -356,8 +356,8 @@ pub struct GatewayClientGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ModuleInit for GatewayClientGen {
-    type Common = LightningCommonGen;
+impl ModuleInit for GatewayClientInit {
+    type Common = LightningCommonInit;
 
     async fn dump_database(
         &self,
@@ -369,7 +369,7 @@ impl ModuleInit for GatewayClientGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleInit for GatewayClientGen {
+impl ClientModuleInit for GatewayClientInit {
     type Module = GatewayClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
@@ -441,7 +441,7 @@ pub struct GatewayClientModule {
 }
 
 impl ClientModule for GatewayClientModule {
-    type Init = LightningClientGen;
+    type Init = LightningClientInit;
     type Common = LightningModuleTypes;
     type ModuleStateMachineContext = GatewayClientContext;
     type States = GatewayClientStateMachines;

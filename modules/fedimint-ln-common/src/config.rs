@@ -9,7 +9,7 @@ use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::serde_impl::SerdeSecret;
 
-use crate::LightningCommonGen;
+use crate::LightningCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParams {
@@ -93,7 +93,7 @@ impl std::fmt::Display for LightningClientConfig {
 
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
-    LightningCommonGen,
+    LightningCommonInit,
     LightningGenParams,
     LightningGenParamsLocal,
     LightningGenParamsConsensus,

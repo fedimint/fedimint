@@ -263,9 +263,9 @@ impl std::fmt::Display for LightningConsensusItem {
 }
 
 #[derive(Debug)]
-pub struct LightningCommonGen;
+pub struct LightningCommonInit;
 
-impl CommonModuleInit for LightningCommonGen {
+impl CommonModuleInit for LightningCommonInit {
     const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
@@ -483,7 +483,7 @@ pub async fn ln_operation(
         .await
         .ok_or(anyhow::anyhow!("Operation not found"))?;
 
-    if operation.operation_module_kind() != LightningCommonGen::KIND.as_str() {
+    if operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
         bail!("Operation is not a lightning operation");
     }
 

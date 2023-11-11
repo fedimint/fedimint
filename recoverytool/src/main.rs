@@ -19,10 +19,10 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::ServerModule;
-use fedimint_ln_common::LightningCommonGen;
+use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_server::common::MintCommonGen;
+use fedimint_mint_server::common::MintCommonInit;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::io::read_server_config;
@@ -31,7 +31,7 @@ use fedimint_wallet_server::common::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
 use fedimint_wallet_server::common::tweakable::Tweakable;
 use fedimint_wallet_server::common::{
-    PegInDescriptor, SpendableUTXO, WalletCommonGen, WalletInput,
+    PegInDescriptor, SpendableUTXO, WalletCommonInit, WalletInput,
 };
 use fedimint_wallet_server::Wallet;
 use futures::stream::StreamExt;
@@ -166,17 +166,17 @@ async fn main() -> anyhow::Result<()> {
             let decoders = ModuleDecoderRegistry::from_iter([
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_LN,
-                    LightningCommonGen::KIND,
+                    LightningCommonInit::KIND,
                     <Lightning as ServerModule>::decoder(),
                 ),
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                    MintCommonGen::KIND,
+                    MintCommonInit::KIND,
                     <Mint as ServerModule>::decoder(),
                 ),
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-                    WalletCommonGen::KIND,
+                    WalletCommonInit::KIND,
                     <Wallet as ServerModule>::decoder(),
                 ),
             ]);

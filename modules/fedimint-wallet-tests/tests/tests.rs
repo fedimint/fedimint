@@ -13,29 +13,29 @@ use fedimint_core::db::{DatabaseTransactionRef, IRawDatabaseExt};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{sats, Amount, Feerate, PeerId, ServerModule};
-use fedimint_dummy_client::DummyClientGen;
+use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
-use fedimint_dummy_server::DummyGen;
+use fedimint_dummy_server::DummyInit;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{
-    DepositState, WalletClientExt, WalletClientGen, WalletClientModule, WithdrawState,
+    DepositState, WalletClientExt, WalletClientInit, WalletClientModule, WithdrawState,
 };
 use fedimint_wallet_common::config::{WalletConfig, WalletGenParams};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{PegOutFees, Rbf};
-use fedimint_wallet_server::WalletGen;
+use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
 use miniscript::ToPublicKey;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(DummyClientGen, DummyGen, DummyGenParams::default());
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
     let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_server());
-    let wallet_client = WalletClientGen::new(fixtures.bitcoin_client());
-    fixtures.with_module(wallet_client, WalletGen, wallet_params)
+    let wallet_client = WalletClientInit::new(fixtures.bitcoin_client());
+    fixtures.with_module(wallet_client, WalletInit, wallet_params)
 }
 
 fn bsats(satoshi: u64) -> bitcoin::Amount {
@@ -528,7 +528,7 @@ fn build_wallet_server_configs(
 )> {
     let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
     let wallet_cfg = fedimint_core::module::ServerModuleInit::trusted_dealer_gen(
-        &WalletGen,
+        &WalletInit,
         &peers,
         &fedimint_core::config::ConfigGenModuleParams::from_typed(WalletGenParams {
             local: fedimint_wallet_common::config::WalletGenParamsLocal {
@@ -543,10 +543,10 @@ fn build_wallet_server_configs(
     );
     let client_cfg = fedimint_core::config::ClientModuleConfig::from_typed(
         0,
-        <WalletGen as fedimint_core::module::ServerModuleInit>::kind(),
+        <WalletInit as fedimint_core::module::ServerModuleInit>::kind(),
         fedimint_core::module::ModuleConsensusVersion(0),
         fedimint_core::module::ServerModuleInit::get_client_config(
-            &WalletGen,
+            &WalletInit,
             &wallet_cfg[&PeerId::from(0)].consensus,
         )?,
     )?;

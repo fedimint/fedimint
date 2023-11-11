@@ -1,18 +1,18 @@
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
-use fedimint_dummy_client::{DummyClientGen, DummyClientModule};
+use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
-use fedimint_dummy_server::DummyGen;
+use fedimint_dummy_server::DummyInit;
 use fedimint_mint_client::{
-    MintClientExt, MintClientGen, OOBNotes, ReissueExternalNotesState, SpendOOBState,
+    MintClientExt, MintClientInit, OOBNotes, ReissueExternalNotesState, SpendOOBState,
 };
 use fedimint_mint_common::config::MintGenParams;
-use fedimint_mint_server::MintGen;
+use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(MintClientGen, MintGen, MintGenParams::default());
-    fixtures.with_module(DummyClientGen, DummyGen, DummyGenParams::default())
+    let fixtures = Fixtures::new_primary(MintClientInit, MintInit, MintGenParams::default());
+    fixtures.with_module(DummyClientInit, DummyInit, DummyGenParams::default())
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -161,7 +161,7 @@ impl WalletClientExt for ClientArc {
                             .add_operation_log_entry(
                                 dbtx,
                                 operation_id,
-                                WalletCommonGen::KIND.as_str(),
+                                WalletCommonInit::KIND.as_str(),
                                 WalletOperationMeta::Deposit {
                                     address: address.clone(),
                                     expires_at: valid_until,
@@ -198,7 +198,7 @@ impl WalletClientExt for ClientArc {
             .await
             .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
 
-        if operation_log_entry.operation_module_kind() != WalletCommonGen::KIND.as_str() {
+        if operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
             bail!("Operation is not a wallet operation");
         }
 
@@ -294,7 +294,7 @@ impl WalletClientExt for ClientArc {
 
         self.finalize_and_submit_transaction(
             operation_id,
-            WalletCommonGen::KIND.as_str(),
+            WalletCommonInit::KIND.as_str(),
             move |_, change| WalletOperationMeta::Withdraw {
                 address: address.clone(),
                 amount,
@@ -321,7 +321,7 @@ impl WalletClientExt for ClientArc {
 
         self.finalize_and_submit_transaction(
             operation_id,
-            WalletCommonGen::KIND.as_str(),
+            WalletCommonInit::KIND.as_str(),
             move |_, change| WalletOperationMeta::RbfWithdraw {
                 rbf: rbf.clone(),
                 change,
@@ -345,7 +345,7 @@ impl WalletClientExt for ClientArc {
             .await
             .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
 
-        if operation.operation_module_kind() != WalletCommonGen::KIND.as_str() {
+        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
             bail!("Operation is not a wallet operation");
         }
 
@@ -426,17 +426,17 @@ where
 
 #[derive(Debug, Clone, Default)]
 // TODO: should probably move to DB
-pub struct WalletClientGen(pub Option<BitcoinRpcConfig>);
+pub struct WalletClientInit(pub Option<BitcoinRpcConfig>);
 
-impl WalletClientGen {
+impl WalletClientInit {
     pub fn new(rpc: BitcoinRpcConfig) -> Self {
         Self(Some(rpc))
     }
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ModuleInit for WalletClientGen {
-    type Common = WalletCommonGen;
+impl ModuleInit for WalletClientInit {
+    type Common = WalletCommonInit;
 
     async fn dump_database(
         &self,
@@ -465,7 +465,7 @@ impl ModuleInit for WalletClientGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleInit for WalletClientGen {
+impl ClientModuleInit for WalletClientInit {
     type Module = WalletClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
@@ -520,7 +520,7 @@ pub struct WalletClientModule {
 }
 
 impl ClientModule for WalletClientModule {
-    type Init = WalletClientGen;
+    type Init = WalletClientInit;
     type Common = WalletModuleTypes;
     type ModuleStateMachineContext = WalletClientContext;
     type States = WalletClientStates;

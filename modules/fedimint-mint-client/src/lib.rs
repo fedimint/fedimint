@@ -298,7 +298,7 @@ impl MintClientExt for ClientArc {
         let change = self
             .finalize_and_submit_transaction(
                 operation_id,
-                MintCommonGen::KIND.as_str(),
+                MintCommonInit::KIND.as_str(),
                 operation_meta_gen,
                 tx,
             )
@@ -409,7 +409,7 @@ impl MintClientExt for ClientArc {
                             .add_operation_log_entry(
                                 dbtx,
                                 operation_id,
-                                MintCommonGen::KIND.as_str(),
+                                MintCommonInit::KIND.as_str(),
                                 MintOperationMeta {
                                     variant: MintOperationMetaVariants::SpendOOB {
                                         requested_amount,
@@ -549,7 +549,7 @@ async fn mint_operation(
         .await
         .ok_or(anyhow!("Operation not found"))?;
 
-    if operation.operation_module_kind() != MintCommonGen::KIND.as_str() {
+    if operation.operation_module_kind() != MintCommonInit::KIND.as_str() {
         bail!("Operation is not a mint operation");
     }
 
@@ -575,11 +575,11 @@ pub enum MintOperationMetaVariants {
 }
 
 #[derive(Debug, Clone)]
-pub struct MintClientGen;
+pub struct MintClientInit;
 
 #[apply(async_trait_maybe_send!)]
-impl ModuleInit for MintClientGen {
-    type Common = MintCommonGen;
+impl ModuleInit for MintClientInit {
+    type Common = MintCommonInit;
 
     async fn dump_database(
         &self,
@@ -622,7 +622,7 @@ impl ModuleInit for MintClientGen {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl ClientModuleInit for MintClientGen {
+impl ClientModuleInit for MintClientInit {
     type Module = MintClientModule;
 
     fn supported_api_versions(&self) -> MultiApiVersion {
@@ -698,7 +698,7 @@ impl Context for MintClientContext {}
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for MintClientModule {
-    type Init = MintClientGen;
+    type Init = MintClientInit;
     type Common = MintModuleTypes;
     type ModuleStateMachineContext = MintClientContext;
     type States = MintClientStateMachines;

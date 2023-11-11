@@ -12,7 +12,7 @@ use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
 use crate::keys::CompressedPublicKey;
-use crate::{PegInDescriptor, WalletCommonGen};
+use crate::{PegInDescriptor, WalletCommonInit};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
@@ -188,7 +188,7 @@ impl WalletClientConfig {
 }
 
 plugin_types_trait_impl_config!(
-    WalletCommonGen,
+    WalletCommonInit,
     WalletGenParams,
     WalletGenParamsLocal,
     WalletGenParamsConsensus,
