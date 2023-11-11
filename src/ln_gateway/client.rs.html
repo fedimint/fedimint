@@ -164,7 +164,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::ILnRpcClient;
-<span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientGen;
+<span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientInit;
 <span class="kw">use crate</span>::{FederationToClientMap, GatewayError, <span class="prelude-ty">Result</span>, ScidToFederationMap};
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -210,7 +210,7 @@
         <span class="kw">let </span>federation_id = invite_code.federation_id;
 
         <span class="kw">let </span><span class="kw-2">mut </span>registry = <span class="self">self</span>.registry.clone();
-        registry.attach(GatewayClientGen {
+        registry.attach(GatewayClientInit {
             lnrpc,
             all_clients,
             all_scids,

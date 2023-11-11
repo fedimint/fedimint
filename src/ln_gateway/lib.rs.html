@@ -1354,9 +1354,9 @@
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
-<span class="kw">use </span>fedimint_ln_common::LightningCommonGen;
-<span class="kw">use </span>fedimint_mint_client::{MintClientGen, MintCommonGen};
-<span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientGen, WalletCommonGen, WithdrawState};
+<span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
+<span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
+<span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientInit, WalletCommonInit, WithdrawState};
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::Action;
 <span class="kw">use </span>gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
@@ -1407,8 +1407,8 @@
 <span class="kw">const </span>DB_FILE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;gatewayd.db&quot;</span>;
 
 <span class="kw">const </span>DEFAULT_MODULE_KINDS: [(ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind); <span class="number">2</span>] = [
-    (LEGACY_HARDCODED_INSTANCE_ID_MINT, <span class="kw-2">&amp;</span>MintCommonGen::KIND),
-    (LEGACY_HARDCODED_INSTANCE_ID_WALLET, <span class="kw-2">&amp;</span>WalletCommonGen::KIND),
+    (LEGACY_HARDCODED_INSTANCE_ID_MINT, <span class="kw-2">&amp;</span>MintCommonInit::KIND),
+    (LEGACY_HARDCODED_INSTANCE_ID_WALLET, <span class="kw-2">&amp;</span>WalletCommonInit::KIND),
 ];
 
 <span class="attr">#[derive(Parser)]
@@ -1599,8 +1599,8 @@
         <span class="comment">// Gateway module will be attached when the federation clients are created
         // because the LN RPC will be injected with `GatewayClientGen`.
         </span><span class="kw">let </span><span class="kw-2">mut </span>registry = ClientModuleInitRegistry::new();
-        registry.attach(MintClientGen);
-        registry.attach(WalletClientGen::default());
+        registry.attach(MintClientInit);
+        registry.attach(WalletClientInit::default());
 
         <span class="kw">let </span>decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().cloned())<span class="question-mark">?</span>;
 
@@ -2485,7 +2485,7 @@
             .config
             .modules
             .values()
-            .find(|m| LightningCommonGen::KIND == m.kind.clone())
+            .find(|m| LightningCommonInit::KIND == m.kind.clone())
             .ok_or_else(|| {
                 GatewayError::InvalidMetadata(<span class="macro">format!</span>(
                     <span class="string">&quot;Federation {} does not have a lightning module&quot;</span>,

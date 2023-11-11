@@ -337,12 +337,12 @@
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
-    LightningClientExt, LightningClientGen, LnPayState, OutgoingLightningPayment,
+    LightningClientExt, LightningClientInit, LnPayState, OutgoingLightningPayment,
 };
 <span class="kw">use </span>fedimint_mint_client::{
-    MintClientExt, MintClientGen, MintClientModule, MintCommonGen, OOBNotes,
+    MintClientExt, MintClientInit, MintClientModule, MintCommonInit, OOBNotes,
 };
-<span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
+<span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>rand::thread_rng;
@@ -454,9 +454,9 @@
     rocksdb: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PathBuf&gt;,
 ) -&gt; anyhow::Result&lt;ClientArc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
-    client_builder.with_module(MintClientGen);
-    client_builder.with_module(LightningClientGen);
-    client_builder.with_module(WalletClientGen::default());
+    client_builder.with_module(MintClientInit);
+    client_builder.with_module(LightningClientInit);
+    client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module(<span class="number">1</span>);
     <span class="kw">if let </span><span class="prelude-val">Some</span>(invite_code) = invite_code {
         client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>);
@@ -622,7 +622,7 @@
     <span class="kw">let </span>(txid, <span class="kw">_</span>) = client
         .finalize_and_submit_transaction(
             operation_id,
-            MintCommonGen::KIND.as_str(),
+            MintCommonInit::KIND.as_str(),
             operation_meta_gen,
             tx,
         )

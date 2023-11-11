@@ -398,7 +398,7 @@
     <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
-    <span class="kw">use </span>fedimint_dummy_common::{DummyCommonGen, DummyInput, DummyOutput};
+    <span class="kw">use </span>fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     <span class="kw">use </span>fedimint_dummy_server::Dummy;
     <span class="kw">use </span>fedimint_testing::db::{prepare_db_migration_snapshot, validate_migrations, BYTE_32};
     <span class="kw">use </span>futures::StreamExt;
@@ -489,7 +489,7 @@
             },
             ModuleDecoderRegistry::from_iter([(
                 <span class="number">0</span>,
-                DummyCommonGen::KIND,
+                DummyCommonInit::KIND,
                 &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
@@ -573,7 +573,7 @@
             },
             ModuleDecoderRegistry::from_iter([(
                 <span class="number">0</span>,
-                DummyCommonGen::KIND,
+                DummyCommonInit::KIND,
                 &lt;Dummy <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )

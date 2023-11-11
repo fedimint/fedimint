@@ -966,6 +966,8 @@
 <a href="#966" id="966">966</a>
 <a href="#967" id="967">967</a>
 <a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 
@@ -1406,8 +1408,9 @@
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt;;
 }
 
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>ExtendsCommonModuleInit: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static </span>{
+<span class="doccomment">/// Trait implemented by every `*ModuleInit` (server or client side)
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+</span><span class="kw">pub trait </span>ModuleInit: Debug + Clone + Send + Sync + <span class="lifetime">&#39;static </span>{
     <span class="kw">type </span>Common: CommonModuleInit;
 
     <span class="kw">async fn </span>dump_database(
@@ -1420,7 +1423,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl</span>&lt;T&gt; IDynCommonModuleInit <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: ExtendsCommonModuleInit,
+    </span>T: ModuleInit,
 {
     <span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder {
         T::Common::decoder()
@@ -1439,7 +1442,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">&#39;_</span>&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleInit&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
+        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::dump_database(<span class="self">self</span>, dbtx, prefix_names).<span class="kw">await
     </span>}
 }
 
@@ -1527,7 +1530,8 @@
     }
 }
 
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<span class="doccomment">/// Logic and constant common between server side and client side modules
+</span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>CommonModuleInit: Debug + Sized {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion;
     <span class="kw">const </span>KIND: ModuleKind;
@@ -1576,7 +1580,7 @@
 /// For examples, take a look at one of the `MintConfigGenerator`,
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>ServerModuleInit: ExtendsCommonModuleInit + Sized {
+</span><span class="kw">pub trait </span>ServerModuleInit: ModuleInit + Sized {
     <span class="kw">type </span>Params: ModuleInitParams;
 
     <span class="doccomment">/// This represents the module&#39;s database version that the current code is
@@ -1604,7 +1608,7 @@
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions;
 
     <span class="kw">fn </span>kind() -&gt; ModuleKind {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleInit&gt;::Common::KIND
+        &lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::Common::KIND
     }
 
     <span class="doccomment">/// Initialize the [`DynServerModule`] instance from its config
@@ -1639,7 +1643,7 @@
     </span><span class="kw">fn </span>get_client_config(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig,
-    ) -&gt; anyhow::Result&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ExtendsCommonModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig&gt;;
+    ) -&gt; anyhow::Result&lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1749,12 +1753,12 @@
 </span><span class="kw">pub trait </span>ServerModule: Debug + Sized {
     <span class="kw">type </span>Common: ModuleCommon;
 
-    <span class="kw">type </span>Gen: ServerModuleInit;
+    <span class="kw">type </span>Init: ServerModuleInit;
 
     <span class="kw">fn </span>module_kind() -&gt; ModuleKind {
         <span class="comment">// Note: All modules should define kinds as &amp;&#39;static str, so this doesn&#39;t
         // allocate
-        </span>&lt;<span class="self">Self</span>::Gen <span class="kw">as </span>ExtendsCommonModuleInit&gt;::Common::KIND
+        </span>&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ModuleInit&gt;::Common::KIND
     }
 
     <span class="doccomment">/// Returns a decoder for the following associated types of this module:

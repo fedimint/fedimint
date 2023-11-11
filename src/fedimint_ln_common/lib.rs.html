@@ -754,9 +754,9 @@
 }
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>LightningCommonGen;
+</span><span class="kw">pub struct </span>LightningCommonInit;
 
-<span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>LightningCommonGen {
+<span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>LightningCommonInit {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
@@ -974,7 +974,7 @@
         .<span class="kw">await
         </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Operation not found&quot;</span>))<span class="question-mark">?</span>;
 
-    <span class="kw">if </span>operation.operation_module_kind() != LightningCommonGen::KIND.as_str() {
+    <span class="kw">if </span>operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
         <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning operation&quot;</span>);
     }
 

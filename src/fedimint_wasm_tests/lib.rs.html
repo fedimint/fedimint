@@ -190,16 +190,16 @@
 <span class="kw">use </span>fedimint_client::FederationInfo;
 <span class="kw">use </span>fedimint_core::api::InviteCode;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
-<span class="kw">use </span>fedimint_ln_client::LightningClientGen;
-<span class="kw">use </span>fedimint_mint_client::MintClientGen;
-<span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
+<span class="kw">use </span>fedimint_ln_client::LightningClientInit;
+<span class="kw">use </span>fedimint_mint_client::MintClientInit;
+<span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
 <span class="kw">use </span>rand::thread_rng;
 
 <span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientArc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::ClientBuilder::default();
-    builder.with_module(LightningClientGen);
-    builder.with_module(MintClientGen);
-    builder.with_module(WalletClientGen::default());
+    builder.with_module(LightningClientInit);
+    builder.with_module(MintClientInit);
+    builder.with_module(WalletClientInit::default());
     builder.with_primary_module(<span class="number">1</span>);
     builder.with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).<span class="kw">await</span><span class="question-mark">?</span>);
     builder.with_raw_database(MemDatabase::default());

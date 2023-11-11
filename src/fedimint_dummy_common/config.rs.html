@@ -92,7 +92,7 @@
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, SecretKeyShare};
 
-<span class="kw">use </span><span class="kw">crate</span>::DummyCommonGen;
+<span class="kw">use </span><span class="kw">crate</span>::DummyCommonInit;
 
 <span class="doccomment">/// Parameters necessary to generate this module&#39;s configuration
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,7 +162,7 @@
 
 <span class="comment">// Wire together the configs for this module
 </span><span class="macro">plugin_types_trait_impl_config!</span>(
-    DummyCommonGen,
+    DummyCommonInit,
     DummyGenParams,
     DummyGenParamsLocal,
     DummyGenParamsConsensus,

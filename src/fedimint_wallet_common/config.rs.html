@@ -212,7 +212,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
-<span class="kw">use crate</span>::{PegInDescriptor, WalletCommonGen};
+<span class="kw">use crate</span>::{PegInDescriptor, WalletCommonInit};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletGenParams {
@@ -388,7 +388,7 @@
 }
 
 <span class="macro">plugin_types_trait_impl_config!</span>(
-    WalletCommonGen,
+    WalletCommonInit,
     WalletGenParams,
     WalletGenParamsLocal,
     WalletGenParamsConsensus,

@@ -2000,7 +2000,7 @@
 };
 <span class="kw">use </span>common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, PendingTransaction,
-    ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonGen,
+    ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
     WalletConsensusItem, WalletError, WalletInput, WalletModuleTypes, WalletOutput,
     WalletOutputOutcome, CONFIRMATION_TARGET,
 };
@@ -2020,8 +2020,8 @@
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
@@ -2053,11 +2053,11 @@
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>WalletGen;
+</span><span class="kw">pub struct </span>WalletInit;
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>WalletGen {
-    <span class="kw">type </span>Common = WalletCommonGen;
+</span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>WalletInit {
+    <span class="kw">type </span>Common = WalletCommonInit;
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2158,7 +2158,7 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>WalletGen {
+</span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>WalletInit {
     <span class="kw">type </span>Params = WalletGenParams;
     <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">0</span>);
 
@@ -2283,7 +2283,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Wallet {
     <span class="kw">type </span>Common = WalletModuleTypes;
-    <span class="kw">type </span>Gen = WalletGen;
+    <span class="kw">type </span>Init = WalletInit;
 
     <span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
@@ -3638,7 +3638,7 @@
         UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
     };
     <span class="kw">use </span>fedimint_wallet_common::{
-        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction, WalletCommonGen,
+        PegOutFees, PendingTransaction, Rbf, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
         WalletOutputOutcome,
     };
     <span class="kw">use </span>futures::StreamExt;
@@ -3646,7 +3646,7 @@
     <span class="kw">use </span>secp256k1::Message;
     <span class="kw">use </span>strum::IntoEnumIterator;
 
-    <span class="kw">use crate</span>::{Wallet, WalletGen};
+    <span class="kw">use crate</span>::{Wallet, WalletInit};
 
     <span class="doccomment">/// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -3814,7 +3814,7 @@
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-                WalletCommonGen::KIND,
+                WalletCommonInit::KIND,
                 &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )
@@ -3826,7 +3826,7 @@
         validate_migrations(
             <span class="string">&quot;wallet&quot;</span>,
             |db| <span class="kw">async move </span>{
-                <span class="kw">let </span>module = DynServerModuleInit::from(WalletGen);
+                <span class="kw">let </span>module = DynServerModuleInit::from(WalletInit);
                 apply_migrations(
                     <span class="kw-2">&amp;</span>db,
                     module.module_kind().to_string(),
@@ -3951,7 +3951,7 @@
             },
             ModuleDecoderRegistry::from_iter([(
                 LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-                WalletCommonGen::KIND,
+                WalletCommonInit::KIND,
                 &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
             )]),
         )

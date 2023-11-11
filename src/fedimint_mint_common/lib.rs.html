@@ -323,9 +323,9 @@
 </span><span class="kw">pub struct </span>BlindNonce(<span class="kw">pub </span>tbs::BlindedMessage);
 
 <span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>MintCommonGen;
+</span><span class="kw">pub struct </span>MintCommonInit;
 
-<span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>MintCommonGen {
+<span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>MintCommonInit {
     <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 

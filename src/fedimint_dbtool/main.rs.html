@@ -194,13 +194,13 @@
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
 <span class="kw">use </span>fedimint_core::module::DynServerModuleInit;
-<span class="kw">use </span>fedimint_ln_client::LightningClientGen;
-<span class="kw">use </span>fedimint_ln_server::LightningGen;
+<span class="kw">use </span>fedimint_ln_client::LightningClientInit;
+<span class="kw">use </span>fedimint_ln_server::LightningInit;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>fedimint_mint_client::MintClientGen;
-<span class="kw">use </span>fedimint_mint_server::MintGen;
-<span class="kw">use </span>fedimint_wallet_client::WalletClientGen;
-<span class="kw">use </span>fedimint_wallet_server::WalletGen;
+<span class="kw">use </span>fedimint_mint_client::MintClientInit;
+<span class="kw">use </span>fedimint_mint_server::MintInit;
+<span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
+<span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>futures::StreamExt;
 
 <span class="kw">use </span><span class="kw">crate</span>::dump::DatabaseDump;
@@ -336,9 +336,9 @@
                 <span class="macro">vec!</span>[]
             } <span class="kw">else </span>{
                 <span class="macro">vec!</span>[
-                    DynServerModuleInit::from(WalletGen),
-                    DynServerModuleInit::from(MintGen),
-                    DynServerModuleInit::from(LightningGen),
+                    DynServerModuleInit::from(WalletInit),
+                    DynServerModuleInit::from(MintInit),
+                    DynServerModuleInit::from(LightningInit),
                 ]
             });
 
@@ -346,9 +346,9 @@
                 <span class="macro">vec!</span>[]
             } <span class="kw">else </span>{
                 <span class="macro">vec!</span>[
-                    DynClientModuleInit::from(WalletClientGen::default()),
-                    DynClientModuleInit::from(MintClientGen),
-                    DynClientModuleInit::from(LightningClientGen),
+                    DynClientModuleInit::from(WalletClientInit::default()),
+                    DynClientModuleInit::from(MintClientInit),
+                    DynClientModuleInit::from(LightningClientInit),
                 ]
             });
 

@@ -995,6 +995,8 @@
 <a href="#995" id="995">995</a>
 <a href="#996" id="996">996</a>
 <a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
@@ -1686,7 +1688,7 @@
     <span class="kw">use </span>fedimint_dummy_common::config::{
         DummyConfig, DummyGenParams, DummyGenParamsConsensus, DummyGenParamsLocal,
     };
-    <span class="kw">use </span>fedimint_dummy_server::DummyGen;
+    <span class="kw">use </span>fedimint_dummy_server::DummyInit;
     <span class="kw">use </span>fedimint_logging::TracingSetup;
     <span class="kw">use </span>fedimint_testing::fixtures::test_dir;
     <span class="kw">use </span>futures::future::join_all;
@@ -1726,7 +1728,7 @@
                 .parse()
                 .expect(<span class="string">&quot;parses&quot;</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
-            modules.attach_config_gen_params(<span class="number">0</span>, DummyGen::kind(), DummyGenParams::default());
+            modules.attach_config_gen_params(<span class="number">0</span>, DummyInit::kind(), DummyGenParams::default());
 
             <span class="kw">let </span>default_params = ConfigGenParamsRequest {
                 meta: Default::default(),
@@ -1740,7 +1742,9 @@
                 api_url: api_url.clone(),
                 default_params,
                 max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-                registry: ServerModuleInitRegistry::from(<span class="macro">vec!</span>[DynServerModuleInit::from(DummyGen)]),
+                registry: ServerModuleInitRegistry::from(<span class="macro">vec!</span>[DynServerModuleInit::from(
+                    DummyInit,
+                )]),
             };
             <span class="kw">let </span>dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect(<span class="string">&quot;Unable to create test dir&quot;</span>);
@@ -1821,7 +1825,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>modules = ServerModuleConfigGenParamsRegistry::default();
             modules.attach_config_gen_params(
                 <span class="number">0</span>,
-                DummyGen::kind(),
+                DummyInit::kind(),
                 DummyGenParams {
                     local: DummyGenParamsLocal(<span class="self">self</span>.name.clone()),
                     consensus: DummyGenParamsConsensus {

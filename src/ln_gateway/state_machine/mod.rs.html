@@ -723,8 +723,6 @@
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
 <a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -746,22 +744,20 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, Database, DatabaseTransactionRef};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, ExtendsCommonModuleInit, MultiApiVersion, TransactionItemAmount,
-};
+<span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
-<span class="kw">use </span>fedimint_ln_client::{create_incoming_contract_output, LightningClientGen};
+<span class="kw">use </span>fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::{
-    ln_operation, LightningClientContext, LightningCommonGen, LightningGateway,
+    ln_operation, LightningClientContext, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, KIND,
 };
 <span class="kw">use </span>futures::StreamExt;
@@ -1072,7 +1068,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>GatewayClientGen {
+</span><span class="kw">pub struct </span>GatewayClientInit {
     <span class="kw">pub </span>lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
     <span class="kw">pub </span>all_clients: FederationToClientMap,
     <span class="kw">pub </span>all_scids: ScidToFederationMap,
@@ -1085,8 +1081,8 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>GatewayClientGen {
-    <span class="kw">type </span>Common = LightningCommonGen;
+</span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>GatewayClientInit {
+    <span class="kw">type </span>Common = LightningCommonInit;
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1098,7 +1094,7 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>GatewayClientGen {
+</span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>GatewayClientInit {
     <span class="kw">type </span>Module = GatewayClientModule;
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {
@@ -1170,7 +1166,7 @@
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModule {
-    <span class="kw">type </span>Init = LightningClientGen;
+    <span class="kw">type </span>Init = LightningClientInit;
     <span class="kw">type </span>Common = LightningModuleTypes;
     <span class="kw">type </span>ModuleStateMachineContext = GatewayClientContext;
     <span class="kw">type </span>States = GatewayClientStateMachines;

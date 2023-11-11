@@ -475,8 +475,8 @@
 <span class="kw">use </span>fedimint_core::epoch::{SerdeSignature, SerdeSignatureShare};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, ExtendsCommonModuleInit, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, PeerHandle, ServerModuleInit,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
+    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
     ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
@@ -486,7 +486,7 @@
     DummyGenParams,
 };
 <span class="kw">use </span>fedimint_dummy_common::{
-    broken_fed_public_key, fed_public_key, DummyCommonGen, DummyConsensusItem, DummyError,
+    broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyError,
     DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
@@ -507,12 +507,12 @@
 
 <span class="doccomment">/// Generates the module
 </span><span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>DummyGen;
+</span><span class="kw">pub struct </span>DummyInit;
 
 <span class="comment">// TODO: Boilerplate-code
 </span><span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>DummyGen {
-    <span class="kw">type </span>Common = DummyCommonGen;
+</span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>DummyInit {
+    <span class="kw">type </span>Common = DummyCommonInit;
 
     <span class="doccomment">/// Dumps all database items for debugging
     </span><span class="kw">async fn </span>dump_database(
@@ -577,7 +577,7 @@
 
 <span class="doccomment">/// Implementation of server module non-consensus functions
 </span><span class="attr">#[async_trait]
-</span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>DummyGen {
+</span><span class="kw">impl </span>ServerModuleInit <span class="kw">for </span>DummyInit {
     <span class="kw">type </span>Params = DummyGenParams;
     <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
 
@@ -698,7 +698,7 @@
 </span><span class="kw">impl </span>ServerModule <span class="kw">for </span>Dummy {
     <span class="doccomment">/// Define the consensus types
     </span><span class="kw">type </span>Common = DummyModuleTypes;
-    <span class="kw">type </span>Gen = DummyGen;
+    <span class="kw">type </span>Init = DummyInit;
 
     <span class="kw">async fn </span>consensus_proposal(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

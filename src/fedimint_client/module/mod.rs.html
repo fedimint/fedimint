@@ -588,8 +588,6 @@
 <a href="#588" id="588">588</a>
 <a href="#589" id="589">589</a>
 <a href="#590" id="590">590</a>
-<a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::ffi;
@@ -603,9 +601,7 @@
 };
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<span class="kw">use </span>fedimint_core::module::{
-    CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, TransactionItemAmount,
-};
+<span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::{
@@ -736,7 +732,7 @@
     }
 
     <span class="kw">fn </span>kind() -&gt; ModuleKind {
-        &lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ClientModule&gt;::Init <span class="kw">as </span>ExtendsCommonModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::KIND
+        &lt;&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ClientModule&gt;::Init <span class="kw">as </span>ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::KIND
     }
 
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext;

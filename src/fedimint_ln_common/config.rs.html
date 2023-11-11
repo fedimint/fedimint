@@ -157,7 +157,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 
-<span class="kw">use </span><span class="kw">crate</span>::LightningCommonGen;
+<span class="kw">use </span><span class="kw">crate</span>::LightningCommonInit;
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningGenParams {
@@ -241,7 +241,7 @@
 
 <span class="comment">// Wire together the configs for this module
 </span><span class="macro">plugin_types_trait_impl_config!</span>(
-    LightningCommonGen,
+    LightningCommonInit,
     LightningGenParams,
     LightningGenParamsLocal,
     LightningGenParamsConsensus,

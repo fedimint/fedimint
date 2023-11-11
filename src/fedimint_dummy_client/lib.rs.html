@@ -382,7 +382,6 @@
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
 <a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -399,15 +398,14 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ExtendsCommonModuleInit, ModuleCommon, MultiApiVersion,
-    TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 <span class="kw">pub use </span>fedimint_dummy_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_dummy_common::config::DummyClientConfig;
 <span class="kw">use </span>fedimint_dummy_common::{
-    fed_key_pair, DummyCommonGen, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
+    fed_key_pair, DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
     KIND,
 };
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
@@ -444,7 +442,7 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModule <span class="kw">for </span>DummyClientModule {
-    <span class="kw">type </span>Init = DummyClientGen;
+    <span class="kw">type </span>Init = DummyClientInit;
     <span class="kw">type </span>Common = DummyModuleTypes;
     <span class="kw">type </span>ModuleStateMachineContext = DummyClientContext;
     <span class="kw">type </span>States = DummyStateMachine;
@@ -657,7 +655,7 @@
         <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>(txid, <span class="kw">_</span>) = <span class="self">self
             </span>.client_ctx
-            .finalize_and_submit_transaction(op_id, DummyCommonGen::KIND.as_str(), outpoint, tx)
+            .finalize_and_submit_transaction(op_id, DummyCommonInit::KIND.as_str(), outpoint, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx_subscription = <span class="self">self</span>.client_ctx.transaction_updates(op_id).<span class="kw">await</span>;
@@ -713,12 +711,12 @@
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>DummyClientGen;
+</span><span class="kw">pub struct </span>DummyClientInit;
 
 <span class="comment">// TODO: Boilerplate-code
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ExtendsCommonModuleInit <span class="kw">for </span>DummyClientGen {
-    <span class="kw">type </span>Common = DummyCommonGen;
+</span><span class="kw">impl </span>ModuleInit <span class="kw">for </span>DummyClientInit {
+    <span class="kw">type </span>Common = DummyCommonInit;
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -746,7 +744,7 @@
 
 <span class="doccomment">/// Generates the client module
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>DummyClientGen {
+</span><span class="kw">impl </span>ClientModuleInit <span class="kw">for </span>DummyClientInit {
     <span class="kw">type </span>Module = DummyClientModule;
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MultiApiVersion {

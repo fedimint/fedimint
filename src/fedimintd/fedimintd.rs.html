@@ -337,13 +337,13 @@
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::timing;
 <span class="kw">use </span>fedimint_core::util::{write_overwrite, SafeUrl};
-<span class="kw">use </span>fedimint_ln_server::LightningGen;
+<span class="kw">use </span>fedimint_ln_server::LightningInit;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>fedimint_mint_server::MintGen;
+<span class="kw">use </span>fedimint_mint_server::MintInit;
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{CODE_VERSION, DB_FILE, PLAINTEXT_PASSWORD};
 <span class="kw">use </span>fedimint_server::FedimintServer;
-<span class="kw">use </span>fedimint_wallet_server::WalletGen;
+<span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
@@ -430,9 +430,9 @@
 /// Example:
 ///
 /// ```
-/// use fedimint_ln_server::LightningGen;
-/// use fedimint_mint_server::MintGen;
-/// use fedimint_wallet_server::WalletGen;
+/// use fedimint_ln_server::LightningInit;
+/// use fedimint_mint_server::MintInit;
+/// use fedimint_wallet_server::WalletInit;
 /// use fedimintd::fedimintd::Fedimintd;
 ///
 /// // Note: not called `main` to avoid rustdoc executing it
@@ -441,9 +441,9 @@
 ///     Fedimintd::new()?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
-///         .with_module(WalletGen)
-///         .with_module(MintGen)
-///         .with_module(LightningGen)
+///         .with_module(WalletInit)
+///         .with_module(MintInit)
+///         .with_module(LightningInit)
 ///         .run()
 ///         .await
 /// }
@@ -494,9 +494,9 @@
     </span>}
 
     <span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.with_module(LightningGen)
-            .with_module(MintGen)
-            .with_module(WalletGen)
+        <span class="self">self</span>.with_module(LightningInit)
+            .with_module(MintInit)
+            .with_module(WalletInit)
     }
 
     <span class="kw">pub async fn </span>run(<span class="self">self</span>) -&gt; ! {

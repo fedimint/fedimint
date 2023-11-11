@@ -847,12 +847,12 @@
 <span class="kw">use </span>fedimint_core::query::ThresholdConsensus;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
-<span class="kw">use </span>fedimint_ln_client::LightningClientGen;
+<span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientGen, SpendableNote};
+<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientInit, SpendableNote};
 <span class="kw">use </span>fedimint_server::config::io::SALT_FILE;
 <span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
-<span class="kw">use </span>fedimint_wallet_client::{WalletClientGen, WalletClientModule};
+<span class="kw">use </span>fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
@@ -1303,9 +1303,9 @@ Examples:
     </span>}
 
     <span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.with_module(LightningClientGen)
-            .with_module(MintClientGen)
-            .with_module(WalletClientGen::default())
+        <span class="self">self</span>.with_module(LightningClientInit)
+            .with_module(MintClientInit)
+            .with_module(WalletClientInit::default())
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {

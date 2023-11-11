@@ -8,9 +8,9 @@ modules needs to be combined with rest of the code at the compilation time.</p>
 building <code>fedimintd</code> with custom set of modules.</p>
 <p>Example:</p>
 
-<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>fedimint_ln_server::LightningGen;
-<span class="kw">use </span>fedimint_mint_server::MintGen;
-<span class="kw">use </span>fedimint_wallet_server::WalletGen;
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>fedimint_ln_server::LightningInit;
+<span class="kw">use </span>fedimint_mint_server::MintInit;
+<span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>fedimintd::fedimintd::Fedimintd;
 
 <span class="comment">// Note: not called `main` to avoid rustdoc executing it
@@ -19,9 +19,9 @@ building <code>fedimintd</code> with custom set of modules.</p>
     Fedimintd::new()<span class="question-mark">?
         </span><span class="comment">// use `.with_default_modules()` to avoid having
         // to import these manually
-        </span>.with_module(WalletGen)
-        .with_module(MintGen)
-        .with_module(LightningGen)
+        </span>.with_module(WalletInit)
+        .with_module(MintInit)
+        .with_module(LightningInit)
         .run()
         .<span class="kw">await
 </span>}</code></pre></div>
