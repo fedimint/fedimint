@@ -1338,6 +1338,7 @@
 <a href="#1338" id="1338">1338</a>
 <a href="#1339" id="1339">1339</a>
 <a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1389,7 +1390,7 @@
 <span class="kw">use </span>fedimint_ln_common::{
     ln_operation, ContractOutput, LightningClientContext, LightningCommonGen, LightningGateway,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
-    LightningOutput, KIND,
+    LightningOutput,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>incoming::IncomingSmError;
@@ -1563,8 +1564,8 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>LightningClientExt <span class="kw">for </span>ClientArc {
     <span class="kw">async fn </span>select_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;LightningGateway&gt; {
-        <span class="kw">let </span>(_lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = lightning.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>LightningGatewayKey).<span class="kw">await </span>{
             <span class="prelude-val">Some</span>(active_gateway) =&gt; <span class="prelude-val">Ok</span>(active_gateway.info),
             <span class="prelude-val">None </span>=&gt; <span class="self">self
@@ -1579,8 +1580,8 @@
 
     <span class="doccomment">/// Switches the clients active gateway to a registered gateway.
     </span><span class="kw">async fn </span>set_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway_id: <span class="kw-2">&amp;</span>secp256k1::PublicKey) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>(_lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = lightning.db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>gateways.is_empty() {
@@ -1601,16 +1602,16 @@
     }
 
     <span class="kw">async fn </span>fetch_registered_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt; {
-        <span class="kw">let </span>(_lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="prelude-val">Ok</span>(instance.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="prelude-val">Ok</span>(lightning.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">async fn </span>pay_bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Bolt11Invoice,
     ) -&gt; anyhow::Result&lt;OutgoingLightningPayment&gt; {
-        <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = instance.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = lightning.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>prev_payment_result = lightning
             .get_prev_payment_result(invoice.payment_hash(), <span class="kw-2">&amp;mut </span>dbtx)
             .<span class="kw">await</span>;
@@ -1662,10 +1663,11 @@
             (PayType::Internal(operation_id), output, contract_id)
         } <span class="kw">else </span>{
             <span class="kw">let </span>active_gateway = <span class="self">self</span>.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>api = lightning.api.clone();
             <span class="kw">let </span>(output, contract_id) = lightning
                 .create_outgoing_output(
                     operation_id,
-                    instance.api,
+                    api,
                     invoice.clone(),
                     active_gateway,
                     <span class="self">self</span>.get_config().global.federation_id(),
@@ -1701,7 +1703,7 @@
             }
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;User client will only create contract outputs on spend&quot;</span>),
         };
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(lightning.id));
         <span class="kw">let </span>operation_meta_gen = |txid, change| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
             invoice: invoice.clone(),
@@ -1735,7 +1737,7 @@
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice)&gt; {
-        <span class="kw">let </span>(lightning, instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;();
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span><span class="self">self</span>.select_active_gateway().<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(active_gateway) =&gt; (
@@ -1761,7 +1763,7 @@
                 lightning.cfg.network,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(lightning.id));
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">&quot;extra_meta is serializable&quot;</span>);
         <span class="kw">let </span>operation_meta_gen = |txid, <span class="kw">_</span>| LightningOperationMeta::Receive {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
@@ -1812,8 +1814,7 @@
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
                 <span class="kw">let </span>lightning = client
-                    .get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
-                    .<span class="number">0</span>;
+                    .get_first_module::&lt;LightningClientModule&gt;();
 
                 <span class="kw">yield </span>LnReceiveState::Created;
 
@@ -1865,7 +1866,7 @@
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
-                <span class="kw">let </span>lightning = client.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND).<span class="number">0</span>;
+                <span class="kw">let </span>lightning = client.get_first_module::&lt;LightningClientModule&gt;();
 
                 <span class="kw">yield </span>LnPayState::Created;
 
@@ -1920,7 +1921,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;InternalPayState&gt;&gt; {
-        <span class="kw">let </span>(lightning, _instance) = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;LightningClientModule&gt;();
 
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>stream = lightning.notifier.subscribe(operation_id).<span class="kw">await</span>;
@@ -2062,6 +2063,7 @@
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>LightningClientModule {
+    <span class="kw">type </span>Init = LightningClientGen;
     <span class="kw">type </span>Common = LightningModuleTypes;
     <span class="kw">type </span>ModuleStateMachineContext = LightningClientContext;
     <span class="kw">type </span>States = LightningClientStateMachines;

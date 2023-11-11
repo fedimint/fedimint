@@ -1744,6 +1744,31 @@
 <a href="#1744" id="1744">1744</a>
 <a href="#1745" id="1745">1745</a>
 <a href="#1746" id="1746">1746</a>
+<a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2212,7 +2237,24 @@
 /// methods live.
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>ClientArc {
-    inner: Arc&lt;Client&gt;,
+    <span class="comment">// Use [`ClientArc::new`] instead
+    </span>inner: Arc&lt;Client&gt;,
+
+    __use_constructor_to_create: (),
+}
+
+<span class="kw">impl </span>ClientArc {
+    <span class="doccomment">/// Create
+    </span><span class="kw">fn </span>new(inner: Arc&lt;Client&gt;) -&gt; <span class="self">Self </span>{
+        inner
+            .client_count
+            .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+        <span class="self">Self </span>{
+            inner,
+            <span class="comment">// this is the constructor
+            </span>__use_constructor_to_create: (),
+        }
+    }
 }
 
 <span class="kw">impl </span>ops::Deref <span class="kw">for </span>ClientArc {
@@ -2233,12 +2275,7 @@
 
 <span class="kw">impl </span>Clone <span class="kw">for </span>ClientArc {
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.inner
-            .client_count
-            .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
-        ClientArc {
-            inner: <span class="self">self</span>.inner.clone(),
-        }
+        ClientArc::new(<span class="self">self</span>.inner.clone())
     }
 }
 
@@ -2250,7 +2287,7 @@
 
 <span class="kw">impl </span>ClientWeak {
     <span class="kw">pub fn </span>upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ClientArc&gt; {
-        Weak::upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner).map(|inner| ClientArc { inner })
+        Weak::upgrade(<span class="kw-2">&amp;</span><span class="self">self</span>.inner).map(ClientArc::new)
     }
 }
 
@@ -2310,13 +2347,26 @@
 <span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen&lt;DynGlobalClientContext&gt;;
 
 <span class="doccomment">/// Resources particular to a module instance
-</span><span class="kw">pub struct </span>ClientModuleInstance {
+</span><span class="kw">pub struct </span>ClientModuleInstance&lt;<span class="lifetime">&#39;m</span>, M: ClientModule&gt; {
     <span class="doccomment">/// Instance id of the module
     </span><span class="kw">pub </span>id: ModuleInstanceId,
     <span class="doccomment">/// Module-specific DB
     </span><span class="kw">pub </span>db: Database,
     <span class="doccomment">/// Module-specific API
     </span><span class="kw">pub </span>api: DynModuleApi,
+
+    module: <span class="kw-2">&amp;</span><span class="lifetime">&#39;m </span>M,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;m</span>, M&gt; ops::Deref <span class="kw">for </span>ClientModuleInstance&lt;<span class="lifetime">&#39;m</span>, M&gt;
+<span class="kw">where
+    </span>M: ClientModule,
+{
+    <span class="kw">type </span>Target = M;
+
+    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+        <span class="self">self</span>.module
+    }
 }
 
 <span class="kw">pub struct </span>Client {
@@ -2351,6 +2401,10 @@
 
     <span class="kw">pub fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>IGlobalFederationApi + <span class="lifetime">&#39;static</span>) {
         <span class="self">self</span>.api.as_ref()
+    }
+
+    <span class="kw">pub fn </span>api_clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynGlobalApi {
+        <span class="self">self</span>.api.clone()
     }
 
     <span class="kw">pub async fn </span>start_executor(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
@@ -2699,12 +2753,10 @@
     }
 
     <span class="doccomment">/// Returns a reference to a typed module client instance by kind
-    </span><span class="kw">pub fn </span>get_first_module&lt;M: ClientModule&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_kind: <span class="kw-2">&amp;</span>ModuleKind,
-    ) -&gt; (<span class="kw-2">&amp;</span>M, ClientModuleInstance) {
+    </span><span class="kw">pub fn </span>get_first_module&lt;M: ClientModule&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleInstance&lt;M&gt; {
+        <span class="kw">let </span>module_kind = M::kind();
         <span class="kw">let </span>id = <span class="self">self
-            </span>.get_first_instance(module_kind)
+            </span>.get_first_instance(<span class="kw-2">&amp;</span>module_kind)
             .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;No modules found of kind {module_kind}&quot;</span>));
         <span class="kw">let </span>module: <span class="kw-2">&amp;</span>M = <span class="self">self
             </span>.try_get_module(id)
@@ -2712,12 +2764,12 @@
             .as_any()
             .downcast_ref::&lt;M&gt;()
             .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">&quot;Module is not of type {}&quot;</span>, std::any::type_name::&lt;M&gt;()));
-        <span class="kw">let </span>instance = ClientModuleInstance {
+        ClientModuleInstance {
             id,
             db: <span class="self">self</span>.db().with_prefix_module_id(id),
             api: <span class="self">self</span>.api().with_module(id),
-        };
-        (module, instance)
+            module,
+        }
     }
 
     <span class="kw">pub fn </span>get_module_client_dyn(
@@ -3353,12 +3405,10 @@
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
-            client_count: AtomicUsize::new(<span class="number">1</span>),
+            client_count: Default::default(),
         });
 
-        <span class="kw">let </span>client_arc = ClientArc {
-            inner: client_inner,
-        };
+        <span class="kw">let </span>client_arc = ClientArc::new(client_inner);
 
         final_client.set(client_arc.downgrade());
 

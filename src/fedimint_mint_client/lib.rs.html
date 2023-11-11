@@ -1758,6 +1758,7 @@
 <a href="#1758" id="1758">1758</a>
 <a href="#1759" id="1759">1759</a>
 <a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2016,7 +2017,7 @@
         oob_notes: OOBNotes,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="kw">let </span>(mint, instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>mint = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;();
         <span class="kw">let </span>OOBNotes {
             federation_id_prefix,
             notes,
@@ -2041,7 +2042,7 @@
             .create_input_from_notes(operation_id, notes)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
-            .map(|input| input.into_dyn(instance.id))
+            .map(|input| input.into_dyn(mint.id))
             .collect();
 
         <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(mint_input);
@@ -2086,7 +2087,7 @@
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
-                <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND).<span class="number">0</span>;
+                <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
 
                 <span class="kw">yield </span>ReissueExternalNotesState::Created;
 
@@ -2138,7 +2139,10 @@
         try_cancel_after: Duration,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
-        <span class="kw">let </span>(mint, instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>mint = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>mint_id = mint.id;
+        <span class="kw">let </span>federation_id_prefix = mint.federation_id.to_prefix();
+        <span class="kw">let </span>mint = <span class="kw-2">&amp;*</span>mint;
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">&quot;MintClientExt::spend_notes extra_meta is serializable&quot;</span>);
 
@@ -2149,21 +2153,18 @@
                     Box::pin(<span class="kw">async move </span>{
                         <span class="kw">let </span>(operation_id, states, notes) = mint
                             .spend_notes_oob(
-                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance.id),
+                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(mint_id),
                                 notes_selector,
                                 requested_amount,
                                 try_cancel_after,
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">let </span>oob_notes = OOBNotes {
-                            federation_id_prefix: mint.federation_id.to_prefix(),
+                            federation_id_prefix,
                             notes,
                         };
 
-                        <span class="kw">let </span>dyn_states = states
-                            .into_iter()
-                            .map(|s| s.into_dyn(instance.id))
-                            .collect();
+                        <span class="kw">let </span>dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
 
                         <span class="self">self</span>.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="self">self</span>.operation_log()
@@ -2197,7 +2198,7 @@
     }
 
     <span class="kw">async fn </span>validate_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, oob_notes: OOBNotes) -&gt; anyhow::Result&lt;Amount&gt; {
-        <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>mint = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;();
         <span class="kw">let </span>OOBNotes {
             federation_id_prefix,
             notes,
@@ -2228,7 +2229,7 @@
     }
 
     <span class="kw">async fn </span>try_cancel_spend_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) {
-        <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>mint = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;();
 
         <span class="comment">// TODO: make robust by writing to the DB, this can fail
         </span><span class="kw">let _ </span>= mint.cancel_oob_payment_bc.send(operation_id);
@@ -2250,7 +2251,7 @@
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
             <span class="macro">stream! </span>{
-                <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND).<span class="number">0</span>;
+                <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
 
                 <span class="kw">yield </span>SpendOOBState::Created;
 
@@ -2295,7 +2296,7 @@
 
     <span class="doccomment">/// Waits for the mint backup restoration to finish
     </span><span class="kw">async fn </span>await_restore_finished(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Amount&gt; {
-        <span class="kw">let </span>(mint, _instance) = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>mint = <span class="self">self</span>.get_first_module::&lt;MintClientModule&gt;();
         mint.await_restore_finished().<span class="kw">await
     </span>}
 }
@@ -2459,6 +2460,7 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModule <span class="kw">for </span>MintClientModule {
+    <span class="kw">type </span>Init = MintClientGen;
     <span class="kw">type </span>Common = MintModuleTypes;
     <span class="kw">type </span>ModuleStateMachineContext = MintClientContext;
     <span class="kw">type </span>States = MintClientStateMachines;

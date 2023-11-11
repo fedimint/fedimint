@@ -200,6 +200,7 @@
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -371,7 +372,7 @@
             </span>.init(<span class="kw-2">&amp;</span>ClientModuleInitArgs {
                 federation_id,
                 cfg: typed_cfg.clone(),
-                db,
+                db: db.with_prefix_module_id(instance_id),
                 api_version,
                 module_root_secret,
                 notifier: notifier.module_notifier(instance_id),
@@ -379,6 +380,7 @@
                 module_api: api.with_module(instance_id),
                 context: ClientContext {
                     client: final_client,
+                    module_instance_id: instance_id,
                 },
             })
             .<span class="kw">await</span><span class="question-mark">?

@@ -816,7 +816,6 @@
 <a href="#816" id="816">816</a>
 <a href="#817" id="817">817</a>
 <a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -1470,11 +1469,10 @@ Examples:
                 task::timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async move </span>{
                     <span class="kw">let </span>client = cli.build_client_ng(<span class="kw-2">&amp;</span><span class="self">self</span>.module_inits, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">loop </span>{
-                        <span class="kw">let </span>(<span class="kw">_</span>, instance) = client
-                            .get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_wallet_client::KIND);
+                        <span class="kw">let </span>wallet = client.get_first_module::&lt;WalletClientModule&gt;();
                         <span class="kw">let </span>count = client
                             .api()
-                            .with_module(instance.id)
+                            .with_module(wallet.id)
                             .fetch_consensus_block_count()
                             .<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">if </span>count &gt;= target {

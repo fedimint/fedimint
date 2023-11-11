@@ -725,7 +725,6 @@
 <a href="#725" id="725">725</a>
 <a href="#726" id="726">726</a>
 <a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -752,11 +751,11 @@
 };
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_ln_client::create_incoming_contract_output;
 <span class="kw">use </span>fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
+<span class="kw">use </span>fedimint_ln_client::{create_incoming_contract_output, LightningClientGen};
 <span class="kw">use </span>fedimint_ln_common::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
@@ -885,7 +884,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         pay_invoice_payload: PayInvoicePayload,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="kw">let </span>(<span class="kw">_</span>, instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
         <span class="kw">let </span>payload = pay_invoice_payload.clone();
 
         <span class="self">self</span>.db()
@@ -904,7 +903,7 @@
 
                         <span class="kw">let </span>dyn_states = state_machines
                             .into_iter()
-                            .map(|s| s.into_dyn(instance.id))
+                            .map(|s| s.into_dyn(lightning.id))
                             .collect();
 
                         <span class="self">self</span>.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -936,9 +935,8 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
-            </span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
-            .<span class="number">0
-            </span>.notifier
+            </span>.get_first_module::&lt;GatewayClientModule&gt;()
+            .notifier
             .subscribe(operation_id)
             .<span class="kw">await</span>;
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -992,7 +990,7 @@
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>(gateway, <span class="kw">_</span>) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>gateway = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
         <span class="kw">let </span>registration_info = gateway.to_gateway_registration_info(
             route_hints,
             time_to_live,
@@ -1009,11 +1007,11 @@
 
     <span class="doccomment">/// Handles an intercepted HTLC by buying a preimage from the federation
     </span><span class="kw">async fn </span>gateway_handle_intercepted_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: Htlc) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="kw">let </span>(gateway, instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>gateway = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
         <span class="kw">let </span>(operation_id, output) = gateway
             .create_funding_incoming_contract_output_from_htlc(htlc)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
         <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
         <span class="self">self</span>.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1026,9 +1024,8 @@
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt; {
         <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
-            </span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND)
-            .<span class="number">0
-            </span>.notifier
+            </span>.get_first_module::&lt;GatewayClientModule&gt;()
+            .notifier
             .subscribe(operation_id)
             .<span class="kw">await</span>;
         <span class="kw">let </span>client = <span class="self">self</span>.clone();
@@ -1062,11 +1059,11 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         swap_params: SwapParameters,
     ) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="kw">let </span>(gateway, instance) = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;(<span class="kw-2">&amp;</span>KIND);
+        <span class="kw">let </span>gateway = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
         <span class="kw">let </span>(operation_id, output) = gateway
             .create_funding_incoming_contract_output_from_swap(swap_params)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
         <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
         <span class="self">self</span>.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1173,6 +1170,7 @@
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModule {
+    <span class="kw">type </span>Init = LightningClientGen;
     <span class="kw">type </span>Common = LightningModuleTypes;
     <span class="kw">type </span>ModuleStateMachineContext = GatewayClientContext;
     <span class="kw">type </span>States = GatewayClientStateMachines;

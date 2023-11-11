@@ -321,7 +321,6 @@
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -585,7 +584,7 @@
 }
 
 <span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientArc) -&gt; anyhow::Result&lt;TieredSummary&gt; {
-    <span class="kw">let </span>(mint_client, <span class="kw">_</span>) = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
+    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
         .get_wallet_summary(
             <span class="kw-2">&amp;mut </span>client
@@ -603,10 +602,9 @@
     denomination: Amount,
     quantity: u16,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>(mint_client, client_module_instance) =
-        client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
+    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.dbtx_ref_with_prefix_module_id(client_module_instance.id);
+    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.dbtx_ref_with_prefix_module_id(mint_client.id);
     <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::new();
     <span class="kw">let </span>operation_id = OperationId::new_random();
     <span class="kw">for _ in </span><span class="number">0</span>..quantity {
@@ -614,7 +612,7 @@
             .create_output(<span class="kw-2">&amp;mut </span>module_transaction, operation_id, <span class="number">1</span>, denomination)
             .<span class="kw">await
             </span>.into_iter()
-            .map(|output| output.into_dyn(client_module_instance.id))
+            .map(|output| output.into_dyn(mint_client.id))
             .collect();
 
         tx = tx.with_outputs(outputs);

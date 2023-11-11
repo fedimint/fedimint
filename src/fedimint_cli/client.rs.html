@@ -527,7 +527,6 @@
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
 <a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -1007,9 +1006,8 @@
 }
 
 <span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientArc) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
-    <span class="kw">let </span>(mint_client, <span class="kw">_</span>) = client.get_first_module::&lt;MintClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_mint_client::KIND);
-    <span class="kw">let </span>(wallet_client, <span class="kw">_</span>) =
-        client.get_first_module::&lt;WalletClientModule&gt;(<span class="kw-2">&amp;</span>fedimint_wallet_client::KIND);
+    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
+    <span class="kw">let </span>wallet_client = client.get_first_module::&lt;WalletClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
         .get_wallet_summary(
             <span class="kw-2">&amp;mut </span>client
