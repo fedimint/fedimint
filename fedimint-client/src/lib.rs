@@ -466,7 +466,24 @@ fn states_add_instance(
 /// methods live.
 #[derive(Debug)]
 pub struct ClientArc {
+    // Use [`ClientArc::new`] instead
     inner: Arc<Client>,
+
+    __use_constructor_to_create: (),
+}
+
+impl ClientArc {
+    /// Create
+    fn new(inner: Arc<Client>) -> Self {
+        inner
+            .client_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self {
+            inner,
+            // this is the constructor
+            __use_constructor_to_create: (),
+        }
+    }
 }
 
 impl ops::Deref for ClientArc {
@@ -487,12 +504,7 @@ impl ClientArc {
 
 impl Clone for ClientArc {
     fn clone(&self) -> Self {
-        self.inner
-            .client_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        ClientArc {
-            inner: self.inner.clone(),
-        }
+        ClientArc::new(self.inner.clone())
     }
 }
 
@@ -504,7 +516,7 @@ pub struct ClientWeak {
 
 impl ClientWeak {
     pub fn upgrade(&self) -> Option<ClientArc> {
-        Weak::upgrade(&self.inner).map(|inner| ClientArc { inner })
+        Weak::upgrade(&self.inner).map(ClientArc::new)
     }
 }
 
@@ -564,13 +576,26 @@ const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
 pub type ModuleGlobalContextGen = ContextGen<DynGlobalClientContext>;
 
 /// Resources particular to a module instance
-pub struct ClientModuleInstance {
+pub struct ClientModuleInstance<'m, M: ClientModule> {
     /// Instance id of the module
     pub id: ModuleInstanceId,
     /// Module-specific DB
     pub db: Database,
     /// Module-specific API
     pub api: DynModuleApi,
+
+    module: &'m M,
+}
+
+impl<'m, M> ops::Deref for ClientModuleInstance<'m, M>
+where
+    M: ClientModule,
+{
+    type Target = M;
+
+    fn deref(&self) -> &Self::Target {
+        self.module
+    }
 }
 
 pub struct Client {
@@ -605,6 +630,10 @@ impl Client {
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
         self.api.as_ref()
+    }
+
+    pub fn api_clone(&self) -> DynGlobalApi {
+        self.api.clone()
     }
 
     pub async fn start_executor(self: &Arc<Self>) {
@@ -953,12 +982,10 @@ impl Client {
     }
 
     /// Returns a reference to a typed module client instance by kind
-    pub fn get_first_module<M: ClientModule>(
-        &self,
-        module_kind: &ModuleKind,
-    ) -> (&M, ClientModuleInstance) {
+    pub fn get_first_module<M: ClientModule>(&self) -> ClientModuleInstance<M> {
+        let module_kind = M::kind();
         let id = self
-            .get_first_instance(module_kind)
+            .get_first_instance(&module_kind)
             .unwrap_or_else(|| panic!("No modules found of kind {module_kind}"));
         let module: &M = self
             .try_get_module(id)
@@ -966,12 +993,12 @@ impl Client {
             .as_any()
             .downcast_ref::<M>()
             .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
-        let instance = ClientModuleInstance {
+        ClientModuleInstance {
             id,
             db: self.db().with_prefix_module_id(id),
             api: self.api().with_module(id),
-        };
-        (module, instance)
+            module,
+        }
     }
 
     pub fn get_module_client_dyn(
@@ -1607,12 +1634,10 @@ impl ClientBuilder {
             secp_ctx: Secp256k1::new(),
             root_secret,
             operation_log: OperationLog::new(db),
-            client_count: AtomicUsize::new(1),
+            client_count: Default::default(),
         });
 
-        let client_arc = ClientArc {
-            inner: client_inner,
-        };
+        let client_arc = ClientArc::new(client_inner);
 
         final_client.set(client_arc.downgrade());
 

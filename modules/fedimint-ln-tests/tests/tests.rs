@@ -4,7 +4,7 @@ use anyhow::bail;
 use assert_matches::assert_matches;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
-use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
+use fedimint_dummy_client::{DummyClientGen, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_ln_client::{
@@ -75,9 +75,10 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client2
-    let (op, outpoint) = client2.print_money(sats(1000)).await?;
+    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
     client2.await_primary_module_output(op, outpoint).await?;
 
     let extra_meta = "internal payment with no gateway registered".to_string();
@@ -129,9 +130,10 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client2
-    let (op, outpoint) = client2.print_money(sats(1000)).await?;
+    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
     client2.await_primary_module_output(op, outpoint).await?;
 
     // TEST internal payment when there are no gateways registered
@@ -188,13 +190,15 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
     let gw = gateway(&fixtures, &fed).await;
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client1
-    let (op, outpoint) = client1.print_money(sats(10000)).await?;
+    let (op, outpoint) = client1_dummy_module.print_money(sats(10000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
     // Print money for client2
-    let (op, outpoint) = client2.print_money(sats(10000)).await?;
+    let (op, outpoint) = client2_dummy_module.print_money(sats(10000)).await?;
     client2.await_primary_module_output(op, outpoint).await?;
 
     let cln = fixtures.cln().await;
@@ -246,9 +250,10 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fed = fixtures.new_fed().await;
     let client = fed.new_client().await;
     let gw = gateway(&fixtures, &fed).await;
+    let dummy_module = client.get_first_module::<DummyClientModule>();
 
     // Print money for client
-    let (op, outpoint) = client.print_money(sats(1000)).await?;
+    let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
     client.await_primary_module_output(op, outpoint).await?;
 
     let cln = fixtures.cln().await;
@@ -304,9 +309,10 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let (client1, client2) = fed.two_clients().await;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // Print money for client2
-    let (op, outpoint) = client2.print_money(sats(1000)).await?;
+    let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
     client2.await_primary_module_output(op, outpoint).await?;
 
     // TEST internal payment when there are no gateways registered

@@ -169,7 +169,7 @@ where
             .init(&ClientModuleInitArgs {
                 federation_id,
                 cfg: typed_cfg.clone(),
-                db,
+                db: db.with_prefix_module_id(instance_id),
                 api_version,
                 module_root_secret,
                 notifier: notifier.module_notifier(instance_id),
@@ -177,6 +177,7 @@ where
                 module_api: api.with_module(instance_id),
                 context: ClientContext {
                     client: final_client,
+                    module_instance_id: instance_id,
                 },
             })
             .await?

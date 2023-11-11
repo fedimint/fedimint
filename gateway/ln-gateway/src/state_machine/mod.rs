@@ -24,11 +24,11 @@ use fedimint_core::module::{
 };
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
-use fedimint_ln_client::create_incoming_contract_output;
 use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_client::{create_incoming_contract_output, LightningClientGen};
 use fedimint_ln_common::api::LnFederationApi;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
@@ -157,7 +157,7 @@ impl GatewayClientExt for ClientArc {
         &self,
         pay_invoice_payload: PayInvoicePayload,
     ) -> anyhow::Result<OperationId> {
-        let (_, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let lightning = self.get_first_module::<GatewayClientModule>();
         let payload = pay_invoice_payload.clone();
 
         self.db()
@@ -176,7 +176,7 @@ impl GatewayClientExt for ClientArc {
 
                         let dyn_states = state_machines
                             .into_iter()
-                            .map(|s| s.into_dyn(instance.id))
+                            .map(|s| s.into_dyn(lightning.id))
                             .collect();
 
                         self.add_state_machines(dbtx, dyn_states).await?;
@@ -208,8 +208,7 @@ impl GatewayClientExt for ClientArc {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtPayStates>> {
         let mut stream = self
-            .get_first_module::<GatewayClientModule>(&KIND)
-            .0
+            .get_first_module::<GatewayClientModule>()
             .notifier
             .subscribe(operation_id)
             .await;
@@ -264,7 +263,7 @@ impl GatewayClientExt for ClientArc {
         time_to_live: Duration,
         gateway_id: secp256k1::PublicKey,
     ) -> anyhow::Result<()> {
-        let (gateway, _) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let gateway = self.get_first_module::<GatewayClientModule>();
         let registration_info = gateway.to_gateway_registration_info(
             route_hints,
             time_to_live,
@@ -281,11 +280,11 @@ impl GatewayClientExt for ClientArc {
 
     /// Handles an intercepted HTLC by buying a preimage from the federation
     async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
-        let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let gateway = self.get_first_module::<GatewayClientModule>();
         let (operation_id, output) = gateway
             .create_funding_incoming_contract_output_from_htlc(htlc)
             .await?;
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        let tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
@@ -298,8 +297,7 @@ impl GatewayClientExt for ClientArc {
     ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>> {
         let operation = ln_operation(self, operation_id).await?;
         let mut stream = self
-            .get_first_module::<GatewayClientModule>(&KIND)
-            .0
+            .get_first_module::<GatewayClientModule>()
             .notifier
             .subscribe(operation_id)
             .await;
@@ -334,11 +332,11 @@ impl GatewayClientExt for ClientArc {
         &self,
         swap_params: SwapParameters,
     ) -> anyhow::Result<OperationId> {
-        let (gateway, instance) = self.get_first_module::<GatewayClientModule>(&KIND);
+        let gateway = self.get_first_module::<GatewayClientModule>();
         let (operation_id, output) = gateway
             .create_funding_incoming_contract_output_from_swap(swap_params)
             .await?;
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(instance.id));
+        let tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
@@ -445,6 +443,7 @@ pub struct GatewayClientModule {
 }
 
 impl ClientModule for GatewayClientModule {
+    type Init = LightningClientGen;
     type Common = LightningModuleTypes;
     type ModuleStateMachineContext = GatewayClientContext;
     type States = GatewayClientStateMachines;

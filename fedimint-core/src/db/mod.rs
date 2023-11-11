@@ -40,7 +40,7 @@ use std::fmt::{self, Debug};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
 use futures::{Stream, StreamExt};
@@ -202,6 +202,9 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     async fn register(&self, key: &[u8]);
     /// Notify about `key` update (creation, modification, deletion)
     async fn notify(&self, key: &[u8]);
+
+    /// The prefix len of this database instance
+    fn prefix_len(&self) -> usize;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -217,6 +220,10 @@ where
     }
     async fn notify(&self, key: &[u8]) {
         (**self).notify(key).await
+    }
+
+    fn prefix_len(&self) -> usize {
+        (**self).prefix_len()
     }
 }
 
@@ -247,6 +254,10 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
     }
     async fn notify(&self, key: &[u8]) {
         self.notifications.notify(key).await
+    }
+
+    fn prefix_len(&self) -> usize {
+        0
     }
 }
 
@@ -311,6 +322,29 @@ impl Database {
             inner: self.inner.clone(),
             module_decoders,
         }
+    }
+
+    /// Is this `Database` a global, unpartitioned `Database`
+    pub fn is_global(&self) -> bool {
+        self.inner.prefix_len() == 0
+    }
+
+    /// `Err` if [`Self::is_global`] is not true
+    pub fn ensure_global(&self) -> Result<()> {
+        if !self.is_global() {
+            bail!("Database instance not global");
+        }
+
+        Ok(())
+    }
+
+    /// `Err` if [`Self::is_global`] is true
+    pub fn ensure_isolated(&self) -> Result<()> {
+        if self.is_global() {
+            bail!("Database instance not isolated");
+        }
+
+        Ok(())
     }
 
     /// Begin a database transaction
@@ -512,8 +546,13 @@ where
     async fn register(&self, key: &[u8]) {
         self.inner.register(&self.get_full_key(key)).await
     }
+
     async fn notify(&self, key: &[u8]) {
         self.inner.notify(&self.get_full_key(key)).await
+    }
+
+    fn prefix_len(&self) -> usize {
+        self.inner.prefix_len() + self.prefix.len()
     }
 }
 
@@ -549,6 +588,10 @@ where
 {
     async fn commit_tx(&mut self) -> Result<()> {
         self.inner.commit_tx().await
+    }
+
+    fn prefix_len(&self) -> usize {
+        self.inner.prefix_len() + self.prefix.len()
     }
 }
 
@@ -981,7 +1024,11 @@ pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
 /// See [`IDatabase`] for more info.
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
+    /// Commit the transaction
     async fn commit_tx(&mut self) -> Result<()>;
+
+    /// The prefix len of this database instance
+    fn prefix_len(&self) -> usize;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -992,6 +1039,9 @@ where
     async fn commit_tx(&mut self) -> Result<()> {
         (**self).commit_tx().await
     }
+    fn prefix_len(&self) -> usize {
+        (**self).prefix_len()
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -1001,6 +1051,9 @@ where
 {
     async fn commit_tx(&mut self) -> Result<()> {
         (**self).commit_tx().await
+    }
+    fn prefix_len(&self) -> usize {
+        (**self).prefix_len()
     }
 }
 
@@ -1126,6 +1179,10 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransacti
         );
         Ok(())
     }
+
+    fn prefix_len(&self) -> usize {
+        0
+    }
 }
 
 /// A helper for tracking and logging on `Drop` any instances of uncommitted
@@ -1168,6 +1225,31 @@ pub struct DatabaseTransactionRef<'tx> {
     tx: Box<dyn IDatabaseTransaction + 'tx>,
     decoders: ModuleDecoderRegistry,
     commit_tracker: &'tx mut CommitTracker,
+}
+
+impl<'tx> DatabaseTransactionRef<'tx> {
+    /// Is this `Database` a global, unpartitioned `Database`
+    pub fn is_global(&self) -> bool {
+        self.tx.prefix_len() == 0
+    }
+
+    /// `Err` if [`Self::is_global`] is not true
+    pub fn ensure_global(&self) -> Result<()> {
+        if !self.is_global() {
+            bail!("Database instance not global");
+        }
+
+        Ok(())
+    }
+
+    /// `Err` if [`Self::is_global`] is true
+    pub fn ensure_isolated(&self) -> Result<()> {
+        if self.is_global() {
+            bail!("Database instance not isolated");
+        }
+
+        Ok(())
+    }
 }
 
 impl<'a> WithDecoders for DatabaseTransactionRef<'a> {
@@ -1325,6 +1407,29 @@ impl<'tx> DatabaseTransaction<'tx> {
     {
         let prefix = module_instance_id_to_byte_prefix(module_instance_id);
         self.dbtx_ref_with_prefix(prefix)
+    }
+
+    /// Is this `Database` a global, unpartitioned `Database`
+    pub fn is_global(&self) -> bool {
+        self.tx.prefix_len() == 0
+    }
+
+    /// `Err` if [`Self::is_global`] is not true
+    pub fn ensure_global(&self) -> Result<()> {
+        if !self.is_global() {
+            bail!("Database instance not global");
+        }
+
+        Ok(())
+    }
+
+    /// `Err` if [`Self::is_global`] is true
+    pub fn ensure_isolated(&self) -> Result<()> {
+        if self.is_global() {
+            bail!("Database instance not isolated");
+        }
+
+        Ok(())
     }
 
     /// Cancel the tx to avoid debugging warnings about uncommitted writes

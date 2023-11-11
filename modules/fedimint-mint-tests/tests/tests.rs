@@ -1,6 +1,6 @@
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
-use fedimint_dummy_client::{DummyClientExt, DummyClientGen};
+use fedimint_dummy_client::{DummyClientGen, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyGen;
 use fedimint_mint_client::{
@@ -20,7 +20,8 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let (op, outpoint) = client1.print_money(sats(1000)).await?;
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
     // Spend from client1 to client2
@@ -46,7 +47,8 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_fed().await;
     let (client1, _client2) = fed.two_clients().await;
-    let (op, outpoint) = client1.print_money(sats(1000)).await?;
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
     // Spend from client1 to client2
@@ -65,7 +67,8 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_fed().await;
     let (client1, _client2) = fed.two_clients().await;
-    let (op, outpoint) = client1.print_money(sats(1000)).await?;
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
     // Spend from client1 to client2
