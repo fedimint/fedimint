@@ -164,7 +164,11 @@ jobs:
       - name: Run cargo audit
         run: |
           nix flake lock --update-input advisory-db
-          nix build -L .#ci.workspaceAudit
+          nix build -L .#ci.cargoAudit
+
+      - name: Run cargo deny
+        run: |
+          nix build -L .#ci.cargoDeny
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another
