@@ -24,7 +24,7 @@ use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
-use nostr_sdk::ToBech32;
+use nostr_sdk::{Contact, EventBuilder, ToBech32, UncheckedUrl, Url};
 use nostrmint_client::NostrmintClientExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -32,6 +32,7 @@ use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
 use tracing::info;
 
+use crate::nostr_subcommands::publish_contactlist_csv::ContactListTag;
 use crate::{metadata_from_clap_cli, nostr_subcommands, LnInvoiceResponse, Opts};
 
 #[derive(Debug, Clone)]
@@ -143,9 +144,6 @@ pub enum ClientCmd {
         nostr_command: NostrCommands,
         // TODO: impl PoW nostr
         // difficulty_target: u8
-        // TODO: Get this from the client DB
-        #[clap(long)]
-        peer_id: PeerId,
     },
 }
 
@@ -487,13 +485,15 @@ pub async fn handle_command(
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
         }
-        ClientCmd::Nostr {
-            nostr_command,
-            peer_id,
-        } => {
+        ClientCmd::Nostr { nostr_command } => {
+            let peer_id = match opts.our_id {
+                Some(x) => x,
+                None => bail!("Please define FM_OUR_ID as your peer ID"),
+            };
+            // TODO: store pubkey client side in config or something
+            let pubkey = client.get_npub().await?;
             match &nostr_command {
                 NostrCommands::CreateNote { msg } => {
-                    let pubkey = client.get_npub().await?;
                     let unsigned_event =
                         nostr_sdk::EventBuilder::new_text_note(msg, &[]).to_unsigned_event(pubkey);
                     client
@@ -519,13 +519,10 @@ pub async fn handle_command(
                     Err(anyhow!("No event with id: {event_id}"))
                 }
                 NostrCommands::GetNpub => {
-                    let pubkey = client.get_npub().await?;
                     let npub = pubkey.to_bech32()?;
                     Ok(json!(npub))
                 }
                 NostrCommands::UpdateMetadata(sub_command_args) => {
-                    // TODO: store pubkey client side in config or something
-                    let pubkey = client.get_npub().await?;
                     let unsigned_event = nostr_subcommands::update_metadata::update_metadata(
                         sub_command_args,
                         pubkey,
@@ -537,7 +534,6 @@ pub async fn handle_command(
                     Ok(json!("UnsignedEventSubmitted"))
                 }
                 NostrCommands::TextNote(sub_command_args) => {
-                    let pubkey = client.get_npub().await?;
                     let unsigned_event = nostr_sdk::EventBuilder::new_text_note(
                         sub_command_args.content().clone(),
                         &[],
@@ -550,23 +546,51 @@ pub async fn handle_command(
                     let note_id = format!("{}", unsigned_event.id);
                     Ok(json!(note_id))
                 }
-                NostrCommands::RecommendRelay(_sub_command_args) => {
-                    todo!()
-                    // nostr_subcommands::recommend_relay::recommend_relay(
-                    //     args.private_key,
-                    //     args.relays,
-                    //     args.difficulty_target,
-                    //     sub_command_args,
-                    // )
+                NostrCommands::RecommendRelay(sub_command_args) => {
+                    let url = Url::from_str(sub_command_args.clone().url().as_str()).unwrap();
+                    let unsigned_event =
+                        EventBuilder::add_recommended_relay(&url).to_unsigned_event(pubkey);
+                    client
+                        .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
+                        .await?;
+
+                    let note_id = format!("{}", unsigned_event.id);
+                    Ok(json!(note_id))
                 }
-                NostrCommands::PublishContactListCsv(_sub_command_args) => {
-                    todo!()
-                    // nostr_subcommands::publish_contactlist_csv::publish_contact_list_from_csv_file(
-                    //     args.private_key,
-                    //     args.relays,
-                    //     args.difficulty_target,
-                    //     sub_command_args,
-                    // )
+                NostrCommands::PublishContactListCsv(sub_command_args) => {
+                    let mut rdr = csv::Reader::from_path(&sub_command_args.filepath)?;
+                    let mut contacts: Vec<Contact> = vec![];
+                    for result in rdr.deserialize() {
+                        let tag: ContactListTag = result?;
+                        let relay_url = match tag.relay {
+                            Some(relay) => Some(UncheckedUrl::from_str(&relay)?),
+                            None => None,
+                        };
+                        let clt = Contact {
+                            pk: nostr_sdk::secp256k1::XOnlyPublicKey::from_str(&tag.pubkey)?,
+                            relay_url,
+                            alias: tag.petname,
+                        };
+                        contacts.push(clt);
+                    }
+                    let tags: Vec<nostr_sdk::Tag> = contacts
+                        .iter()
+                        .map(|contact| nostr_sdk::Tag::ContactList {
+                            pk: contact.pk,
+                            relay_url: contact.relay_url.clone(),
+                            alias: contact.alias.clone(),
+                        })
+                        .collect();
+
+                    let unsigned_event = EventBuilder::new(nostr_sdk::Kind::ContactList, "", &tags)
+                        .to_unsigned_event(pubkey);
+                    println!("Contact list imported!");
+                    client
+                        .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
+                        .await?;
+
+                    let note_id = format!("{}", unsigned_event.id);
+                    Ok(json!(note_id))
                 }
                 NostrCommands::SendDirectMessage(_sub_command_args) => {
                     todo!()

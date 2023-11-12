@@ -7,7 +7,7 @@ pub struct PublishContactListCsvSubCommand {
     /// Path to CSV file. CSV file should be have the following format:
     /// pubkey,relay_url,petname. See example in resources/contact_list.csv
     #[arg(short, long)]
-    filepath: String,
+    pub filepath: String,
     // Print keys as hex
     #[arg(long, default_value = "false")]
     hex: bool,
