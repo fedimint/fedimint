@@ -45,12 +45,15 @@ pub struct DummyOutput {
 pub struct DummyOutputOutcome(pub Amount, pub XOnlyPublicKey);
 
 /// Errors that might be returned by the server
-// TODO: Move to server lib?
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
-pub enum DummyError {
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+pub enum DummyInputError {
     #[error("Not enough funds")]
     NotEnoughFunds,
 }
+
+/// Errors that might be returned by the server
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+pub enum DummyOutputError {}
 
 /// Contains the types defined above
 pub struct DummyModuleTypes;
@@ -62,7 +65,9 @@ plugin_types_trait_impl_common!(
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
-    DummyConsensusItem
+    DummyConsensusItem,
+    DummyInputError,
+    DummyOutputError
 );
 
 #[derive(Debug)]

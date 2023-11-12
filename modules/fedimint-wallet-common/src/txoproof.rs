@@ -47,8 +47,8 @@ impl PegInProof {
 
         if transaction.output.get(output_idx as usize).is_none() {
             return Err(PegInProofError::OutputIndexOutOfRange(
-                output_idx as usize,
-                transaction.output.len(),
+                output_idx as u64,
+                transaction.output.len() as u64,
             ));
         }
 
@@ -181,14 +181,14 @@ impl Decodable for PegInProof {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
 pub enum PegInProofError {
     #[error("Supplied transaction is not included in proof")]
     TransactionNotInProof,
     #[error("Supplied transaction has too many outputs")]
     TooManyTransactionOutputs,
     #[error("The output with index {0} referred to does not exist (tx has {1} outputs)")]
-    OutputIndexOutOfRange(usize, usize),
+    OutputIndexOutOfRange(u64, u64),
     #[error("The expected script given the tweak did not match the actual script")]
     ScriptDoesNotMatch,
 }

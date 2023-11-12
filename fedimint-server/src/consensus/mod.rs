@@ -13,7 +13,7 @@ pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
     transaction: Transaction,
-) -> anyhow::Result<()> {
+) -> Result<(), TransactionError> {
     let txid = transaction.tx_hash();
     let mut funding_verifier = FundingVerifier::default();
     let mut public_keys = Vec::new();
@@ -24,8 +24,10 @@ pub async fn process_transaction_with_dbtx(
             .process_input(
                 &mut dbtx.dbtx_ref_with_prefix_module_id(input.module_instance_id()),
                 input,
+                input.module_instance_id(),
             )
-            .await?;
+            .await
+            .map_err(TransactionError::Input)?;
 
         funding_verifier.add_input(meta.amount);
         public_keys.push(meta.pub_keys);
@@ -40,8 +42,10 @@ pub async fn process_transaction_with_dbtx(
                 &mut dbtx.dbtx_ref_with_prefix_module_id(output.module_instance_id()),
                 output,
                 OutPoint { txid, out_idx },
+                output.module_instance_id(),
             )
-            .await?;
+            .await
+            .map_err(TransactionError::Output)?;
 
         funding_verifier.add_output(amount);
     }

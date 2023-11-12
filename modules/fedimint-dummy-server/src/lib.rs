@@ -13,9 +13,8 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError, ModuleConsensusVersion,
-    ModuleError, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
+    ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{push_db_pair_items, Amount, OutPoint, PeerId, ServerModule};
@@ -24,8 +23,9 @@ use fedimint_dummy_common::config::{
     DummyGenParams,
 };
 use fedimint_dummy_common::{
-    broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyError,
-    DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyInput,
+    DummyInputError, DummyModuleTypes, DummyOutput, DummyOutputError, DummyOutputOutcome,
+    CONSENSUS_VERSION,
 };
 use futures::{FutureExt, StreamExt};
 use strum::IntoEnumIterator;
@@ -212,7 +212,7 @@ impl ServerModule for Dummy {
         &'a self,
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b DummyInput,
-    ) -> Result<InputMeta, ModuleError> {
+    ) -> Result<InputMeta, DummyInputError> {
         let current_funds = dbtx
             .get_value(&DummyFundsKeyV1(input.account))
             .await
@@ -223,7 +223,7 @@ impl ServerModule for Dummy {
             && fed_public_key() != input.account
             && broken_fed_public_key() != input.account
         {
-            return Err(DummyError::NotEnoughFunds).into_module_error_other();
+            return Err(DummyInputError::NotEnoughFunds);
         }
 
         // Subtract funds from normal user, or print funds for the fed
@@ -254,7 +254,7 @@ impl ServerModule for Dummy {
         dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a DummyOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+    ) -> Result<TransactionItemAmount, DummyOutputError> {
         // Add output funds to the user's account
         let current_funds = dbtx.get_value(&DummyFundsKeyV1(output.account)).await;
         let updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;

@@ -13,9 +13,9 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
-    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{
@@ -34,8 +34,8 @@ use fedimint_mint_common::db::{
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
-    MintCommonInit, MintConsensusItem, MintError, MintInput, MintModuleTypes, MintOutput,
-    MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
+    MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
+    MintOutputError, MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
 };
 use fedimint_server::config::distributedgen::{scalar, PeerHandleOps};
 use futures::StreamExt;
@@ -320,15 +320,14 @@ impl ServerModule for Mint {
         &'a self,
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b MintInput,
-    ) -> Result<InputMeta, ModuleError> {
+    ) -> Result<InputMeta, MintInputError> {
         let amount_key = self
             .pub_key
             .get(&input.amount)
-            .ok_or(MintError::InvalidAmountTier(input.amount))
-            .into_module_error_other()?;
+            .ok_or(MintInputError::InvalidAmountTier(input.amount))?;
 
         if !input.note.verify(*amount_key) {
-            return Err(MintError::InvalidSignature).into_module_error_other();
+            return Err(MintInputError::InvalidSignature);
         }
 
         if dbtx
@@ -336,7 +335,7 @@ impl ServerModule for Mint {
             .await
             .is_some()
         {
-            return Err(MintError::SpentCoin).into_module_error_other();
+            return Err(MintInputError::SpentCoin);
         }
 
         dbtx.insert_new_entry(
@@ -359,12 +358,11 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a MintOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+    ) -> Result<TransactionItemAmount, MintOutputError> {
         let amount_key = self
             .sec_key
             .get(output.amount)
-            .ok_or(MintError::InvalidAmountTier(output.amount))
-            .into_module_error_other()?;
+            .ok_or(MintOutputError::InvalidAmountTier(output.amount))?;
 
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),

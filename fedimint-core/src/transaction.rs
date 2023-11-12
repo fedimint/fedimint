@@ -9,6 +9,8 @@ use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use thiserror::Error;
 
+use crate::core::{DynInputError, DynOutputError};
+
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///
 /// The mint enforces that the total value of the outputs equals the total value
@@ -161,7 +163,7 @@ where
     session.partial_sig_agg(&partial_sigs)
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
 pub enum TransactionError {
     #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
     UnbalancedTransaction {
@@ -178,4 +180,8 @@ pub enum TransactionError {
     },
     #[error("The transaction did not have a signature although there were inputs to be signed")]
     MissingSignature,
+    #[error("The transaction had an invalid input")]
+    Input(DynInputError),
+    #[error("The transaction had an invalid output")]
+    Output(DynOutputError),
 }

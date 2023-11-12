@@ -127,7 +127,11 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let result = client.api().submit_transaction(tx).await;
     match result {
         Ok(submission_result) => {
-            if submission_result.is_ok() {
+            if submission_result
+                .try_into_inner(client.decoders())
+                .unwrap()
+                .is_ok()
+            {
                 bail!("Should have been rejected")
             }
         }

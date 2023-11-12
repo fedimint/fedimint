@@ -21,8 +21,8 @@ use fedimint_core::endpoint_constants::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, CoreConsensusVersion, InputMeta,
-    IntoModuleError, ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
-    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
+    SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -48,9 +48,9 @@ use fedimint_ln_common::db::{
     OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
 };
 use fedimint_ln_common::{
-    ContractAccount, LightningCommonInit, LightningConsensusItem, LightningError,
-    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
-    LightningModuleTypes, LightningOutput, LightningOutputOutcome,
+    ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
+    LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
+    LightningOutput, LightningOutputError, LightningOutputOutcome,
 };
 use fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
@@ -545,19 +545,17 @@ impl ServerModule for Lightning {
         &'a self,
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b LightningInput,
-    ) -> Result<InputMeta, ModuleError> {
+    ) -> Result<InputMeta, LightningInputError> {
         let mut account = dbtx
             .get_value(&ContractKey(input.contract_id))
             .await
-            .ok_or(LightningError::UnknownContract(input.contract_id))
-            .into_module_error_other()?;
+            .ok_or(LightningInputError::UnknownContract(input.contract_id))?;
 
         if account.amount < input.amount {
-            return Err(LightningError::InsufficientFunds(
+            return Err(LightningInputError::InsufficientFunds(
                 account.amount,
                 input.amount,
-            ))
-            .into_module_error_other();
+            ));
         }
 
         let consensus_block_count = self.consensus_block_count(dbtx).await;
@@ -570,14 +568,13 @@ impl ServerModule for Lightning {
                         &input
                             .witness
                             .as_ref()
-                            .ok_or(LightningError::MissingPreimage)
-                            .into_module_error_other()?
+                            .ok_or(LightningInputError::MissingPreimage)?
                             .0,
                     );
 
                     // … and the spender provides a valid preimage …
                     if preimage_hash != outgoing.hash {
-                        return Err(LightningError::InvalidPreimage).into_module_error_other();
+                        return Err(LightningInputError::InvalidPreimage);
                     }
 
                     // … then the contract account can be spent using the gateway key,
@@ -590,14 +587,12 @@ impl ServerModule for Lightning {
             FundedContract::Incoming(incoming) => match &incoming.contract.decrypted_preimage {
                 // Once the preimage has been decrypted …
                 DecryptedPreimage::Pending => {
-                    return Err(LightningError::ContractNotReady).into_module_error_other();
+                    return Err(LightningInputError::ContractNotReady);
                 }
                 // … either the user may spend the funds since they sold a valid preimage …
                 DecryptedPreimage::Some(preimage) => match preimage.to_public_key() {
                     Ok(pub_key) => pub_key,
-                    Err(_) => {
-                        return Err(LightningError::InvalidPreimage).into_module_error_other()
-                    }
+                    Err(_) => return Err(LightningInputError::InvalidPreimage),
                 },
                 // … or the gateway may claim back funds for not receiving the advertised preimage.
                 DecryptedPreimage::Invalid => incoming.contract.gateway_key,
@@ -633,7 +628,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a LightningOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+    ) -> Result<TransactionItemAmount, LightningOutputError> {
         match output {
             LightningOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
@@ -641,21 +636,19 @@ impl ServerModule for Lightning {
                     let offer = dbtx
                         .get_value(&OfferKey(incoming.hash))
                         .await
-                        .ok_or(LightningError::NoOffer(incoming.hash))
-                        .into_module_error_other()?;
+                        .ok_or(LightningOutputError::NoOffer(incoming.hash))?;
 
                     if contract.amount < offer.amount {
                         // If the account is not sufficiently funded fail the output
-                        return Err(LightningError::InsufficientIncomingFunding(
+                        return Err(LightningOutputError::InsufficientIncomingFunding(
                             offer.amount,
                             contract.amount,
-                        ))
-                        .into_module_error_other();
+                        ));
                     }
                 }
 
                 if contract.amount == Amount::ZERO {
-                    return Err(LightningError::ZeroOutput).into_module_error_other();
+                    return Err(LightningOutputError::ZeroOutput);
                 }
 
                 let contract_db_key = ContractKey(contract.contract.contract_id());
@@ -737,7 +730,7 @@ impl ServerModule for Lightning {
             }
             LightningOutput::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
-                    return Err(LightningError::InvalidEncryptedPreimage).into_module_error_other();
+                    return Err(LightningOutputError::InvalidEncryptedPreimage);
                 }
 
                 // Check that each preimage is only offered for sale once, see #1397
@@ -749,8 +742,7 @@ impl ServerModule for Lightning {
                     .await
                     .is_some()
                 {
-                    return Err(LightningError::DuplicateEncryptedPreimage)
-                        .into_module_error_other();
+                    return Err(LightningOutputError::DuplicateEncryptedPreimage);
                 }
 
                 dbtx.insert_new_entry(
@@ -774,13 +766,12 @@ impl ServerModule for Lightning {
                 let contract_account = dbtx
                     .get_value(&ContractKey(*contract))
                     .await
-                    .ok_or(LightningError::UnknownContract(*contract))
-                    .into_module_error_other()?;
+                    .ok_or(LightningOutputError::UnknownContract(*contract))?;
 
                 let outgoing_contract = match &contract_account.contract {
                     FundedContract::Outgoing(contract) => contract,
                     _ => {
-                        return Err(LightningError::NotOutgoingContract).into_module_error_other();
+                        return Err(LightningOutputError::NotOutgoingContract);
                     }
                 };
 
@@ -790,8 +781,7 @@ impl ServerModule for Lightning {
                         &outgoing_contract.cancellation_message().into(),
                         &outgoing_contract.gateway_key,
                     )
-                    .map_err(|_| LightningError::InvalidCancellationSignature)
-                    .into_module_error_other()?;
+                    .map_err(|_| LightningOutputError::InvalidCancellationSignature)?;
 
                 let updated_contract_account = {
                     let mut contract_account = dbtx

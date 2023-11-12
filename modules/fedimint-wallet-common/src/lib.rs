@@ -271,23 +271,33 @@ plugin_types_trait_impl_common!(
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,
-    WalletConsensusItem
+    WalletConsensusItem,
+    WalletInputError,
+    WalletOutputError
 );
 
-#[derive(Debug, Error)]
-pub enum WalletError {
+#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
+pub enum WalletCreationError {
     #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
     WrongNetwork(Network, Network),
     #[error("Error querying bitcoind: {0}")]
-    RpcError(#[from] anyhow::Error),
-    #[error("Unknown bitcoin network: {0}")]
-    UnknownNetwork(String),
+    RpcError(String),
+}
+
+#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
+pub enum WalletInputError {
     #[error("Unknown block hash in peg-in proof: {0}")]
     UnknownPegInProofBlock(BlockHash),
     #[error("Invalid peg-in proof: {0}")]
     PegInProofError(#[from] PegInProofError),
     #[error("The peg-in was already claimed")]
     PegInAlreadyClaimed,
+}
+
+#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
+pub enum WalletOutputError {
+    #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
+    WrongNetwork(Network, Network),
     #[error("Peg-out fee rate {0:?} is set below consensus {1:?}")]
     PegOutFeeBelowConsensus(Feerate, Feerate),
     #[error("Not enough SpendableUTXO")]
@@ -321,14 +331,3 @@ pub enum ProcessPegOutSigError {
     #[error("Error finalizing PSBT {0:?}")]
     ErrorFinalizingPsbt(Vec<miniscript::psbt::Error>),
 }
-
-// FIXME: make tests not require Eq
-/// **WARNING**: this is only intended to be used for testing
-impl PartialEq for WalletError {
-    fn eq(&self, other: &Self) -> bool {
-        format!("{self:?}") == format!("{other:?}")
-    }
-}
-
-/// **WARNING**: this is only intended to be used for testing
-impl Eq for WalletError {}

@@ -558,13 +558,15 @@ macro_rules! plugin_types_trait_impl_config {
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl_common {
-    ($types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty) => {
+    ($types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty, $input_error:ty, $output_error:ty) => {
         impl fedimint_core::module::ModuleCommon for $types {
             type ClientConfig = $client_config;
             type Input = $input;
             type Output = $output;
             type OutputOutcome = $outcome;
             type ConsensusItem = $ci;
+            type InputError = $input_error;
+            type OutputError = $output_error;
         }
 
         impl fedimint_core::core::ClientConfig for $client_config {}
@@ -614,6 +616,26 @@ macro_rules! plugin_types_trait_impl_common {
 
             fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
                 fedimint_core::core::DynModuleConsensusItem::from_typed(instance_id, self)
+            }
+        }
+
+        impl fedimint_core::core::InputError for $input_error {}
+
+        impl fedimint_core::core::IntoDynInstance for $input_error {
+            type DynType = fedimint_core::core::DynInputError;
+
+            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+                fedimint_core::core::DynInputError::from_typed(instance_id, self)
+            }
+        }
+
+        impl fedimint_core::core::OutputError for $output_error {}
+
+        impl fedimint_core::core::IntoDynInstance for $output_error {
+            type DynType = fedimint_core::core::DynOutputError;
+
+            fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+                fedimint_core::core::DynOutputError::from_typed(instance_id, self)
             }
         }
     };

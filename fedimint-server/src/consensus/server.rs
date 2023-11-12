@@ -563,11 +563,12 @@ impl ConsensusServer {
             .get_value(&AcceptedItemKey(item_index.to_owned()))
             .await
         {
+            // this branch is only taken if we crashed mid session
             if accepted_item.item == item && accepted_item.peer == peer {
                 return Ok(());
             }
 
-            bail!("Consensus item was discarded before recovery");
+            bail!("Item was discarded before we recovered");
         }
 
         self.process_consensus_item_with_db_transaction(&mut dbtx, item.clone(), peer)
@@ -611,12 +612,12 @@ impl ConsensusServer {
 
         match consensus_item {
             ConsensusItem::Module(module_item) => {
-                let moduletx =
-                    &mut dbtx.dbtx_ref_with_prefix_module_id(module_item.module_instance_id());
+                let instance_id = module_item.module_instance_id();
+                let module_dbtx = &mut dbtx.dbtx_ref_with_prefix_module_id(instance_id);
 
                 self.modules
-                    .get_expect(module_item.module_instance_id())
-                    .process_consensus_item(moduletx, module_item, peer_id)
+                    .get_expect(instance_id)
+                    .process_consensus_item(module_dbtx, module_item, peer_id)
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
@@ -625,7 +626,7 @@ impl ConsensusServer {
                     .await
                     .is_some()
                 {
-                    bail!("The transaction is already accepted");
+                    bail!("Transaction is already accepted");
                 }
 
                 let txid = transaction.tx_hash();
@@ -635,7 +636,9 @@ impl ConsensusServer {
                     .map(|output| output.module_instance_id())
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, transaction).await?;
+                process_transaction_with_dbtx(self.modules.clone(), dbtx, transaction)
+                    .await
+                    .map_err(|error| anyhow!(error.to_string()))?;
 
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
                     .await;
