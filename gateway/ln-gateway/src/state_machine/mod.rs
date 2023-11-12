@@ -423,6 +423,10 @@ impl From<&GatewayClientContext> for LightningClientContext {
     }
 }
 
+/// Client side Lightning module **for the gateway**.
+///
+/// For the client side Lightning module for normal clients,
+/// see [`fedimint_ln_client::LightningClientModule`]
 #[derive(Debug)]
 pub struct GatewayClientModule {
     lnrpc: Arc<dyn ILnRpcClient>,
