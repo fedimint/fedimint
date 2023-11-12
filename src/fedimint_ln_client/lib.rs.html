@@ -1338,6 +1338,10 @@
 <a href="#1338" id="1338">1338</a>
 <a href="#1339" id="1339">1339</a>
 <a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -2050,7 +2054,11 @@
     }
 }
 
-<span class="attr">#[derive(Debug)]
+<span class="doccomment">/// Client side lightning module
+///
+/// Note that lightning gateways use a different version
+/// of client side module.
+</span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LightningClientModule {
     <span class="kw">pub </span>cfg: LightningClientConfig,
     notifier: ModuleNotifier&lt;DynGlobalClientContext, LightningClientStateMachines&gt;,
