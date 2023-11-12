@@ -430,50 +430,17 @@
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
 <a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a>
-<a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
-<a href="#464" id="464">464</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
-</span><span class="kw">use </span>std::time::{Duration, SystemTime};
+</span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::TransactionId;
-<span class="kw">use </span>tracing::{debug, warn};
+<span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, OperationState, State, StateTransition};
 <span class="kw">use crate</span>::{DynGlobalClientContext, DynState};
@@ -484,11 +451,7 @@
 
 <span class="kw">pub const </span>LOG_TARGET: <span class="kw-2">&amp;</span>str = <span class="string">&quot;transaction_submission&quot;</span>;
 
-<span class="doccomment">/// Every how many seconds an unconfirmed transaction gets re-submitted
-</span><span class="kw">const </span>RESUBMISSION_INTERVAL: Duration = Duration::from_secs(<span class="number">5</span>);
-
-<span class="doccomment">/// Every how many seconds the transaction status is checked
-</span><span class="kw">const </span>FETCH_INTERVAL: Duration = Duration::from_secs(<span class="number">1</span>);
+<span class="kw">const </span>RETRY_INTERVAL: Duration = Duration::from_secs(<span class="number">5</span>);
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>TxSubmissionContext;
@@ -503,44 +466,30 @@
     }
 }
 
-<span class="comment">// TODO: refactor states into their own structs that impl `State`. The enum
-// merely dispatches fn calls to the right state impl in that scenario
-</span><span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
-</span><span class="doccomment">/// State machine to (re-)submit a transaction till it is either confirmed or
+<span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
+</span><span class="doccomment">/// State machine to (re-)submit a transaction until it is either accepted or
 /// rejected by the federation
 ///
 /// ```mermaid
 /// flowchart LR
-///     Created -- await consensus --&gt; Accepted
-///     Created -- await consensus --&gt; Rejected
-///     Created -- Periodically submit --&gt; Created
-///     Created -- Error on submit --&gt; Rejected
+///     Created -- tx is accepted by consensus --&gt; Accepted
+///     Created -- tx is rejected on submission --&gt; Rejected
 /// ```
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>TxSubmissionStates {
     <span class="doccomment">/// The transaction has been created and potentially already been submitted,
     /// but no rejection or acceptance happened so far
-    </span>Created {
-        <span class="comment">// TODO: put into wrapper struct
-        </span><span class="doccomment">/// We need this filed to be able to submit multiple transactions in one
-        /// operation.
-        </span>txid: TransactionId,
-        tx: Transaction,
-        next_submission: SystemTime,
-    },
-    <span class="doccomment">/// The transaction has been accepted after consensus was reached on it
+    </span>Created(Transaction),
+    <span class="doccomment">/// The transaction has been accepted in consensus
     ///
     /// **This state is final**
-    </span>Accepted {
-        txid: TransactionId,
-        <span class="comment">// TODO: enable again after awaiting DB prefix writes becomes available
-        //epoch: u64
-    </span>},
-    <span class="doccomment">/// The transaction has been rejected, either by a quorum on submission or
-    /// after consensus was reached
+    </span>Accepted(TransactionId),
+    <span class="doccomment">/// The transaction has been rejected by a quorum on submission
     ///
     /// **This state is final**
-    </span>Rejected { txid: TransactionId, error: String },
+    </span>Rejected(TransactionId, String),
+    <span class="doccomment">/// this should never happen with a honest federation and bug-free code
+    </span>NonRetryableError(String),
 }
 
 <span class="kw">impl </span>State <span class="kw">for </span>TxSubmissionStates {
@@ -553,53 +502,42 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="self">self </span>{
-            TxSubmissionStates::Created {
-                txid,
-                tx,
-                next_submission,
-            } =&gt; {
-                <span class="kw">let </span>txid = <span class="kw-2">*</span>txid;
+            TxSubmissionStates::Created(transaction) =&gt; {
+                <span class="kw">let </span>txid = transaction.tx_hash();
                 <span class="macro">vec!</span>[
                     StateTransition::new(
-                        trigger_created_submit(
-                            tx.clone(),
-                            <span class="kw-2">*</span>next_submission,
-                            global_context.clone(),
-                        ),
-                        |_dbtx, res, state| {
+                        trigger_created_rejected(transaction.clone(), global_context.clone()),
+                        <span class="kw">move </span>|_dbtx, result, _state| {
                             Box::pin(<span class="kw">async move </span>{
-                                <span class="kw">let </span>TxSubmissionStates::Created {
-                                    txid,
-                                    tx,
-                                    next_submission,
-                                } = state
-                                <span class="kw">else </span>{
-                                    <span class="macro">panic!</span>(<span class="string">&quot;Wrong input state for transition fn&quot;</span>);
-                                };
-
-                                <span class="kw">match </span>res {
-                                    <span class="prelude-val">Ok</span>(txid) =&gt; TxSubmissionStates::Created {
-                                        txid,
-                                        tx,
-                                        next_submission: next_submission + RESUBMISSION_INTERVAL,
-                                    },
-                                    <span class="prelude-val">Err</span>(error) =&gt; TxSubmissionStates::Rejected { txid, error },
+                                <span class="kw">match </span>result {
+                                    <span class="prelude-val">Ok</span>(submit_error) =&gt; {
+                                        TxSubmissionStates::Rejected(txid, submit_error)
+                                    }
+                                    <span class="prelude-val">Err</span>(e) =&gt; TxSubmissionStates::NonRetryableError(e),
                                 }
                             })
                         },
                     ),
                     StateTransition::new(
-                        trigger_created_accepted(tx.tx_hash(), global_context.clone()),
-                        <span class="kw">move </span>|_dbtx, _res, _state| {
-                            Box::pin(<span class="kw">async move </span>{ TxSubmissionStates::Accepted { txid } })
+                        trigger_created_accepted(txid, global_context.clone()),
+                        <span class="kw">move </span>|_dbtx, result, _state| {
+                            Box::pin(<span class="kw">async move </span>{
+                                <span class="kw">match </span>result {
+                                    <span class="prelude-val">Ok</span>(()) =&gt; TxSubmissionStates::Accepted(txid),
+                                    <span class="prelude-val">Err</span>(e) =&gt; TxSubmissionStates::NonRetryableError(e),
+                                }
+                            })
                         },
                     ),
                 ]
             }
-            TxSubmissionStates::Accepted { .. } =&gt; {
+            TxSubmissionStates::Accepted(..) =&gt; {
                 <span class="macro">vec!</span>[]
             }
-            TxSubmissionStates::Rejected { .. } =&gt; {
+            TxSubmissionStates::Rejected(..) =&gt; {
+                <span class="macro">vec!</span>[]
+            }
+            TxSubmissionStates::NonRetryableError(..) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -618,44 +556,47 @@
     }
 }
 
-<span class="kw">async fn </span>trigger_created_submit(
+<span class="kw">async fn </span>trigger_created_rejected(
     tx: Transaction,
-    next_submission: SystemTime,
     context: DynGlobalClientContext,
-) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId, String&gt; {
-    fedimint_core::task::sleep(
-        next_submission
-            .duration_since(now())
-            .unwrap_or(Duration::ZERO),
-    )
-    .<span class="kw">await</span>;
-
-    <span class="comment">// TODO: get rid of state machine created-&gt;created loop and only rely on this
-    // loop
-    </span><span class="kw">loop </span>{
-        <span class="kw">match </span>context.api().submit_transaction(tx.clone()).<span class="kw">await </span>{
-            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;Got {e} while submitting transaction, will sleep for {RESUBMISSION_INTERVAL:?}&quot;</span>);
-                sleep(RESUBMISSION_INTERVAL).<span class="kw">await</span>;
-            }
-            res =&gt; <span class="kw">return </span>res.map_err(|e| e.to_string()),
-        }
-    }
-}
-
-<span class="kw">async fn </span>trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
+) -&gt; <span class="prelude-ty">Result</span>&lt;String, String&gt; {
     <span class="kw">loop </span>{
-        <span class="kw">match </span>context.api().await_transaction(txid).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(..) =&gt; <span class="kw">break</span>,
+        <span class="kw">match </span>context.api().submit_transaction(tx.clone()).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(submission_result) =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Err</span>(submission_error) = submission_result {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(submission_error.to_string());
+                }
+            }
             <span class="prelude-val">Err</span>(error) =&gt; {
                 <span class="kw">if </span>!error.is_retryable() {
-                    <span class="comment">// FIXME: what to do in this case?
-                    </span><span class="macro">warn!</span>(target: LOG_TARGET, <span class="question-mark">?</span>error, <span class="string">&quot;Federation returned non-retryable error&quot;</span>);
+                    <span class="macro">warn!</span>(target: LOG_TARGET, <span class="question-mark">?</span>error, <span class="string">&quot;Federation returned non-retryable error&quot;</span>);
+
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(error.to_string());
                 }
             }
         }
 
-        sleep(FETCH_INTERVAL).<span class="kw">await</span>;
+        sleep(RETRY_INTERVAL).<span class="kw">await</span>;
+    }
+}
+
+<span class="kw">async fn </span>trigger_created_accepted(
+    txid: TransactionId,
+    context: DynGlobalClientContext,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+    <span class="kw">loop </span>{
+        <span class="kw">match </span>context.api().await_transaction(txid).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(..) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
+            <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="kw">if </span>!error.is_retryable() {
+                    <span class="macro">warn!</span>(target: LOG_TARGET, <span class="question-mark">?</span>error, <span class="string">&quot;Federation returned non-retryable error&quot;</span>);
+
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(error.to_string());
+                }
+            }
+        }
+
+        sleep(RETRY_INTERVAL).<span class="kw">await</span>;
     }
 }
 
@@ -684,7 +625,6 @@
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
     <span class="kw">use </span>fedimint_core::task::sleep;
-    <span class="kw">use </span>fedimint_core::time::now;
     <span class="kw">use </span>fedimint_core::transaction::SerdeTransaction;
     <span class="kw">use </span>fedimint_core::util::BoxStream;
     <span class="kw">use </span>fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
@@ -746,7 +686,7 @@
 
                     <span class="self">self</span>.txns.lock().<span class="kw">await</span>.push(tx.tx_hash());
 
-                    <span class="prelude-val">Ok</span>(serde_json::to_value(tx.tx_hash()).unwrap())
+                    <span class="prelude-val">Ok</span>(serde_json::to_value(<span class="prelude-val">Ok</span>::&lt;TransactionId, String&gt;(tx.tx_hash())).unwrap())
                 }
                 WAIT_TRANSACTION_ENDPOINT =&gt; {
                     <span class="kw">let </span>api_req: ApiRequestErased =
@@ -784,18 +724,14 @@
             operation_id: OperationId,
             tx_builder: TransactionBuilder,
         ) -&gt; anyhow::Result&lt;TransactionId&gt; {
-            <span class="kw">let </span>(tx, states) = tx_builder.build(secp256k1_zkp::SECP256K1, thread_rng());
-            <span class="kw">let </span>txid = tx.tx_hash();
+            <span class="kw">let </span>(transaction, states) = tx_builder.build(secp256k1_zkp::SECP256K1, thread_rng());
+            <span class="kw">let </span>txid = transaction.tx_hash();
 
             <span class="macro">assert!</span>(states.is_empty(), <span class="string">&quot;A non-empty transaction was submitted&quot;</span>);
 
             <span class="kw">let </span>tx_submission_sm = OperationState {
                 operation_id,
-                state: TxSubmissionStates::Created {
-                    txid,
-                    tx,
-                    next_submission: now(),
-                },
+                state: TxSubmissionStates::Created(transaction),
             }
             .into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE);
             <span class="self">self</span>.executor

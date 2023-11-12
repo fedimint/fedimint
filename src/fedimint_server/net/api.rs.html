@@ -534,37 +534,6 @@
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
-<a href="#549" id="549">549</a>
-<a href="#550" id="550">550</a>
-<a href="#551" id="551">551</a>
-<a href="#552" id="552">552</a>
-<a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
-<a href="#563" id="563">563</a>
-<a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -611,8 +580,8 @@
 
 <span class="kw">use </span><span class="kw">super</span>::peers::PeerStatusChannels;
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::LatestContributionByPeer;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::FundingVerifier;
 <span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
@@ -662,12 +631,17 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.supported_api_versions
     }
 
-    <span class="kw">pub async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="comment">// we want to return an error if and only if the submitted transaction is
+    // invalid and will be rejected if we were to submit it to consensus
+    </span><span class="kw">pub async fn </span>submit_transaction(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        transaction: Transaction,
+    ) -&gt; anyhow::Result&lt;TransactionId&gt; {
         <span class="kw">let </span>txid = transaction.tx_hash();
 
         <span class="macro">debug!</span>(%txid, <span class="string">&quot;Received mint transaction&quot;</span>);
 
-        <span class="comment">// we already processed the transaction before the request was received
+        <span class="comment">// we already processed the transaction before
         </span><span class="kw">if </span><span class="self">self
             </span>.db
             .begin_transaction()
@@ -676,7 +650,7 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
         }
 
         <span class="comment">// Create read-only DB tx so that the read state is consistent
@@ -685,46 +659,14 @@
         <span class="comment">// We ignore any writes, as we only verify if the transaction is valid here
         </span>dbtx.ignore_uncommitted();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>funding_verifier = FundingVerifier::default();
-        <span class="kw">let </span><span class="kw-2">mut </span>public_keys = Vec::new();
-
-        <span class="kw">for </span>input <span class="kw">in </span>transaction.inputs.iter() {
-            <span class="kw">let </span>meta = <span class="self">self
-                </span>.modules
-                .get_expect(input.module_instance_id())
-                .process_input(
-                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(input.module_instance_id()),
-                    input,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-
-            funding_verifier.add_input(meta.amount);
-            public_keys.push(meta.pub_keys);
-        }
-
-        transaction.validate_signature(public_keys.into_iter().flatten())<span class="question-mark">?</span>;
-
-        <span class="kw">for </span>(output, out_idx) <span class="kw">in </span>transaction.outputs.iter().zip(<span class="number">0u64</span>..) {
-            <span class="kw">let </span>amount = <span class="self">self
-                </span>.modules
-                .get_expect(output.module_instance_id())
-                .process_output(
-                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(output.module_instance_id()),
-                    output,
-                    OutPoint { txid, out_idx },
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-
-            funding_verifier.add_output(amount);
-        }
-
-        funding_verifier.verify_funding()<span class="question-mark">?</span>;
+        process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), <span class="kw-2">&amp;mut </span>dbtx, transaction.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="self">self</span>.submission_sender
             .send(ConsensusItem::Transaction(transaction))
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            .<span class="kw">await
+            </span>.ok();
 
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(txid)
     }
 
     <span class="kw">pub async fn </span>await_transaction(
@@ -938,18 +880,14 @@
         },
         <span class="macro">api_endpoint! </span>{
             TRANSACTION_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, serde_transaction: SerdeTransaction| -&gt; TransactionId {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, serde_transaction: SerdeTransaction| -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId, String&gt; {
                 <span class="kw">let </span>transaction = serde_transaction
                     .try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry())
                     .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
-                <span class="kw">let </span>tx_id = transaction.tx_hash();
-
-                fedimint.submit_transaction(transaction)
-                    .<span class="kw">await
-                    </span>.map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
-
-                <span class="prelude-val">Ok</span>(tx_id)
+                <span class="comment">// we return an inner error if and only if the submitted transaction is
+                // invalid and will be rejected if we were to submit it to consensus
+                </span><span class="prelude-val">Ok</span>(fedimint.submit_transaction(transaction).<span class="kw">await</span>.map_err(|e| e.to_string()))
             }
         },
         <span class="macro">api_endpoint! </span>{

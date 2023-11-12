@@ -1762,13 +1762,6 @@
 <a href="#1762" id="1762">1762</a>
 <a href="#1763" id="1763">1763</a>
 <a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
-<a href="#1768" id="1768">1768</a>
-<a href="#1769" id="1769">1769</a>
-<a href="#1770" id="1770">1770</a>
-<a href="#1771" id="1771">1771</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1872,7 +1865,6 @@
     SupportedModuleApiVersions,
 };
 <span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
-<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
@@ -1997,17 +1989,15 @@
     <span class="kw">pub async fn </span>await_tx_accepted(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        txid: TransactionId,
+        query_txid: TransactionId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-        <span class="kw">let </span>update_stream = <span class="self">self</span>.transaction_update_stream(operation_id).<span class="kw">await</span>;
-
-        <span class="kw">let </span>query_txid = txid;
-        update_stream
-            .filter_map(|tx_update| {
+        <span class="self">self</span>.transaction_update_stream(operation_id)
+            .<span class="kw">await
+            </span>.filter_map(|tx_update| {
                 std::future::ready(<span class="kw">match </span>tx_update.state {
-                    TxSubmissionStates::Accepted { txid } <span class="kw">if </span>txid == query_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
-                    TxSubmissionStates::Rejected { txid, error } <span class="kw">if </span>txid == query_txid =&gt; {
-                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(error))
+                    TxSubmissionStates::Accepted(txid) <span class="kw">if </span>txid == query_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
+                    TxSubmissionStates::Rejected(txid, submit_error) <span class="kw">if </span>txid == query_txid =&gt; {
+                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(submit_error))
                     }
                     <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
                 })
@@ -2679,11 +2669,7 @@
             TRANSACTION_SUBMISSION_MODULE_INSTANCE,
             OperationState {
                 operation_id,
-                state: TxSubmissionStates::Created {
-                    txid,
-                    tx: transaction,
-                    next_submission: now(),
-                },
+                state: TxSubmissionStates::Created(transaction),
             },
         );
         states.push(tx_submission_sm);
@@ -3046,9 +3032,9 @@
         <span class="self">self</span>.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(<span class="kw">match </span>tx_update.state {
-                    TxSubmissionStates::Accepted { txid } <span class="kw">if </span>txid == await_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
-                    TxSubmissionStates::Rejected { txid, error } <span class="kw">if </span>txid == await_txid =&gt; {
-                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(error))
+                    TxSubmissionStates::Accepted(txid) <span class="kw">if </span>txid == await_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
+                    TxSubmissionStates::Rejected(txid, submit_error) <span class="kw">if </span>txid == await_txid =&gt; {
+                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(submit_error))
                     }
                     <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
                 })

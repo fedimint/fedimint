@@ -1164,6 +1164,12 @@
 <a href="#1164" id="1164">1164</a>
 <a href="#1165" id="1165">1165</a>
 <a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display, Formatter};
@@ -1512,7 +1518,10 @@
 <span class="doccomment">/// The API for the global (non-module) endpoints
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>GlobalFederationApi {
-    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt;;
+    <span class="kw">async fn </span>submit_transaction(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tx: Transaction,
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, String&gt;&gt;;
 
     <span class="kw">async fn </span>await_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1580,7 +1589,10 @@
     </span>T: IGlobalFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
 {
     <span class="doccomment">/// Submit a transaction for inclusion
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; FederationResult&lt;TransactionId&gt; {
+    </span><span class="kw">async fn </span>submit_transaction(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        tx: Transaction,
+    ) -&gt; FederationResult&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, String&gt;&gt; {
         <span class="self">self</span>.request_current_consensus(
             TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
