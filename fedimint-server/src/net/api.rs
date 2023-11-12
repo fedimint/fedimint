@@ -44,8 +44,8 @@ use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
 use crate::config::ServerConfig;
+use crate::consensus::process_transaction_with_dbtx;
 use crate::consensus::server::LatestContributionByPeer;
-use crate::consensus::FundingVerifier;
 use crate::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
@@ -95,12 +95,17 @@ impl ConsensusApi {
         &self.supported_api_versions
     }
 
-    pub async fn submit_transaction(&self, transaction: Transaction) -> anyhow::Result<()> {
+    // we want to return an error if and only if the submitted transaction is
+    // invalid and will be rejected if we were to submit it to consensus
+    pub async fn submit_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> anyhow::Result<TransactionId> {
         let txid = transaction.tx_hash();
 
         debug!(%txid, "Received mint transaction");
 
-        // we already processed the transaction before the request was received
+        // we already processed the transaction before
         if self
             .db
             .begin_transaction()
@@ -109,7 +114,7 @@ impl ConsensusApi {
             .await
             .is_some()
         {
-            return Ok(());
+            return Ok(txid);
         }
 
         // Create read-only DB tx so that the read state is consistent
@@ -118,46 +123,14 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        let mut funding_verifier = FundingVerifier::default();
-        let mut public_keys = Vec::new();
-
-        for input in transaction.inputs.iter() {
-            let meta = self
-                .modules
-                .get_expect(input.module_instance_id())
-                .process_input(
-                    &mut dbtx.dbtx_ref_with_prefix_module_id(input.module_instance_id()),
-                    input,
-                )
-                .await?;
-
-            funding_verifier.add_input(meta.amount);
-            public_keys.push(meta.pub_keys);
-        }
-
-        transaction.validate_signature(public_keys.into_iter().flatten())?;
-
-        for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
-            let amount = self
-                .modules
-                .get_expect(output.module_instance_id())
-                .process_output(
-                    &mut dbtx.dbtx_ref_with_prefix_module_id(output.module_instance_id()),
-                    output,
-                    OutPoint { txid, out_idx },
-                )
-                .await?;
-
-            funding_verifier.add_output(amount);
-        }
-
-        funding_verifier.verify_funding()?;
+        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, transaction.clone()).await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
-            .await?;
+            .await
+            .ok();
 
-        Ok(())
+        Ok(txid)
     }
 
     pub async fn await_transaction(
@@ -371,18 +344,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             TRANSACTION_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, serde_transaction: SerdeTransaction| -> TransactionId {
+            async |fedimint: &ConsensusApi, _context, serde_transaction: SerdeTransaction| -> Result<TransactionId, String> {
                 let transaction = serde_transaction
                     .try_into_inner(&fedimint.modules.decoder_registry())
                     .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
-                let tx_id = transaction.tx_hash();
-
-                fedimint.submit_transaction(transaction)
-                    .await
-                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
-
-                Ok(tx_id)
+                // we return an inner error if and only if the submitted transaction is
+                // invalid and will be rejected if we were to submit it to consensus
+                Ok(fedimint.submit_transaction(transaction).await.map_err(|e| e.to_string()))
             }
         },
         api_endpoint! {

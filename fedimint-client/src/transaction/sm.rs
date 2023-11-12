@@ -1,15 +1,14 @@
 //! State machine for submitting transactions
 
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
-use tracing::{debug, warn};
+use tracing::warn;
 
 use crate::sm::{Context, DynContext, OperationState, State, StateTransition};
 use crate::{DynGlobalClientContext, DynState};
@@ -20,11 +19,7 @@ pub const TRANSACTION_SUBMISSION_MODULE_INSTANCE: ModuleInstanceId = 0xffff;
 
 pub const LOG_TARGET: &str = "transaction_submission";
 
-/// Every how many seconds an unconfirmed transaction gets re-submitted
-const RESUBMISSION_INTERVAL: Duration = Duration::from_secs(5);
-
-/// Every how many seconds the transaction status is checked
-const FETCH_INTERVAL: Duration = Duration::from_secs(1);
+const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct TxSubmissionContext;
@@ -39,44 +34,30 @@ impl IntoDynInstance for TxSubmissionContext {
     }
 }
 
-// TODO: refactor states into their own structs that impl `State`. The enum
-// merely dispatches fn calls to the right state impl in that scenario
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// State machine to (re-)submit a transaction till it is either confirmed or
+/// State machine to (re-)submit a transaction until it is either accepted or
 /// rejected by the federation
 ///
 /// ```mermaid
 /// flowchart LR
-///     Created -- await consensus --> Accepted
-///     Created -- await consensus --> Rejected
-///     Created -- Periodically submit --> Created
-///     Created -- Error on submit --> Rejected
+///     Created -- tx is accepted by consensus --> Accepted
+///     Created -- tx is rejected on submission --> Rejected
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
 pub enum TxSubmissionStates {
     /// The transaction has been created and potentially already been submitted,
     /// but no rejection or acceptance happened so far
-    Created {
-        // TODO: put into wrapper struct
-        /// We need this filed to be able to submit multiple transactions in one
-        /// operation.
-        txid: TransactionId,
-        tx: Transaction,
-        next_submission: SystemTime,
-    },
-    /// The transaction has been accepted after consensus was reached on it
+    Created(Transaction),
+    /// The transaction has been accepted in consensus
     ///
     /// **This state is final**
-    Accepted {
-        txid: TransactionId,
-        // TODO: enable again after awaiting DB prefix writes becomes available
-        //epoch: u64
-    },
-    /// The transaction has been rejected, either by a quorum on submission or
-    /// after consensus was reached
+    Accepted(TransactionId),
+    /// The transaction has been rejected by a quorum on submission
     ///
     /// **This state is final**
-    Rejected { txid: TransactionId, error: String },
+    Rejected(TransactionId, String),
+    /// this should never happen with a honest federation and bug-free code
+    NonRetryableError(String),
 }
 
 impl State for TxSubmissionStates {
@@ -89,53 +70,42 @@ impl State for TxSubmissionStates {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self {
-            TxSubmissionStates::Created {
-                txid,
-                tx,
-                next_submission,
-            } => {
-                let txid = *txid;
+            TxSubmissionStates::Created(transaction) => {
+                let txid = transaction.tx_hash();
                 vec![
                     StateTransition::new(
-                        trigger_created_submit(
-                            tx.clone(),
-                            *next_submission,
-                            global_context.clone(),
-                        ),
-                        |_dbtx, res, state| {
+                        trigger_created_rejected(transaction.clone(), global_context.clone()),
+                        move |_dbtx, result, _state| {
                             Box::pin(async move {
-                                let TxSubmissionStates::Created {
-                                    txid,
-                                    tx,
-                                    next_submission,
-                                } = state
-                                else {
-                                    panic!("Wrong input state for transition fn");
-                                };
-
-                                match res {
-                                    Ok(txid) => TxSubmissionStates::Created {
-                                        txid,
-                                        tx,
-                                        next_submission: next_submission + RESUBMISSION_INTERVAL,
-                                    },
-                                    Err(error) => TxSubmissionStates::Rejected { txid, error },
+                                match result {
+                                    Ok(submit_error) => {
+                                        TxSubmissionStates::Rejected(txid, submit_error)
+                                    }
+                                    Err(e) => TxSubmissionStates::NonRetryableError(e),
                                 }
                             })
                         },
                     ),
                     StateTransition::new(
-                        trigger_created_accepted(tx.tx_hash(), global_context.clone()),
-                        move |_dbtx, _res, _state| {
-                            Box::pin(async move { TxSubmissionStates::Accepted { txid } })
+                        trigger_created_accepted(txid, global_context.clone()),
+                        move |_dbtx, result, _state| {
+                            Box::pin(async move {
+                                match result {
+                                    Ok(()) => TxSubmissionStates::Accepted(txid),
+                                    Err(e) => TxSubmissionStates::NonRetryableError(e),
+                                }
+                            })
                         },
                     ),
                 ]
             }
-            TxSubmissionStates::Accepted { .. } => {
+            TxSubmissionStates::Accepted(..) => {
                 vec![]
             }
-            TxSubmissionStates::Rejected { .. } => {
+            TxSubmissionStates::Rejected(..) => {
+                vec![]
+            }
+            TxSubmissionStates::NonRetryableError(..) => {
                 vec![]
             }
         }
@@ -154,44 +124,47 @@ impl IntoDynInstance for TxSubmissionStates {
     }
 }
 
-async fn trigger_created_submit(
+async fn trigger_created_rejected(
     tx: Transaction,
-    next_submission: SystemTime,
     context: DynGlobalClientContext,
-) -> Result<TransactionId, String> {
-    fedimint_core::task::sleep(
-        next_submission
-            .duration_since(now())
-            .unwrap_or(Duration::ZERO),
-    )
-    .await;
-
-    // TODO: get rid of state machine created->created loop and only rely on this
-    // loop
+) -> Result<String, String> {
     loop {
         match context.api().submit_transaction(tx.clone()).await {
-            Err(e) if e.is_retryable() => {
-                debug!("Got {e} while submitting transaction, will sleep for {RESUBMISSION_INTERVAL:?}");
-                sleep(RESUBMISSION_INTERVAL).await;
+            Ok(submission_result) => {
+                if let Err(submission_error) = submission_result {
+                    return Ok(submission_error.to_string());
+                }
             }
-            res => return res.map_err(|e| e.to_string()),
-        }
-    }
-}
-
-async fn trigger_created_accepted(txid: TransactionId, context: DynGlobalClientContext) {
-    loop {
-        match context.api().await_transaction(txid).await {
-            Ok(..) => break,
             Err(error) => {
                 if !error.is_retryable() {
-                    // FIXME: what to do in this case?
                     warn!(target: LOG_TARGET, ?error, "Federation returned non-retryable error");
+
+                    return Err(error.to_string());
                 }
             }
         }
 
-        sleep(FETCH_INTERVAL).await;
+        sleep(RETRY_INTERVAL).await;
+    }
+}
+
+async fn trigger_created_accepted(
+    txid: TransactionId,
+    context: DynGlobalClientContext,
+) -> Result<(), String> {
+    loop {
+        match context.api().await_transaction(txid).await {
+            Ok(..) => return Ok(()),
+            Err(error) => {
+                if !error.is_retryable() {
+                    warn!(target: LOG_TARGET, ?error, "Federation returned non-retryable error");
+
+                    return Err(error.to_string());
+                }
+            }
+        }
+
+        sleep(RETRY_INTERVAL).await;
     }
 }
 
@@ -220,7 +193,6 @@ mod tests {
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::ApiRequestErased;
     use fedimint_core::task::sleep;
-    use fedimint_core::time::now;
     use fedimint_core::transaction::SerdeTransaction;
     use fedimint_core::util::BoxStream;
     use fedimint_core::{maybe_add_send_sync, OutPoint, PeerId, TransactionId};
@@ -282,7 +254,7 @@ mod tests {
 
                     self.txns.lock().await.push(tx.tx_hash());
 
-                    Ok(serde_json::to_value(tx.tx_hash()).unwrap())
+                    Ok(serde_json::to_value(Ok::<TransactionId, String>(tx.tx_hash())).unwrap())
                 }
                 WAIT_TRANSACTION_ENDPOINT => {
                     let api_req: ApiRequestErased =
@@ -320,18 +292,14 @@ mod tests {
             operation_id: OperationId,
             tx_builder: TransactionBuilder,
         ) -> anyhow::Result<TransactionId> {
-            let (tx, states) = tx_builder.build(secp256k1_zkp::SECP256K1, thread_rng());
-            let txid = tx.tx_hash();
+            let (transaction, states) = tx_builder.build(secp256k1_zkp::SECP256K1, thread_rng());
+            let txid = transaction.tx_hash();
 
             assert!(states.is_empty(), "A non-empty transaction was submitted");
 
             let tx_submission_sm = OperationState {
                 operation_id,
-                state: TxSubmissionStates::Created {
-                    txid,
-                    tx,
-                    next_submission: now(),
-                },
+                state: TxSubmissionStates::Created(transaction),
             }
             .into_dyn(TRANSACTION_SUBMISSION_MODULE_INSTANCE);
             self.executor
