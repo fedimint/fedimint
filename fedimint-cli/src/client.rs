@@ -24,7 +24,7 @@ use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
-use nostr_sdk::{Contact, EventBuilder, ToBech32, UncheckedUrl, Url};
+use nostr_sdk::{Contact, EventBuilder, EventId, ToBech32, UncheckedUrl, Url};
 use nostrmint_client::NostrmintClientExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -33,6 +33,7 @@ use time::OffsetDateTime;
 use tracing::info;
 
 use crate::nostr_subcommands::publish_contactlist_csv::ContactListTag;
+use crate::utils::parse_key;
 use crate::{metadata_from_clap_cli, nostr_subcommands, LnInvoiceResponse, Opts};
 
 #[derive(Debug, Clone)]
@@ -593,22 +594,24 @@ pub async fn handle_command(
                     Ok(json!(note_id))
                 }
                 NostrCommands::SendDirectMessage(_sub_command_args) => {
-                    todo!()
-                    //     nostr_subcommands::dm::send(
-                    //     args.private_key,
-                    //     args.relays,
-                    //     args.difficulty_target,
-                    //     sub_command_args,
-                    // )
+                    info!("You probably shouldn't use nostr for DMs");
+                    unimplemented!()
                 }
-                NostrCommands::DeleteEvent(_sub_command_args) => {
-                    todo!()
-                    // nostr_subcommands::delete_event::delete(
-                    //     args.private_key,
-                    //     args.relays,
-                    //     args.difficulty_target,
-                    //     sub_command_args,
-                    // )
+                NostrCommands::DeleteEvent(sub_command_args) => {
+                    let event_id_to_delete_hex = parse_key(sub_command_args.event_id.clone())
+                        .expect("Bad event id provided.");
+                    let event_id = EventId::from_hex(event_id_to_delete_hex)?;
+
+                    let unsigned_event =
+                        EventBuilder::delete(vec![event_id], sub_command_args.clone().reason)
+                            .to_unsigned_event(pubkey);
+                    println!("Contact list imported!");
+                    client
+                        .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
+                        .await?;
+
+                    let note_id = format!("{}", unsigned_event.id);
+                    Ok(json!(note_id))
                 }
                 NostrCommands::React(_sub_command_args) => {
                     todo!()

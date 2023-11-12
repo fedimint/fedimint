@@ -5,10 +5,10 @@ use nostr_sdk::prelude::*;
 pub struct SendDirectMessageSubCommand {
     /// Receiver public key. Both hex and bech32 encoded keys are supported.
     #[arg(short, long)]
-    receiver: String,
+    pub receiver: String,
     /// Message to send
     #[arg(short, long)]
-    message: String,
+    pub message: String,
     // Print keys as hex
     #[arg(long, default_value = "false")]
     hex: bool,

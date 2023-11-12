@@ -26,9 +26,6 @@ pub struct TextNoteSubCommand {
 }
 
 impl TextNoteSubCommand {
-    pub fn peer_id(&self) -> PeerId {
-        self.peer_id
-    }
     pub fn content(&self) -> String {
         self.content.clone()
     }

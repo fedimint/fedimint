@@ -5,10 +5,10 @@ use nostr_sdk::prelude::*;
 pub struct DeleteEventSubCommand {
     /// Event id to delete
     #[arg(short, long)]
-    event_id: String,
+    pub event_id: String,
     /// Reason for deleting the events
     #[arg(short, long)]
-    reason: Option<String>,
+    pub reason: Option<String>,
     // Print keys as hex
     #[arg(long, default_value = "false")]
     hex: bool,
