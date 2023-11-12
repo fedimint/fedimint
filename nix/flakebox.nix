@@ -229,6 +229,10 @@ rec {
     # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
     cargoTestExtraArgs = "--doc";
     cargoArtifacts = workspaceBuild;
+
+    # workaround: `cargo test --doc` started to ignore CARGO_TARGET_<native-target>_RUSTFLAGS
+    # out of the blue
+    stdenv = pkgs.clangStdenv;
   };
 
   workspaceClippy = craneLib.cargoClippy {
