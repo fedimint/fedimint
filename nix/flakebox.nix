@@ -228,7 +228,7 @@ rec {
   workspaceTestDoc = craneLib.cargoTest {
     # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
     cargoTestExtraArgs = "--doc";
-    cargoArtifacts = workspaceDeps;
+    cargoArtifacts = workspaceBuild;
   };
 
   workspaceClippy = craneLib.cargoClippy {
