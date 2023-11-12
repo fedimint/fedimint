@@ -710,6 +710,10 @@ impl ClientModuleInit for LightningClientInit {
     }
 }
 
+/// Client side lightning module
+///
+/// Note that lightning gateways use a different version
+/// of client side module.
 #[derive(Debug)]
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
