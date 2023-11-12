@@ -2,6 +2,11 @@
 name = "fedimint-metrics"
 version = "0.2.0-alpha"
 edition = "2021"
+license = "MIT"
+
+[lib]
+name = "fedimint_metrics"
+path = "./src/lib.rs"
 
 [dependencies]
 anyhow = { version = "1.0.71", features = ["backtrace"] }

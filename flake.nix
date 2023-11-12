@@ -5,7 +5,7 @@
     nixpkgs-kitman.url = "github:jkitman/nixpkgs/add-esplora-pkg";
     flake-utils.url = "github:numtide/flake-utils";
     flakebox = {
-      url = "github:rustshop/flakebox?rev=0d866b57cd09e30e8385150e846885236ea33bdb";
+      url = "github:rustshop/flakebox?rev=390c23bc911b354f16db4d925dbe9b1f795308ed";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";
@@ -175,6 +175,7 @@
                   pkgs.cargo-llvm-cov
                   pkgs.cargo-udeps
                   pkgs.cargo-audit
+                  pkgs.cargo-deny
                   pkgs.parallel
                   pkgs.just
 

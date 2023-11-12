@@ -67,8 +67,11 @@ cln-rpc = { package = "fedimint-cln-rpc", version = "0.4.0" }
 #             https://github.com/ipetkov/crane/issues/370
 [profile.dev.build-override]
 debug = false
+opt-level = 1
+
 [profile.ci.build-override]
 debug = false
+opt-level = 1
 
 [profile.dev]
 

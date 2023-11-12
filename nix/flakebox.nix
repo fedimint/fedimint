@@ -56,6 +56,8 @@ let
   # Like `filterWorkspaceFiles` but with `./scripts/` included
   filterWorkspaceTestFiles = src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ ".*\.rs" ".*\.html" ".*/proto/.*" "db/migrations/.*" "devimint/src/cfg/.*" "scripts/.*" ]) src;
 
+  filterWorkspaceAuditFiles = src: filterSrcWithRegexes (filterWorkspaceDepsBuildFilesRegex ++ [ "deny.toml" ]) src;
+
   # env vars for linking rocksdb
   commonEnvsShellRocksdbLink =
     let
@@ -226,7 +228,11 @@ rec {
   workspaceTestDoc = craneLib.cargoTest {
     # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
     cargoTestExtraArgs = "--doc";
-    cargoArtifacts = workspaceDeps;
+    cargoArtifacts = workspaceBuild;
+
+    # workaround: `cargo test --doc` started to ignore CARGO_TARGET_<native-target>_RUSTFLAGS
+    # out of the blue
+    stdenv = pkgs.clangStdenv;
   };
 
   workspaceClippy = craneLib.cargoClippy {
@@ -286,8 +292,13 @@ rec {
     doCheck = false;
   };
 
-  workspaceAudit = craneLib.cargoAudit {
+  cargoAudit = craneLib.cargoAudit {
     inherit advisory-db;
+    src = filterWorkspaceAuditFiles commonSrc;
+  };
+
+  cargoDeny = craneLib.cargoDeny {
+    src = filterWorkspaceAuditFiles commonSrc;
   };
 
   # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
