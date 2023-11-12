@@ -723,10 +723,6 @@
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
 <a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -1152,11 +1148,7 @@
     }
 }
 
-<span class="doccomment">/// Client side Lightning module **for the gateway**.
-///
-/// For the client side Lightning module for normal clients,
-/// see [`fedimint_ln_client::LightningClientModule`]
-</span><span class="attr">#[derive(Debug)]
+<span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>GatewayClientModule {
     lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
     cfg: LightningClientConfig,
