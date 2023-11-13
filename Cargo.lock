@@ -1452,8 +1452,6 @@ dependencies = [
  "erased-serde",
  "fedimint-core",
  "fedimint-dummy-common",
- "fedimint-server",
- "fedimint-threshold-crypto",
  "futures",
  "rand",
  "secp256k1 0.24.3",

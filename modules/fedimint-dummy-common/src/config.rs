@@ -2,8 +2,6 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{plugin_types_trait_impl_config, Amount};
 use serde::{Deserialize, Serialize};
-use threshold_crypto::serde_impl::SerdeSecret;
-use threshold_crypto::{PublicKey, PublicKeySet, SecretKeyShare};
 
 use crate::DummyCommonInit;
 
@@ -48,7 +46,6 @@ pub struct DummyConfig {
 pub struct DummyClientConfig {
     /// Accessible to clients
     pub tx_fee: Amount,
-    pub fed_public_key: PublicKey,
 }
 
 /// Locally unencrypted config unique to each member
@@ -60,18 +57,13 @@ pub struct DummyConfigLocal {
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
 pub struct DummyConfigConsensus {
-    /// Example federation threshold signing key
-    pub public_key_set: PublicKeySet,
     /// Will be the same for all peers
     pub tx_fee: Amount,
 }
 
 /// Will be encrypted and not shared such as private key material
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DummyConfigPrivate {
-    /// Example private key share for a single member
-    pub private_key_share: SerdeSecret<SecretKeyShare>,
-}
+pub struct DummyConfigPrivate;
 
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
