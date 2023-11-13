@@ -532,7 +532,7 @@ pub async fn handle_command(
                     client
                         .request_sign_event(unsigned_event.clone(), peer_id, opts.auth()?)
                         .await?;
-                    Ok(json!("UnsignedEventSubmitted"))
+                    Ok(json!(unsigned_event.id))
                 }
                 NostrCommands::TextNote(sub_command_args) => {
                     let unsigned_event = nostr_sdk::EventBuilder::new_text_note(

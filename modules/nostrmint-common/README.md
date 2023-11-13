@@ -4,20 +4,25 @@ Since the npub is for the fedimint itself, we limit nostr interaction to authent
 
 You can list message requests: `fedimint-cli nostr list-note-requests`
 
-You can create note requests: `fedimint-cli nostr text-note --msg "My FROST Message"`
+You can create note requests:
 
-Then you can use the other guardians to sign: fedimint-cli sign-note --event-id <EVENT_ID> --peer-id 1
-That will only work if you have FM_PASSWORD set correctly for peer 1. In tmuxinator all passwords are the same so you only need to do it once
+```sh
+FM_OUR_ID=0 fedimint-cli nostr text-note --content "nostrmint doing nostrmint things"
+```
 
-you can get the npub of the federation: fedimint-cli get-npub
+This will give you an event ID, this is the hex id of the event created and submitted to be signed. In a dev environment you can set `FM_OUR_ID` to other Peer Ids to sign. Once a threshold is met, the event is broadcast.
 
-Then signin to snort.social or something and you should see the note
-Give it a try and let me know if you get it to work. It's really rough right now but it works!
+```sh
+FM_OUR_ID=1 fedimint-cli nostr sign-note --event-id b9c4f093b08580ca73c68894f5207d5f1a63002b8ab3452ab85ffec149861533
+FM_OUR_ID=2 fedimint-cli nostr sign-note --event-id b9c4f093b08580ca73c68894f5207d5f1a63002b8ab3452ab85ffec149861533
+```
 
-## Running it
+In a devimint shell (tmuxinator or mprocs) all passwords are the same so you only need to do it once
 
-## How it works?
+```sh
+export FM_PASSWORD=pass
+```
 
-## Contributing
+You can get the npub of the federation: `fedimint-cli get-npub`
 
-## Goals
+Once an event is signed by a threshold quorum, navigate to coracle.social or another client and you should see the note.
