@@ -529,22 +529,6 @@
 <a href="#529" id="529">529</a>
 <a href="#530" id="530">530</a>
 <a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a>
-<a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -602,15 +586,6 @@
         <span class="kw">let </span>client_dir = workdir.join(<span class="string">&quot;clients&quot;</span>).join(name);
 
         std::fs::create_dir_all(<span class="kw-2">&amp;</span>client_dir)<span class="question-mark">?</span>;
-
-        <span class="macro">cmd!</span>(
-            <span class="string">&quot;cp&quot;</span>,
-            <span class="string">&quot;-R&quot;</span>,
-            workdir.join(<span class="string">&quot;client.json&quot;</span>).display(),
-            client_dir.join(<span class="string">&quot;client.json&quot;</span>).display()
-        )
-        .run()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">cmd!</span>(
             <span class="string">&quot;cp&quot;</span>,
@@ -673,12 +648,6 @@
         )
         .<span class="kw">await
         </span>.context(<span class="string">&quot;moving invite code file&quot;</span>)<span class="question-mark">?</span>;
-        tokio::fs::rename(
-            <span class="macro">format!</span>(<span class="string">&quot;{out_dir}/client.json&quot;</span>),
-            <span class="macro">format!</span>(<span class="string">&quot;{cfg_dir}/client.json&quot;</span>),
-        )
-        .<span class="kw">await
-        </span>.context(<span class="string">&quot;moving client.json&quot;</span>)<span class="question-mark">?</span>;
         <span class="macro">info!</span>(<span class="string">&quot;moved client configs&quot;</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
@@ -689,8 +658,7 @@
     }
 
     <span class="kw">pub async fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig&gt; {
-        <span class="kw">let </span>workdir: PathBuf = env::var(<span class="string">&quot;FM_DATA_DIR&quot;</span>)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
-        <span class="kw">let </span>cfg_path = workdir.join(<span class="string">&quot;client.json&quot;</span>);
+        <span class="kw">let </span>cfg_path = <span class="self">self</span>.vars[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR.join(<span class="string">&quot;client.json&quot;</span>);
         load_from_file(<span class="kw-2">&amp;</span>cfg_path)
     }
 
