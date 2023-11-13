@@ -59,15 +59,6 @@ impl Client {
         cmd!(
             "cp",
             "-R",
-            workdir.join("client.json").display(),
-            client_dir.join("client.json").display()
-        )
-        .run()
-        .await?;
-
-        cmd!(
-            "cp",
-            "-R",
             workdir.join("client.db").display(),
             client_dir.join("client.db").display()
         )
@@ -126,12 +117,6 @@ impl Federation {
         )
         .await
         .context("moving invite code file")?;
-        tokio::fs::rename(
-            format!("{out_dir}/client.json"),
-            format!("{cfg_dir}/client.json"),
-        )
-        .await
-        .context("moving client.json")?;
         info!("moved client configs");
 
         Ok(Self {
@@ -142,8 +127,7 @@ impl Federation {
     }
 
     pub async fn client_config(&self) -> Result<ClientConfig> {
-        let workdir: PathBuf = env::var("FM_DATA_DIR")?.parse()?;
-        let cfg_path = workdir.join("client.json");
+        let cfg_path = self.vars[&0].FM_DATA_DIR.join("client.json");
         load_from_file(&cfg_path)
     }
 
