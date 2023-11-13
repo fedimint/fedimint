@@ -20,7 +20,7 @@ fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 js-sys = "0.3.61"
-wasm-bindgen = "=0.2.87" # must match the nix provided wasm-bindgen-cli version
+wasm-bindgen = "=0.2.88" # must match the nix provided wasm-bindgen-cli version
 wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3.34"
 gloo-net = "0.2.6"
