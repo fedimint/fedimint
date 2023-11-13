@@ -10,62 +10,16 @@
 <a href="#10" id="10">10</a>
 <a href="#11" id="11">11</a>
 <a href="#12" id="12">12</a>
-<a href="#13" id="13">13</a>
-<a href="#14" id="14">14</a>
-<a href="#15" id="15">15</a>
-<a href="#16" id="16">16</a>
-<a href="#17" id="17">17</a>
-<a href="#18" id="18">18</a>
-<a href="#19" id="19">19</a>
-<a href="#20" id="20">20</a>
-<a href="#21" id="21">21</a>
-<a href="#22" id="22">22</a>
-<a href="#23" id="23">23</a>
-<a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a>
-<a href="#27" id="27">27</a>
-<a href="#28" id="28">28</a>
-<a href="#29" id="29">29</a>
-<a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::{FederationApiExt, FederationResult, IModuleFederationApi};
-<span class="kw">use </span>fedimint_core::endpoint_constants::{SIGN_MESSAGE_ENDPOINT, WAIT_SIGNED_ENDPOINT};
-<span class="kw">use </span>fedimint_core::epoch::SerdeSignature;
-<span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::api::IModuleFederationApi;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>DummyFederationApi {
-    <span class="kw">async fn </span>sign_message(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;()&gt;;
-
-    <span class="kw">async fn </span>wait_signed(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;SerdeSignature&gt;;
-}
+</span><span class="kw">pub trait </span>DummyFederationApi {}
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; DummyFederationApi <span class="kw">for </span>T
-<span class="kw">where
-    </span>T: IModuleFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
-{
-    <span class="kw">async fn </span>sign_message(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;()&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            SIGN_MESSAGE_ENDPOINT.to_string(),
-            ApiRequestErased::new(message),
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>wait_signed(<span class="kw-2">&amp;</span><span class="self">self</span>, message: String) -&gt; FederationResult&lt;SerdeSignature&gt; {
-        <span class="self">self</span>.request_current_consensus(
-            WAIT_SIGNED_ENDPOINT.to_string(),
-            ApiRequestErased::new(message),
-        )
-        .<span class="kw">await
-    </span>}
+</span><span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized&gt; DummyFederationApi <span class="kw">for </span>T <span class="kw">where
+    </span>T: IModuleFederationApi + MaybeSend + MaybeSync + <span class="lifetime">&#39;static
+</span>{
 }
 </code></pre></div></section></main></body></html>

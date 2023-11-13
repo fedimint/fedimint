@@ -130,16 +130,11 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>config::DummyClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::epoch::SerdeSignatureShare;
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Amount};
 <span class="kw">use </span>secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
@@ -159,10 +154,7 @@
 
 <span class="doccomment">/// Non-transaction items that will be submitted to consensus
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>DummyConsensusItem {
-    <span class="doccomment">/// User&#39;s message sign request signed by a single peer
-    </span>Sign(String, SerdeSignatureShare),
-}
+</span><span class="kw">pub struct </span>DummyConsensusItem;
 
 <span class="doccomment">/// Input for a fedimint transaction
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

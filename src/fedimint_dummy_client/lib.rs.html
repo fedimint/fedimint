@@ -366,22 +366,6 @@
 <a href="#366" id="366">366</a>
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -394,7 +378,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::api::{DynModuleApi, GlobalFederationApi};
+<span class="kw">use </span>fedimint_core::api::GlobalFederationApi;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::{
@@ -412,9 +396,7 @@
 <span class="kw">use </span>secp256k1::{Secp256k1, XOnlyPublicKey};
 <span class="kw">use </span>states::DummyStateMachine;
 <span class="kw">use </span>strum::IntoEnumIterator;
-<span class="kw">use </span>threshold_crypto::{PublicKey, Signature};
 
-<span class="kw">use </span><span class="kw">crate</span>::api::DummyFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::db::DummyClientFundsKeyV0;
 
 <span class="kw">pub mod </span>api;
@@ -427,7 +409,6 @@
     key: KeyPair,
     notifier: ModuleNotifier&lt;DynGlobalClientContext, DummyStateMachine&gt;,
     client_ctx: ClientContext,
-    module_api: DynModuleApi,
     db: Database,
 }
 
@@ -687,22 +668,10 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Request the federation signs a message for us
-    </span><span class="kw">pub async fn </span>fed_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;Signature&gt; {
-        <span class="self">self</span>.module_api.sign_message(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>sig = <span class="self">self</span>.module_api.wait_signed(message.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(sig.<span class="number">0</span>)
-    }
-
     <span class="doccomment">/// Return our account
     </span><span class="kw">pub fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; XOnlyPublicKey {
         <span class="self">self</span>.key.x_only_public_key().<span class="number">0
     </span>}
-
-    <span class="doccomment">/// Return the fed&#39;s public key
-    </span><span class="kw">pub fn </span>fed_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
-        <span class="self">self</span>.cfg.fed_public_key
-    }
 }
 
 <span class="kw">async fn </span>get_funds(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Amount {
@@ -761,7 +730,6 @@
                 .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
-            module_api: args.module_api().clone(),
             db: args.db().clone(),
         })
     }

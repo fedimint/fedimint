@@ -77,20 +77,10 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_config, Amount};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
-<span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, SecretKeyShare};
 
 <span class="kw">use </span><span class="kw">crate</span>::DummyCommonInit;
 
@@ -135,7 +125,6 @@
 </span><span class="kw">pub struct </span>DummyClientConfig {
     <span class="doccomment">/// Accessible to clients
     </span><span class="kw">pub </span>tx_fee: Amount,
-    <span class="kw">pub </span>fed_public_key: PublicKey,
 }
 
 <span class="doccomment">/// Locally unencrypted config unique to each member
@@ -147,18 +136,13 @@
 <span class="doccomment">/// Will be the same for every federation member
 </span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>DummyConfigConsensus {
-    <span class="doccomment">/// Example federation threshold signing key
-    </span><span class="kw">pub </span>public_key_set: PublicKeySet,
     <span class="doccomment">/// Will be the same for all peers
     </span><span class="kw">pub </span>tx_fee: Amount,
 }
 
 <span class="doccomment">/// Will be encrypted and not shared such as private key material
 </span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>DummyConfigPrivate {
-    <span class="doccomment">/// Example private key share for a single member
-    </span><span class="kw">pub </span>private_key_share: SerdeSecret&lt;SecretKeyShare&gt;,
-}
+</span><span class="kw">pub struct </span>DummyConfigPrivate;
 
 <span class="comment">// Wire together the configs for this module
 </span><span class="macro">plugin_types_trait_impl_config!</span>(
