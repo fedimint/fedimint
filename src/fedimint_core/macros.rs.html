@@ -659,6 +659,28 @@
 <a href="#659" id="659">659</a>
 <a href="#660" id="660">660</a>
 <a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Define &quot;dyn newtype&quot; (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
@@ -1219,13 +1241,15 @@
 /// `FederationServer` module.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules! </span>plugin_types_trait_impl_common {
-    (<span class="macro-nonterminal">$types</span>:ty, <span class="macro-nonterminal">$client_config</span>:ty, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty) =&gt; {
+    (<span class="macro-nonterminal">$types</span>:ty, <span class="macro-nonterminal">$client_config</span>:ty, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty, <span class="macro-nonterminal">$input_error</span>:ty, <span class="macro-nonterminal">$output_error</span>:ty) =&gt; {
         <span class="kw">impl </span>fedimint_core::module::ModuleCommon <span class="kw">for </span><span class="macro-nonterminal">$types </span>{
             <span class="kw">type </span>ClientConfig = <span class="macro-nonterminal">$client_config</span>;
             <span class="kw">type </span>Input = <span class="macro-nonterminal">$input</span>;
             <span class="kw">type </span>Output = <span class="macro-nonterminal">$output</span>;
             <span class="kw">type </span>OutputOutcome = <span class="macro-nonterminal">$outcome</span>;
             <span class="kw">type </span>ConsensusItem = <span class="macro-nonterminal">$ci</span>;
+            <span class="kw">type </span>InputError = <span class="macro-nonterminal">$input_error</span>;
+            <span class="kw">type </span>OutputError = <span class="macro-nonterminal">$output_error</span>;
         }
 
         <span class="kw">impl </span>fedimint_core::core::ClientConfig <span class="kw">for </span><span class="macro-nonterminal">$client_config </span>{}
@@ -1275,6 +1299,26 @@
 
             <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
                 fedimint_core::core::DynModuleConsensusItem::from_typed(instance_id, <span class="self">self</span>)
+            }
+        }
+
+        <span class="kw">impl </span>fedimint_core::core::InputError <span class="kw">for </span><span class="macro-nonterminal">$input_error </span>{}
+
+        <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$input_error </span>{
+            <span class="kw">type </span>DynType = fedimint_core::core::DynInputError;
+
+            <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+                fedimint_core::core::DynInputError::from_typed(instance_id, <span class="self">self</span>)
+            }
+        }
+
+        <span class="kw">impl </span>fedimint_core::core::OutputError <span class="kw">for </span><span class="macro-nonterminal">$output_error </span>{}
+
+        <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$output_error </span>{
+            <span class="kw">type </span>DynType = fedimint_core::core::DynOutputError;
+
+            <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+                fedimint_core::core::DynOutputError::from_typed(instance_id, <span class="self">self</span>)
             }
         }
     };

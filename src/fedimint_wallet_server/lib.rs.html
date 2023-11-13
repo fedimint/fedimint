@@ -1975,9 +1975,6 @@
 <a href="#1975" id="1975">1975</a>
 <a href="#1976" id="1976">1976</a>
 <a href="#1977" id="1977">1977</a>
-<a href="#1978" id="1978">1978</a>
-<a href="#1979" id="1979">1979</a>
-<a href="#1980" id="1980">1980</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2001,7 +1998,7 @@
 <span class="kw">use </span>common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, PendingTransaction,
     ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
-    WalletConsensusItem, WalletError, WalletInput, WalletModuleTypes, WalletOutput,
+    WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes, WalletOutput,
     WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -2020,9 +2017,9 @@
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
-    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -2043,7 +2040,7 @@
 };
 <span class="kw">use </span>fedimint_wallet_common::keys::CompressedPublicKey;
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
-<span class="kw">use </span>fedimint_wallet_common::Rbf;
+<span class="kw">use </span>fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
@@ -2463,15 +2460,14 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>WalletInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, WalletInputError&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.block_is_known(dbtx, input.proof_block()).<span class="kw">await </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::UnknownPegInProofBlock(input.proof_block()))
-                .into_module_error_other();
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::UnknownPegInProofBlock(
+                input.proof_block(),
+            ));
         }
 
-        input
-            .verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.peg_in_descriptor)
-            .into_module_error_other()<span class="question-mark">?</span>;
+        input.verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.consensus.peg_in_descriptor)<span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(outpoint = %input.outpoint(), <span class="string">&quot;Claiming peg-in&quot;</span>);
 
@@ -2486,7 +2482,7 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegInAlreadyClaimed).into_module_error_other();
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletInputError::PegInAlreadyClaimed);
         }
 
         <span class="prelude-val">Ok</span>(InputMeta {
@@ -2503,19 +2499,15 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>WalletOutput,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, WalletOutputError&gt; {
         <span class="kw">let </span>change_tweak = <span class="self">self</span>.consensus_nonce(dbtx).<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self
-            </span>.create_peg_out_tx(dbtx, output, <span class="kw-2">&amp;</span>change_tweak)
-            .<span class="kw">await
-            </span>.into_module_error_other()<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self</span>.create_peg_out_tx(dbtx, output, <span class="kw-2">&amp;</span>change_tweak).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>fee_rate = <span class="self">self</span>.consensus_fee_rate(dbtx).<span class="kw">await</span>;
 
         <span class="self">self</span>.offline_wallet()
-            .validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)
-            .into_module_error_other()<span class="question-mark">?</span>;
+            .validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)<span class="question-mark">?</span>;
 
         <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
 
@@ -2693,7 +2685,7 @@
         bitcoind: DynBitcoindRpc,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         our_peer_id: PeerId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
         <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind.clone();
         <span class="kw">let </span>broadcaster_db = db.clone();
         task_group
@@ -2707,9 +2699,9 @@
         <span class="kw">let </span>bitcoind_net = bitcoind_rpc
             .get_network()
             .<span class="kw">await
-            </span>.map_err(WalletError::RpcError)<span class="question-mark">?</span>;
+            </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>;
         <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
                 bitcoind_net,
             ));
@@ -3067,7 +3059,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>WalletOutput,
         change_tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletOutputError&gt; {
         <span class="kw">match </span>output {
             WalletOutput::PegOut(peg_out) =&gt; <span class="self">self</span>.offline_wallet().create_tx(
                 peg_out.amount,
@@ -3082,7 +3074,7 @@
                 <span class="kw">let </span>tx = dbtx
                     .get_value(<span class="kw-2">&amp;</span>PendingTransactionKey(rbf.txid))
                     .<span class="kw">await
-                    </span>.ok_or(WalletError::RbfTransactionIdNotFound)<span class="question-mark">?</span>;
+                    </span>.ok_or(WalletOutputError::RbfTransactionIdNotFound)<span class="question-mark">?</span>;
 
                 <span class="self">self</span>.offline_wallet().create_tx(
                     tx.peg_out_amount,
@@ -3175,10 +3167,10 @@
         output: <span class="kw-2">&amp;</span>WalletOutput,
         consensus_fee_rate: Feerate,
         network: Network,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), WalletError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), WalletOutputError&gt; {
         <span class="kw">if let </span>WalletOutput::PegOut(peg_out) = output {
             <span class="kw">if </span>!peg_out.recipient.is_valid_for_network(network) {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
+                <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(
                     network,
                     peg_out.recipient.network,
                 ));
@@ -3187,12 +3179,12 @@
 
         <span class="comment">// Validate the tx amount is over the dust limit
         </span><span class="kw">if </span>tx.peg_out_amount &lt; tx.destination.dust_value() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegOutUnderDustLimit);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::PegOutUnderDustLimit);
         }
 
         <span class="comment">// Validate tx fee rate is above the consensus fee rate
         </span><span class="kw">if </span>tx.fees.fee_rate &lt; consensus_fee_rate {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegOutFeeBelowConsensus(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::PegOutFeeBelowConsensus(
                 tx.fees.fee_rate,
                 consensus_fee_rate,
             ));
@@ -3205,12 +3197,12 @@
             WalletOutput::Rbf(rbf) =&gt; rbf.fees,
         };
         <span class="kw">if </span>fees.fee_rate.sats_per_kvb &lt; DEFAULT_MIN_RELAY_TX_FEE <span class="kw">as </span>u64 {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::BelowMinRelayFee);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::BelowMinRelayFee);
         }
 
         <span class="comment">// Validate fees weight matches the actual weight
         </span><span class="kw">if </span>fees.total_weight != tx.fees.total_weight {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::TxWeightIncorrect(
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::TxWeightIncorrect(
                 fees.total_weight,
                 tx.fees.total_weight,
             ));
@@ -3238,7 +3230,7 @@
         <span class="kw-2">mut </span>fee_rate: Feerate,
         change_tweak: <span class="kw-2">&amp;</span>[u8],
         rbf: <span class="prelude-ty">Option</span>&lt;Rbf&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;UnsignedTransaction, WalletOutputError&gt; {
         <span class="comment">// Add the rbf fees to the existing tx fees
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(rbf) = <span class="kw-2">&amp;</span>rbf {
             fee_rate.sats_per_kvb += rbf.fees.fee_rate.sats_per_kvb;
@@ -3288,7 +3280,7 @@
                     fees = fee_rate.calculate_fee(total_weight);
                     selected_utxos.push((utxo_key, utxo));
                 }
-                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::NotEnoughSpendableUTXO), <span class="comment">// Not enough UTXOs
+                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::NotEnoughSpendableUTXO), <span class="comment">// Not enough UTXOs
             </span>}
         }
 
@@ -3506,7 +3498,9 @@
     <span class="kw">use </span>miniscript::descriptor::Wsh;
 
     <span class="kw">use </span><span class="kw">crate</span>::common::PegInDescriptor;
-    <span class="kw">use crate</span>::{CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletError};
+    <span class="kw">use crate</span>::{
+        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletOutputError,
+    };
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>create_tx_should_validate_amounts() {
@@ -3551,7 +3545,7 @@
             <span class="kw-2">&amp;</span>[],
             <span class="prelude-val">None</span>,
         );
-        <span class="macro">assert_eq!</span>(tx, <span class="prelude-val">Err</span>(WalletError::NotEnoughSpendableUTXO));
+        <span class="macro">assert_eq!</span>(tx, <span class="prelude-val">Err</span>(WalletOutputError::NotEnoughSpendableUTXO));
 
         <span class="comment">// successful tx creation
         </span><span class="kw">let </span><span class="kw-2">mut </span>tx = wallet
@@ -3568,11 +3562,11 @@
 
         <span class="comment">// peg out weight is incorrectly set to 0
         </span><span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, <span class="number">0</span>), fee, Network::Bitcoin);
-        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletError::TxWeightIncorrect(<span class="number">0</span>, weight)));
+        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::TxWeightIncorrect(<span class="number">0</span>, weight)));
 
         <span class="comment">// fee rate set below min relay fee to 0
         </span><span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(<span class="number">0</span>, weight), fee, Bitcoin);
-        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletError::BelowMinRelayFee));
+        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::BelowMinRelayFee));
 
         <span class="comment">// fees are okay
         </span><span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
@@ -3583,7 +3577,7 @@
         <span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(
             res,
-            <span class="prelude-val">Err</span>(WalletError::PegOutFeeBelowConsensus(
+            <span class="prelude-val">Err</span>(WalletOutputError::PegOutFeeBelowConsensus(
                 Feerate { sats_per_kvb: <span class="number">0 </span>},
                 fee
             ))
@@ -3592,7 +3586,7 @@
         <span class="comment">// tx has peg-out amount under dust limit
         </span>tx.peg_out_amount = Amount::ZERO;
         <span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
-        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletError::PegOutUnderDustLimit));
+        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::PegOutUnderDustLimit));
 
         <span class="comment">// tx is invalid for network
         </span><span class="kw">let </span>output = WalletOutput::PegOut(PegOut {
@@ -3601,7 +3595,7 @@
             fees: PegOutFees::new(<span class="number">100</span>, weight),
         });
         <span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>output, fee, Testnet);
-        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletError::WrongNetwork(Testnet, Bitcoin)));
+        <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 
     <span class="kw">fn </span>rbf(sats_per_kvb: u64, total_weight: u64) -&gt; WalletOutput {

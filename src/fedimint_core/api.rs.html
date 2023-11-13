@@ -1230,7 +1230,7 @@
     UnionResponsesSingle,
 };
 <span class="kw">use </span><span class="kw">crate</span>::task;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction};
+<span class="kw">use </span><span class="kw">crate</span>::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
@@ -1521,7 +1521,7 @@
     <span class="kw">async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: Transaction,
-    ) -&gt; FederationResult&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, String&gt;&gt;;
+    ) -&gt; FederationResult&lt;SerdeModuleEncoding&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt;&gt;&gt;;
 
     <span class="kw">async fn </span>await_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1592,7 +1592,7 @@
     </span><span class="kw">async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: Transaction,
-    ) -&gt; FederationResult&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, String&gt;&gt; {
+    ) -&gt; FederationResult&lt;SerdeModuleEncoding&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt;&gt;&gt; {
         <span class="self">self</span>.request_current_consensus(
             TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),

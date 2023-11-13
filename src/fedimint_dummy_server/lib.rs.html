@@ -333,9 +333,8 @@
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError, ModuleConsensusVersion,
-    ModuleError, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
+    ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, OutPoint, PeerId, ServerModule};
@@ -344,8 +343,9 @@
     DummyGenParams,
 };
 <span class="kw">use </span>fedimint_dummy_common::{
-    broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyError,
-    DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, CONSENSUS_VERSION,
+    broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyInput,
+    DummyInputError, DummyModuleTypes, DummyOutput, DummyOutputError, DummyOutputOutcome,
+    CONSENSUS_VERSION,
 };
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -532,7 +532,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>DummyInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, DummyInputError&gt; {
         <span class="kw">let </span>current_funds = dbtx
             .get_value(<span class="kw-2">&amp;</span>DummyFundsKeyV1(input.account))
             .<span class="kw">await
@@ -543,7 +543,7 @@
             &amp;&amp; fed_public_key() != input.account
             &amp;&amp; broken_fed_public_key() != input.account
         {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(DummyError::NotEnoughFunds).into_module_error_other();
+            <span class="kw">return </span><span class="prelude-val">Err</span>(DummyInputError::NotEnoughFunds);
         }
 
         <span class="comment">// Subtract funds from normal user, or print funds for the fed
@@ -574,7 +574,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>DummyOutput,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, DummyOutputError&gt; {
         <span class="comment">// Add output funds to the user&#39;s account
         </span><span class="kw">let </span>current_funds = dbtx.get_value(<span class="kw-2">&amp;</span>DummyFundsKeyV1(output.account)).<span class="kw">await</span>;
         <span class="kw">let </span>updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;

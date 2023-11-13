@@ -941,33 +941,6 @@
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
-<a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a>
-<a href="#949" id="949">949</a>
-<a href="#950" id="950">950</a>
-<a href="#951" id="951">951</a>
-<a href="#952" id="952">952</a>
-<a href="#953" id="953">953</a>
-<a href="#954" id="954">954</a>
-<a href="#955" id="955">955</a>
-<a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a>
-<a href="#958" id="958">958</a>
-<a href="#959" id="959">959</a>
-<a href="#960" id="960">960</a>
-<a href="#961" id="961">961</a>
-<a href="#962" id="962">962</a>
-<a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
-<a href="#965" id="965">965</a>
-<a href="#966" id="966">966</a>
-<a href="#967" id="967">967</a>
-<a href="#968" id="968">968</a>
-<a href="#969" id="969">969</a>
-<a href="#970" id="970">970</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>registry;
 
@@ -983,7 +956,6 @@
 <span class="kw">use </span>jsonrpsee_core::JsonValue;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::instrument;
 
 <span class="comment">// TODO: Make this module public and remove the wildcard `pub use` below
@@ -994,8 +966,8 @@
     ServerModuleConsensusConfig,
 };
 <span class="kw">use </span><span class="kw">crate</span>::core::{
-    ClientConfig, Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId,
-    ModuleKind, Output, OutputOutcome,
+    ClientConfig, Decoder, DecoderBuilder, Input, InputError, ModuleConsensusItem,
+    ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
@@ -1356,37 +1328,6 @@
     }
 }
 
-<span class="attr">#[derive(Error, Debug)]
-</span><span class="kw">pub enum </span>ModuleError {
-    <span class="attr">#[error(transparent)]
-    </span>Other(<span class="attr">#[from] </span>anyhow::Error),
-}
-
-<span class="doccomment">/// Extension trait with a function to map `Result`s used by modules to
-/// `ModuleError`
-///
-/// Currently each module defined it&#39;s own `enum XyzError { ... }` and is not
-/// using `anyhow::Error`. For `?` to work seamlessly two conversion would have
-/// to be made: `enum-Error -&gt; anyhow::Error -&gt; enum-Error`, while `Into`/`From`
-/// can only do one.
-///
-/// To avoid the boilerplate, this trait defines an easy conversion method.
-</span><span class="kw">pub trait </span>IntoModuleError {
-    <span class="kw">type </span>Target;
-    <span class="kw">fn </span>into_module_error_other(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Target;
-}
-
-<span class="kw">impl</span>&lt;O, E&gt; IntoModuleError <span class="kw">for </span><span class="prelude-ty">Result</span>&lt;O, E&gt;
-<span class="kw">where
-    </span>E: std::error::Error + Send + Sync + <span class="lifetime">&#39;static</span>,
-{
-    <span class="kw">type </span>Target = <span class="prelude-ty">Result</span>&lt;O, ModuleError&gt;;
-
-    <span class="kw">fn </span>into_module_error_other(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Target {
-        <span class="self">self</span>.map_err(|e| ModuleError::Other(e.into()))
-    }
-}
-
 <span class="doccomment">/// Operations common to Server and Client side module gen dyn newtypes
 ///
 /// Due to conflict of `impl Trait for T` for both `ServerModuleInit` and
@@ -1733,6 +1674,8 @@
     <span class="kw">type </span>Output: Output;
     <span class="kw">type </span>OutputOutcome: OutputOutcome;
     <span class="kw">type </span>ConsensusItem: ModuleConsensusItem;
+    <span class="kw">type </span>InputError: InputError;
+    <span class="kw">type </span>OutputError: OutputError;
 
     <span class="kw">fn </span>decoder_builder() -&gt; DecoderBuilder {
         <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder();
@@ -1741,6 +1684,9 @@
         decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::Output&gt;();
         decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::OutputOutcome&gt;();
         decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::ConsensusItem&gt;();
+        decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::InputError&gt;();
+        decoder_builder.with_decodable_type::&lt;<span class="self">Self</span>::OutputError&gt;();
+
         decoder_builder
     }
 
@@ -1794,7 +1740,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::InputError&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
@@ -1809,7 +1755,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputError&gt;;
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this
     /// might contain data needed by the client to access funds or give an

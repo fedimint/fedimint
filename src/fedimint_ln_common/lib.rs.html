@@ -489,6 +489,12 @@
 <a href="#489" id="489">489</a>
 <a href="#490" id="490">490</a>
 <a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -775,7 +781,9 @@
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,
-    LightningConsensusItem
+    LightningConsensusItem,
+    LightningInputError,
+    LightningOutputError
 );
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -934,8 +942,8 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Error, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>LightningError {
+<span class="attr">#[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
+</span><span class="kw">pub enum </span>LightningInputError {
     <span class="attr">#[error(<span class="string">&quot;The the input contract {0} does not exist&quot;</span>)]
     </span>UnknownContract(ContractId),
     <span class="attr">#[error(<span class="string">&quot;The input contract has too little funds, got {0}, input spends {1}&quot;</span>)]
@@ -946,15 +954,19 @@
     </span>InvalidPreimage,
     <span class="attr">#[error(<span class="string">&quot;Incoming contract not ready to be spent yet, decryption in progress&quot;</span>)]
     </span>ContractNotReady,
+}
+
+<span class="attr">#[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
+</span><span class="kw">pub enum </span>LightningOutputError {
+    <span class="attr">#[error(<span class="string">&quot;The the input contract {0} does not exist&quot;</span>)]
+    </span>UnknownContract(ContractId),
     <span class="attr">#[error(<span class="string">&quot;Output contract value may not be zero unless it&#39;s an offer output&quot;</span>)]
     </span>ZeroOutput,
     <span class="attr">#[error(<span class="string">&quot;Offer contains invalid threshold-encrypted data&quot;</span>)]
     </span>InvalidEncryptedPreimage,
     <span class="attr">#[error(<span class="string">&quot;Offer contains a ciphertext that has already been used&quot;</span>)]
     </span>DuplicateEncryptedPreimage,
-    <span class="attr">#[error(
-        <span class="string">&quot;The incoming LN account requires more funding according to the offer (need {0} got {1})&quot;
-    </span>)]
+    <span class="attr">#[error(<span class="string">&quot;The incoming LN account requires more funding (need {0} got {1})&quot;</span>)]
     </span>InsufficientIncomingFunding(Amount, Amount),
     <span class="attr">#[error(<span class="string">&quot;No offer found for payment hash {0}&quot;</span>)]
     </span>NoOffer(secp256k1::hashes::sha256::Hash),

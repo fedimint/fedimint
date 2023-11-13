@@ -534,6 +534,7 @@
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -569,7 +570,7 @@
     SupportedApiVersionsSummary,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction};
+<span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::StreamExt;
@@ -585,8 +586,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
-
-<span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;DynOutputOutcome&gt;;
 
 <span class="doccomment">/// A state that has context for the API, passed to each rpc handler callback
 </span><span class="attr">#[derive(Clone)]
@@ -636,7 +635,7 @@
     </span><span class="kw">pub async fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         transaction: Transaction,
-    ) -&gt; anyhow::Result&lt;TransactionId&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt; {
         <span class="kw">let </span>txid = transaction.tx_hash();
 
         <span class="macro">debug!</span>(%txid, <span class="string">&quot;Received mint transaction&quot;</span>);
@@ -678,7 +677,10 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>await_output_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;SerdeOutputOutcome&gt; {
+    <span class="kw">pub async fn </span>await_output_outcome(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        outpoint: OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SerdeModuleEncoding&lt;DynOutputOutcome&gt;&gt; {
         <span class="kw">let </span>(module_ids, <span class="kw-2">mut </span>dbtx) = <span class="self">self</span>.await_transaction(outpoint.txid).<span class="kw">await</span>;
 
         <span class="kw">let </span>module_id = module_ids
@@ -880,14 +882,14 @@
         },
         <span class="macro">api_endpoint! </span>{
             TRANSACTION_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, serde_transaction: SerdeTransaction| -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId, String&gt; {
-                <span class="kw">let </span>transaction = serde_transaction
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, transaction: SerdeTransaction| -&gt; SerdeModuleEncoding&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt;&gt; {
+                <span class="kw">let </span>transaction = transaction
                     .try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry())
                     .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
                 <span class="comment">// we return an inner error if and only if the submitted transaction is
                 // invalid and will be rejected if we were to submit it to consensus
-                </span><span class="prelude-val">Ok</span>(fedimint.submit_transaction(transaction).<span class="kw">await</span>.map_err(|e| e.to_string()))
+                </span><span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.submit_transaction(transaction).<span class="kw">await</span>).into())
             }
         },
         <span class="macro">api_endpoint! </span>{
@@ -904,7 +906,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, outpoint: OutPoint| -&gt; SerdeOutputOutcome {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, outpoint: OutPoint| -&gt; SerdeModuleEncoding&lt;DynOutputOutcome&gt; {
                 <span class="kw">let </span>outcome = fedimint
                     .await_output_outcome(outpoint)
                     .<span class="kw">await

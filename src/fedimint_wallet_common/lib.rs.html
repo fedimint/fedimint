@@ -331,7 +331,6 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
@@ -605,23 +604,33 @@
     WalletInput,
     WalletOutput,
     WalletOutputOutcome,
-    WalletConsensusItem
+    WalletConsensusItem,
+    WalletInputError,
+    WalletOutputError
 );
 
-<span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>WalletError {
+<span class="attr">#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>WalletCreationError {
     <span class="attr">#[error(<span class="string">&quot;Connected bitcoind is on wrong network, expected {0}, got {1}&quot;</span>)]
     </span>WrongNetwork(Network, Network),
     <span class="attr">#[error(<span class="string">&quot;Error querying bitcoind: {0}&quot;</span>)]
-    </span>RpcError(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">&quot;Unknown bitcoin network: {0}&quot;</span>)]
-    </span>UnknownNetwork(String),
+    </span>RpcError(String),
+}
+
+<span class="attr">#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>WalletInputError {
     <span class="attr">#[error(<span class="string">&quot;Unknown block hash in peg-in proof: {0}&quot;</span>)]
     </span>UnknownPegInProofBlock(BlockHash),
     <span class="attr">#[error(<span class="string">&quot;Invalid peg-in proof: {0}&quot;</span>)]
     </span>PegInProofError(<span class="attr">#[from] </span>PegInProofError),
     <span class="attr">#[error(<span class="string">&quot;The peg-in was already claimed&quot;</span>)]
     </span>PegInAlreadyClaimed,
+}
+
+<span class="attr">#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
+</span><span class="kw">pub enum </span>WalletOutputError {
+    <span class="attr">#[error(<span class="string">&quot;Connected bitcoind is on wrong network, expected {0}, got {1}&quot;</span>)]
+    </span>WrongNetwork(Network, Network),
     <span class="attr">#[error(<span class="string">&quot;Peg-out fee rate {0:?} is set below consensus {1:?}&quot;</span>)]
     </span>PegOutFeeBelowConsensus(Feerate, Feerate),
     <span class="attr">#[error(<span class="string">&quot;Not enough SpendableUTXO&quot;</span>)]
@@ -655,15 +664,4 @@
     <span class="attr">#[error(<span class="string">&quot;Error finalizing PSBT {0:?}&quot;</span>)]
     </span>ErrorFinalizingPsbt(Vec&lt;miniscript::psbt::Error&gt;),
 }
-
-<span class="comment">// FIXME: make tests not require Eq
-</span><span class="doccomment">/// **WARNING**: this is only intended to be used for testing
-</span><span class="kw">impl </span>PartialEq <span class="kw">for </span>WalletError {
-    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
-        <span class="macro">format!</span>(<span class="string">&quot;{self:?}&quot;</span>) == <span class="macro">format!</span>(<span class="string">&quot;{other:?}&quot;</span>)
-    }
-}
-
-<span class="doccomment">/// **WARNING**: this is only intended to be used for testing
-</span><span class="kw">impl </span>Eq <span class="kw">for </span>WalletError {}
 </code></pre></div></section></main></body></html>

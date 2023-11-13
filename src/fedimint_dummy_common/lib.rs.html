@@ -130,6 +130,11 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>config::DummyClientConfig;
@@ -177,12 +182,15 @@
 </span><span class="kw">pub struct </span>DummyOutputOutcome(<span class="kw">pub </span>Amount, <span class="kw">pub </span>XOnlyPublicKey);
 
 <span class="doccomment">/// Errors that might be returned by the server
-</span><span class="comment">// TODO: Move to server lib?
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
-</span><span class="kw">pub enum </span>DummyError {
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>DummyInputError {
     <span class="attr">#[error(<span class="string">&quot;Not enough funds&quot;</span>)]
     </span>NotEnoughFunds,
 }
+
+<span class="doccomment">/// Errors that might be returned by the server
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>DummyOutputError {}
 
 <span class="doccomment">/// Contains the types defined above
 </span><span class="kw">pub struct </span>DummyModuleTypes;
@@ -194,7 +202,9 @@
     DummyInput,
     DummyOutput,
     DummyOutputOutcome,
-    DummyConsensusItem
+    DummyConsensusItem,
+    DummyInputError,
+    DummyOutputError
 );
 
 <span class="attr">#[derive(Debug)]

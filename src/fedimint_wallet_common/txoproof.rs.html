@@ -287,8 +287,8 @@
 
         <span class="kw">if </span>transaction.output.get(output_idx <span class="kw">as </span>usize).is_none() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(PegInProofError::OutputIndexOutOfRange(
-                output_idx <span class="kw">as </span>usize,
-                transaction.output.len(),
+                output_idx <span class="kw">as </span>u64,
+                transaction.output.len() <span class="kw">as </span>u64,
             ));
         }
 
@@ -421,14 +421,14 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>PegInProofError {
     <span class="attr">#[error(<span class="string">&quot;Supplied transaction is not included in proof&quot;</span>)]
     </span>TransactionNotInProof,
     <span class="attr">#[error(<span class="string">&quot;Supplied transaction has too many outputs&quot;</span>)]
     </span>TooManyTransactionOutputs,
     <span class="attr">#[error(<span class="string">&quot;The output with index {0} referred to does not exist (tx has {1} outputs)&quot;</span>)]
-    </span>OutputIndexOutOfRange(usize, usize),
+    </span>OutputIndexOutOfRange(u64, u64),
     <span class="attr">#[error(<span class="string">&quot;The expected script given the tweak did not match the actual script&quot;</span>)]
     </span>ScriptDoesNotMatch,
 }

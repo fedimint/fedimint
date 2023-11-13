@@ -729,6 +729,9 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1294,11 +1297,12 @@
             .get_value(<span class="kw-2">&amp;</span>AcceptedItemKey(item_index.to_owned()))
             .<span class="kw">await
         </span>{
-            <span class="kw">if </span>accepted_item.item == item &amp;&amp; accepted_item.peer == peer {
+            <span class="comment">// this branch is only taken if we crashed mid session
+            </span><span class="kw">if </span>accepted_item.item == item &amp;&amp; accepted_item.peer == peer {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
 
-            <span class="macro">bail!</span>(<span class="string">&quot;Consensus item was discarded before recovery&quot;</span>);
+            <span class="macro">bail!</span>(<span class="string">&quot;Item was discarded before we recovered&quot;</span>);
         }
 
         <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx, item.clone(), peer)
@@ -1342,12 +1346,12 @@
 
         <span class="kw">match </span>consensus_item {
             ConsensusItem::Module(module_item) =&gt; {
-                <span class="kw">let </span>moduletx =
-                    <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_item.module_instance_id());
+                <span class="kw">let </span>instance_id = module_item.module_instance_id();
+                <span class="kw">let </span>module_dbtx = <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(instance_id);
 
                 <span class="self">self</span>.modules
-                    .get_expect(module_item.module_instance_id())
-                    .process_consensus_item(moduletx, module_item, peer_id)
+                    .get_expect(instance_id)
+                    .process_consensus_item(module_dbtx, module_item, peer_id)
                     .<span class="kw">await
             </span>}
             ConsensusItem::Transaction(transaction) =&gt; {
@@ -1356,7 +1360,7 @@
                     .<span class="kw">await
                     </span>.is_some()
                 {
-                    <span class="macro">bail!</span>(<span class="string">&quot;The transaction is already accepted&quot;</span>);
+                    <span class="macro">bail!</span>(<span class="string">&quot;Transaction is already accepted&quot;</span>);
                 }
 
                 <span class="kw">let </span>txid = transaction.tx_hash();
@@ -1366,7 +1370,9 @@
                     .map(|output| output.module_instance_id())
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-                process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), dbtx, transaction).<span class="kw">await</span><span class="question-mark">?</span>;
+                process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), dbtx, transaction)
+                    .<span class="kw">await
+                    </span>.map_err(|error| <span class="macro">anyhow!</span>(error.to_string()))<span class="question-mark">?</span>;
 
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid), <span class="kw-2">&amp;</span>modules_ids)
                     .<span class="kw">await</span>;

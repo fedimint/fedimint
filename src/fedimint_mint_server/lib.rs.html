@@ -878,8 +878,6 @@
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -895,9 +893,9 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
-    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, ApiError, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{
@@ -916,8 +914,8 @@
 };
 <span class="kw">pub use </span>fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 <span class="kw">use </span>fedimint_mint_common::{
-    MintCommonInit, MintConsensusItem, MintError, MintInput, MintModuleTypes, MintOutput,
-    MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
+    MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
+    MintOutputError, MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::{scalar, PeerHandleOps};
 <span class="kw">use </span>futures::StreamExt;
@@ -1202,15 +1200,14 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>MintInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, ModuleError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, MintInputError&gt; {
         <span class="kw">let </span>amount_key = <span class="self">self
             </span>.pub_key
             .get(<span class="kw-2">&amp;</span>input.amount)
-            .ok_or(MintError::InvalidAmountTier(input.amount))
-            .into_module_error_other()<span class="question-mark">?</span>;
+            .ok_or(MintInputError::InvalidAmountTier(input.amount))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>!input.note.verify(<span class="kw-2">*</span>amount_key) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature).into_module_error_other();
+            <span class="kw">return </span><span class="prelude-val">Err</span>(MintInputError::InvalidSignature);
         }
 
         <span class="kw">if </span>dbtx
@@ -1218,7 +1215,7 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin).into_module_error_other();
+            <span class="kw">return </span><span class="prelude-val">Err</span>(MintInputError::SpentCoin);
         }
 
         dbtx.insert_new_entry(
@@ -1241,12 +1238,11 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintOutput,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, ModuleError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, MintOutputError&gt; {
         <span class="kw">let </span>amount_key = <span class="self">self
             </span>.sec_key
             .get(output.amount)
-            .ok_or(MintError::InvalidAmountTier(output.amount))
-            .into_module_error_other()<span class="question-mark">?</span>;
+            .ok_or(MintOutputError::InvalidAmountTier(output.amount))<span class="question-mark">?</span>;
 
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>MintOutputOutcomeKey(out_point),

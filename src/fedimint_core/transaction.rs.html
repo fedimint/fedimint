@@ -179,6 +179,12 @@
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
 <a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
@@ -189,6 +195,8 @@
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 <span class="kw">use </span>thiserror::Error;
+
+<span class="kw">use </span><span class="kw">crate</span>::core::{DynInputError, DynOutputError};
 
 <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
 ///
@@ -342,7 +350,7 @@
     session.partial_sig_agg(<span class="kw-2">&amp;</span>partial_sigs)
 }
 
-<span class="attr">#[derive(Debug, Error)]
+<span class="attr">#[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>TransactionError {
     <span class="attr">#[error(<span class="string">&quot;The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})&quot;</span>)]
     </span>UnbalancedTransaction {
@@ -359,5 +367,9 @@
     },
     <span class="attr">#[error(<span class="string">&quot;The transaction did not have a signature although there were inputs to be signed&quot;</span>)]
     </span>MissingSignature,
+    <span class="attr">#[error(<span class="string">&quot;The transaction had an invalid input&quot;</span>)]
+    </span>Input(DynInputError),
+    <span class="attr">#[error(<span class="string">&quot;The transaction had an invalid output&quot;</span>)]
+    </span>Output(DynOutputError),
 }
 </code></pre></div></section></main></body></html>
