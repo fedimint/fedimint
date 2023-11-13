@@ -21,7 +21,7 @@ use common::db::{
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, PendingTransaction,
     ProcessPegOutSigError, SpendableUTXO, UnsignedTransaction, WalletCommonInit,
-    WalletConsensusItem, WalletError, WalletInput, WalletModuleTypes, WalletOutput,
+    WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes, WalletOutput,
     WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -40,9 +40,9 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, IntoModuleError,
-    ModuleConsensusVersion, ModuleError, ModuleInit, PeerHandle, ServerModuleInit,
-    ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint, ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+    PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
+    TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
@@ -63,7 +63,7 @@ use fedimint_wallet_common::db::{
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
-use fedimint_wallet_common::Rbf;
+use fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError};
 use futures::StreamExt;
 use miniscript::psbt::PsbtExt;
 use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
@@ -483,15 +483,14 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b WalletInput,
-    ) -> Result<InputMeta, ModuleError> {
+    ) -> Result<InputMeta, WalletInputError> {
         if !self.block_is_known(dbtx, input.proof_block()).await {
-            return Err(WalletError::UnknownPegInProofBlock(input.proof_block()))
-                .into_module_error_other();
+            return Err(WalletInputError::UnknownPegInProofBlock(
+                input.proof_block(),
+            ));
         }
 
-        input
-            .verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)
-            .into_module_error_other()?;
+        input.verify(&self.secp, &self.cfg.consensus.peg_in_descriptor)?;
 
         debug!(outpoint = %input.outpoint(), "Claiming peg-in");
 
@@ -506,7 +505,7 @@ impl ServerModule for Wallet {
             .await
             .is_some()
         {
-            return Err(WalletError::PegInAlreadyClaimed).into_module_error_other();
+            return Err(WalletInputError::PegInAlreadyClaimed);
         }
 
         Ok(InputMeta {
@@ -523,19 +522,15 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a WalletOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+    ) -> Result<TransactionItemAmount, WalletOutputError> {
         let change_tweak = self.consensus_nonce(dbtx).await;
 
-        let mut tx = self
-            .create_peg_out_tx(dbtx, output, &change_tweak)
-            .await
-            .into_module_error_other()?;
+        let mut tx = self.create_peg_out_tx(dbtx, output, &change_tweak).await?;
 
         let fee_rate = self.consensus_fee_rate(dbtx).await;
 
         self.offline_wallet()
-            .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)
-            .into_module_error_other()?;
+            .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)?;
 
         self.offline_wallet().sign_psbt(&mut tx.psbt);
 
@@ -713,7 +708,7 @@ impl Wallet {
         bitcoind: DynBitcoindRpc,
         task_group: &mut TaskGroup,
         our_peer_id: PeerId,
-    ) -> Result<Wallet, WalletError> {
+    ) -> Result<Wallet, WalletCreationError> {
         let broadcaster_bitcoind_rpc = bitcoind.clone();
         let broadcaster_db = db.clone();
         task_group
@@ -727,9 +722,9 @@ impl Wallet {
         let bitcoind_net = bitcoind_rpc
             .get_network()
             .await
-            .map_err(WalletError::RpcError)?;
+            .map_err(|e| WalletCreationError::RpcError(e.to_string()))?;
         if bitcoind_net != cfg.consensus.network {
-            return Err(WalletError::WrongNetwork(
+            return Err(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
                 bitcoind_net,
             ));
@@ -1087,7 +1082,7 @@ impl Wallet {
         dbtx: &mut DatabaseTransactionRef<'_>,
         output: &WalletOutput,
         change_tweak: &[u8; 32],
-    ) -> Result<UnsignedTransaction, WalletError> {
+    ) -> Result<UnsignedTransaction, WalletOutputError> {
         match output {
             WalletOutput::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
@@ -1102,7 +1097,7 @@ impl Wallet {
                 let tx = dbtx
                     .get_value(&PendingTransactionKey(rbf.txid))
                     .await
-                    .ok_or(WalletError::RbfTransactionIdNotFound)?;
+                    .ok_or(WalletOutputError::RbfTransactionIdNotFound)?;
 
                 self.offline_wallet().create_tx(
                     tx.peg_out_amount,
@@ -1195,10 +1190,10 @@ impl<'a> StatelessWallet<'a> {
         output: &WalletOutput,
         consensus_fee_rate: Feerate,
         network: Network,
-    ) -> Result<(), WalletError> {
+    ) -> Result<(), WalletOutputError> {
         if let WalletOutput::PegOut(peg_out) = output {
             if !peg_out.recipient.is_valid_for_network(network) {
-                return Err(WalletError::WrongNetwork(
+                return Err(WalletOutputError::WrongNetwork(
                     network,
                     peg_out.recipient.network,
                 ));
@@ -1207,12 +1202,12 @@ impl<'a> StatelessWallet<'a> {
 
         // Validate the tx amount is over the dust limit
         if tx.peg_out_amount < tx.destination.dust_value() {
-            return Err(WalletError::PegOutUnderDustLimit);
+            return Err(WalletOutputError::PegOutUnderDustLimit);
         }
 
         // Validate tx fee rate is above the consensus fee rate
         if tx.fees.fee_rate < consensus_fee_rate {
-            return Err(WalletError::PegOutFeeBelowConsensus(
+            return Err(WalletOutputError::PegOutFeeBelowConsensus(
                 tx.fees.fee_rate,
                 consensus_fee_rate,
             ));
@@ -1225,12 +1220,12 @@ impl<'a> StatelessWallet<'a> {
             WalletOutput::Rbf(rbf) => rbf.fees,
         };
         if fees.fee_rate.sats_per_kvb < DEFAULT_MIN_RELAY_TX_FEE as u64 {
-            return Err(WalletError::BelowMinRelayFee);
+            return Err(WalletOutputError::BelowMinRelayFee);
         }
 
         // Validate fees weight matches the actual weight
         if fees.total_weight != tx.fees.total_weight {
-            return Err(WalletError::TxWeightIncorrect(
+            return Err(WalletOutputError::TxWeightIncorrect(
                 fees.total_weight,
                 tx.fees.total_weight,
             ));
@@ -1258,7 +1253,7 @@ impl<'a> StatelessWallet<'a> {
         mut fee_rate: Feerate,
         change_tweak: &[u8],
         rbf: Option<Rbf>,
-    ) -> Result<UnsignedTransaction, WalletError> {
+    ) -> Result<UnsignedTransaction, WalletOutputError> {
         // Add the rbf fees to the existing tx fees
         if let Some(rbf) = &rbf {
             fee_rate.sats_per_kvb += rbf.fees.fee_rate.sats_per_kvb;
@@ -1308,7 +1303,7 @@ impl<'a> StatelessWallet<'a> {
                     fees = fee_rate.calculate_fee(total_weight);
                     selected_utxos.push((utxo_key, utxo));
                 }
-                _ => return Err(WalletError::NotEnoughSpendableUTXO), // Not enough UTXOs
+                _ => return Err(WalletOutputError::NotEnoughSpendableUTXO), // Not enough UTXOs
             }
         }
 
@@ -1526,7 +1521,9 @@ mod tests {
     use miniscript::descriptor::Wsh;
 
     use crate::common::PegInDescriptor;
-    use crate::{CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletError};
+    use crate::{
+        CompressedPublicKey, OsRng, SpendableUTXO, StatelessWallet, UTXOKey, WalletOutputError,
+    };
 
     #[test]
     fn create_tx_should_validate_amounts() {
@@ -1571,7 +1568,7 @@ mod tests {
             &[],
             None,
         );
-        assert_eq!(tx, Err(WalletError::NotEnoughSpendableUTXO));
+        assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
 
         // successful tx creation
         let mut tx = wallet
@@ -1588,11 +1585,11 @@ mod tests {
 
         // peg out weight is incorrectly set to 0
         let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, 0), fee, Network::Bitcoin);
-        assert_eq!(res, Err(WalletError::TxWeightIncorrect(0, weight)));
+        assert_eq!(res, Err(WalletOutputError::TxWeightIncorrect(0, weight)));
 
         // fee rate set below min relay fee to 0
         let res = wallet.validate_tx(&tx, &rbf(0, weight), fee, Bitcoin);
-        assert_eq!(res, Err(WalletError::BelowMinRelayFee));
+        assert_eq!(res, Err(WalletOutputError::BelowMinRelayFee));
 
         // fees are okay
         let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
@@ -1603,7 +1600,7 @@ mod tests {
         let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         assert_eq!(
             res,
-            Err(WalletError::PegOutFeeBelowConsensus(
+            Err(WalletOutputError::PegOutFeeBelowConsensus(
                 Feerate { sats_per_kvb: 0 },
                 fee
             ))
@@ -1612,7 +1609,7 @@ mod tests {
         // tx has peg-out amount under dust limit
         tx.peg_out_amount = Amount::ZERO;
         let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
-        assert_eq!(res, Err(WalletError::PegOutUnderDustLimit));
+        assert_eq!(res, Err(WalletOutputError::PegOutUnderDustLimit));
 
         // tx is invalid for network
         let output = WalletOutput::PegOut(PegOut {
@@ -1621,7 +1618,7 @@ mod tests {
             fees: PegOutFees::new(100, weight),
         });
         let res = wallet.validate_tx(&tx, &output, fee, Testnet);
-        assert_eq!(res, Err(WalletError::WrongNetwork(Testnet, Bitcoin)));
+        assert_eq!(res, Err(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 
     fn rbf(sats_per_kvb: u64, total_weight: u64) -> WalletOutput {

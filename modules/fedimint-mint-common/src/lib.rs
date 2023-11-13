@@ -5,8 +5,7 @@ use config::MintClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::tiered::InvalidAmountTierError;
-use fedimint_core::{plugin_types_trait_impl_common, Amount, PeerId};
+use fedimint_core::{plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -177,53 +176,23 @@ plugin_types_trait_impl_common!(
     MintInput,
     MintOutput,
     MintOutputOutcome,
-    MintConsensusItem
+    MintConsensusItem,
+    MintInputError,
+    MintOutputError
 );
 
-/// Represents an array of mint indexes that delivered faulty shares
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct MintShareErrors(pub Vec<(PeerId, PeerErrorType)>);
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum PeerErrorType {
-    InvalidSignature,
-    DifferentStructureSigShare,
-    DifferentNonce,
-    InvalidAmountTier,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
-pub enum CombineError {
-    #[error("Too few shares to begin the combination: got {0:?} need {1}")]
-    TooFewShares(Vec<PeerId>, usize),
-    #[error(
-        "Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid"
-    )]
-    TooFewValidShares(usize, usize, usize),
-    #[error("We could not find our own contribution in the provided shares, so we have no validation reference")]
-    NoOwnContribution,
-    #[error("Peer {0} contributed {1} shares, 1 expected")]
-    MultiplePeerContributions(PeerId, usize),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
-pub enum MintError {
-    #[error("One of the supplied notes had an invalid mint signature")]
-    InvalidNote,
-    #[error("Insufficient note value: reissuing {0} but only got {1} in notes")]
-    TooFewNotes(Amount, Amount),
-    #[error("One of the supplied notes was already spent previously")]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+pub enum MintInputError {
+    #[error("The note is already spent")]
     SpentCoin,
-    #[error("One of the notes had an invalid amount not issued by the mint: {0:?}")]
+    #[error("The note has an invalid amount not issued by the mint: {0:?}")]
     InvalidAmountTier(Amount),
-    #[error("One of the notes had an invalid signature")]
+    #[error("The note has an invalid signature")]
     InvalidSignature,
-    #[error("Exceeded maximum notes per denomination {0}, found {1}")]
-    ExceededMaxNotes(u16, usize),
 }
 
-impl From<InvalidAmountTierError> for MintError {
-    fn from(e: InvalidAmountTierError) -> Self {
-        MintError::InvalidAmountTier(e.0)
-    }
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+pub enum MintOutputError {
+    #[error("The note has an invalid amount not issued by the mint: {0:?}")]
+    InvalidAmountTier(Amount),
 }

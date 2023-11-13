@@ -284,7 +284,9 @@ plugin_types_trait_impl_common!(
     LightningInput,
     LightningOutput,
     LightningOutputOutcome,
-    LightningConsensusItem
+    LightningConsensusItem,
+    LightningInputError,
+    LightningOutputError
 );
 
 #[derive(Debug, Clone)]
@@ -443,8 +445,8 @@ pub mod serde_option_routing_fees {
     }
 }
 
-#[derive(Debug, Error, Eq, PartialEq)]
-pub enum LightningError {
+#[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
+pub enum LightningInputError {
     #[error("The the input contract {0} does not exist")]
     UnknownContract(ContractId),
     #[error("The input contract has too little funds, got {0}, input spends {1}")]
@@ -455,15 +457,19 @@ pub enum LightningError {
     InvalidPreimage,
     #[error("Incoming contract not ready to be spent yet, decryption in progress")]
     ContractNotReady,
+}
+
+#[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
+pub enum LightningOutputError {
+    #[error("The the input contract {0} does not exist")]
+    UnknownContract(ContractId),
     #[error("Output contract value may not be zero unless it's an offer output")]
     ZeroOutput,
     #[error("Offer contains invalid threshold-encrypted data")]
     InvalidEncryptedPreimage,
     #[error("Offer contains a ciphertext that has already been used")]
     DuplicateEncryptedPreimage,
-    #[error(
-        "The incoming LN account requires more funding according to the offer (need {0} got {1})"
-    )]
+    #[error("The incoming LN account requires more funding (need {0} got {1})")]
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
     NoOffer(secp256k1::hashes::sha256::Hash),

@@ -33,7 +33,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::transaction::{SerdeTransaction, Transaction};
+use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
@@ -49,8 +49,6 @@ use crate::consensus::server::LatestContributionByPeer;
 use crate::db::{AcceptedTransactionKey, SignedBlockKey, SignedBlockPrefix};
 use crate::fedimint_core::encoding::Encodable;
 use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
-
-pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
@@ -100,7 +98,7 @@ impl ConsensusApi {
     pub async fn submit_transaction(
         &self,
         transaction: Transaction,
-    ) -> anyhow::Result<TransactionId> {
+    ) -> Result<TransactionId, TransactionError> {
         let txid = transaction.tx_hash();
 
         debug!(%txid, "Received mint transaction");
@@ -142,7 +140,10 @@ impl ConsensusApi {
             .await
     }
 
-    pub async fn await_output_outcome(&self, outpoint: OutPoint) -> Result<SerdeOutputOutcome> {
+    pub async fn await_output_outcome(
+        &self,
+        outpoint: OutPoint,
+    ) -> Result<SerdeModuleEncoding<DynOutputOutcome>> {
         let (module_ids, mut dbtx) = self.await_transaction(outpoint.txid).await;
 
         let module_id = module_ids
@@ -344,14 +345,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             TRANSACTION_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, serde_transaction: SerdeTransaction| -> Result<TransactionId, String> {
-                let transaction = serde_transaction
+            async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<Result<TransactionId, TransactionError>> {
+                let transaction = transaction
                     .try_into_inner(&fedimint.modules.decoder_registry())
                     .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 // we return an inner error if and only if the submitted transaction is
                 // invalid and will be rejected if we were to submit it to consensus
-                Ok(fedimint.submit_transaction(transaction).await.map_err(|e| e.to_string()))
+                Ok((&fedimint.submit_transaction(transaction).await).into())
             }
         },
         api_endpoint! {
@@ -368,7 +369,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-            async |fedimint: &ConsensusApi, _context, outpoint: OutPoint| -> SerdeOutputOutcome {
+            async |fedimint: &ConsensusApi, _context, outpoint: OutPoint| -> SerdeModuleEncoding<DynOutputOutcome> {
                 let outcome = fedimint
                     .await_output_outcome(outpoint)
                     .await

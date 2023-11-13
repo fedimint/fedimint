@@ -378,6 +378,49 @@ where
     }
 }
 
+impl<T, E> Encodable for Result<T, E>
+where
+    T: Encodable,
+    E: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        let mut len = 0;
+
+        match self {
+            Ok(value) => {
+                len += 1u8.consensus_encode(writer)?;
+                len += value.consensus_encode(writer)?;
+            }
+            Err(error) => {
+                len += 0u8.consensus_encode(writer)?;
+                len += error.consensus_encode(writer)?;
+            }
+        }
+
+        Ok(len)
+    }
+}
+
+impl<T, E> Decodable for Result<T, E>
+where
+    T: Decodable,
+    E: Decodable,
+{
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let flag = u8::consensus_decode(d, modules)?;
+        match flag {
+            0 => Ok(Err(E::consensus_decode(d, modules)?)),
+            1 => Ok(Ok(T::consensus_decode(d, modules)?)),
+            _ => Err(DecodeError::from_str(
+                "Invalid flag for option enum, expected 0 or 1",
+            )),
+        }
+    }
+}
+
 impl<T> Encodable for Box<T>
 where
     T: Encodable,

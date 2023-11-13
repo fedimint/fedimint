@@ -58,7 +58,7 @@ use crate::query::{
     UnionResponsesSingle,
 };
 use crate::task;
-use crate::transaction::{SerdeTransaction, Transaction};
+use crate::transaction::{SerdeTransaction, Transaction, TransactionError};
 use crate::util::SafeUrl;
 
 pub type PeerResult<T> = Result<T, PeerError>;
@@ -349,7 +349,7 @@ pub trait GlobalFederationApi {
     async fn submit_transaction(
         &self,
         tx: Transaction,
-    ) -> FederationResult<Result<TransactionId, String>>;
+    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionError>>>;
 
     async fn await_block(
         &self,
@@ -420,7 +420,7 @@ where
     async fn submit_transaction(
         &self,
         tx: Transaction,
-    ) -> FederationResult<Result<TransactionId, String>> {
+    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionError>>> {
         self.request_current_consensus(
             TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),

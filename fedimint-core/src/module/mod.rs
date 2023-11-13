@@ -13,7 +13,6 @@ use futures::Future;
 use jsonrpsee_core::JsonValue;
 use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use tracing::instrument;
 
 // TODO: Make this module public and remove the wildcard `pub use` below
@@ -24,8 +23,8 @@ use crate::config::{
     ServerModuleConsensusConfig,
 };
 use crate::core::{
-    ClientConfig, Decoder, DecoderBuilder, Input, ModuleConsensusItem, ModuleInstanceId,
-    ModuleKind, Output, OutputOutcome,
+    ClientConfig, Decoder, DecoderBuilder, Input, InputError, ModuleConsensusItem,
+    ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 use crate::db::{
     Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
@@ -386,37 +385,6 @@ impl ApiEndpoint<()> {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum ModuleError {
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-}
-
-/// Extension trait with a function to map `Result`s used by modules to
-/// `ModuleError`
-///
-/// Currently each module defined it's own `enum XyzError { ... }` and is not
-/// using `anyhow::Error`. For `?` to work seamlessly two conversion would have
-/// to be made: `enum-Error -> anyhow::Error -> enum-Error`, while `Into`/`From`
-/// can only do one.
-///
-/// To avoid the boilerplate, this trait defines an easy conversion method.
-pub trait IntoModuleError {
-    type Target;
-    fn into_module_error_other(self) -> Self::Target;
-}
-
-impl<O, E> IntoModuleError for Result<O, E>
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    type Target = Result<O, ModuleError>;
-
-    fn into_module_error_other(self) -> Self::Target {
-        self.map_err(|e| ModuleError::Other(e.into()))
-    }
-}
-
 /// Operations common to Server and Client side module gen dyn newtypes
 ///
 /// Due to conflict of `impl Trait for T` for both `ServerModuleInit` and
@@ -763,6 +731,8 @@ pub trait ModuleCommon {
     type Output: Output;
     type OutputOutcome: OutputOutcome;
     type ConsensusItem: ModuleConsensusItem;
+    type InputError: InputError;
+    type OutputError: OutputError;
 
     fn decoder_builder() -> DecoderBuilder {
         let mut decoder_builder = Decoder::builder();
@@ -771,6 +741,9 @@ pub trait ModuleCommon {
         decoder_builder.with_decodable_type::<Self::Output>();
         decoder_builder.with_decodable_type::<Self::OutputOutcome>();
         decoder_builder.with_decodable_type::<Self::ConsensusItem>();
+        decoder_builder.with_decodable_type::<Self::InputError>();
+        decoder_builder.with_decodable_type::<Self::OutputError>();
+
         decoder_builder
     }
 
@@ -824,7 +797,7 @@ pub trait ServerModule: Debug + Sized {
         &'a self,
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
-    ) -> Result<InputMeta, ModuleError>;
+    ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
@@ -839,7 +812,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransactionRef<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError>;
+    ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError>;
 
     /// Retrieve the current status of the output. Depending on the module this
     /// might contain data needed by the client to access funds or give an

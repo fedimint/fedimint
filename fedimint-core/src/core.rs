@@ -448,3 +448,55 @@ module_plugin_dyn_newtype_clone_passthrough!(DynModuleConsensusItem);
 module_plugin_dyn_newtype_eq_passthrough!(DynModuleConsensusItem);
 
 module_plugin_dyn_newtype_display_passthrough!(DynModuleConsensusItem);
+
+pub trait IOutputError: Debug + Display + DynEncodable {
+    fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynOutputError;
+    fn dyn_hash(&self) -> u64;
+
+    fn erased_eq_no_instance_id(&self, other: &DynOutputError) -> bool;
+}
+
+module_plugin_dyn_newtype_define! {
+    pub DynOutputError(Box<IOutputError>)
+}
+module_plugin_static_trait_define! {
+    DynOutputError, OutputError, IOutputError,
+    { },
+    {
+        erased_eq_no_instance_id!(DynOutputError);
+    }
+}
+module_plugin_dyn_newtype_encode_decode!(DynOutputError);
+
+module_plugin_dyn_newtype_clone_passthrough!(DynOutputError);
+
+module_plugin_dyn_newtype_eq_passthrough!(DynOutputError);
+
+module_plugin_dyn_newtype_display_passthrough!(DynOutputError);
+
+pub trait IInputError: Debug + Display + DynEncodable {
+    fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn clone(&self, module_instance_id: ModuleInstanceId) -> DynInputError;
+    fn dyn_hash(&self) -> u64;
+
+    fn erased_eq_no_instance_id(&self, other: &DynInputError) -> bool;
+}
+
+module_plugin_dyn_newtype_define! {
+    pub DynInputError(Box<IInputError>)
+}
+module_plugin_static_trait_define! {
+    DynInputError, InputError, IInputError,
+    { },
+    {
+        erased_eq_no_instance_id!(DynInputError);
+    }
+}
+module_plugin_dyn_newtype_encode_decode!(DynInputError);
+
+module_plugin_dyn_newtype_clone_passthrough!(DynInputError);
+
+module_plugin_dyn_newtype_eq_passthrough!(DynInputError);
+
+module_plugin_dyn_newtype_display_passthrough!(DynInputError);

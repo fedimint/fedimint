@@ -10,13 +10,16 @@ use std::sync::Arc;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
-use crate::core::{Any, Decoder, DynInput, DynModuleConsensusItem, DynOutput, DynOutputOutcome};
+use crate::core::{
+    Any, Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
+    DynOutputOutcome,
+};
 use crate::db::DatabaseTransactionRef;
 use crate::dyn_newtype_define;
 use crate::module::registry::ModuleInstanceId;
 use crate::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ModuleError,
-    ServerModule, TransactionItemAmount,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ServerModule,
+    TransactionItemAmount,
 };
 
 /// Backend side module interface
@@ -54,7 +57,8 @@ pub trait IServerModule: Debug {
         &'a self,
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b DynInput,
-    ) -> Result<InputMeta, ModuleError>;
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<InputMeta, DynInputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
@@ -69,7 +73,8 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransactionRef<'a>,
         output: &DynOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError>;
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<TransactionItemAmount, DynOutputError>;
 
     /// Retrieve the current status of the output. Depending on the module this
     /// might contain data needed by the client to access funds or give an
@@ -162,7 +167,8 @@ where
         &'a self,
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b DynInput,
-    ) -> Result<InputMeta, ModuleError> {
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<InputMeta, DynInputError> {
         <Self as ServerModule>::process_input(
             self,
             dbtx,
@@ -173,6 +179,7 @@ where
         )
         .await
         .map(Into::into)
+        .map_err(|v| DynInputError::from_typed(module_instance_id, v))
     }
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -188,7 +195,8 @@ where
         dbtx: &mut DatabaseTransactionRef<'a>,
         output: &DynOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, ModuleError> {
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<TransactionItemAmount, DynOutputError> {
         <Self as ServerModule>::process_output(
             self,
             dbtx,
@@ -199,6 +207,7 @@ where
             out_point,
         )
         .await
+        .map_err(|v| DynOutputError::from_typed(module_instance_id, v))
     }
 
     /// Retrieve the current status of the output. Depending on the module this
