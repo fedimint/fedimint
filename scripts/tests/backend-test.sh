@@ -54,7 +54,7 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
     -E 'package(fedimint-wallet-tests)'
   cargo nextest run --locked --workspace --all-targets \
     ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-    ${TEST_ARGS_THREADED} \
+    ${TEST_ARGS_SERIALIZED} \
     -E 'package(fedimint-ln-tests)'
   cargo nextest run --locked --workspace --all-targets \
     ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
