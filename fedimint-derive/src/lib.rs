@@ -206,7 +206,11 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
 fn derive_enum_variant_encode_block(idx: usize, fields: &[Ident]) -> TokenStream2 {
     quote! {
         len += ::fedimint_core::encoding::Encodable::consensus_encode(&(#idx as u64), writer)?;
-        #(len += ::fedimint_core::encoding::Encodable::consensus_encode(#fields, writer)?;)*
+
+        let mut bytes = Vec::<u8>::new();
+        #(::fedimint_core::encoding::Encodable::consensus_encode(#fields, &mut bytes)?;)*
+
+        len += ::fedimint_core::encoding::Encodable::consensus_encode(&bytes, writer)?;
     }
 }
 
@@ -242,7 +246,7 @@ fn error(ident: &Ident, message: &str) -> TokenStream2 {
 }
 
 fn derive_struct_decode(ident: &Ident, fields: &Fields) -> TokenStream2 {
-    let decode_block = derive_tuple_or_named_decode_block(quote! { #ident }, &fields);
+    let decode_block = derive_tuple_or_named_decode_block(quote! { #ident }, quote! { d }, fields);
 
     quote! {
         Ok(#decode_block)
@@ -258,12 +262,29 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
 
     let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
         let variant_ident = variant.ident.clone();
-        let decode_block =
-            derive_tuple_or_named_decode_block(quote! { #ident::#variant_ident }, &variant.fields);
+        let decode_block = derive_tuple_or_named_decode_block(
+            quote! { #ident::#variant_ident },
+            quote! { &mut cursor },
+            &variant.fields,
+        );
 
+        // FIXME: make sure we read all bytes
         quote! {
             #variant_idx => {
-                #decode_block
+                let bytes: Vec<u8> = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)?;
+                let mut cursor = std::io::Cursor::new(&bytes);
+
+                let decoded = #decode_block;
+
+                let read_bytes = cursor.position();
+                let total_bytes = bytes.len() as u64;
+                if read_bytes != total_bytes {
+                    return Err(::fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
+                        "Partial read: got {total_bytes} bytes but only read {read_bytes}"
+                    )));
+                }
+
+                decoded
             }
         }
     });
@@ -288,15 +309,23 @@ fn is_tuple_struct(fields: &Fields) -> bool {
 //   * Enum::Variant
 //   * Struct
 // as idents
-fn derive_tuple_or_named_decode_block(constructor: TokenStream2, fields: &Fields) -> TokenStream2 {
+fn derive_tuple_or_named_decode_block(
+    constructor: TokenStream2,
+    reader: TokenStream2,
+    fields: &Fields,
+) -> TokenStream2 {
     if is_tuple_struct(fields) {
-        derive_tuple_decode_block(constructor, fields)
+        derive_tuple_decode_block(constructor, reader, fields)
     } else {
-        derive_named_decode_block(constructor, fields)
+        derive_named_decode_block(constructor, reader, fields)
     }
 }
 
-fn derive_tuple_decode_block(constructor: TokenStream2, fields: &Fields) -> TokenStream2 {
+fn derive_tuple_decode_block(
+    constructor: TokenStream2,
+    reader: TokenStream2,
+    fields: &Fields,
+) -> TokenStream2 {
     let field_names = fields
         .iter()
         .filter(|f| panic_if_ignored(f))
@@ -305,13 +334,17 @@ fn derive_tuple_decode_block(constructor: TokenStream2, fields: &Fields) -> Toke
         .collect::<Vec<_>>();
     quote! {
         {
-            #(let #field_names = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)?;)*
+            #(let #field_names = ::fedimint_core::encoding::Decodable::consensus_decode(#reader, modules)?;)*
             #constructor(#(#field_names,)*)
         }
     }
 }
 
-fn derive_named_decode_block(constructor: TokenStream2, fields: &Fields) -> TokenStream2 {
+fn derive_named_decode_block(
+    constructor: TokenStream2,
+    reader: TokenStream2,
+    fields: &Fields,
+) -> TokenStream2 {
     let variant_fields = fields
         .iter()
         .filter(|f| panic_if_ignored(f))
@@ -319,7 +352,7 @@ fn derive_named_decode_block(constructor: TokenStream2, fields: &Fields) -> Toke
         .collect::<Vec<_>>();
     quote! {
         {
-            #(let #variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)?;)*
+            #(let #variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode(#reader, modules)?;)*
             #constructor{
                 #(#variant_fields,)*
             }
