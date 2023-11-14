@@ -9,7 +9,7 @@ source scripts/build.sh ""
 
 TEST_ARGS="${TEST_ARGS:-}"
 TEST_ARGS_SERIALIZED="${TEST_ARGS:-$TEST_ARGS}"
-TEST_ARGS_THREADED="${TEST_ARGS:-$TEST_ARGS ---test-threads=$(($(nproc) * 2))}"
+TEST_ARGS_THREADED="${TEST_ARGS:-$TEST_ARGS --test-threads=$(($(nproc) * 2))}"
 
 >&2 echo "### Setting up tests"
 
