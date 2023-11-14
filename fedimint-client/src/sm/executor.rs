@@ -441,6 +441,7 @@ where
             };
             transitions = remaining_transitions;
             let (transition_outcome, state, transition_fn, meta) = completed_result;
+            // TODO: add a INFO version without all the details
             debug!(
                 ?state,
                 transition_outcome = ?AbbreviateJson(&transition_outcome),
@@ -511,6 +512,8 @@ where
                     } => last_error.context(format!("Failed to commit after {attempts} attempts")),
                     AutocommitError::ClosureError { error, .. } => error,
                 })?;
+
+            // TODO: add a INFO version without all the details
             debug!(
                 outcome = ?active_or_inactive_state,
                 "Finished executing state transition"

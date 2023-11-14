@@ -407,7 +407,7 @@ impl ILnRpcClient for GatewayLndClient {
             payment_hash,
             ..
         } = request;
-
+        info!("LND Paying invoice {invoice:?}");
         let mut client = Self::connect(
             self.address.clone(),
             self.tls_cert.clone(),
@@ -415,11 +415,14 @@ impl ILnRpcClient for GatewayLndClient {
         )
         .await?;
 
+        debug!("LND got client to pay invoice {invoice:?}, will check if payment already exists");
+
         // If the payment exists, that means we've already tried to pay the invoice
         let preimage: Vec<u8> = if let Some(preimage) = self
             .lookup_payment(payment_hash.clone(), &mut client)
             .await?
         {
+            info!("LND payment already exists for invoice {invoice:?}");
             bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
                 LightningRpcError::FailedPayment {
                     failure_reason: format!("Failed to convert preimage {error:?}"),
@@ -437,50 +440,74 @@ impl ILnRpcClient for GatewayLndClient {
                             "max_fee_msat exceeds valid LND fee limit ranges {error:?}"
                         ),
                     })?;
-
+            debug!("LND payment does not exist for invoice {invoice:?}, will attempt to pay");
             let payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
-                    payment_request: invoice,
+                    payment_request: invoice.clone(),
                     allow_self_payment: true,
-                    no_inflight_updates: true,
+                    no_inflight_updates: false,
                     timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
                     fee_limit_msat,
                     ..Default::default()
                 })
                 .await
-                .map_err(|status| LightningRpcError::FailedPayment {
-                    failure_reason: format!("Failed to make outgoing payment {status:?}"),
+                .map_err(|status| {
+                    info!("LND payment request failed for invoice {invoice:?} with {status:?}");
+                    LightningRpcError::FailedPayment {
+                        failure_reason: format!("Failed to make outgoing payment {status:?}"),
+                    }
                 })?;
 
-            match payments.into_inner().message().await.map_err(|error| {
-                LightningRpcError::FailedPayment {
-                    failure_reason: format!("Failed to get payment status {error:?}"),
-                }
-            })? {
-                Some(payment) if payment.status() == PaymentStatus::Succeeded => {
-                    bitcoin_hashes::hex::FromHex::from_hex(payment.payment_preimage.as_str())
-                        .map_err(|error| LightningRpcError::FailedPayment {
-                            failure_reason: format!("Failed to convert preimage {error:?}"),
-                        })?
-                }
-                Some(payment) => {
-                    let failure_reason = payment.failure_reason();
-                    return Err(LightningRpcError::FailedPayment {
-                        failure_reason: format!("{failure_reason:?}"),
-                    });
-                }
-                None => {
-                    return Err(LightningRpcError::FailedPayment {
-                        failure_reason: format!(
-                            "Failed to get payment status for payment hash {payment_hash:?}"
-                        ),
-                    });
+            debug!(
+                "LND payment request sent for invoice {invoice:?}, waiting for payment status..."
+            );
+            let mut messages = payments.into_inner();
+            loop {
+                match messages
+                    .message()
+                    .await
+                    .map_err(|error| LightningRpcError::FailedPayment {
+                        failure_reason: format!("Failed to get payment status {error:?}"),
+                    }) {
+                    Ok(Some(payment)) if payment.status() == PaymentStatus::Succeeded => {
+                        info!("LND payment succeeded for invoice {invoice:?}");
+                        break bitcoin_hashes::hex::FromHex::from_hex(
+                            payment.payment_preimage.as_str(),
+                        )
+                        .map_err(|error| {
+                            LightningRpcError::FailedPayment {
+                                failure_reason: format!("Failed to convert preimage {error:?}"),
+                            }
+                        })?;
+                    }
+                    Ok(Some(payment)) if payment.status() == PaymentStatus::InFlight => {
+                        debug!("LND payment is inflight");
+                        continue;
+                    }
+                    Ok(Some(payment)) => {
+                        info!("LND payment failed for invoice {invoice:?} with {payment:?}");
+                        let failure_reason = payment.failure_reason();
+                        return Err(LightningRpcError::FailedPayment {
+                            failure_reason: format!("{failure_reason:?}"),
+                        });
+                    }
+                    Ok(None) => {
+                        info!("LND payment failed for invoice {invoice:?} with no payment status");
+                        return Err(LightningRpcError::FailedPayment {
+                            failure_reason: format!(
+                                "Failed to get payment status for payment hash {payment_hash:?}"
+                            ),
+                        });
+                    }
+                    Err(e) => {
+                        info!("LND payment failed for invoice {invoice:?} with {e:?}");
+                        return Err(e);
+                    }
                 }
             }
         };
-
-        return Ok(PayInvoiceResponse { preimage });
+        Ok(PayInvoiceResponse { preimage })
     }
 
     async fn route_htlcs<'a>(

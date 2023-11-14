@@ -7,6 +7,7 @@ use fedimint_ln_common::contracts::Preimage;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::{debug, info, warn};
 
 use super::{GatewayClientContext, GatewayClientStateMachines};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Settle};
@@ -103,15 +104,19 @@ impl WaitForPreimageState {
     ) -> Result<Preimage, CompleteHtlcError> {
         let mut stream = context.notifier.subscribe(common.operation_id).await;
         loop {
+            debug!("Waiting for preimage for {common:?}");
             if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                 match state.state {
                     IncomingSmStates::Preimage(preimage) => {
+                        debug!("Received preimage for {common:?}");
                         return Ok(preimage);
                     }
-                    IncomingSmStates::RefundSubmitted { .. } => {
+                    IncomingSmStates::RefundSubmitted { out_points, error } => {
+                        info!("Refund submitted for {common:?}: {out_points:?} {error}");
                         return Err(CompleteHtlcError::IncomingContractNotFunded);
                     }
-                    IncomingSmStates::FundingFailed { error: _ } => {
+                    IncomingSmStates::FundingFailed { error } => {
+                        warn!("Funding failed for {common:?}: {error}");
                         return Err(CompleteHtlcError::IncomingContractNotFunded);
                     }
                     _ => {}
