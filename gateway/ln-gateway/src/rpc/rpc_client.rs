@@ -100,7 +100,7 @@ impl GatewayRpcClient {
     where
         P: Serialize,
     {
-        let mut builder = self.client.post(url.reap_guts());
+        let mut builder = self.client.post(url.to_unsafe());
         if let Some(password) = self.password.clone() {
             builder = builder.bearer_auth(password);
         }
