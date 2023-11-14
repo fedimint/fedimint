@@ -240,13 +240,13 @@ impl ServerConfig {
     }
 
     pub fn get_invite_code(&self) -> InviteCode {
-        InviteCode {
-            url: self.consensus.api_endpoints[&self.local.identity]
+        InviteCode::new(
+            self.consensus.api_endpoints[&self.local.identity]
                 .url
                 .clone(),
-            federation_id: FederationId(self.consensus.api_endpoints.consensus_hash()),
-            peer: self.local.identity,
-        }
+            self.local.identity,
+            FederationId(self.consensus.api_endpoints.consensus_hash()),
+        )
     }
 
     pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {

@@ -58,7 +58,7 @@ impl GatewayClientBuilder {
             timelock_delta,
             fees,
         } = config;
-        let federation_id = invite_code.federation_id;
+        let federation_id = invite_code.federation_id();
 
         let mut registry = self.registry.clone();
         registry.attach(GatewayClientInit {
@@ -126,7 +126,7 @@ impl GatewayClientBuilder {
         config: FederationConfig,
         mut dbtx: DatabaseTransaction<'_>,
     ) -> Result<()> {
-        let id = config.invite_code.federation_id;
+        let id = config.invite_code.federation_id();
         dbtx.insert_entry(&FederationIdKey { id }, &config).await;
         dbtx.commit_tx_result()
             .await

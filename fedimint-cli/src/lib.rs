@@ -668,8 +668,8 @@ impl FedimintCli {
             }
             Command::Dev(DevCmd::DecodeInviteCode { invite_code }) => {
                 Ok(CliOutput::DecodeInviteCode {
-                    url: invite_code.url,
-                    federation_id: invite_code.federation_id,
+                    url: invite_code.url(),
+                    federation_id: invite_code.federation_id(),
                 })
             }
             Command::Dev(DevCmd::EncodeInviteCode {
@@ -677,11 +677,7 @@ impl FedimintCli {
                 federation_id,
                 peer,
             }) => Ok(CliOutput::InviteCode {
-                invite_code: InviteCode {
-                    url,
-                    federation_id,
-                    peer,
-                },
+                invite_code: InviteCode::new(url, peer, federation_id),
             }),
             Command::Dev(DevCmd::SessionCount) => {
                 let count = cli
