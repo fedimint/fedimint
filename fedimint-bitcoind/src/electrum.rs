@@ -29,6 +29,8 @@ pub struct ElectrumClient(electrum_client::Client);
 
 impl ElectrumClient {
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+        println!("inside ElectrumClient::new");
+        println!("url: {:?}", url);
         Ok(Self(electrum_client::Client::new(url.as_str())?))
     }
 }

@@ -25,10 +25,13 @@ then
     exit 1
 fi
 
-export RUST_BACKTRACE=1 
+export RUST_BACKTRACE=1
 
 eval "$(devimint env)"
 >&2 echo "### Setting up tests - complete"
+
+DEVIMINT_ENV="$(devimint env)"
+echo "DEVIMINT_ENV: $DEVIMINT_ENV"
 
 export FM_TEST_USE_REAL_DAEMONS=1
 
@@ -51,7 +54,7 @@ fi
 
 # Switch to electrum and run wallet tests
 export FM_BITCOIN_RPC_KIND="electrum"
-export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:50001"
+export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:$FM_PORT_ELECTRS"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
   >&2 echo "### Testing against electrs"
@@ -62,7 +65,7 @@ fi
 
 # Switch to esplora and run wallet tests
 export FM_BITCOIN_RPC_KIND="esplora"
-export FM_BITCOIN_RPC_URL="http://127.0.0.1:50002"
+export FM_BITCOIN_RPC_URL="http://127.0.0.1:$FM_PORT_ESPLORA"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
   >&2 echo "### Testing against esplora"

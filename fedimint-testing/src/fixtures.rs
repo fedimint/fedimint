@@ -14,6 +14,7 @@ use fedimint_core::config::{
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::util::SafeUrl;
 use fedimint_logging::{TracingSetup, LOG_TEST};
 use tempfile::TempDir;
 use tracing::info;
@@ -193,7 +194,11 @@ impl Fixtures {
         match Fixtures::is_real_test() {
             true => BitcoinRpcConfig {
                 kind: "esplora".to_string(),
-                url: "http://127.0.0.1:50002".parse().unwrap(),
+                url: SafeUrl::parse(&format!(
+                    "http://127.0.0.1:{}/",
+                    env::var("FM_PORT_ESPLORA").unwrap_or(String::from("50002"))
+                ))
+                .expect("Failed to parse default esplora server"),
             },
             false => self.bitcoin_rpc.clone(),
         }

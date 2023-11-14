@@ -33,6 +33,7 @@ pub struct Bitcoind {
 
 impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager) -> Result<Self> {
+        println!("inside Bitcoind::new");
         let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
         let conf = format!(
             include_str!("cfg/bitcoin.conf"),
@@ -47,7 +48,9 @@ impl Bitcoind {
             .await?;
 
         let url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
+        println!("url: {:?}", &url);
         let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
+        println!("host: {:?}, auth: {:?}", &url, &auth);
         let client = Arc::new(
             bitcoincore_rpc::Client::new(&host, auth).context("Failed to connect to bitcoind")?,
         );
@@ -69,11 +72,13 @@ impl Bitcoind {
             sleep(Duration::from_secs(1)).await
         }
 
+        println!("about to mine blocks");
         // mine blocks
         let address = client.get_new_address(None, None)?;
         client
             .generate_to_address(101, &address)
             .context("Failed to generate blocks")?;
+        println!("mined 101 blocks to address: {:?}", &address);
 
         // wait bitciond is ready
         poll("bitcoind", None, || async {
@@ -82,6 +87,7 @@ impl Bitcoind {
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?;
             if info.blocks > 100 {
+                println!("found blocks: {:?}", info.blocks);
                 Ok(())
             } else {
                 Err(ControlFlow::Continue(anyhow!(
@@ -555,6 +561,7 @@ pub struct Electrs {
 
 impl Electrs {
     pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
+        println!("inside Electrs::new");
         let electrs_dir = process_mgr
             .globals
             .FM_ELECTRS_DIR
@@ -567,6 +574,7 @@ impl Electrs {
             p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
             electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
         );
+        println!("conf: {:?}", conf);
         write_overwrite_async(
             process_mgr.globals.FM_ELECTRS_DIR.join("electrs.toml"),
             conf,
@@ -641,7 +649,10 @@ pub struct ExternalDaemons {
 
 pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDaemons> {
     let start_time = fedimint_core::time::now();
+    println!("inside external_daemons");
+    println!("about to call Bitcoind::new");
     let bitcoind = Bitcoind::new(process_mgr).await?;
+    println!("called Bitcoind::new");
     let (cln, lnd, electrs, esplora) = tokio::try_join!(
         Lightningd::new(process_mgr, bitcoind.clone()),
         Lnd::new(process_mgr, bitcoind.clone()),

@@ -35,7 +35,10 @@ struct BitcoinClient(::bitcoincore_rpc::Client);
 
 impl BitcoinClient {
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+        println!("inside BitcoinClient::new");
+        println!("url: {:?}", &url);
         let (url, auth) = from_url_to_url_auth(url)?;
+        println!("url: {:?}, auth: {:?}", &url, auth);
         Ok(Self(::bitcoincore_rpc::Client::new(&url, auth)?))
     }
 }

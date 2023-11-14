@@ -32,7 +32,9 @@ use miniscript::ToPublicKey;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
+    println!("inside fixtures");
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
+    println!("called Fixtures::new_primary");
     let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_server());
     let wallet_client = WalletClientInit::new(fixtures.bitcoin_client());
     fixtures.with_module(wallet_client, WalletInit, wallet_params)
@@ -101,7 +103,7 @@ async fn await_consensus_to_catch_up(client: &ClientArc, block_count: u64) -> an
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
+#[ignore]
 async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -144,7 +146,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
+#[ignore]
 async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -188,7 +190,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
+#[ignore]
 async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -234,7 +236,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
+#[ignore]
 async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -311,19 +313,28 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
+    println!("inside peg_outs_must_wait_for_available_utxos");
     let fixtures = fixtures();
+    println!("called fixtures");
     let fed = fixtures.new_fed().await;
+    println!("called fed");
     let client = fed.new_client().await;
+    println!("called fed.new_client");
     let bitcoin = fixtures.bitcoin();
+    println!("called fixtures.bitcoin");
     // This test has many assumptions about bitcoin L1 blocks
     // and FM epochs, so we just lock the node
     let bitcoin = bitcoin.lock_exclusive().await;
+    println!("called bitcoin.lock_exclusive");
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    println!("called fixtures.dyn_bitcoin_rpc");
     info!("Starting test peg_outs_must_wait_for_available_utxos");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
+    println!("called bitcoin.mine_blocks");
     await_consensus_to_catch_up(&client, 1).await?;
+    println!("called await_consensus_to_catch_up");
 
     let mut balance_sub =
         peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
@@ -391,7 +402,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
+#[ignore]
 async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let bitcoin = fixtures.bitcoin();

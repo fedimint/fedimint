@@ -49,8 +49,12 @@ lazy_static! {
 
 /// Create a bitcoin RPC of a given kind
 pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {
+    println!("inside create_bitcoind");
+    println!("config: {:?}", config);
     let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
+    println!("called BITCOIN_RPC_REGISTRY.lock");
     let maybe_factory = registry.get(&config.kind);
+    println!("called registry.get(&config.kind)");
     let factory = maybe_factory.with_context(|| {
         anyhow::anyhow!(
             "{} rpc not registered, available options: {:?}",
@@ -58,6 +62,7 @@ pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<
             registry.keys()
         )
     })?;
+    println!("called maybe_factory.with_context");
     factory.create_connection(&config.url, handle)
 }
 
