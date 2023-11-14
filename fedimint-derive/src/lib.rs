@@ -3,9 +3,8 @@
 use heck::ToSnakeCase;
 use itertools::Itertools;
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
+use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use syn::__private::TokenStream2;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{
@@ -89,12 +88,10 @@ pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
 }
 
 fn do_not_ignore(field: &Field) -> bool {
-    !field.attrs.iter().any(|attr| {
-        attr.path
-            .segments
-            .iter()
-            .any(|segment| segment.ident == *"encodable_ignore")
-    })
+    !field
+        .attrs
+        .iter()
+        .any(|attr| attr.path.is_ident("encodable_ignore"))
 }
 
 fn panic_if_ignored(field: &Field) -> bool {
@@ -105,12 +102,10 @@ fn panic_if_ignored(field: &Field) -> bool {
 }
 
 fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
-    let is_default = variant.attrs.iter().any(|attr| {
-        attr.path
-            .segments
-            .iter()
-            .any(|segment| segment.ident == *"encodable_default")
-    });
+    let is_default = variant
+        .attrs
+        .iter()
+        .any(|attr| attr.path.is_ident("encodable_default"));
 
     if is_default {
         assert_eq!(
@@ -135,16 +130,22 @@ fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
 
 #[proc_macro_derive(Encodable, attributes(encodable_ignore, encodable_default))]
 pub fn derive_encodable(input: TokenStream) -> TokenStream {
-    let DeriveInput { ident, data, .. } = parse_macro_input!(input);
+    let DeriveInput {
+        ident,
+        data,
+        generics,
+        ..
+    } = parse_macro_input!(input);
 
     let encode_inner = match data {
         Data::Struct(DataStruct { fields, .. }) => derive_struct_encode(&fields),
         Data::Enum(DataEnum { variants, .. }) => derive_enum_encode(&ident, &variants),
         Data::Union(_) => error(&ident, "Encodable can't be derived for unions"),
     };
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let output = quote! {
-        impl ::fedimint_core::encoding::Encodable for #ident {
+        impl #impl_generics ::fedimint_core::encoding::Encodable for #ident #ty_generics #where_clause {
             fn consensus_encode<W: std::io::Write>(&self, mut writer: &mut W) -> std::result::Result<usize, std::io::Error> {
                 #encode_inner
             }
@@ -159,8 +160,8 @@ fn derive_struct_encode(fields: &Fields) -> TokenStream2 {
         // Tuple struct
         let field_names = fields
             .iter()
-            .filter(|f| do_not_ignore(f))
             .enumerate()
+            .filter(|(_, f)| do_not_ignore(f))
             .map(|(idx, _)| Index::from(idx))
             .collect::<Vec<_>>();
         quote! {
@@ -201,8 +202,8 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
                 let variant_fields = variant
                     .fields
                     .iter()
-                    .filter(|f| do_not_ignore(f))
                     .enumerate()
+                    .filter(|(_, f)| do_not_ignore(f))
                     .map(|(idx, _)| format_ident!("bound_{}", idx))
                     .collect::<Vec<_>>();
                 let variant_encode_block =
