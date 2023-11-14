@@ -40,7 +40,7 @@ pub struct DummyClientModule {
     cfg: DummyClientConfig,
     key: KeyPair,
     notifier: ModuleNotifier<DynGlobalClientContext, DummyStateMachine>,
-    client_ctx: ClientContext,
+    client_ctx: ClientContext<Self>,
     db: Database,
 }
 

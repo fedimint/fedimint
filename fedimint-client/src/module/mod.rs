@@ -1,8 +1,8 @@
 use core::fmt;
 use std::any::Any;
-use std::ffi;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::{ffi, marker, ops};
 
 use anyhow::bail;
 use fedimint_core::api::DynGlobalApi;
@@ -22,7 +22,7 @@ use fedimint_core::{
 use self::init::ClientModuleInit;
 use crate::sm::{Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use crate::{ClientArc, ClientWeak, DynGlobalClientContext, TransactionUpdates};
+use crate::{oplog, ClientArc, ClientWeak, DynGlobalClientContext, TransactionUpdates};
 
 pub mod init;
 
@@ -55,21 +55,92 @@ impl FinalClient {
     }
 }
 
-#[derive(Clone)]
-pub struct ClientContext {
+/// A Client context for a [`ClientModule`] `M`
+///
+/// Client modules can interact with the whole
+/// client through this struct.
+pub struct ClientContext<M> {
     client: FinalClient,
     module_instance_id: ModuleInstanceId,
+    _marker: marker::PhantomData<M>,
 }
 
-impl fmt::Debug for ClientContext {
+impl<M> Clone for ClientContext<M> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            module_instance_id: self.module_instance_id,
+            _marker: marker::PhantomData,
+        }
+    }
+}
+
+/// A reference back to itself that the module cacn get from the
+/// [`ClientContext`]
+pub struct ClientContextSelfRef<'s, M> {
+    client: ClientArc,
+    module_instance_id: ModuleInstanceId,
+    _marker: marker::PhantomData<&'s M>,
+}
+
+impl<M> ops::Deref for ClientContextSelfRef<'_, M>
+where
+    M: ClientModule,
+{
+    type Target = M;
+
+    fn deref(&self) -> &Self::Target {
+        self.client
+            .get_module(self.module_instance_id)
+            .as_any()
+            .downcast_ref::<M>()
+            .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()))
+    }
+}
+
+impl<M> fmt::Debug for ClientContext<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ClientContext")
     }
 }
 
-impl ClientContext {
+impl<M> ClientContext<M>
+where
+    M: ClientModule,
+{
+    /// Get a reference back to client module from the [`Self`]
+    ///
+    /// It's often necessary for a client module to "move self"
+    /// by-value, especially due to async lifetimes issues.
+    /// Clients usually work with `&mut self`, which can't really
+    /// work in such context.
+    ///
+    /// Fortunately [`ClientContext`] is `Clone` and `Send, and
+    /// can be used to recover the reference to the module at later
+    /// time.
+    #[allow(clippy::needless_lifetimes)] // just for explicitiness
+    pub fn self_ref<'s>(&'s self) -> ClientContextSelfRef<'s, M> {
+        ClientContextSelfRef {
+            client: self.client.get(),
+            module_instance_id: self.module_instance_id,
+            _marker: marker::PhantomData,
+        }
+    }
+
+    /// Get a reference to a global Api handle
+    pub fn global_api(&self) -> DynGlobalApi {
+        self.client.get().api_clone()
+    }
+
+    /// Get own [`ModuleInstanceId`]
+    // TODO: we would like to eventually get rid of that
+    // and make it entirely internal.
+    pub fn module_instance_id(&self) -> ModuleInstanceId {
+        self.module_instance_id
+    }
+
     /// See [`crate::Client::finalize_and_submit_transaction`]
-    pub async fn finalize_and_submit_transaction<F, M>(
+    pub async fn finalize_and_submit_transaction<F, Meta>(
         &self,
         operation_id: OperationId,
         operation_type: &str,
@@ -77,8 +148,8 @@ impl ClientContext {
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
-        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
-        M: serde::Serialize + MaybeSend,
+        F: Fn(TransactionId, Vec<OutPoint>) -> Meta + Clone + MaybeSend + MaybeSync,
+        Meta: serde::Serialize + MaybeSend,
     {
         self.client
             .get()
@@ -108,12 +179,41 @@ impl ClientContext {
             .await
     }
 
-    pub fn global_api(&self) -> DynGlobalApi {
-        self.client.get().api_clone()
+    pub async fn get_operation(
+        &self,
+        operation_id: OperationId,
+    ) -> std::option::Option<oplog::OperationLogEntry> {
+        self.client
+            .get()
+            .operation_log()
+            .get_operation(operation_id)
+            .await
     }
 
-    pub fn module_instance_id(&self) -> ModuleInstanceId {
-        self.module_instance_id
+    pub fn global_db(&self) -> fedimint_core::db::Database {
+        self.client.get().db().clone()
+    }
+
+    pub async fn add_state_machines(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        dyn_states: Vec<DynState<DynGlobalClientContext>>,
+    ) -> anyhow::Result<()> {
+        self.client.get().add_state_machines(dbtx, dyn_states).await
+    }
+
+    pub async fn add_operation_log_entry(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: impl serde::Serialize,
+    ) {
+        self.client
+            .get()
+            .operation_log()
+            .add_operation_log_entry(dbtx, operation_id, operation_type, operation_meta)
+            .await
     }
 }
 

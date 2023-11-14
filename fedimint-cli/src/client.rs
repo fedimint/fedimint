@@ -19,7 +19,7 @@ use fedimint_ln_client::{
     PayType,
 };
 use fedimint_ln_common::contracts::ContractId;
-use fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
+use fedimint_mint_client::{MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -154,8 +154,10 @@ pub async fn handle_command(
         ClientCmd::Reissue { oob_notes } => {
             let amount = oob_notes.total_amount();
 
-            let operation_id = client.reissue_external_notes(oob_notes, ()).await?;
-            let mut updates = client
+            let mint = client.get_first_module::<MintClientModule>();
+
+            let operation_id = mint.reissue_external_notes(oob_notes, ()).await?;
+            let mut updates = mint
                 .subscribe_reissue_external_notes(operation_id)
                 .await
                 .unwrap()
@@ -173,6 +175,7 @@ pub async fn handle_command(
         }
         ClientCmd::Spend { amount } => {
             let (operation, notes) = client
+                .get_first_module::<MintClientModule>()
                 .spend_notes(amount, Duration::from_secs(3600), ())
                 .await?;
             info!("Spend e-cash operation: {operation}");
@@ -182,7 +185,10 @@ pub async fn handle_command(
             }))
         }
         ClientCmd::Validate { oob_notes } => {
-            let amount = client.validate_notes(oob_notes).await?;
+            let amount = client
+                .get_first_module::<MintClientModule>()
+                .validate_notes(oob_notes)
+                .await?;
 
             Ok(json!({
                 "amount_msat": amount,

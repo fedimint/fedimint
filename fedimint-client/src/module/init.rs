@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::marker;
 use std::sync::Arc;
 
 use fedimint_core::api::{DynGlobalApi, DynModuleApi};
@@ -34,7 +35,7 @@ where
     >,
     api: DynGlobalApi,
     module_api: DynModuleApi,
-    context: ClientContext,
+    context: ClientContext<<C as ClientModuleInit>::Module>,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -84,7 +85,7 @@ where
     /// as the outer context is not yet complete. But it can be stored to be
     /// used in the methods of [`ClientModule`], at which point it will be
     /// ready.
-    pub fn context(&self) -> ClientContext {
+    pub fn context(&self) -> ClientContext<<C as ClientModuleInit>::Module> {
         self.context.clone()
     }
 }
@@ -176,6 +177,7 @@ where
                 context: ClientContext {
                     client: final_client,
                     module_instance_id: instance_id,
+                    _marker: marker::PhantomData,
                 },
             })
             .await?
