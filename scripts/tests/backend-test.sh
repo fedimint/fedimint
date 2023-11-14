@@ -8,7 +8,7 @@ source scripts/lib.sh
 source scripts/build.sh ""
 
 TEST_ARGS="${TEST_ARGS:-}"
-TEST_ARGS_SERIALIZED="${TEST_ARGS:-$TEST_ARGS}"
+TEST_ARGS_SERIALIZED="${TEST_ARGS:-$TEST_ARGS --test-threads=1}"
 TEST_ARGS_THREADED="${TEST_ARGS:-$TEST_ARGS --test-threads=$(($(nproc) * 2))}"
 
 >&2 echo "### Setting up tests"
@@ -54,7 +54,7 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
     -E 'package(fedimint-wallet-tests)'
   cargo nextest run --locked --workspace --all-targets \
     ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-    ${TEST_ARGS_THREADED} \
+    ${TEST_ARGS_SERIALIZED} \
     -E 'package(fedimint-ln-tests)'
   cargo nextest run --locked --workspace --all-targets \
     ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
