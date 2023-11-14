@@ -34,7 +34,6 @@ use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::consensus::server::ConsensusServer;
 use crate::net::api::{ConsensusApi, RpcHandlerCtx};
 use crate::net::connect::TlsTcpConnector;
-use crate::net::peers::ReconnectPeerConnections;
 
 pub mod atomic_broadcast;
 

@@ -37,7 +37,8 @@ use crate::fedimint_core::NumPeers;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};
-use crate::{ReconnectPeerConnections, TlsTcpConnector};
+use crate::net::peers_reliable::ReconnectPeerConnectionsReliable;
+use crate::TlsTcpConnector;
 
 pub mod api;
 pub mod distributedgen;
@@ -674,7 +675,8 @@ where
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
     let (connections, _) =
-        ReconnectPeerConnections::new(network, delay_calculator, connector, task_group).await;
+        ReconnectPeerConnectionsReliable::new(network, delay_calculator, connector, task_group)
+            .await;
     connections.into_dyn()
 }
 
