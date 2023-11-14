@@ -13,32 +13,59 @@ default:
 
 # run `cargo build` on everything
 build:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f Cargo.toml ]; then
+    cd {{invocation_directory()}}
+  fi
   cargo build --workspace --all-targets
 
 
 # run `cargo check` on everything
 check:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f Cargo.toml ]; then
+    cd {{invocation_directory()}}
+  fi
   cargo check --workspace --all-targets
 
 
 # run code formatters
 format:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f Cargo.toml ]; then
+    cd {{invocation_directory()}}
+  fi
   cargo fmt --all
   nixpkgs-fmt $(echo **.nix)
 
 
 # run lints (git pre-commit hook)
 lint:
+  #!/usr/bin/env bash
+  set -euo pipefail
   env NO_STASH=true $(git rev-parse --git-common-dir)/hooks/pre-commit
 
 
 # run tests
 test: build
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f Cargo.toml ]; then
+    cd {{invocation_directory()}}
+  fi
   cargo test
 
 
 # run and restart on changes
 watch:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f Cargo.toml ]; then
+    cd {{invocation_directory()}}
+  fi
   env RUST_LOG=${RUST_LOG:-debug} cargo watch -x run
 
 
