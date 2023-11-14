@@ -144,7 +144,7 @@ dyn_newtype_define! {
 }
 
 const RETRY_SLEEP_MIN_MS: Duration = Duration::from_millis(10);
-const RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(1000);
+const RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(5000);
 
 /// Wrapper around [`IBitcoindRpc`] that will retry failed calls
 #[derive(Debug)]
