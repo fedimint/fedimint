@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "diagnostics", feature(proc_macro_diagnostic))]
 
 use heck::ToSnakeCase;
+use itertools::Itertools;
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::{format_ident, quote};
@@ -103,7 +104,36 @@ fn panic_if_ignored(field: &Field) -> bool {
     true
 }
 
-#[proc_macro_derive(Encodable, attributes(encodable_ignore))]
+fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
+    let is_default = variant.attrs.iter().any(|attr| {
+        attr.path
+            .segments
+            .iter()
+            .any(|segment| segment.ident == *"encodable_default")
+    });
+
+    if is_default {
+        assert_eq!(
+            variant.ident.to_string(),
+            "Default",
+            "Default variant should be called `Default`"
+        );
+        let two_fields = variant.fields.len() == 2;
+        let field_names = variant
+            .fields
+            .iter()
+            .filter_map(|field| field.ident.as_ref().map(|ident| ident.to_string()))
+            .sorted()
+            .collect::<Vec<_>>();
+        let correct_fields = field_names == vec!["bytes".to_string(), "variant".to_string()];
+
+        assert!(two_fields && correct_fields, "The default variant should have exactly two field: `variant: u64` and `bytes: Vec<u8>`");
+    }
+
+    is_default
+}
+
+#[proc_macro_derive(Encodable, attributes(encodable_ignore, encodable_default))]
 pub fn derive_encodable(input: TokenStream) -> TokenStream {
     let DeriveInput { ident, data, .. } = parse_macro_input!(input);
 
@@ -160,40 +190,59 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
         };
     }
 
-    let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
-        let variant_ident = variant.ident.clone();
+    let non_default_match_arms = variants
+        .iter()
+        .filter(|variant| !is_default_variant_enforce_valid(variant))
+        .enumerate()
+        .map(|(variant_idx, variant)| {
+            let variant_ident = variant.ident.clone();
 
-        if is_tuple_struct(&variant.fields) {
-            let variant_fields = variant
-                .fields
-                .iter()
-                .filter(|f| do_not_ignore(f))
-                .enumerate()
-                .map(|(idx, _)| format_ident!("bound_{}", idx))
-                .collect::<Vec<_>>();
-            let variant_encode_block =
-                derive_enum_variant_encode_block(variant_idx, &variant_fields);
-            quote! {
-                #ident::#variant_ident(#(#variant_fields,)*) => {
-                    #variant_encode_block
+            if is_tuple_struct(&variant.fields) {
+                let variant_fields = variant
+                    .fields
+                    .iter()
+                    .filter(|f| do_not_ignore(f))
+                    .enumerate()
+                    .map(|(idx, _)| format_ident!("bound_{}", idx))
+                    .collect::<Vec<_>>();
+                let variant_encode_block =
+                    derive_enum_variant_encode_block(variant_idx, &variant_fields);
+                quote! {
+                    #ident::#variant_ident(#(#variant_fields,)*) => {
+                        #variant_encode_block
+                    }
+                }
+            } else {
+                let variant_fields = variant
+                    .fields
+                    .iter()
+                    .filter(|f| do_not_ignore(f))
+                    .map(|field| field.ident.clone().unwrap())
+                    .collect::<Vec<_>>();
+                let variant_encode_block =
+                    derive_enum_variant_encode_block(variant_idx, &variant_fields);
+                quote! {
+                    #ident::#variant_ident { #(#variant_fields,)*} => {
+                        #variant_encode_block
+                    }
                 }
             }
-        } else {
-            let variant_fields = variant
-                .fields
-                .iter()
-                .filter(|f| do_not_ignore(f))
-                .map(|field| field.ident.clone().unwrap())
-                .collect::<Vec<_>>();
-            let variant_encode_block =
-                derive_enum_variant_encode_block(variant_idx, &variant_fields);
+        });
+
+    let default_match_arm = variants
+        .iter()
+        .find(|variant| is_default_variant_enforce_valid(variant))
+        .map(|_variant| {
             quote! {
-                #ident::#variant_ident { #(#variant_fields,)*} => {
-                    #variant_encode_block
+                #ident::Default { variant, bytes } => {
+                    len += ::fedimint_core::encoding::Encodable::consensus_encode(variant, writer)?;
+                    len += ::fedimint_core::encoding::Encodable::consensus_encode(bytes, writer)?;
                 }
             }
-        }
-    });
+        });
+
+    let match_arms = non_default_match_arms.chain(default_match_arm);
+
     quote! {
         let mut len = 0;
         match self {
@@ -260,42 +309,62 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
         };
     }
 
-    let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
-        let variant_ident = variant.ident.clone();
-        let decode_block = derive_tuple_or_named_decode_block(
-            quote! { #ident::#variant_ident },
-            quote! { &mut cursor },
-            &variant.fields,
-        );
+    let non_default_match_arms = variants.iter()
+        .filter(|variant| !is_default_variant_enforce_valid(variant))
+        .enumerate()
+        .map(|(variant_idx, variant)| {
+            let variant_idx = variant_idx as u64;
+            let variant_ident = variant.ident.clone();
+            let decode_block = derive_tuple_or_named_decode_block(
+                quote! { #ident::#variant_ident },
+                quote! { &mut cursor },
+                &variant.fields,
+            );
 
-        // FIXME: make sure we read all bytes
-        quote! {
-            #variant_idx => {
-                let bytes: Vec<u8> = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)?;
-                let mut cursor = std::io::Cursor::new(&bytes);
+            // FIXME: make sure we read all bytes
+            quote! {
+                #variant_idx => {
+                    let bytes: Vec<u8> = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)?;
+                    let mut cursor = std::io::Cursor::new(&bytes);
 
-                let decoded = #decode_block;
+                    let decoded = #decode_block;
 
-                let read_bytes = cursor.position();
-                let total_bytes = bytes.len() as u64;
-                if read_bytes != total_bytes {
-                    return Err(::fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
-                        "Partial read: got {total_bytes} bytes but only read {read_bytes}"
-                    )));
+                    let read_bytes = cursor.position();
+                    let total_bytes = bytes.len() as u64;
+                    if read_bytes != total_bytes {
+                        return Err(::fedimint_core::encoding::DecodeError::new_custom(anyhow::anyhow!(
+                            "Partial read: got {total_bytes} bytes but only read {read_bytes}"
+                        )));
+                    }
+
+                    decoded
                 }
+            }
+        });
 
-                decoded
+    let default_match_arm = if variants.iter().any(is_default_variant_enforce_valid) {
+        quote! {
+            variant => {
+                let bytes: Vec<u8> = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)?;
+                #ident::Default {
+                    variant,
+                    bytes
+                }
             }
         }
-    });
-
-    quote! {
-        let variant = <u64 as ::fedimint_core::encoding::Decodable>::consensus_decode(d, modules)? as usize;
-        let decoded = match variant {
-            #(#match_arms)*
+    } else {
+        quote! {
             _ => {
                 return Err(::fedimint_core::encoding::DecodeError::from_str("invalid enum variant"));
             }
+        }
+    };
+
+    quote! {
+        let variant = <u64 as ::fedimint_core::encoding::Decodable>::consensus_decode(d, modules)?;
+        let decoded = match variant {
+            #(#non_default_match_arms)*
+            #default_match_arm
         };
         Ok(decoded)
     }
