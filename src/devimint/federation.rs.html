@@ -965,7 +965,7 @@
 
     <span class="kw">let </span><span class="kw-2">mut </span>configs = <span class="macro">vec!</span>[];
     <span class="kw">for </span>client <span class="kw">in </span>admin_clients.values() {
-        configs.push(client.get_consensus_config_gen_params().<span class="kw">await</span><span class="question-mark">?</span>);
+        configs.push(client.consensus_config_gen_params().<span class="kw">await</span><span class="question-mark">?</span>);
     }
     <span class="comment">// Confirm all consensus configs are the same
     </span><span class="kw">let </span><span class="kw-2">mut </span>consensus: Vec&lt;<span class="kw">_</span>&gt; = configs.iter().map(|p| p.consensus.clone()).collect();

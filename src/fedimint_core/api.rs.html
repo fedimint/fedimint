@@ -1220,9 +1220,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::core::backup::SignedBackupRequest;
 <span class="kw">use </span><span class="kw">crate</span>::core::{Decoder, OutputOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
-    FETCH_BLOCK_COUNT_ENDPOINT, RECOVER_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
-    WAIT_TRANSACTION_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, RECOVER_ENDPOINT, SESSION_COUNT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    VERSION_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 <span class="kw">use </span><span class="kw">crate</span>::query::{
@@ -1529,7 +1529,7 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; anyhow::Result&lt;Block&gt;;
 
-    <span class="kw">async fn </span>fetch_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
+    <span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt;;
 
     <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt;;
 
@@ -1594,7 +1594,7 @@
         tx: Transaction,
     ) -&gt; FederationResult&lt;SerdeModuleEncoding&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt;&gt;&gt; {
         <span class="self">self</span>.request_current_consensus(
-            TRANSACTION_ENDPOINT.to_owned(),
+            SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(<span class="kw-2">&amp;</span>SerdeTransaction::from(<span class="kw-2">&amp;</span>tx)),
         )
         .<span class="kw">await
@@ -1614,9 +1614,9 @@
         .map_err(|e| <span class="macro">anyhow!</span>(e.to_string()))
     }
 
-    <span class="kw">async fn </span>fetch_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
+    <span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;u64&gt; {
         <span class="self">self</span>.request_current_consensus(
-            FETCH_BLOCK_COUNT_ENDPOINT.to_owned(),
+            SESSION_COUNT_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
         )
         .<span class="kw">await
@@ -1624,7 +1624,7 @@
 
     <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; FederationResult&lt;TransactionId&gt; {
         <span class="self">self</span>.request_current_consensus(
-            WAIT_TRANSACTION_ENDPOINT.to_owned(),
+            AWAIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(txid),
         )
         .<span class="kw">await

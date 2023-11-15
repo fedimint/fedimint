@@ -248,9 +248,9 @@
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
-    WAIT_OFFER_ENDPOINT, WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, WAIT_PREIMAGE_DECRYPTION,
+    ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
+    AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
+    LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::query::UnionResponses;
@@ -322,7 +322,7 @@
 
     <span class="kw">async fn </span>wait_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; FederationResult&lt;ContractAccount&gt; {
         <span class="self">self</span>.request_current_consensus(
-            WAIT_ACCOUNT_ENDPOINT.to_string(),
+            AWAIT_ACCOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
         )
         .<span class="kw">await
@@ -330,7 +330,7 @@
 
     <span class="kw">async fn </span>wait_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_current_consensus(
-            WAIT_BLOCK_HEIGHT_ENDPOINT.to_string(),
+            AWAIT_BLOCK_HEIGHT_ENDPOINT.to_string(),
             ApiRequestErased::new(block_height),
         )
         .<span class="kw">await
@@ -341,7 +341,7 @@
         contract: ContractId,
     ) -&gt; FederationResult&lt;ContractAccount&gt; {
         <span class="self">self</span>.request_current_consensus(
-            WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT.to_string(),
+            AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
         )
         .<span class="kw">await
@@ -352,7 +352,7 @@
         contract: ContractId,
     ) -&gt; FederationResult&lt;(IncomingContractAccount, <span class="prelude-ty">Option</span>&lt;Preimage&gt;)&gt; {
         <span class="self">self</span>.request_current_consensus(
-            WAIT_PREIMAGE_DECRYPTION.to_string(),
+            AWAIT_PREIMAGE_DECRYPTION.to_string(),
             ApiRequestErased::new(contract),
         )
         .<span class="kw">await
@@ -363,7 +363,7 @@
         payment_hash: Sha256Hash,
     ) -&gt; FederationResult&lt;IncomingContractOffer&gt; {
         <span class="self">self</span>.request_current_consensus(
-            WAIT_OFFER_ENDPOINT.to_string(),
+            AWAIT_OFFER_ENDPOINT.to_string(),
             ApiRequestErased::new(payment_hash),
         )
         .<span class="kw">await

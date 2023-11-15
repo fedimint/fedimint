@@ -557,10 +557,10 @@
 };
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_BLOCK_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
-    FETCH_BLOCK_COUNT_ENDPOINT, GET_VERIFY_CONFIG_HASH_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
-    VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+    AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
@@ -702,7 +702,7 @@
         <span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>outcome).into())
     }
 
-    <span class="kw">pub async fn </span>fetch_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+    <span class="kw">pub async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
         <span class="self">self</span>.db
             .begin_transaction()
             .<span class="kw">await
@@ -722,7 +722,7 @@
     <span class="kw">pub async fn </span>get_federation_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;FederationStatus&gt; {
         <span class="kw">let </span>peers_connection_status = <span class="self">self</span>.peer_status_channels.get_all_status().<span class="kw">await</span>;
         <span class="kw">let </span>latest_contribution_by_peer = <span class="self">self</span>.latest_contribution_by_peer.read().<span class="kw">await</span>.clone();
-        <span class="kw">let </span>session_count = <span class="self">self</span>.fetch_block_count().<span class="kw">await</span>;
+        <span class="kw">let </span>session_count = <span class="self">self</span>.session_count().<span class="kw">await</span>;
 
         <span class="kw">let </span>status_by_peer = peers_connection_status
             .into_iter()
@@ -881,7 +881,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            TRANSACTION_ENDPOINT,
+            SUBMIT_TRANSACTION_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, transaction: SerdeTransaction| -&gt; SerdeModuleEncoding&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt;&gt; {
                 <span class="kw">let </span>transaction = transaction
                     .try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry())
@@ -893,7 +893,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            WAIT_TRANSACTION_ENDPOINT,
+            AWAIT_TRANSACTION_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, tx_hash: TransactionId| -&gt; TransactionId {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Received request&quot;</span>);
 
@@ -941,9 +941,9 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            FETCH_BLOCK_COUNT_ENDPOINT,
+            SESSION_COUNT_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; u64 {
-                <span class="prelude-val">Ok</span>(fedimint.fetch_block_count().<span class="kw">await</span>)
+                <span class="prelude-val">Ok</span>(fedimint.session_count().<span class="kw">await</span>)
             }
         },
         <span class="macro">api_endpoint! </span>{
@@ -966,7 +966,7 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            GET_VERIFY_CONFIG_HASH_ENDPOINT,
+            VERIFY_CONFIG_HASH_ENDPOINT,
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(get_verification_hashes(<span class="kw-2">&amp;</span>fedimint.cfg))

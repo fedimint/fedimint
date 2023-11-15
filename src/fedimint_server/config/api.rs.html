@@ -1017,11 +1017,11 @@
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
-    GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -1123,13 +1123,13 @@
     }
 
     <span class="doccomment">/// Returns the peers that have called `add_config_gen_peer` on the leader
-    </span><span class="kw">pub async fn </span>get_config_gen_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;Vec&lt;PeerServerParams&gt;&gt; {
+    </span><span class="kw">pub async fn </span>config_gen_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;Vec&lt;PeerServerParams&gt;&gt; {
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
         <span class="prelude-val">Ok</span>(state.get_peer_info().into_values().collect())
     }
 
     <span class="doccomment">/// Returns default config gen params that can be modified by the leader
-    </span><span class="kw">pub fn </span>get_default_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenParamsRequest&gt; {
+    </span><span class="kw">pub fn </span>default_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;ConfigGenParamsRequest&gt; {
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().expect(<span class="string">&quot;lock poisoned&quot;</span>);
         <span class="prelude-val">Ok</span>(state.settings.default_params.clone())
     }
@@ -1138,7 +1138,7 @@
     ///
     /// The leader passes consensus params, everyone passes local params
     </span><span class="kw">pub async fn </span>set_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>, request: ConfigGenParamsRequest) -&gt; ApiResult&lt;()&gt; {
-        <span class="self">self</span>.get_consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.require_status(ServerStatus::SharingConfigGenParams)<span class="question-mark">?</span>;
         state.requested_params = <span class="prelude-val">Some</span>(request);
         <span class="prelude-val">Ok</span>(())
@@ -1152,7 +1152,7 @@
     }
 
     <span class="doccomment">/// Gets the consensus config gen params
-    </span><span class="kw">pub async fn </span>get_consensus_config_gen_params(
+    </span><span class="kw">pub async fn </span>consensus_config_gen_params(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         request: <span class="kw-2">&amp;</span>ConfigGenParamsRequest,
     ) -&gt; ApiResult&lt;ConfigGenParamsResponse&gt; {
@@ -1162,7 +1162,7 @@
         <span class="kw">let </span>consensus = <span class="kw">match </span>local.and_then(|local| local.leader_api_url) {
             <span class="prelude-val">Some</span>(leader_url) =&gt; {
                 <span class="kw">let </span>client = WsAdminClient::new(leader_url.clone());
-                <span class="kw">let </span>response = client.get_consensus_config_gen_params().<span class="kw">await</span>;
+                <span class="kw">let </span>response = client.consensus_config_gen_params().<span class="kw">await</span>;
                 response
                     .map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">&quot;Cannot get leader params&quot;</span>.to_string()))<span class="question-mark">?
                     </span>.consensus
@@ -1221,7 +1221,7 @@
 
                 <span class="comment">// Get params and registry
                 </span><span class="kw">let </span>request = self_clone.get_requested_params()<span class="question-mark">?</span>;
-                <span class="kw">let </span>response = self_clone.get_consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>response = self_clone.consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>(params, registry) = {
                     <span class="kw">let </span>state: MutexGuard&lt;<span class="lifetime">&#39;_</span>, ConfigGenState&gt; =
                         self_clone.require_status(ServerStatus::ReadyForConfigGen)<span class="question-mark">?</span>;
@@ -1270,7 +1270,7 @@
 
     <span class="doccomment">/// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
-    </span><span class="kw">pub fn </span>get_verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
+    </span><span class="kw">pub fn </span>verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
         <span class="kw">let </span>state = <span class="self">self
             </span>.require_status(ServerStatus::VerifyingConfigs)
             .or_else(|<span class="kw">_</span>| <span class="self">self</span>.require_status(ServerStatus::VerifiedConfigs))
@@ -1589,16 +1589,16 @@
             }
         },
         <span class="macro">api_endpoint! </span>{
-            GET_CONFIG_GEN_PEERS_ENDPOINT,
+            CONFIG_GEN_PEERS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, _context, _v: ()| -&gt; Vec&lt;PeerServerParams&gt; {
-                config.get_config_gen_peers().<span class="kw">await
+                config.config_gen_peers().<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+            DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context,  _v: ()| -&gt; ConfigGenParamsRequest {
                 check_auth(context)<span class="question-mark">?</span>;
-                config.get_default_config_gen_params()
+                config.default_config_gen_params()
             }
         },
         <span class="macro">api_endpoint! </span>{
@@ -1609,10 +1609,10 @@
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+            CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, _context, _v: ()| -&gt; ConfigGenParamsResponse {
                 <span class="kw">let </span>request = config.get_requested_params()<span class="question-mark">?</span>;
-                config.get_consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await
+                config.consensus_config_gen_params(<span class="kw-2">&amp;</span>request).<span class="kw">await
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
@@ -1623,10 +1623,10 @@
             </span>}
         },
         <span class="macro">api_endpoint! </span>{
-            GET_VERIFY_CONFIG_HASH_ENDPOINT,
+            VERIFY_CONFIG_HASH_ENDPOINT,
             <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, _v: ()| -&gt; BTreeMap&lt;PeerId, sha256::Hash&gt; {
                 check_auth(context)<span class="question-mark">?</span>;
-                config.get_verify_config_hash()
+                config.verify_config_hash()
             }
         },
         <span class="macro">api_endpoint! </span>{
@@ -1802,7 +1802,7 @@
         <span class="doccomment">/// Helper for awaiting all servers have the status
         </span><span class="kw">async fn </span>wait_status(<span class="kw-2">&amp;</span><span class="self">self</span>, status: ServerStatus) {
             <span class="kw">loop </span>{
-                <span class="kw">let </span>response = <span class="self">self</span>.client.get_consensus_config_gen_params().<span class="kw">await</span>.unwrap();
+                <span class="kw">let </span>response = <span class="self">self</span>.client.consensus_config_gen_params().<span class="kw">await</span>.unwrap();
                 <span class="kw">let </span>mismatched: Vec&lt;<span class="kw">_</span>&gt; = response
                     .consensus
                     .peers
@@ -1935,7 +1935,7 @@
         <span class="comment">// Followers can fetch configs
         </span><span class="kw">let </span><span class="kw-2">mut </span>configs = <span class="macro">vec!</span>[];
         <span class="kw">for </span>peer <span class="kw">in </span><span class="kw-2">&amp;</span>followers {
-            configs.push(peer.client.get_consensus_config_gen_params().<span class="kw">await</span>.unwrap());
+            configs.push(peer.client.consensus_config_gen_params().<span class="kw">await</span>.unwrap());
         }
         <span class="comment">// Confirm all consensus configs are the same
         </span><span class="kw">let </span><span class="kw-2">mut </span>consensus: Vec&lt;<span class="kw">_</span>&gt; = configs.iter().map(|p| p.consensus.clone()).collect();

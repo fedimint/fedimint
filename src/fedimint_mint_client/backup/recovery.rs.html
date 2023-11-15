@@ -893,8 +893,8 @@
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>amount_tiers: Vec&lt;<span class="kw">_</span>&gt; = tbs_pks.tiers().copied().collect();
         <span class="kw">let </span><span class="kw-2">mut </span>s = <span class="self">Self </span>{
-            start_epoch: backup.epoch_count,
-            next_epoch: backup.epoch_count,
+            start_epoch: backup.session_count,
+            next_epoch: backup.session_count,
             end_epoch: current_epoch_count + <span class="number">1</span>,
             spendable_notes: backup.spendable_notes,
             pending_outputs: backup

@@ -115,7 +115,7 @@
 </span><span class="kw">pub struct </span>EcashBackup {
     spendable_notes: TieredMulti&lt;SpendableNote&gt;,
     pending_notes: Vec&lt;(OutPoint, Amount, NoteIssuanceRequest)&gt;,
-    epoch_count: u64,
+    session_count: u64,
     next_note_idx: Tiered&lt;NoteIndex&gt;,
 }
 
@@ -125,7 +125,7 @@
         <span class="self">Self </span>{
             spendable_notes: TieredMulti::default(),
             pending_notes: <span class="macro">vec!</span>[],
-            epoch_count: <span class="number">0</span>,
+            session_count: <span class="number">0</span>,
             next_note_idx: Tiered::default(),
         }
     }
@@ -140,7 +140,7 @@
         module_instance_id: ModuleInstanceId,
     ) -&gt; anyhow::Result&lt;EcashBackup&gt; {
         <span class="comment">// fetch consensus height first - so we dont miss anything when scanning
-        </span><span class="kw">let </span>fedimint_block_count = api.fetch_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>session_count = api.session_count().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>notes = <span class="self">Self</span>::get_all_spendable_notes(dbtx).<span class="kw">await</span>;
 
@@ -182,7 +182,7 @@
             spendable_notes: notes,
             pending_notes,
             next_note_idx,
-            epoch_count: fedimint_block_count,
+            session_count,
         })
     }
 }

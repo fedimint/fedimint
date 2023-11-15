@@ -273,9 +273,6 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
-<a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -291,11 +288,10 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
-    GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::module::{ApiAuth, ApiRequestErased};
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
@@ -362,7 +358,7 @@
     ///
     /// Could be called on the leader, so it&#39;s not authenticated
     </span><span class="kw">pub async fn </span>get_config_gen_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;PeerServerParams&gt;&gt; {
-        <span class="self">self</span>.request(GET_CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
+        <span class="self">self</span>.request(CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
             .<span class="kw">await
     </span>}
 
@@ -373,7 +369,7 @@
         auth: ApiAuth,
     ) -&gt; FederationResult&lt;ConfigGenParamsRequest&gt; {
         <span class="self">self</span>.request(
-            GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+            DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .<span class="kw">await
@@ -397,11 +393,9 @@
     <span class="doccomment">/// Returns the consensus config gen params, followers will delegate this
     /// call to the leader.  Once this endpoint returns successfully we can run
     /// DKG.
-    </span><span class="kw">pub async fn </span>get_consensus_config_gen_params(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; FederationResult&lt;ConfigGenParamsResponse&gt; {
+    </span><span class="kw">pub async fn </span>consensus_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ConfigGenParamsResponse&gt; {
         <span class="self">self</span>.request(
-            GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+            CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::default(),
         )
         .<span class="kw">await
@@ -425,7 +419,7 @@
         auth: ApiAuth,
     ) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
         <span class="self">self</span>.request(
-            GET_VERIFY_CONFIG_HASH_ENDPOINT,
+            VERIFY_CONFIG_HASH_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .<span class="kw">await
