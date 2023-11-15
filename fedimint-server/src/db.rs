@@ -150,6 +150,7 @@ mod fedimint_migration_tests {
                     account: key_pair.x_only_public_key().0,
                 },
             )],
+            nonce: [0x42; 8],
             signature: Some(schnorr),
         };
 

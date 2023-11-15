@@ -23,6 +23,13 @@ pub struct Transaction {
     pub inputs: Vec<DynInput>,
     /// [`DynOutput`]s created as a result of the transaction
     pub outputs: Vec<DynOutput>,
+    /// No defined meaning, can be used to send the otherwise exactly same
+    /// transaction multiple times if the module inputs and outputs don't
+    /// introduce enough entropy.
+    ///
+    /// In the future the nonce can be used for grinding a tx hash that fulfills
+    /// certain PoW requirements.
+    pub nonce: [u8; 8],
     /// Aggregated MuSig2 signature over all the public keys of the inputs
     pub signature: Option<schnorr::Signature>,
 }
@@ -36,16 +43,23 @@ impl Transaction {
     /// To generate it without already having a signature use
     /// [`Self::tx_hash_from_parts`].
     pub fn tx_hash(&self) -> TransactionId {
-        Self::tx_hash_from_parts(&self.inputs, &self.outputs)
+        Self::tx_hash_from_parts(&self.inputs, &self.outputs, self.nonce)
     }
 
     /// Generate the transaction hash.
-    pub fn tx_hash_from_parts(inputs: &[DynInput], outputs: &[DynOutput]) -> TransactionId {
+    pub fn tx_hash_from_parts(
+        inputs: &[DynInput],
+        outputs: &[DynOutput],
+        nonce: [u8; 8],
+    ) -> TransactionId {
         let mut engine = TransactionId::engine();
         inputs
             .consensus_encode(&mut engine)
             .expect("write to hash engine can't fail");
         outputs
+            .consensus_encode(&mut engine)
+            .expect("write to hash engine can't fail");
+        nonce
             .consensus_encode(&mut engine)
             .expect("write to hash engine can't fail");
         TransactionId::from_engine(engine)
