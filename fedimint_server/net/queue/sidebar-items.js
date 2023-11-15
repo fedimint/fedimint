@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["MessageId","MessageQueue","UniqueMessage"]};

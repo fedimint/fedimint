@@ -977,7 +977,7 @@
     <span class="kw">const </span>BASE_MS: u64 = <span class="number">4</span>;
 
     <span class="comment">// exponential back-off with jitter
-    </span><span class="kw">fn </span>reconnection_delay(<span class="kw-2">&amp;</span><span class="self">self</span>, disconnect_count: u64) -&gt; Duration {
+    </span><span class="kw">pub fn </span>reconnection_delay(<span class="kw-2">&amp;</span><span class="self">self</span>, disconnect_count: u64) -&gt; Duration {
         <span class="kw">let </span>exponent = disconnect_count.try_into().unwrap_or(u32::MAX);
         <span class="comment">// initial value
         </span><span class="kw">let </span>delay_ms = <span class="self">Self</span>::BASE_MS.saturating_pow(exponent);

@@ -768,6 +768,8 @@
 <a href="#768" id="768">768</a>
 <a href="#769" id="769">769</a>
 <a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -807,7 +809,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::multiplexed::PeerConnectionMultiplexer;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{dns_sanitize, Connector, TlsConfig};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, NetworkConfig};
-<span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers_reliable::ReconnectPeerConnectionsReliable;
+<span class="kw">use </span><span class="kw">crate</span>::TlsTcpConnector;
 
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>distributedgen;
@@ -1444,7 +1447,8 @@
 {
     <span class="kw">let </span>connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
     <span class="kw">let </span>(connections, <span class="kw">_</span>) =
-        ReconnectPeerConnections::new(network, delay_calculator, connector, task_group).<span class="kw">await</span>;
+        ReconnectPeerConnectionsReliable::new(network, delay_calculator, connector, task_group)
+            .<span class="kw">await</span>;
     connections.into_dyn()
 }
 
