@@ -1269,23 +1269,23 @@ pub enum LightningMode {
 
 #[derive(Debug, Error)]
 pub enum GatewayError {
-    #[error("Federation error: {}", OptStacktrace(0))]
+    #[error("Federation error: {}", OptStacktrace(.0))]
     FederationError(#[from] FederationError),
-    #[error("Other: {}", OptStacktrace(0))]
+    #[error("Other: {}", OptStacktrace(.0))]
     ClientStateMachineError(#[from] anyhow::Error),
-    #[error("Failed to open the database: {}", OptStacktrace(0))]
+    #[error("Failed to open the database: {}", OptStacktrace(.0))]
     DatabaseError(anyhow::Error),
     #[error("Federation client error")]
     LightningRpcError(#[from] LightningRpcError),
-    #[error("Outgoing Payment Error {}", OptStacktrace(0))]
+    #[error("Outgoing Payment Error {}", OptStacktrace(.0))]
     OutgoingPaymentError(#[from] Box<OutgoingPaymentError>),
-    #[error("Invalid Metadata: {}", OptStacktrace(0))]
+    #[error("Invalid Metadata: {}", OptStacktrace(.0))]
     InvalidMetadata(String),
-    #[error("Unexpected state: {}", OptStacktrace(0))]
+    #[error("Unexpected state: {}", OptStacktrace(.0))]
     UnexpectedState(String),
     #[error("The gateway is disconnected")]
     Disconnected,
-    #[error("Error configuring the gateway: {}", OptStacktrace(0))]
+    #[error("Error configuring the gateway: {}", OptStacktrace(.0))]
     GatewayConfigurationError(String),
     #[error("Unsupported Network: {0}")]
     UnsupportedNetwork(Network),
