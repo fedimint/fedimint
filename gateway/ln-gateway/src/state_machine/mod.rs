@@ -40,7 +40,7 @@ use lightning_invoice::RoutingFees;
 use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
@@ -218,35 +218,56 @@ impl GatewayClientExt for ClientArc {
                 yield GatewayExtPayStates::Created;
 
                 loop {
+                    debug!("Getting next ln pay state for {operation_id}");
                     if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
                         match state.state {
                             GatewayPayStates::Preimage(out_points, preimage) => {
                                 yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
 
-                                if client.await_primary_module_outputs(operation_id, out_points.clone()).await.is_ok() {
-                                    yield GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
-                                    return;
+                                match client.await_primary_module_outputs(operation_id, out_points.clone()).await {
+                                    Ok(_) => {
+                                        debug!(?operation_id, "Success");
+                                        yield GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
+                                        return;
+
+                                    }
+                                    Err(e) => {
+                                        warn!(?operation_id, "Got failure {e:?} while awaiting for outputs {out_points:?}");
+                                        // TODO: yield something here?
+                                    }
                                 }
                             }
-                            GatewayPayStates::Canceled { txid, contract_id: _, error } => {
+                            GatewayPayStates::Canceled { txid, contract_id, error } => {
+                                debug!(?operation_id, "Trying to cancel contract {contract_id:?} due to {error:?}");
                                 match client.transaction_updates(operation_id).await.await_tx_accepted(txid).await {
                                     Ok(()) => {
+                                        debug!(?operation_id, "Canceled contract {contract_id:?} due to {error:?}");
                                         yield GatewayExtPayStates::Canceled{ error };
                                         return;
                                     }
                                     Err(e) => {
+                                        warn!(?operation_id, "Got failure {e:?} while awaiting for transaction {txid} to be accepted for");
                                         yield GatewayExtPayStates::Fail { error, error_message: format!("Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}") };
                                     }
                                 }
                             }
                             GatewayPayStates::OfferDoesNotExist(contract_id) => {
+                                warn!("Yielding OfferDoesNotExist state for {operation_id} and contract {contract_id}");
                                 yield GatewayExtPayStates::OfferDoesNotExist { contract_id };
                             }
                             GatewayPayStates::Failed{ error, error_message } => {
+                                warn!("Yielding Fail state for {operation_id} due to {error:?} {error_message:?}");
                                 yield GatewayExtPayStates::Fail{ error, error_message };
                             },
-                            _ => {}
+                            GatewayPayStates::PayInvoice(_) => {
+                                debug!("Got initial state PayInvoice while awaiting for output of {operation_id}");
+                            }
+                            other => {
+                                info!("Got state {other:?} while awaiting for output of {operation_id}");
+                            }
                         }
+                    } else {
+                        warn!("Got None while getting next ln pay state for {operation_id}");
                     }
                 }
             }
@@ -278,14 +299,16 @@ impl GatewayClientExt for ClientArc {
 
     /// Handles an intercepted HTLC by buying a preimage from the federation
     async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
+        debug!("Handling intercepted HTLC {htlc:?}");
         let gateway = self.get_first_module::<GatewayClientModule>();
         let (operation_id, output) = gateway
-            .create_funding_incoming_contract_output_from_htlc(htlc)
+            .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
+        debug!(?operation_id, "Submitted transaction for HTLC {htlc:?}");
         Ok(operation_id)
     }
 
@@ -306,17 +329,33 @@ impl GatewayClientExt for ClientArc {
                 yield GatewayExtReceiveStates::Funding;
 
                 let state = loop {
+                    debug!("Getting next ln receive state for {operation_id}");
                     if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
-                            IncomingSmStates::Preimage(preimage) => break GatewayExtReceiveStates::Preimage(preimage),
-                            IncomingSmStates::RefundSubmitted{ out_points, error } => {
+                            IncomingSmStates::Preimage(preimage) =>{
+                                debug!(?operation_id, "Received preimage");
+                                break GatewayExtReceiveStates::Preimage(preimage)
+                            },
+                            IncomingSmStates::RefundSubmitted { out_points, error } => {
+                                debug!(?operation_id, "Refund submitted for {out_points:?} {error}");
                                 match client.await_primary_module_outputs(operation_id, out_points.clone()).await {
-                                    Ok(_) => break GatewayExtReceiveStates::RefundSuccess{ out_points, error },
-                                    Err(e) => break GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error },
+                                    Ok(_) => {
+                                        debug!(?operation_id, "Refund success");
+                                        break GatewayExtReceiveStates::RefundSuccess { out_points, error }
+                                    },
+                                    Err(e) => {
+                                        warn!(?operation_id, "Got failure {e:?} while awaiting for refund outputs {out_points:?}");
+                                        break GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error }
+                                    },
                                 }
                             },
-                            IncomingSmStates::FundingFailed{ error } => break GatewayExtReceiveStates::FundingFailed{ error },
-                            _ => {}
+                            IncomingSmStates::FundingFailed { error } => {
+                                warn!(?operation_id, "Funding failed: {error:?}");
+                                break GatewayExtReceiveStates::FundingFailed{ error }
+                            },
+                            other => {
+                                debug!("Got state {other:?} while awaiting for output of {operation_id}");
+                            }
                         }
                     }
                 };
@@ -330,14 +369,19 @@ impl GatewayClientExt for ClientArc {
         &self,
         swap_params: SwapParameters,
     ) -> anyhow::Result<OperationId> {
+        debug!("Handling direct swap {swap_params:?}");
         let gateway = self.get_first_module::<GatewayClientModule>();
         let (operation_id, output) = gateway
-            .create_funding_incoming_contract_output_from_swap(swap_params)
+            .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
         let tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
+        debug!(
+            ?operation_id,
+            "Submitted transaction for direct swap {swap_params:?}"
+        );
         Ok(operation_id)
     }
 }
@@ -522,9 +566,9 @@ impl GatewayClientModule {
         registration: LightningGatewayAnnouncement,
     ) -> anyhow::Result<()> {
         self.module_api.register_gateway(&registration).await?;
-        info!(
-            "Successfully registered gateway {} with federation {}",
-            registration.info.gateway_id, id
+        debug!(
+            "Successfully registered gateway {} with federation {id}",
+            registration.info.gateway_id
         );
         Ok(())
     }
@@ -706,7 +750,7 @@ impl TryFrom<InterceptHtlcRequest> for Htlc {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SwapParameters {
     payment_hash: sha256::Hash,
     amount_msat: Amount,

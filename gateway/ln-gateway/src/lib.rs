@@ -455,6 +455,7 @@ impl Gateway {
                         let mut htlc_task_group = tg.make_subgroup().await;
                         let lnrpc_route = self.lightning_builder.build().await;
 
+                        debug!("Will try to intercept HTLC stream...");
                         // Re-create the HTLC stream if the connection breaks
                         match lnrpc_route
                             .route_htlcs(&mut htlc_task_group)
@@ -700,27 +701,37 @@ impl Gateway {
 
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<Preimage> {
         if let GatewayState::Running { .. } = self.state.read().await.clone() {
+            debug!("Handling pay invoice message: {payload:?}");
             let client = self.select_client(payload.federation_id).await?;
+            let contract_id = payload.contract_id;
             let operation_id = client.gateway_pay_bolt11_invoice(payload).await?;
             let mut updates = client
                 .gateway_subscribe_ln_pay(operation_id)
                 .await?
                 .into_stream();
-
             while let Some(update) = updates.next().await {
                 match update {
-                    GatewayExtPayStates::Success { preimage, .. } => return Ok(preimage),
+                    GatewayExtPayStates::Success { preimage, .. } => {
+                        debug!("Successfully paid invoice: {contract_id}");
+                        return Ok(preimage);
+                    }
                     GatewayExtPayStates::Fail {
                         error,
                         error_message,
                     } => {
-                        error!(error_message);
+                        error!("{error_message} while paying invoice: {contract_id}");
                         return Err(GatewayError::OutgoingPaymentError(Box::new(error)));
                     }
                     GatewayExtPayStates::Canceled { error } => {
+                        error!("Cancelled with {error} while paying invoice: {contract_id}");
                         return Err(GatewayError::OutgoingPaymentError(Box::new(error)));
                     }
-                    _ => {}
+                    GatewayExtPayStates::Created => {
+                        debug!("Got initial state Created while paying invoice: {contract_id}");
+                    }
+                    other => {
+                        info!("Got state {other:?} while paying invoice: {contract_id}");
+                    }
                 };
             }
 
@@ -729,6 +740,7 @@ impl Gateway {
             ));
         }
 
+        warn!("Gateway is not connected, cannot handle {payload:?}");
         Err(GatewayError::Disconnected)
     }
 
