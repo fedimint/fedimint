@@ -33,7 +33,7 @@ use fedimint_core::PeerId;
 use itertools::Itertools;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
@@ -70,7 +70,7 @@ impl ConfigGenApi {
             config_generated_tx,
             task_group: task_group.clone(),
         };
-        tracing::info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
+        info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
         config_gen_api
     }
 
@@ -79,7 +79,7 @@ impl ConfigGenApi {
         let mut state = self.require_status(ServerStatus::AwaitingPassword)?;
         state.auth = Some(auth);
         state.status = ServerStatus::SharingConfigGenParams;
-        tracing::info!(
+        info!(
             target: fedimint_logging::LOG_NET_PEER_DKG,
             "Set password for config gen"
         );
@@ -126,7 +126,7 @@ impl ConfigGenApi {
     pub fn add_config_gen_peer(&self, peer: PeerServerParams) -> ApiResult<()> {
         let mut state = self.state.lock().expect("lock poisoned");
         state.peers.insert(peer.api_url.clone(), peer);
-        tracing::info!(target: fedimint_logging::LOG_NET_PEER_DKG, "New peer added to config gen");
+        info!(target: fedimint_logging::LOG_NET_PEER_DKG, "New peer added to config gen");
         Ok(())
     }
 
@@ -149,7 +149,7 @@ impl ConfigGenApi {
         self.get_consensus_config_gen_params(&request).await?;
         let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
         state.requested_params = Some(request);
-        tracing::info!(
+        info!(
             target: fedimint_logging::LOG_NET_PEER_DKG,
             "Set params for config gen"
         );
@@ -205,7 +205,7 @@ impl ConfigGenApi {
             let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
             // Update our state
             state.status = ServerStatus::ReadyForConfigGen;
-            tracing::info!(
+            info!(
                 target: fedimint_logging::LOG_NET_PEER_DKG,
                 "Update config gen status to 'Ready for config gen'"
             );
@@ -267,7 +267,7 @@ impl ConfigGenApi {
                             self_clone.write_configs(&config, &state)?;
                             state.status = ServerStatus::VerifyingConfigs;
                             state.config = Some(config);
-                            tracing::info!(
+                            info!(
                                 target: fedimint_logging::LOG_NET_PEER_DKG,
                                 "Set config for config gen"
                             );
@@ -278,7 +278,7 @@ impl ConfigGenApi {
                                 "DKG failed with {:?}", e
                             );
                             state.status = ServerStatus::ConfigGenFailed;
-                            tracing::info!(
+                            info!(
                                 target: fedimint_logging::LOG_NET_PEER_DKG,
                                 "Update config gen status to 'Config gen failed'"
                             );
@@ -347,7 +347,7 @@ impl ConfigGenApi {
                 return Ok(());
             }
             state.status = ServerStatus::VerifiedConfigs;
-            tracing::info!(
+            info!(
                 target: fedimint_logging::LOG_NET_PEER_DKG,
                 "Update config gen status to 'Verfied configs'"
             );
@@ -474,7 +474,7 @@ impl ConfigGenState {
             our_name: request.our_name,
             leader_api_url: request.leader_api_url,
         });
-        tracing::info!(
+        info!(
             target: fedimint_logging::LOG_NET_PEER_DKG,
             "Set local connection for config gen"
         );
@@ -822,7 +822,7 @@ mod tests {
                     Ok(status) => return status,
                     Err(_) => sleep(Duration::from_millis(1000)).await,
                 }
-                tracing::info!(
+                info!(
                     target: fedimint_logging::LOG_TEST,
                     "Test retrying server status"
                 )
@@ -842,7 +842,7 @@ mod tests {
                 if mismatched.is_empty() {
                     break;
                 }
-                tracing::info!(
+                info!(
                     target: fedimint_logging::LOG_TEST,
                     "Test retrying server status"
                 );
