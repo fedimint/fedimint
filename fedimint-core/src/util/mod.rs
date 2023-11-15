@@ -85,7 +85,7 @@ impl SafeUrl {
 
     /// Warning: This removes the safety.
     // nosemgrep: ban-raw-url
-    pub fn reap_guts(self) -> Url {
+    pub fn to_unsafe(self) -> Url {
         self.0
     }
 
@@ -148,6 +148,15 @@ impl Debug for SafeUrl {
         write!(f, ", has_username={}", !self.0.username().is_empty())?;
         write!(f, ")")?;
         Ok(())
+    }
+}
+
+/// Only ease conversions from unsafe into safe version.
+/// We want to protect leakage of sensitive credentials unless code explicitly
+/// calls `to_unsafe()`.
+impl From<Url> for SafeUrl {
+    fn from(u: Url) -> Self {
+        SafeUrl(u)
     }
 }
 
@@ -263,6 +272,9 @@ mod tests {
                 "Debug implementation out of spec"
             );
         }
+
+        // Exercise `From`-trait via `Into`
+        let _: SafeUrl = url::Url::parse("http://1.2.3.4:80/foo").unwrap().into();
     }
 
     #[tokio::test]
