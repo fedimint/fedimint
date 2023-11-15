@@ -33,7 +33,7 @@ use fedimint_core::PeerId;
 use itertools::Itertools;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::config::io::{read_server_config, write_server_config, PLAINTEXT_PASSWORD, SALT_FILE};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
@@ -63,13 +63,15 @@ impl ConfigGenApi {
         config_generated_tx: Sender<ServerConfig>,
         task_group: &mut TaskGroup,
     ) -> Self {
-        Self {
+        let config_gen_api = Self {
             data_dir,
             state: Arc::new(Mutex::new(ConfigGenState::new(settings))),
             db,
             config_generated_tx,
             task_group: task_group.clone(),
-        }
+        };
+        info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
+        config_gen_api
     }
 
     // Sets the auth and decryption key derived from the password
@@ -77,6 +79,10 @@ impl ConfigGenApi {
         let mut state = self.require_status(ServerStatus::AwaitingPassword)?;
         state.auth = Some(auth);
         state.status = ServerStatus::SharingConfigGenParams;
+        info!(
+            target: fedimint_logging::LOG_NET_PEER_DKG,
+            "Set password for config gen"
+        );
         Ok(())
     }
 
@@ -120,6 +126,7 @@ impl ConfigGenApi {
     pub fn add_config_gen_peer(&self, peer: PeerServerParams) -> ApiResult<()> {
         let mut state = self.state.lock().expect("lock poisoned");
         state.peers.insert(peer.api_url.clone(), peer);
+        info!(target: fedimint_logging::LOG_NET_PEER_DKG, "New peer added to config gen");
         Ok(())
     }
 
@@ -142,6 +149,10 @@ impl ConfigGenApi {
         self.consensus_config_gen_params(&request).await?;
         let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
         state.requested_params = Some(request);
+        info!(
+            target: fedimint_logging::LOG_NET_PEER_DKG,
+            "Set params for config gen"
+        );
         Ok(())
     }
 
@@ -194,6 +205,10 @@ impl ConfigGenApi {
             let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
             // Update our state
             state.status = ServerStatus::ReadyForConfigGen;
+            info!(
+                target: fedimint_logging::LOG_NET_PEER_DKG,
+                "Update config gen status to 'Ready for config gen'"
+            );
             // Create a WSClient for the leader
             state
                 .local
@@ -252,6 +267,10 @@ impl ConfigGenApi {
                             self_clone.write_configs(&config, &state)?;
                             state.status = ServerStatus::VerifyingConfigs;
                             state.config = Some(config);
+                            info!(
+                                target: fedimint_logging::LOG_NET_PEER_DKG,
+                                "Set config for config gen"
+                            );
                         }
                         Err(e) => {
                             error!(
@@ -259,6 +278,10 @@ impl ConfigGenApi {
                                 "DKG failed with {:?}", e
                             );
                             state.status = ServerStatus::ConfigGenFailed;
+                            info!(
+                                target: fedimint_logging::LOG_NET_PEER_DKG,
+                                "Update config gen status to 'Config gen failed'"
+                            );
                         }
                     }
                 }
@@ -324,6 +347,10 @@ impl ConfigGenApi {
                 return Ok(());
             }
             state.status = ServerStatus::VerifiedConfigs;
+            info!(
+                target: fedimint_logging::LOG_NET_PEER_DKG,
+                "Update config gen status to 'Verfied configs'"
+            );
         }
 
         self.update_leader().await?;
@@ -447,6 +474,10 @@ impl ConfigGenState {
             our_name: request.our_name,
             leader_api_url: request.leader_api_url,
         });
+        info!(
+            target: fedimint_logging::LOG_NET_PEER_DKG,
+            "Set local connection for config gen"
+        );
         Ok(())
     }
 
@@ -694,6 +725,7 @@ mod tests {
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
+    use tracing::info;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
@@ -793,7 +825,7 @@ mod tests {
                     Ok(status) => return status,
                     Err(_) => sleep(Duration::from_millis(1000)).await,
                 }
-                tracing::info!(
+                info!(
                     target: fedimint_logging::LOG_TEST,
                     "Test retrying server status"
                 )
@@ -813,7 +845,7 @@ mod tests {
                 if mismatched.is_empty() {
                     break;
                 }
-                tracing::info!(
+                info!(
                     target: fedimint_logging::LOG_TEST,
                     "Test retrying server status"
                 );
