@@ -9,6 +9,7 @@ use anyhow::Context;
 pub use anyhow::Result;
 use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
@@ -143,7 +144,7 @@ dyn_newtype_define! {
 }
 
 const RETRY_SLEEP_MIN_MS: Duration = Duration::from_millis(10);
-const RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(1000);
+const RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(5000);
 
 /// Wrapper around [`IBitcoindRpc`] that will retry failed calls
 #[derive(Debug)]
@@ -175,7 +176,7 @@ impl<C> RetryClient<C> {
                         return Err(e);
                     }
 
-                    info!(target: LOG_BLOCKCHAIN, "Bitcoind error {:?}, retrying", e);
+                    info!(target: LOG_BLOCKCHAIN, "Bitcoind error {}, retrying", OptStacktrace(e));
                     std::thread::sleep(retry_time);
                     retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * 2);
                 }

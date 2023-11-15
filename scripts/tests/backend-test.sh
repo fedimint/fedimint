@@ -7,6 +7,10 @@ export RUST_LOG="${RUST_LOG:-info,timing=debug}"
 source scripts/lib.sh
 source scripts/build.sh ""
 
+TEST_ARGS="${TEST_ARGS:-}"
+TEST_ARGS_SERIALIZED="${TEST_ARGS:-$TEST_ARGS --test-threads=1}"
+TEST_ARGS_THREADED="${TEST_ARGS:-$TEST_ARGS --test-threads=$(($(nproc) * 2))}"
+
 >&2 echo "### Setting up tests"
 
 # Convert RUST_LOG to lowercase
@@ -36,37 +40,50 @@ if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
   >&2 echo "### Testing against bitcoind"
 
   # Note: Ideally `-E` flags can be used together, but that seems to trigger lots of problems
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+  cargo nextest run --locked --workspace --all-targets \
+    ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+    ${TEST_ARGS_THREADED} \
     -E 'package(fedimint-dummy-tests)'
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+  cargo nextest run --locked --workspace --all-targets \
+    ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+    ${TEST_ARGS_THREADED} \
     -E 'package(fedimint-mint-tests)'
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+  cargo nextest run --locked --workspace --all-targets \
+    ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+    ${TEST_ARGS_THREADED} \
     -E 'package(fedimint-wallet-tests)'
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+  cargo nextest run --locked --workspace --all-targets \
+    ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+    ${TEST_ARGS_SERIALIZED} \
     -E 'package(fedimint-ln-tests)'
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=1 \
-    -E 'package(ln-gateway)'
+  cargo nextest run --locked --workspace --all-targets \
+    ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+    ${TEST_ARGS_SERIALIZED} 'package(ln-gateway)'
   >&2 echo "### Testing against bitcoind - complete"
 fi
 
 # Switch to electrum and run wallet tests
 export FM_BITCOIN_RPC_KIND="electrum"
-export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:50001"
+export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:$FM_PORT_ELECTRS"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
   >&2 echo "### Testing against electrs"
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+  cargo nextest run --locked --workspace --all-targets \
+    ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+    ${TEST_ARGS_THREADED} \
     -E 'package(fedimint-wallet-tests)'
   >&2 echo "### Testing against electrs - complete"
 fi
 
 # Switch to esplora and run wallet tests
 export FM_BITCOIN_RPC_KIND="esplora"
-export FM_BITCOIN_RPC_URL="http://127.0.0.1:50002"
+export FM_BITCOIN_RPC_URL="http://127.0.0.1:$FM_PORT_ESPLORA"
 
 if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
   >&2 echo "### Testing against esplora"
-  cargo nextest run --locked --workspace --all-targets ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+-profile ${CARGO_PROFILE}} --test-threads=$(($(nproc) * 2)) \
+  cargo nextest run --locked --workspace --all-targets \
+    ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+    ${TEST_ARGS_THREADED} \
     -E 'package(fedimint-wallet-tests)'
   >&2 echo "### Testing against esplora - complete"
 fi
