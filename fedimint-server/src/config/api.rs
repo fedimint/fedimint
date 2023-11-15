@@ -725,6 +725,7 @@ mod tests {
     use fedimint_testing::fixtures::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
+    use tracing::info;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
