@@ -13,11 +13,10 @@ use crate::api::{
 };
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
-    GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use crate::module::{ApiAuth, ApiRequestErased};
 use crate::PeerId;
@@ -84,7 +83,7 @@ impl WsAdminClient {
     ///
     /// Could be called on the leader, so it's not authenticated
     pub async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>> {
-        self.request(GET_CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
+        self.request(CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
             .await
     }
 
@@ -95,7 +94,7 @@ impl WsAdminClient {
         auth: ApiAuth,
     ) -> FederationResult<ConfigGenParamsRequest> {
         self.request(
-            GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+            DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .await
@@ -119,11 +118,9 @@ impl WsAdminClient {
     /// Returns the consensus config gen params, followers will delegate this
     /// call to the leader.  Once this endpoint returns successfully we can run
     /// DKG.
-    pub async fn get_consensus_config_gen_params(
-        &self,
-    ) -> FederationResult<ConfigGenParamsResponse> {
+    pub async fn consensus_config_gen_params(&self) -> FederationResult<ConfigGenParamsResponse> {
         self.request(
-            GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+            CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::default(),
         )
         .await
@@ -147,7 +144,7 @@ impl WsAdminClient {
         auth: ApiAuth,
     ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
         self.request(
-            GET_VERIFY_CONFIG_HASH_ENDPOINT,
+            VERIFY_CONFIG_HASH_ENDPOINT,
             ApiRequestErased::default().with_auth(auth),
         )
         .await

@@ -840,9 +840,9 @@ impl ClientModule for MintClientModule {
             .transpose()?
             .unwrap_or(EcashBackup::new_empty());
 
-        let current_block_count = api.fetch_block_count().await?;
+        let current_session_count = api.session_count().await?;
         let state = MintRestoreInProgressState::from_backup(
-            current_block_count,
+            current_session_count,
             snapshot,
             30,
             self.cfg.tbs_pks.clone(),

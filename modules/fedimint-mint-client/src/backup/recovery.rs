@@ -299,8 +299,8 @@ impl MintRestoreInProgressState {
     ) -> Self {
         let amount_tiers: Vec<_> = tbs_pks.tiers().copied().collect();
         let mut s = Self {
-            start_epoch: backup.epoch_count,
-            next_epoch: backup.epoch_count,
+            start_epoch: backup.session_count,
+            next_epoch: backup.session_count,
             end_epoch: current_epoch_count + 1,
             spendable_notes: backup.spendable_notes,
             pending_outputs: backup

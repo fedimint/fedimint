@@ -434,7 +434,7 @@ pub async fn run_dkg(
 
     let mut configs = vec![];
     for client in admin_clients.values() {
-        configs.push(client.get_consensus_config_gen_params().await?);
+        configs.push(client.consensus_config_gen_params().await?);
     }
     // Confirm all consensus configs are the same
     let mut consensus: Vec<_> = configs.iter().map(|p| p.consensus.clone()).collect();

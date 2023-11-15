@@ -20,10 +20,10 @@ use fedimint_core::db::{
 };
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_BLOCK_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
-    FETCH_BLOCK_COUNT_ENDPOINT, GET_VERIFY_CONFIG_HASH_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, STATUS_ENDPOINT, TRANSACTION_ENDPOINT,
-    VERSION_ENDPOINT, WAIT_TRANSACTION_ENDPOINT,
+    AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -165,7 +165,7 @@ impl ConsensusApi {
         Ok((&outcome).into())
     }
 
-    pub async fn fetch_block_count(&self) -> u64 {
+    pub async fn session_count(&self) -> u64 {
         self.db
             .begin_transaction()
             .await
@@ -185,7 +185,7 @@ impl ConsensusApi {
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
         let peers_connection_status = self.peer_status_channels.get_all_status().await;
         let latest_contribution_by_peer = self.latest_contribution_by_peer.read().await.clone();
-        let session_count = self.fetch_block_count().await;
+        let session_count = self.session_count().await;
 
         let status_by_peer = peers_connection_status
             .into_iter()
@@ -344,7 +344,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            TRANSACTION_ENDPOINT,
+            SUBMIT_TRANSACTION_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<Result<TransactionId, TransactionError>> {
                 let transaction = transaction
                     .try_into_inner(&fedimint.modules.decoder_registry())
@@ -356,7 +356,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            WAIT_TRANSACTION_ENDPOINT,
+            AWAIT_TRANSACTION_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
                 debug!(transaction = %tx_hash, "Received request");
 
@@ -404,9 +404,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            FETCH_BLOCK_COUNT_ENDPOINT,
+            SESSION_COUNT_ENDPOINT,
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
-                Ok(fedimint.fetch_block_count().await)
+                Ok(fedimint.session_count().await)
             }
         },
         api_endpoint! {
@@ -429,7 +429,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            GET_VERIFY_CONFIG_HASH_ENDPOINT,
+            VERIFY_CONFIG_HASH_ENDPOINT,
             async |fedimint: &ConsensusApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 check_auth(context)?;
                 Ok(get_verification_hashes(&fedimint.cfg))

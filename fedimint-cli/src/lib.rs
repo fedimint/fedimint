@@ -406,7 +406,7 @@ Examples:
     },
 
     /// Gets the current fedimint AlephBFT block count
-    FedimintBlockCount,
+    SessionCount,
 
     ConfigDecrypt {
         /// Encrypted config file
@@ -683,12 +683,12 @@ impl FedimintCli {
                     peer,
                 },
             }),
-            Command::Dev(DevCmd::FedimintBlockCount) => {
+            Command::Dev(DevCmd::SessionCount) => {
                 let count = cli
                     .build_client_ng(&self.module_inits, None)
                     .await?
                     .api()
-                    .fetch_block_count()
+                    .session_count()
                     .await?;
                 Ok(CliOutput::EpochCount { count })
             }
