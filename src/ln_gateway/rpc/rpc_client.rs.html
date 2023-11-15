@@ -228,7 +228,7 @@
     <span class="kw">where
         </span>P: Serialize,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>builder = <span class="self">self</span>.client.post(url.reap_guts());
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = <span class="self">self</span>.client.post(url.to_unsafe());
         <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = <span class="self">self</span>.password.clone() {
             builder = builder.bearer_auth(password);
         }

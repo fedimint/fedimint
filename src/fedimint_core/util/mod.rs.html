@@ -276,6 +276,18 @@
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 
@@ -363,7 +375,7 @@
 
     <span class="doccomment">/// Warning: This removes the safety.
     </span><span class="comment">// nosemgrep: ban-raw-url
-    </span><span class="kw">pub fn </span>reap_guts(<span class="self">self</span>) -&gt; Url {
+    </span><span class="kw">pub fn </span>to_unsafe(<span class="self">self</span>) -&gt; Url {
         <span class="self">self</span>.<span class="number">0
     </span>}
 
@@ -426,6 +438,15 @@
         <span class="macro">write!</span>(f, <span class="string">&quot;, has_username={}&quot;</span>, !<span class="self">self</span>.<span class="number">0</span>.username().is_empty())<span class="question-mark">?</span>;
         <span class="macro">write!</span>(f, <span class="string">&quot;)&quot;</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="doccomment">/// Only ease conversions from unsafe into safe version.
+/// We want to protect leakage of sensitive credentials unless code explicitly
+/// calls `to_unsafe()`.
+</span><span class="kw">impl </span>From&lt;Url&gt; <span class="kw">for </span>SafeUrl {
+    <span class="kw">fn </span>from(u: Url) -&gt; <span class="self">Self </span>{
+        SafeUrl(u)
     }
 }
 
@@ -541,6 +562,9 @@
                 <span class="string">&quot;Debug implementation out of spec&quot;
             </span>);
         }
+
+        <span class="comment">// Exercise `From`-trait via `Into`
+        </span><span class="kw">let _</span>: SafeUrl = url::Url::parse(<span class="string">&quot;http://1.2.3.4:80/foo&quot;</span>).unwrap().into();
     }
 
     <span class="attr">#[tokio::test]
