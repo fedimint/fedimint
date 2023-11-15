@@ -185,6 +185,20 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
@@ -210,6 +224,13 @@
     </span><span class="kw">pub </span>inputs: Vec&lt;DynInput&gt;,
     <span class="doccomment">/// [`DynOutput`]s created as a result of the transaction
     </span><span class="kw">pub </span>outputs: Vec&lt;DynOutput&gt;,
+    <span class="doccomment">/// No defined meaning, can be used to send the otherwise exactly same
+    /// transaction multiple times if the module inputs and outputs don&#39;t
+    /// introduce enough entropy.
+    ///
+    /// In the future the nonce can be used for grinding a tx hash that fulfills
+    /// certain PoW requirements.
+    </span><span class="kw">pub </span>nonce: [u8; <span class="number">8</span>],
     <span class="doccomment">/// Aggregated MuSig2 signature over all the public keys of the inputs
     </span><span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;schnorr::Signature&gt;,
 }
@@ -223,16 +244,23 @@
     /// To generate it without already having a signature use
     /// [`Self::tx_hash_from_parts`].
     </span><span class="kw">pub fn </span>tx_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TransactionId {
-        <span class="self">Self</span>::tx_hash_from_parts(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="kw-2">&amp;</span><span class="self">self</span>.outputs)
+        <span class="self">Self</span>::tx_hash_from_parts(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="kw-2">&amp;</span><span class="self">self</span>.outputs, <span class="self">self</span>.nonce)
     }
 
     <span class="doccomment">/// Generate the transaction hash.
-    </span><span class="kw">pub fn </span>tx_hash_from_parts(inputs: <span class="kw-2">&amp;</span>[DynInput], outputs: <span class="kw-2">&amp;</span>[DynOutput]) -&gt; TransactionId {
+    </span><span class="kw">pub fn </span>tx_hash_from_parts(
+        inputs: <span class="kw-2">&amp;</span>[DynInput],
+        outputs: <span class="kw-2">&amp;</span>[DynOutput],
+        nonce: [u8; <span class="number">8</span>],
+    ) -&gt; TransactionId {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = TransactionId::engine();
         inputs
             .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
             .expect(<span class="string">&quot;write to hash engine can&#39;t fail&quot;</span>);
         outputs
+            .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
+            .expect(<span class="string">&quot;write to hash engine can&#39;t fail&quot;</span>);
+        nonce
             .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
             .expect(<span class="string">&quot;write to hash engine can&#39;t fail&quot;</span>);
         TransactionId::from_engine(engine)

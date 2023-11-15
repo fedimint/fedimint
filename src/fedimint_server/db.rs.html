@@ -289,6 +289,7 @@
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>fedimint_core::block::{AcceptedItem, SignedBlock};
@@ -441,6 +442,7 @@
                     account: key_pair.x_only_public_key().<span class="number">0</span>,
                 },
             )],
+            nonce: [<span class="number">0x42</span>; <span class="number">8</span>],
             signature: <span class="prelude-val">Some</span>(schnorr),
         };
 

@@ -162,13 +162,16 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>itertools::multiunzip;
-<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::Secp256k1;
 
 <span class="kw">use </span><span class="kw">crate</span>::module::StateGenerator;
@@ -275,7 +278,9 @@
             .map(|output| (output.output, output.state_machines))
             .unzip();
 
-        <span class="kw">let </span>txid = Transaction::tx_hash_from_parts(<span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;</span>outputs);
+        <span class="kw">let </span>nonce: [u8; <span class="number">8</span>] = rng.gen();
+
+        <span class="kw">let </span>txid = Transaction::tx_hash_from_parts(<span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;</span>outputs, nonce);
 
         <span class="kw">let </span>signature = <span class="kw">if </span>!input_keys.is_empty() {
             <span class="kw">let </span>keys = input_keys.into_iter().flatten().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -290,6 +295,7 @@
         <span class="kw">let </span>transaction = Transaction {
             inputs,
             outputs,
+            nonce,
             signature,
         };
 
