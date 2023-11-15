@@ -335,12 +335,112 @@
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(feature = <span class="string">&quot;diagnostics&quot;</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>heck::ToSnakeCase;
-<span class="kw">use </span>proc_macro::{<span class="self">self</span>, TokenStream};
+<span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>proc_macro::TokenStream;
+<span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::{format_ident, quote};
-<span class="kw">use </span>syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Field, Index};
+<span class="kw">use </span>syn::punctuated::Punctuated;
+<span class="kw">use </span>syn::token::Comma;
+<span class="kw">use </span>syn::{
+    parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Field, Fields, Index, Variant,
+};
 
 <span class="attr">#[proc_macro_derive(UnzipConsensus)]
 </span><span class="kw">pub fn </span>derive_unzip_consensus(input: TokenStream) -&gt; TokenStream {
@@ -419,12 +519,10 @@
 }
 
 <span class="kw">fn </span>do_not_ignore(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
-    !field.attrs.iter().any(|attr| {
-        attr.path
-            .segments
-            .iter()
-            .any(|segment| segment.ident == <span class="kw-2">*</span><span class="string">&quot;encodable_ignore&quot;</span>)
-    })
+    !field
+        .attrs
+        .iter()
+        .any(|attr| attr.path.is_ident(<span class="string">&quot;encodable_ignore&quot;</span>))
 }
 
 <span class="kw">fn </span>panic_if_ignored(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
@@ -434,242 +532,332 @@
     <span class="bool-val">true
 </span>}
 
-<span class="attr">#[proc_macro_derive(Encodable, attributes(encodable_ignore))]
+<span class="kw">fn </span>is_default_variant_enforce_valid(variant: <span class="kw-2">&amp;</span>Variant) -&gt; bool {
+    <span class="kw">let </span>is_default = variant
+        .attrs
+        .iter()
+        .any(|attr| attr.path.is_ident(<span class="string">&quot;encodable_default&quot;</span>));
+
+    <span class="kw">if </span>is_default {
+        <span class="macro">assert_eq!</span>(
+            variant.ident.to_string(),
+            <span class="string">&quot;Default&quot;</span>,
+            <span class="string">&quot;Default variant should be called `Default`&quot;
+        </span>);
+        <span class="kw">let </span>two_fields = variant.fields.len() == <span class="number">2</span>;
+        <span class="kw">let </span>field_names = variant
+            .fields
+            .iter()
+            .filter_map(|field| field.ident.as_ref().map(|ident| ident.to_string()))
+            .sorted()
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>correct_fields = field_names == <span class="macro">vec!</span>[<span class="string">&quot;bytes&quot;</span>.to_string(), <span class="string">&quot;variant&quot;</span>.to_string()];
+
+        <span class="macro">assert!</span>(two_fields &amp;&amp; correct_fields, <span class="string">&quot;The default variant should have exactly two field: `variant: u64` and `bytes: Vec&lt;u8&gt;`&quot;</span>);
+    }
+
+    is_default
+}
+
+<span class="attr">#[proc_macro_derive(Encodable, attributes(encodable_ignore, encodable_default))]
 </span><span class="kw">pub fn </span>derive_encodable(input: TokenStream) -&gt; TokenStream {
-    <span class="kw">let </span>DeriveInput { ident, data, .. } = <span class="macro">parse_macro_input!</span>(input);
+    <span class="kw">let </span>DeriveInput {
+        ident,
+        data,
+        generics,
+        ..
+    } = <span class="macro">parse_macro_input!</span>(input);
 
-    <span class="kw">let </span>output = <span class="kw">match </span>data {
-        Data::Struct(DataStruct { fields, .. }) =&gt; {
-            <span class="kw">if </span>fields.iter().any(|field| field.ident.is_none()) {
-                <span class="comment">// Tuple struct
-                </span><span class="kw">let </span>field_names = fields
-                    .iter()
-                    .filter(|f| do_not_ignore(f))
-                    .enumerate()
-                    .map(|(idx, <span class="kw">_</span>)| Index::from(idx))
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>::fedimint_core::encoding::Encodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
-                            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
-                            <span class="prelude-val">Ok</span>(len)
-                        }
-                    }
-                }
-            } <span class="kw">else </span>{
-                <span class="comment">// Tuple struct
-                </span><span class="kw">let </span>field_names = fields
-                    .iter()
-                    .filter(|f| do_not_ignore(f))
-                    .map(|field| field.ident.clone().unwrap())
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>::fedimint_core::encoding::Encodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
-                            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
-                            <span class="prelude-val">Ok</span>(len)
-                        }
-                    }
-                }
-            }
-        }
-        syn::Data::Enum(DataEnum { variants, .. }) =&gt; {
-            <span class="kw">if </span>variants.is_empty() {
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
-                            <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{}
-                        }
-                    }
-                }
-            } <span class="kw">else </span>{
-                <span class="kw">let </span>match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
-                <span class="kw">let </span>variant_ident = variant.ident.clone();
+    <span class="kw">let </span>encode_inner = <span class="kw">match </span>data {
+        Data::Struct(DataStruct { fields, .. }) =&gt; derive_struct_encode(<span class="kw-2">&amp;</span>fields),
+        Data::Enum(DataEnum { variants, .. }) =&gt; derive_enum_encode(<span class="kw-2">&amp;</span>ident, <span class="kw-2">&amp;</span>variants),
+        Data::Union(<span class="kw">_</span>) =&gt; error(<span class="kw-2">&amp;</span>ident, <span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>),
+    };
+    <span class="kw">let </span>(impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-                <span class="kw">if </span>variant.fields.iter().any(|field| field.ident.is_none()) {
-                    <span class="kw">let </span>variant_fields = variant
-                        .fields
-                        .iter()
-                        .filter(|f| do_not_ignore(f))
-                        .enumerate()
-                        .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;bound_{}&quot;</span>, idx))
-                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                    <span class="macro">quote! </span>{
-                        #ident::#variant_ident(#(#variant_fields,)<span class="kw-2">*</span>) =&gt; {
-                            len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#variant_idx <span class="kw">as </span>u64), writer)<span class="question-mark">?</span>;
-                            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(#variant_fields, writer)<span class="question-mark">?</span>;)*
-                        }
-                    }
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>variant_fields = variant
-                        .fields
-                        .iter()
-                        .filter(|f| do_not_ignore(f))
-                        .map(|field| field.ident.clone().unwrap())
-                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                    <span class="macro">quote! </span>{
-                        #ident::#variant_ident { #(#variant_fields,)<span class="kw-2">*</span>} =&gt; {
-                            len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#variant_idx <span class="kw">as </span>u64), writer)<span class="question-mark">?</span>;
-                            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(#variant_fields, writer)<span class="question-mark">?</span>;)*
-                        }
-                    }
-                }
-            });
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
-                            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            <span class="kw">match </span><span class="self">self </span>{
-                                #(#match_arms)*
-                            }
-                            <span class="prelude-val">Ok</span>(len)
-                        }
-                    }
-                }
+    <span class="kw">let </span>output = <span class="macro">quote! </span>{
+        <span class="kw">impl </span>#impl_generics ::fedimint_core::encoding::Encodable <span class="kw">for </span>#ident #ty_generics #where_clause {
+            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+                #encode_inner
             }
-        }
-        <span class="attr">#[allow(unreachable_code)]
-        </span>syn::Data::Union(<span class="kw">_</span>) =&gt; {
-            <span class="attr">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
-            </span>ident
-                .span()
-                .unstable()
-                .error(<span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>)
-                .emit();
-            <span class="attr">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
-            </span><span class="macro">panic!</span>(<span class="string">&quot;Error: Encodable can&#39;t be derived for unions&quot;</span>);
-            <span class="kw">return </span>TokenStream::new();
         }
     };
 
     output.into()
 }
 
+<span class="kw">fn </span>derive_struct_encode(fields: <span class="kw-2">&amp;</span>Fields) -&gt; TokenStream2 {
+    <span class="kw">if </span>is_tuple_struct(fields) {
+        <span class="comment">// Tuple struct
+        </span><span class="kw">let </span>field_names = fields
+            .iter()
+            .enumerate()
+            .filter(|(<span class="kw">_</span>, f)| do_not_ignore(f))
+            .map(|(idx, <span class="kw">_</span>)| Index::from(idx))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="macro">quote! </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
+            <span class="prelude-val">Ok</span>(len)
+        }
+    } <span class="kw">else </span>{
+        <span class="comment">// Named struct
+        </span><span class="kw">let </span>field_names = fields
+            .iter()
+            .filter(|f| do_not_ignore(f))
+            .map(|field| field.ident.clone().unwrap())
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="macro">quote! </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+            #(len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
+            <span class="prelude-val">Ok</span>(len)
+        }
+    }
+}
+
+<span class="kw">fn </span>derive_enum_encode(ident: <span class="kw-2">&amp;</span>Ident, variants: <span class="kw-2">&amp;</span>Punctuated&lt;Variant, Comma&gt;) -&gt; TokenStream2 {
+    <span class="kw">if </span>variants.is_empty() {
+        <span class="kw">return </span><span class="macro">quote! </span>{
+            <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{}
+        };
+    }
+
+    <span class="kw">let </span>non_default_match_arms = variants
+        .iter()
+        .filter(|variant| !is_default_variant_enforce_valid(variant))
+        .enumerate()
+        .map(|(variant_idx, variant)| {
+            <span class="kw">let </span>variant_ident = variant.ident.clone();
+
+            <span class="kw">if </span>is_tuple_struct(<span class="kw-2">&amp;</span>variant.fields) {
+                <span class="kw">let </span>variant_fields = variant
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .filter(|(<span class="kw">_</span>, f)| do_not_ignore(f))
+                    .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;bound_{}&quot;</span>, idx))
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                <span class="kw">let </span>variant_encode_block =
+                    derive_enum_variant_encode_block(variant_idx, <span class="kw-2">&amp;</span>variant_fields);
+                <span class="macro">quote! </span>{
+                    #ident::#variant_ident(#(#variant_fields,)<span class="kw-2">*</span>) =&gt; {
+                        #variant_encode_block
+                    }
+                }
+            } <span class="kw">else </span>{
+                <span class="kw">let </span>variant_fields = variant
+                    .fields
+                    .iter()
+                    .filter(|f| do_not_ignore(f))
+                    .map(|field| field.ident.clone().unwrap())
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                <span class="kw">let </span>variant_encode_block =
+                    derive_enum_variant_encode_block(variant_idx, <span class="kw-2">&amp;</span>variant_fields);
+                <span class="macro">quote! </span>{
+                    #ident::#variant_ident { #(#variant_fields,)<span class="kw-2">*</span>} =&gt; {
+                        #variant_encode_block
+                    }
+                }
+            }
+        });
+
+    <span class="kw">let </span>default_match_arm = variants
+        .iter()
+        .find(|variant| is_default_variant_enforce_valid(variant))
+        .map(|_variant| {
+            <span class="macro">quote! </span>{
+                #ident::Default { variant, bytes } =&gt; {
+                    len += ::fedimint_core::encoding::Encodable::consensus_encode(variant, writer)<span class="question-mark">?</span>;
+                    len += ::fedimint_core::encoding::Encodable::consensus_encode(bytes, writer)<span class="question-mark">?</span>;
+                }
+            }
+        });
+
+    <span class="kw">let </span>match_arms = non_default_match_arms.chain(default_match_arm);
+
+    <span class="macro">quote! </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        <span class="kw">match </span><span class="self">self </span>{
+            #(#match_arms)*
+        }
+        <span class="prelude-val">Ok</span>(len)
+    }
+}
+
+<span class="kw">fn </span>derive_enum_variant_encode_block(idx: usize, fields: <span class="kw-2">&amp;</span>[Ident]) -&gt; TokenStream2 {
+    <span class="macro">quote! </span>{
+        len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#idx <span class="kw">as </span>u64), writer)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::&lt;u8&gt;::new();
+        #(::fedimint_core::encoding::Encodable::consensus_encode(#fields, <span class="kw-2">&amp;mut </span>bytes)<span class="question-mark">?</span>;)*
+
+        len += ::fedimint_core::encoding::Encodable::consensus_encode(<span class="kw-2">&amp;</span>bytes, writer)<span class="question-mark">?</span>;
+    }
+}
+
 <span class="attr">#[proc_macro_derive(Decodable)]
 </span><span class="kw">pub fn </span>derive_decodable(input: TokenStream) -&gt; TokenStream {
     <span class="kw">let </span>DeriveInput { ident, data, .. } = <span class="macro">parse_macro_input!</span>(input);
 
-    <span class="kw">let </span>output = <span class="kw">match </span>data {
-        Data::Struct(DataStruct { fields, .. }) =&gt; {
-            <span class="kw">if </span>fields.iter().any(|field| field.ident.is_none()) {
-                <span class="comment">// Tuple struct
-                </span><span class="kw">let </span>field_names = fields
-                    .iter()
-                    .filter(|f| panic_if_ignored(f))
-                    .enumerate()
-                    .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;field_{}&quot;</span>, idx))
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt;
-                        {
-                            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(<span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;)*
-                            <span class="prelude-val">Ok</span>(#ident(#(#field_names,)<span class="kw-2">*</span>))
-                        }
-                    }
-                }
-            } <span class="kw">else </span>{
-                <span class="comment">// Tuple struct
-                </span><span class="kw">let </span>field_names = fields
-                    .iter()
-                    .filter(|f| panic_if_ignored(f))
-                    .map(|field| field.ident.clone().unwrap())
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt;
-                        {
-                            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(<span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;)*
-                            <span class="prelude-val">Ok</span>(#ident{
-                                #(#field_names,)*
-                            })
-                        }
-                    }
-                }
+    <span class="kw">let </span>decode_inner = <span class="kw">match </span>data {
+        Data::Struct(DataStruct { fields, .. }) =&gt; derive_struct_decode(<span class="kw-2">&amp;</span>ident, <span class="kw-2">&amp;</span>fields),
+        syn::Data::Enum(DataEnum { variants, .. }) =&gt; derive_enum_decode(<span class="kw-2">&amp;</span>ident, <span class="kw-2">&amp;</span>variants),
+        syn::Data::Union(<span class="kw">_</span>) =&gt; error(<span class="kw-2">&amp;</span>ident, <span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>),
+    };
+
+    <span class="kw">let </span>output = <span class="macro">quote! </span>{
+        <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
+            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt; {
+                #decode_inner
             }
-        }
-        syn::Data::Enum(DataEnum { variants, .. }) =&gt; {
-            <span class="kw">if </span>variants.is_empty() {
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(_d: <span class="kw-2">&amp;mut </span>D, _modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt;
-                        {
-                            <span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Enum without variants can&#39;t be instantiated&quot;</span>)))
-                        }
-                    }
-                }
-            } <span class="kw">else </span>{
-                <span class="kw">let </span>match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
-                <span class="kw">let </span>variant_ident = variant.ident.clone();
-
-                <span class="kw">if </span>variant.fields.iter().any(|field| field.ident.is_none()) {
-                    <span class="kw">let </span>variant_fields = variant
-                        .fields
-                        .iter()
-                        .filter(|f| panic_if_ignored(f))
-                        .enumerate()
-                        .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;bound_{}&quot;</span>, idx))
-                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                    <span class="macro">quote! </span>{
-                        #variant_idx =&gt; {
-                            #(<span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;)*
-                            #ident::#variant_ident(#(#variant_fields,)<span class="kw-2">*</span>)
-                        }
-                    }
-                } <span class="kw">else </span>{
-                    <span class="kw">let </span>variant_fields = variant
-                        .fields
-                        .iter()
-                        .filter(|f| panic_if_ignored(f))
-                        .map(|field| field.ident.clone().unwrap())
-                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                    <span class="macro">quote! </span>{
-                        #variant_idx =&gt; {
-                            #(<span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;)*
-                            #ident::#variant_ident{
-                                #(#variant_fields,)*
-                            }
-                        }
-                    }
-                }
-            });
-
-                <span class="macro">quote! </span>{
-                    <span class="kw">impl </span>::fedimint_core::encoding::Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D, modules: <span class="kw-2">&amp;</span>::fedimint_core::module::registry::ModuleDecoderRegistry) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_core::encoding::DecodeError&gt;
-                        {
-                            <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_core::encoding::Decodable&gt;::consensus_decode(d, modules)<span class="question-mark">? </span><span class="kw">as </span>usize;
-                            <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
-                                #(#match_arms)*
-                                <span class="kw">_ </span>=&gt; {
-                                    <span class="kw">return </span><span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::from_str(<span class="string">&quot;invalid enum variant&quot;</span>));
-                                }
-                            };
-                            <span class="prelude-val">Ok</span>(decoded)
-                        }
-                    }
-                }
-            }
-        }
-        <span class="attr">#[allow(unreachable_code)]
-        </span>syn::Data::Union(<span class="kw">_</span>) =&gt; {
-            <span class="attr">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
-            </span>ident
-                .span()
-                .unstable()
-                .error(<span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>)
-                .emit();
-            <span class="attr">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
-            </span><span class="macro">panic!</span>(<span class="string">&quot;Error: Encodable can&#39;t be derived for unions&quot;</span>);
-
-            <span class="kw">return </span>TokenStream::new();
         }
     };
 
     output.into()
+}
+
+<span class="attr">#[allow(unused_variables, unreachable_code)]
+</span><span class="kw">fn </span>error(ident: <span class="kw-2">&amp;</span>Ident, message: <span class="kw-2">&amp;</span>str) -&gt; TokenStream2 {
+    <span class="attr">#[cfg(feature = <span class="string">&quot;diagnostics&quot;</span>)]
+    </span>ident.span().unstable().error(message).emit();
+    <span class="attr">#[cfg(not(feature = <span class="string">&quot;diagnostics&quot;</span>))]
+    </span><span class="macro">panic!</span>(<span class="string">&quot;{message}&quot;</span>);
+
+    TokenStream2::new()
+}
+
+<span class="kw">fn </span>derive_struct_decode(ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>Fields) -&gt; TokenStream2 {
+    <span class="kw">let </span>decode_block = derive_tuple_or_named_decode_block(<span class="macro">quote! </span>{ #ident }, <span class="macro">quote! </span>{ d }, fields);
+
+    <span class="macro">quote! </span>{
+        <span class="prelude-val">Ok</span>(#decode_block)
+    }
+}
+
+<span class="kw">fn </span>derive_enum_decode(ident: <span class="kw-2">&amp;</span>Ident, variants: <span class="kw-2">&amp;</span>Punctuated&lt;Variant, Comma&gt;) -&gt; TokenStream2 {
+    <span class="kw">if </span>variants.is_empty() {
+        <span class="kw">return </span><span class="macro">quote! </span>{
+            <span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Enum without variants can&#39;t be instantiated&quot;</span>)))
+        };
+    }
+
+    <span class="kw">let </span>non_default_match_arms = variants.iter()
+        .filter(|variant| !is_default_variant_enforce_valid(variant))
+        .enumerate()
+        .map(|(variant_idx, variant)| {
+            <span class="kw">let </span>variant_idx = variant_idx <span class="kw">as </span>u64;
+            <span class="kw">let </span>variant_ident = variant.ident.clone();
+            <span class="kw">let </span>decode_block = derive_tuple_or_named_decode_block(
+                <span class="macro">quote! </span>{ #ident::#variant_ident },
+                <span class="macro">quote! </span>{ <span class="kw-2">&amp;mut </span>cursor },
+                <span class="kw-2">&amp;</span>variant.fields,
+            );
+
+            <span class="comment">// FIXME: make sure we read all bytes
+            </span><span class="macro">quote! </span>{
+                #variant_idx =&gt; {
+                    <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
+                    <span class="kw">let </span><span class="kw-2">mut </span>cursor = std::io::Cursor::new(<span class="kw-2">&amp;</span>bytes);
+
+                    <span class="kw">let </span>decoded = #decode_block;
+
+                    <span class="kw">let </span>read_bytes = cursor.position();
+                    <span class="kw">let </span>total_bytes = bytes.len() <span class="kw">as </span>u64;
+                    <span class="kw">if </span>read_bytes != total_bytes {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(
+                            <span class="string">&quot;Partial read: got {total_bytes} bytes but only read {read_bytes}&quot;
+                        </span>)));
+                    }
+
+                    decoded
+                }
+            }
+        });
+
+    <span class="kw">let </span>default_match_arm = <span class="kw">if </span>variants.iter().any(is_default_variant_enforce_valid) {
+        <span class="macro">quote! </span>{
+            variant =&gt; {
+                <span class="kw">let </span>bytes: Vec&lt;u8&gt; = ::fedimint_core::encoding::Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
+                #ident::Default {
+                    variant,
+                    bytes
+                }
+            }
+        }
+    } <span class="kw">else </span>{
+        <span class="macro">quote! </span>{
+            <span class="kw">_ </span>=&gt; {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(::fedimint_core::encoding::DecodeError::from_str(<span class="string">&quot;invalid enum variant&quot;</span>));
+            }
+        }
+    };
+
+    <span class="macro">quote! </span>{
+        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>::fedimint_core::encoding::Decodable&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
+            #(#non_default_match_arms)*
+            #default_match_arm
+        };
+        <span class="prelude-val">Ok</span>(decoded)
+    }
+}
+
+<span class="kw">fn </span>is_tuple_struct(fields: <span class="kw-2">&amp;</span>Fields) -&gt; bool {
+    fields.iter().any(|field| field.ident.is_none())
+}
+
+<span class="comment">// TODO: how not to use token stream for constructor, but still support both:
+//   * Enum::Variant
+//   * Struct
+// as idents
+</span><span class="kw">fn </span>derive_tuple_or_named_decode_block(
+    constructor: TokenStream2,
+    reader: TokenStream2,
+    fields: <span class="kw-2">&amp;</span>Fields,
+) -&gt; TokenStream2 {
+    <span class="kw">if </span>is_tuple_struct(fields) {
+        derive_tuple_decode_block(constructor, reader, fields)
+    } <span class="kw">else </span>{
+        derive_named_decode_block(constructor, reader, fields)
+    }
+}
+
+<span class="kw">fn </span>derive_tuple_decode_block(
+    constructor: TokenStream2,
+    reader: TokenStream2,
+    fields: <span class="kw-2">&amp;</span>Fields,
+) -&gt; TokenStream2 {
+    <span class="kw">let </span>field_names = fields
+        .iter()
+        .filter(|f| panic_if_ignored(f))
+        .enumerate()
+        .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;field_{}&quot;</span>, idx))
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="macro">quote! </span>{
+        {
+            #(<span class="kw">let </span>#field_names = ::fedimint_core::encoding::Decodable::consensus_decode(#reader, modules)<span class="question-mark">?</span>;)*
+            #constructor(#(#field_names,)<span class="kw-2">*</span>)
+        }
+    }
+}
+
+<span class="kw">fn </span>derive_named_decode_block(
+    constructor: TokenStream2,
+    reader: TokenStream2,
+    fields: <span class="kw-2">&amp;</span>Fields,
+) -&gt; TokenStream2 {
+    <span class="kw">let </span>variant_fields = fields
+        .iter()
+        .filter(|f| panic_if_ignored(f))
+        .map(|field| field.ident.clone().unwrap())
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="macro">quote! </span>{
+        {
+            #(<span class="kw">let </span>#variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode(#reader, modules)<span class="question-mark">?</span>;)*
+            #constructor{
+                #(#variant_fields,)*
+            }
+        }
+    }
 }
 </code></pre></div></section></main></body></html>
