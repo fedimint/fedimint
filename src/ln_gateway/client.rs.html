@@ -207,7 +207,7 @@
             timelock_delta,
             fees,
         } = config;
-        <span class="kw">let </span>federation_id = invite_code.federation_id;
+        <span class="kw">let </span>federation_id = invite_code.federation_id();
 
         <span class="kw">let </span><span class="kw-2">mut </span>registry = <span class="self">self</span>.registry.clone();
         registry.attach(GatewayClientInit {
@@ -275,7 +275,7 @@
         config: FederationConfig,
         <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>id = config.invite_code.federation_id;
+        <span class="kw">let </span>id = config.invite_code.federation_id();
         dbtx.insert_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
         dbtx.commit_tx_result()
             .<span class="kw">await

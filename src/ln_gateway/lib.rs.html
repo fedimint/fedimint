@@ -2093,7 +2093,7 @@
                 .<span class="kw">await
                 </span>.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
 
-            <span class="kw">let </span>federation_id = invite_code.federation_id;
+            <span class="kw">let </span>federation_id = invite_code.federation_id();
             <span class="kw">let </span>gw_client_cfg = FederationConfig {
                 invite_code,
                 mint_channel_id,
@@ -2324,7 +2324,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
             <span class="kw">for </span>config <span class="kw">in </span>configs {
-                <span class="kw">let </span>federation_id = config.invite_code.federation_id;
+                <span class="kw">let </span>federation_id = config.invite_code.federation_id();
                 <span class="kw">let </span>old_client = <span class="self">self</span>.clients.read().<span class="kw">await</span>.get(<span class="kw-2">&amp;</span>federation_id).cloned();
                 <span class="kw">let </span>all_clients = <span class="self">self</span>.clients.clone();
                 <span class="kw">let </span>all_scids = <span class="self">self</span>.scid_to_federation.clone();

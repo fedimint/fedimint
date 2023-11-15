@@ -1012,13 +1012,13 @@
     }
 
     <span class="kw">pub fn </span>get_invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InviteCode {
-        InviteCode {
-            url: <span class="self">self</span>.consensus.api_endpoints[<span class="kw-2">&amp;</span><span class="self">self</span>.local.identity]
+        InviteCode::new(
+            <span class="self">self</span>.consensus.api_endpoints[<span class="kw-2">&amp;</span><span class="self">self</span>.local.identity]
                 .url
                 .clone(),
-            federation_id: FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash()),
-            peer: <span class="self">self</span>.local.identity,
-        }
+            <span class="self">self</span>.local.identity,
+            FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash()),
+        )
     }
 
     <span class="kw">pub fn </span>add_modules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt;) {
