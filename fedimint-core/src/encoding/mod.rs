@@ -918,6 +918,80 @@ mod tests {
         assert_eq!(cursor.position(), len as u64);
     }
 
+    #[derive(Debug, Eq, PartialEq, Encodable, Decodable)]
+    enum NoDefaultEnum {
+        Foo,
+        Bar(u32, String),
+        Baz { baz: u8 },
+    }
+
+    #[derive(Debug, Eq, PartialEq, Encodable, Decodable)]
+    enum DefaultEnum {
+        Foo,
+        Bar(u32, String),
+        #[encodable_default]
+        Default {
+            variant: u64,
+            bytes: Vec<u8>,
+        },
+    }
+
+    #[test_log::test]
+    fn test_derive_enum_no_default_roundtrip_success() {
+        let enums = [
+            NoDefaultEnum::Foo,
+            NoDefaultEnum::Bar(
+                42,
+                "The answer to life, the universe, and everything".to_string(),
+            ),
+            NoDefaultEnum::Baz { baz: 0 },
+        ];
+
+        for e in enums {
+            test_roundtrip(e);
+        }
+    }
+
+    #[test_log::test]
+    fn test_derive_enum_no_default_decode_fail() {
+        let unknown_variant = DefaultEnum::Default {
+            variant: 42,
+            bytes: vec![0, 1, 2, 3],
+        };
+        let mut unknown_variant_encoding = vec![];
+        unknown_variant
+            .consensus_encode(&mut unknown_variant_encoding)
+            .unwrap();
+
+        let mut cursor = Cursor::new(&unknown_variant_encoding);
+        let decode_res = NoDefaultEnum::consensus_decode(&mut cursor, &Default::default());
+
+        match decode_res {
+            Ok(_) => panic!("Should return error"),
+            Err(e) => assert!(e.to_string().contains("invalid enum variant")),
+        }
+    }
+
+    #[test_log::test]
+    fn test_derive_enum_default_decode_success() {
+        let unknown_variant = NoDefaultEnum::Baz { baz: 123 };
+        let mut unknown_variant_encoding = vec![];
+        unknown_variant
+            .consensus_encode(&mut unknown_variant_encoding)
+            .unwrap();
+
+        let mut cursor = Cursor::new(&unknown_variant_encoding);
+        let decode_res = DefaultEnum::consensus_decode(&mut cursor, &Default::default());
+
+        assert_eq!(
+            decode_res.unwrap(),
+            DefaultEnum::Default {
+                variant: 2,
+                bytes: vec![123],
+            }
+        );
+    }
+
     #[test_log::test]
     fn test_derive_struct() {
         #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
@@ -955,13 +1029,13 @@ mod tests {
         }
 
         let test_cases = [
-            (TestEnum::Foo(Some(42)), vec![0, 1, 42]),
-            (TestEnum::Foo(None), vec![0, 0]),
+            (TestEnum::Foo(Some(42)), vec![0, 2, 1, 42]),
+            (TestEnum::Foo(None), vec![0, 1, 0]),
             (
                 TestEnum::Bar {
                     bazz: vec![1, 2, 3],
                 },
-                vec![1, 3, 1, 2, 3],
+                vec![1, 4, 3, 1, 2, 3],
             ),
         ];
 
