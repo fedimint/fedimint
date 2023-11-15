@@ -2,13 +2,11 @@
 //! members
 //!
 //! The main interface is [`fedimint_core::net::peers::IPeerConnections`] and
-//! its main implementation is [`ReconnectPeerConnections`], see these for
-//! details.
+//! its main implementation is [`ReconnectPeerConnectionsReliable`], see these
+//! for details.
 
-use std::cmp::{max, min};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
-use std::net::SocketAddr;
 use std::ops::Sub;
 use std::time::Duration;
 
@@ -24,7 +22,6 @@ use fedimint_logging::LOG_NET_PEER;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;
-use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -32,9 +29,10 @@ use tokio::sync::oneshot;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
-use crate::atomic_broadcast::Recipient;
 use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
+use crate::net::peers::{DelayCalculator, NetworkConfig};
+use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 
 /// Every how many seconds to send an empty message to our peer if we sent no
 /// messages during that time. This helps with reducing the amount of messages
@@ -42,7 +40,7 @@ use crate::net::framed::AnyFramedTransport;
 const PING_INTERVAL: Duration = Duration::from_secs(10);
 
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
-/// [`ReconnectPeerConnections`]
+/// [`ReconnectPeerConnectionsReliable`]
 pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 
 /// Connection manager that automatically reconnects to peers
@@ -52,35 +50,21 @@ pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 /// [`FramedTransport`](crate::net::framed::FramedTransport) connections. For
 /// production deployments the `Connector` has to ensure that connections are
 /// authenticated and encrypted.
-#[derive(Clone)]
-pub struct ReconnectPeerConnections<T> {
+pub struct ReconnectPeerConnectionsReliable<T> {
     connections: HashMap<PeerId, PeerConnection<T>>,
 }
 
-#[derive(Clone)]
 struct PeerConnection<T> {
-    outgoing: async_channel::Sender<T>,
-    incoming: async_channel::Receiver<T>,
+    outgoing: Sender<T>,
+    incoming: Receiver<T>,
 }
 
-/// Specifies the network configuration for federation-internal communication
+/// Internal message type for [`ReconnectPeerConnectionsReliable`], just public
+/// because it appears in the public interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkConfig {
-    /// Our federation member's identity
-    pub identity: PeerId,
-    /// Our listen address for incoming connections from other federation
-    /// members
-    pub bind_addr: SocketAddr,
-    /// Map of all peers' connection information we want to be connected to
-    pub peers: HashMap<PeerId, SafeUrl>,
-}
-
-/// Internal message type for [`ReconnectPeerConnections`], just public because
-/// it appears in the public interface.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PeerMessage<M> {
-    Message(M),
-    Ping,
+pub struct PeerMessage<M> {
+    msg: Option<UniqueMessage<M>>,
+    ack: Option<MessageId>,
 }
 
 struct PeerConnectionStateMachine<M> {
@@ -127,63 +111,17 @@ impl PeerStatusChannels {
     }
 }
 
-/// Calculates delays for reconnecting to peers
-#[derive(Debug, Clone, Copy)]
-pub struct DelayCalculator {
-    min_retry_duration_ms: u64,
-    max_retry_duration_ms: u64,
-}
-
-impl DelayCalculator {
-    /// Production defaults will try to reconnect fast but then fallback to
-    /// larger values if the error persists
-    const PROD_MAX_RETRY_DURATION_MS: u64 = 10_000;
-    const PROD_MIN_RETRY_DURATION_MS: u64 = 10;
-
-    /// For tests we don't want low min/floor delays because they can generate
-    /// too much logging/warnings and make debugging harder
-    const TEST_MAX_RETRY_DURATION_MS: u64 = 10_000;
-    const TEST_MIN_RETRY_DURATION_MS: u64 = 2_000;
-
-    pub const PROD_DEFAULT: Self = Self {
-        min_retry_duration_ms: Self::PROD_MIN_RETRY_DURATION_MS,
-        max_retry_duration_ms: Self::PROD_MAX_RETRY_DURATION_MS,
-    };
-
-    pub const TEST_DEFAULT: Self = Self {
-        min_retry_duration_ms: Self::TEST_MIN_RETRY_DURATION_MS,
-        max_retry_duration_ms: Self::TEST_MAX_RETRY_DURATION_MS,
-    };
-
-    const BASE_MS: u64 = 4;
-
-    // exponential back-off with jitter
-    pub fn reconnection_delay(&self, disconnect_count: u64) -> Duration {
-        let exponent = disconnect_count.try_into().unwrap_or(u32::MAX);
-        // initial value
-        let delay_ms = Self::BASE_MS.saturating_pow(exponent);
-        // sets a floor using the min_retry_duration_ms
-        let delay_ms = max(delay_ms, self.min_retry_duration_ms);
-        // sets a ceiling using the max_retry_duration_ms
-        let delay_ms = min(delay_ms, self.max_retry_duration_ms);
-        // add a small jitter of up to 10% to smooth out the load on the target peer if
-        // many peers are reconnecting at the same time
-        let jitter_max = delay_ms / 10;
-        let jitter_ms = thread_rng().gen_range(0..max(jitter_max, 1));
-        let delay_secs = delay_ms.saturating_add(jitter_ms) as f64 / 1000.0;
-        Duration::from_secs_f64(delay_secs)
-    }
-}
-
 struct CommonPeerConnectionState<M> {
-    incoming: async_channel::Sender<M>,
-    outgoing: async_channel::Receiver<M>,
+    resend_queue: MessageQueue<M>,
+    incoming: Sender<M>,
+    outgoing: Receiver<M>,
     our_id: PeerId,
     peer_id: PeerId,
     peer_address: SafeUrl,
     delay_calculator: DelayCalculator,
     connect: SharedAnyConnector<PeerMessage<M>>,
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
+    last_received: Option<MessageId>,
     status_query_receiver: PeerStatusChannelReceiver,
 }
 
@@ -202,13 +140,13 @@ enum PeerConnectionState<M> {
     Connected(ConnectedPeerConnectionState<M>),
 }
 
-impl<T: 'static> ReconnectPeerConnections<T>
+impl<T: 'static> ReconnectPeerConnectionsReliable<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
     /// Creates a new `ReconnectPeerConnections` connection manager from a
     /// network config and a [`Connector`](crate::net::connect::Connector).
-    /// See [`ReconnectPeerConnections`] for requirements on the
+    /// See [`ReconnectPeerConnectionsReliable`] for requirements on the
     /// `Connector`.
     #[instrument(skip_all)]
     pub(crate) async fn new(
@@ -250,7 +188,7 @@ where
             })
             .await;
         (
-            ReconnectPeerConnections { connections },
+            ReconnectPeerConnectionsReliable { connections },
             PeerStatusChannels(status_query_senders),
         )
     }
@@ -299,23 +237,6 @@ where
             }
         }
     }
-    #[allow(dead_code)]
-    pub fn send_sync(&self, msg: T, recipient: Recipient) {
-        match recipient {
-            Recipient::Everyone => {
-                for connection in self.connections.values() {
-                    connection.send(msg.clone());
-                }
-            }
-            Recipient::Peer(peer) => {
-                if let Some(connection) = self.connections.get(&peer) {
-                    connection.send(msg.clone());
-                } else {
-                    trace!(target: LOG_NET_PEER,peer = ?peer, "Not sending message to unknown peer (maybe banned)");
-                }
-            }
-        }
-    }
 }
 
 pub trait PeerSlice {
@@ -334,7 +255,7 @@ impl PeerSlice for Target<PeerId> {
 }
 
 #[async_trait]
-impl<T> IPeerConnections<T> for ReconnectPeerConnections<T>
+impl<T> IPeerConnections<T> for ReconnectPeerConnectionsReliable<T>
 where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
@@ -343,7 +264,7 @@ where
         for peer_id in peers {
             trace!(target: LOG_NET_PEER, ?peer_id, "Sending message to");
             if let Some(peer) = self.connections.get_mut(peer_id) {
-                peer.send(msg.clone());
+                peer.send(msg.clone()).await?;
             } else {
                 trace!(target: LOG_NET_PEER,peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
             }
@@ -431,11 +352,10 @@ where
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
                 match maybe_msg {
-                    Ok(msg) => {
-                        self.send_message_connected(connected, PeerMessage::Message(msg))
-                            .await
+                    Some(msg) => {
+                        self.send_message_connected(connected, msg).await
                     },
-                    Err(_) => {
+                    None => {
                         debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
                         return None;
                     },
@@ -462,24 +382,11 @@ where
                 }
                 PeerConnectionState::Connected(connected)
             },
-            Some(message_res) = connected.connection.next() => {
-                match message_res {
-                    Ok(peer_message) => {
-                        if let PeerMessage::Message(msg) = peer_message {
-                            if self.incoming.try_send(msg).is_err(){
-                                debug!(target: LOG_NET_PEER, "Could not relay incoming message since the channel is full");
-                            }
-                        }
-
-                        PeerConnectionState::Connected(connected)
-                    },
-                    Err(e) => self.disconnect_err(e, 0),
-                }
+            Some(msg_res) = connected.connection.next() => {
+                self.receive_message(connected, msg_res).await
             },
             _ = sleep_until(connected.next_ping.into()) => {
-                trace!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, "Sending ping");
-                self.send_message_connected(connected, PeerMessage::Ping)
-                    .await
+                self.send_ping(connected).await
             },
             _ = task_handle.make_shutdown_rx().await => {
                 return None;
@@ -495,14 +402,31 @@ where
         info!(target: LOG_NET_PEER,
             our_id = ?self.our_id,
             peer = ?self.peer_id, %disconnect_count,
+            resend_queue_len = self.resend_queue.queue.len(),
             "Initializing new connection");
-        match new_connection.send(PeerMessage::Ping).await {
+        match self.resend_buffer_contents(&mut new_connection).await {
             Ok(()) => PeerConnectionState::Connected(ConnectedPeerConnectionState {
                 connection: new_connection,
                 next_ping: Instant::now(),
             }),
             Err(e) => self.disconnect_err(e, disconnect_count),
         }
+    }
+
+    async fn resend_buffer_contents(
+        &self,
+        connection: &mut AnyFramedTransport<PeerMessage<M>>,
+    ) -> Result<(), anyhow::Error> {
+        for msg in self.resend_queue.iter().cloned() {
+            connection
+                .send(PeerMessage {
+                    msg: Some(msg),
+                    ack: self.last_received,
+                })
+                .await?
+        }
+
+        Ok(())
     }
 
     fn disconnect(&self, mut disconnect_count: u64) -> PeerConnectionState<M> {
@@ -532,16 +456,42 @@ where
         debug!(target: LOG_NET_PEER,
             our_id = ?self.our_id,
             peer = ?self.peer_id, %err, %disconnect_count, "Peer disconnected");
-
         self.disconnect(disconnect_count)
     }
 
     async fn send_message_connected(
         &mut self,
-        mut connected: ConnectedPeerConnectionState<M>,
-        peer_message: PeerMessage<M>,
+        connected: ConnectedPeerConnectionState<M>,
+        msg: M,
     ) -> PeerConnectionState<M> {
-        if let Err(e) = connected.connection.send(peer_message).await {
+        let umsg = self.resend_queue.push(msg);
+        trace!(target: LOG_NET_PEER, peer = ?self.peer_id, id = ?umsg.id, "Sending outgoing message");
+
+        self.send_message_connected_inner(connected, Some(umsg))
+            .await
+    }
+
+    async fn send_ping(
+        &mut self,
+        connected: ConnectedPeerConnectionState<M>,
+    ) -> PeerConnectionState<M> {
+        trace!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, "Sending ping");
+        self.send_message_connected_inner(connected, None).await
+    }
+
+    async fn send_message_connected_inner(
+        &mut self,
+        mut connected: ConnectedPeerConnectionState<M>,
+        maybe_msg: Option<UniqueMessage<M>>,
+    ) -> PeerConnectionState<M> {
+        if let Err(e) = connected
+            .connection
+            .send(PeerMessage {
+                msg: maybe_msg,
+                ack: self.last_received,
+            })
+            .await
+        {
             return self.disconnect_err(e, 0);
         }
 
@@ -553,12 +503,83 @@ where
         }
     }
 
+    async fn receive_message(
+        &mut self,
+        connected: ConnectedPeerConnectionState<M>,
+        msg_res: Result<PeerMessage<M>, anyhow::Error>,
+    ) -> PeerConnectionState<M> {
+        match self.receive_message_inner(msg_res).await {
+            Ok(()) => PeerConnectionState::Connected(connected),
+            Err(e) => {
+                self.last_received = None;
+                self.disconnect_err(e, 0)
+            }
+        }
+    }
+
+    async fn receive_message_inner(
+        &mut self,
+        msg_res: Result<PeerMessage<M>, anyhow::Error>,
+    ) -> Result<(), anyhow::Error> {
+        let PeerMessage { msg, ack } = msg_res?;
+
+        // Process ACK no matter if we received a message or not
+        if let Some(ack) = ack {
+            trace!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, ?ack, "Received ACK for sent message");
+            self.resend_queue.ack(ack);
+        }
+
+        if let Some(msg) = msg {
+            trace!(target: LOG_NET_PEER, peer = ?self.peer_id, id = ?msg.id, "Received incoming message");
+
+            let expected = self
+                .last_received
+                .map(|last_id| last_id.increment())
+                .unwrap_or(msg.id);
+
+            if msg.id < expected {
+                info!(target: LOG_NET_PEER,
+                    ?expected, received = ?msg.id, "Received old message");
+                return Ok(());
+            }
+
+            if msg.id > expected {
+                warn!(target: LOG_NET_PEER, ?expected, received = ?msg.id, "Received message from the future");
+                return Err(anyhow::anyhow!("Received message from the future"));
+            }
+
+            self.last_received = Some(expected);
+
+            debug_assert_eq!(expected, msg.id, "someone removed the check above");
+            if self.incoming.send(msg.msg).await.is_err() {
+                // ignore error - if the other side is not there,
+                // it means we're are probably shutting down
+                debug!(
+                    target: LOG_NET_PEER,
+                    "Could not deliver message to recipient - probably shutting down"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     async fn state_transition_disconnected(
         &mut self,
         disconnected: DisconnectedPeerConnectionState,
         task_handle: &TaskHandle,
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
+            maybe_msg = self.outgoing.recv() => {
+                match maybe_msg {
+                    Some(msg) => {
+                        self.send_message(disconnected, msg).await}
+                    None => {
+                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
+                        return None;
+                    }
+                }
+            },
             new_connection_res = self.incoming_connections.recv() => {
                 match new_connection_res {
                     Some(new_connection) => {
@@ -585,6 +606,16 @@ where
                 return None;
             },
         })
+    }
+
+    async fn send_message(
+        &mut self,
+        disconnected: DisconnectedPeerConnectionState,
+        msg: M,
+    ) -> PeerConnectionState<M> {
+        let umsg = self.resend_queue.push(msg);
+        trace!(target: LOG_NET_PEER, id = ?umsg.id, "Queueing outgoing message");
+        PeerConnectionState::Disconnected(disconnected)
     }
 
     async fn receive_connection(
@@ -640,8 +671,8 @@ where
         status_query_receiver: PeerStatusChannelReceiver,
         task_group: &mut TaskGroup,
     ) -> PeerConnection<M> {
-        let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
-        let (incoming_sender, incoming_receiver) = async_channel::bounded(1024);
+        let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
+        let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
 
         task_group
             .spawn(
@@ -670,21 +701,19 @@ where
         }
     }
 
-    fn send(&self, msg: M) {
-        if self.outgoing.try_send(msg).is_err() {
-            debug!(target: LOG_NET_PEER, "Could not send outgoing message since the channel is full");
-        }
+    async fn send(&mut self, msg: M) -> Cancellable<()> {
+        self.outgoing.send(msg).await.map_err(|_e| Cancelled)
     }
 
     async fn receive(&mut self) -> Cancellable<M> {
-        self.incoming.recv().await.map_err(|_| Cancelled)
+        self.incoming.recv().await.ok_or(Cancelled)
     }
 
     #[allow(clippy::too_many_arguments)] // TODO: consider refactoring
     #[instrument(skip_all, fields(peer))]
     async fn run_io_thread(
-        incoming: async_channel::Sender<M>,
-        outgoing: async_channel::Receiver<M>,
+        incoming: Sender<M>,
+        outgoing: Receiver<M>,
         our_id: PeerId,
         peer_id: PeerId,
         peer_address: SafeUrl,
@@ -695,6 +724,7 @@ where
         task_handle: &TaskHandle,
     ) {
         let common = CommonPeerConnectionState {
+            resend_queue: Default::default(),
             incoming,
             outgoing,
             our_id,
@@ -704,6 +734,7 @@ where
             connect,
             incoming_connections,
             status_query_receiver,
+            last_received: None,
         };
         let initial_state = PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
             reconnect_at: Instant::now(),
@@ -724,13 +755,23 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    use fedimint_core::task::{sleep, TaskGroup};
+    use fedimint_core::task::TaskGroup;
     use fedimint_core::PeerId;
+    use futures::Future;
 
     use super::DelayCalculator;
+    use crate::fedimint_core::net::peers::IPeerConnections;
     use crate::net::connect::mock::{MockNetwork, StreamReliability};
     use crate::net::connect::Connector;
-    use crate::net::peers::{NetworkConfig, ReconnectPeerConnections};
+    use crate::net::peers::NetworkConfig;
+    use crate::net::peers_reliable::ReconnectPeerConnectionsReliable;
+
+    async fn timeout<F, T>(f: F) -> Option<T>
+    where
+        F: Future<Output = T>,
+    {
+        tokio::time::timeout(Duration::from_secs(100), f).await.ok()
+    }
 
     #[test_log::test(tokio::test)]
     async fn test_connect() {
@@ -763,7 +804,7 @@ mod tests {
                 let connect = net_ref
                     .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
                     .into_dyn();
-                ReconnectPeerConnections::<u64>::new(
+                ReconnectPeerConnectionsReliable::<u64>::new(
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,
@@ -772,26 +813,32 @@ mod tests {
                 .await
             };
 
-            let (_peers_a, peer_status_client_a) =
+            let (mut peers_a, peer_status_client_a) =
                 build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
-            let (_peers_b, peer_status_client_b) =
+            let (mut peers_b, peer_status_client_b) =
                 build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
 
-            sleep(Duration::from_secs(20)).await;
-
+            peers_a.send(&[PeerId::from(2)], 42).await.unwrap();
+            let recv = timeout(peers_b.receive()).await.unwrap().unwrap();
+            assert_eq!(recv.0, PeerId::from(1));
+            assert_eq!(recv.1, 42);
             let status = peer_status_client_a.get_all_status().await;
             assert_eq!(status.len(), 2);
             assert!(status.values().all(|s| s.is_ok()));
 
+            peers_a.send(&[PeerId::from(3)], 21).await.unwrap();
             let status = peer_status_client_b.get_all_status().await;
             assert_eq!(status.len(), 2);
             assert!(status.values().all(|s| s.is_ok()));
 
-            let (_peers_c, peer_status_client_c) =
+            let (mut peers_c, peer_status_client_c) =
                 build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
-
-            sleep(Duration::from_secs(20)).await;
-
+            let recv = timeout(peers_c.receive())
+                .await
+                .expect("time out")
+                .expect("stream closed");
+            assert_eq!(recv.0, PeerId::from(1));
+            assert_eq!(recv.1, 21);
             let status = peer_status_client_c.get_all_status().await;
             assert_eq!(status.len(), 2);
             assert!(status.values().all(|s| s.is_ok()));
