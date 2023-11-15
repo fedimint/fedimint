@@ -662,6 +662,13 @@
 <a href="#662" id="662">662</a>
 <a href="#663" id="663">663</a>
 <a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -683,7 +690,7 @@
 <span class="kw">use </span>tonic_lnd::lnrpc::policy_update_request::Scope;
 <span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
-<span class="kw">use </span>tracing::{info, trace, warn};
+<span class="kw">use </span>tracing::{debug, info, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
@@ -711,7 +718,9 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()<span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="string">&quot;Parsed FM_BITCOIN_RPC_URL: {:?}&quot;</span>, <span class="kw-2">&amp;</span>url);
         <span class="kw">let </span>(host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(<span class="kw-2">&amp;</span>url)<span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="string">&quot;bitcoind host: {:?}, auth: {:?}&quot;</span>, <span class="kw-2">&amp;</span>host, auth);
         <span class="kw">let </span>client = Arc::new(
             bitcoincore_rpc::Client::new(<span class="kw-2">&amp;</span>host, auth).context(<span class="string">&quot;Failed to connect to bitcoind&quot;</span>)<span class="question-mark">?</span>,
         );
@@ -734,10 +743,13 @@
         </span>}
 
         <span class="comment">// mine blocks
-        </span><span class="kw">let </span>address = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+        </span><span class="kw">let </span>blocks = <span class="number">101</span>;
+        <span class="kw">let </span>address = client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">&quot;begin mining {:?} blocks to address {:?}&quot;</span>, blocks, <span class="kw-2">&amp;</span>address);
         client
-            .generate_to_address(<span class="number">101</span>, <span class="kw-2">&amp;</span>address)
+            .generate_to_address(blocks, <span class="kw-2">&amp;</span>address)
             .context(<span class="string">&quot;Failed to generate blocks&quot;</span>)<span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">&quot;mined {:?} blocks to address {:?}&quot;</span>, blocks, <span class="kw-2">&amp;</span>address);
 
         <span class="comment">// wait bitciond is ready
         </span>poll(<span class="string">&quot;bitcoind&quot;</span>, <span class="prelude-val">None</span>, || <span class="kw">async </span>{
@@ -746,6 +758,7 @@
                 .context(<span class="string">&quot;bitcoind getblockchaininfo&quot;</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
             <span class="kw">if </span>info.blocks &gt; <span class="number">100 </span>{
+                <span class="macro">info!</span>(<span class="string">&quot;block count: {:?}&quot;</span>, info.blocks);
                 <span class="prelude-val">Ok</span>(())
             } <span class="kw">else </span>{
                 <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
@@ -1231,6 +1244,7 @@
             p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
             electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
         );
+        <span class="macro">debug!</span>(<span class="string">&quot;electrs conf: {:?}&quot;</span>, conf);
         write_overwrite_async(
             process_mgr.globals.FM_ELECTRS_DIR.join(<span class="string">&quot;electrs.toml&quot;</span>),
             conf,
