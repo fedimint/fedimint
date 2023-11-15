@@ -229,6 +229,7 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
@@ -240,6 +241,7 @@
 <span class="kw">pub use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
+<span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -374,7 +376,7 @@
 }
 
 <span class="kw">const </span>RETRY_SLEEP_MIN_MS: Duration = Duration::from_millis(<span class="number">10</span>);
-<span class="kw">const </span>RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(<span class="number">1000</span>);
+<span class="kw">const </span>RETRY_SLEEP_MAX_MS: Duration = Duration::from_millis(<span class="number">5000</span>);
 
 <span class="doccomment">/// Wrapper around [`IBitcoindRpc`] that will retry failed calls
 </span><span class="attr">#[derive(Debug)]
@@ -406,7 +408,7 @@
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
 
-                    <span class="macro">info!</span>(target: LOG_BLOCKCHAIN, <span class="string">&quot;Bitcoind error {:?}, retrying&quot;</span>, e);
+                    <span class="macro">info!</span>(target: LOG_BLOCKCHAIN, <span class="string">&quot;Bitcoind error {}, retrying&quot;</span>, OptStacktrace(e));
                     std::thread::sleep(retry_time);
                     retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * <span class="number">2</span>);
                 }

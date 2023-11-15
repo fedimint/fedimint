@@ -226,6 +226,11 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -242,6 +247,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_TEST};
 <span class="kw">use </span>tempfile::TempDir;
 <span class="kw">use </span>tracing::info;
@@ -421,7 +427,11 @@
         <span class="kw">match </span>Fixtures::is_real_test() {
             <span class="bool-val">true </span>=&gt; BitcoinRpcConfig {
                 kind: <span class="string">&quot;esplora&quot;</span>.to_string(),
-                url: <span class="string">&quot;http://127.0.0.1:50002&quot;</span>.parse().unwrap(),
+                url: SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                    <span class="string">&quot;http://127.0.0.1:{}/&quot;</span>,
+                    env::var(<span class="string">&quot;FM_PORT_ESPLORA&quot;</span>).unwrap_or(String::from(<span class="string">&quot;50002&quot;</span>))
+                ))
+                .expect(<span class="string">&quot;Failed to parse default esplora server&quot;</span>),
             },
             <span class="bool-val">false </span>=&gt; <span class="self">self</span>.bitcoin_rpc.clone(),
         }
