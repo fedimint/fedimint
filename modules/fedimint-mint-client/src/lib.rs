@@ -13,6 +13,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ffi;
 use std::fmt::{Display, Formatter};
+use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,7 +36,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationI
 use fedimint_core::db::{
     AutocommitError, DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -80,10 +81,84 @@ pub const LOG_TARGET: &str = "client::module::mint";
 /// An encapsulation of [`FederationId`] and e-cash notes in the form of
 /// [`TieredMulti<SpendableNote>`] for the purpose of spending e-cash
 /// out-of-band. Also used for validating and reissuing such out-of-band notes.
+///
+/// ## Invariants
+/// * Has to contain at least one `Notes` item
+/// * Has to contain at least one `FederationIdPrefix` item
+#[derive(Clone, Debug, Encodable)]
+pub struct OOBNotes(Vec<OOBNotesData>);
+
 #[derive(Clone, Debug, Decodable, Encodable)]
-pub struct OOBNotes {
-    pub federation_id_prefix: FederationIdPrefix,
-    pub notes: TieredMulti<SpendableNote>,
+enum OOBNotesData {
+    Notes(TieredMulti<SpendableNote>),
+    FederationIdPrefix(FederationIdPrefix),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
+
+impl OOBNotes {
+    pub fn new(
+        federation_id_prefix: FederationIdPrefix,
+        notes: TieredMulti<SpendableNote>,
+    ) -> Self {
+        Self(vec![
+            OOBNotesData::FederationIdPrefix(federation_id_prefix),
+            OOBNotesData::Notes(notes),
+        ])
+    }
+
+    pub fn federation_id_prefix(&self) -> FederationIdPrefix {
+        self.0
+            .iter()
+            .find_map(|data| match data {
+                OOBNotesData::FederationIdPrefix(prefix) => Some(*prefix),
+                _ => None,
+            })
+            .expect("Invariant violated: OOBNotes does not contain a FederationIdPrefix")
+    }
+
+    pub fn notes(&self) -> &TieredMulti<SpendableNote> {
+        self.0
+            .iter()
+            .find_map(|data| match data {
+                OOBNotesData::Notes(notes) => Some(notes),
+                _ => None,
+            })
+            .expect("Invariant violated: OOBNotes does not contain any notes")
+    }
+}
+
+impl Decodable for OOBNotes {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        _modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let inner = Vec::<OOBNotesData>::consensus_decode(r, &ModuleDecoderRegistry::default())?;
+
+        // TODO: maybe write some macros for defining TLV structs?
+        if !inner
+            .iter()
+            .any(|data| matches!(data, OOBNotesData::Notes(_)))
+        {
+            return Err(DecodeError::from_str(
+                "No e-cash notes were found in OOBNotes data",
+            ));
+        }
+
+        if !inner
+            .iter()
+            .any(|data| matches!(data, OOBNotesData::FederationIdPrefix(_)))
+        {
+            return Err(DecodeError::from_str(
+                "No Federation ID provided in OOBNotes data",
+            ));
+        }
+
+        Ok(OOBNotes(inner))
+    }
 }
 
 impl FromStr for OOBNotes {
@@ -97,7 +172,7 @@ impl FromStr for OOBNotes {
             &ModuleDecoderRegistry::default(),
         )?;
 
-        ensure!(!oob_notes.notes.is_empty(), "OOBNotes cannot be empty");
+        ensure!(!oob_notes.notes().is_empty(), "OOBNotes cannot be empty");
 
         Ok(oob_notes)
     }
@@ -134,7 +209,7 @@ impl<'de> Deserialize<'de> for OOBNotes {
 impl OOBNotes {
     /// Returns the total value of all notes in msat as `Amount`
     pub fn total_amount(&self) -> Amount {
-        self.notes.total_amount()
+        self.notes().total_amount()
     }
 }
 
@@ -256,10 +331,10 @@ impl MintClientExt for ClientArc {
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         let mint = self.get_first_module::<MintClientModule>();
-        let OOBNotes {
-            federation_id_prefix,
-            notes,
-        } = oob_notes;
+
+        let notes = oob_notes.notes().clone();
+        let federation_id_prefix = oob_notes.federation_id_prefix();
+
         ensure!(
             notes.total_amount() > Amount::ZERO,
             "Reissuing zero-amount e-cash isn't supported"
@@ -397,10 +472,7 @@ impl MintClientExt for ClientArc {
                                 try_cancel_after,
                             )
                             .await?;
-                        let oob_notes = OOBNotes {
-                            federation_id_prefix,
-                            notes,
-                        };
+                        let oob_notes = OOBNotes::new(federation_id_prefix, notes);
 
                         let dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
 
@@ -437,10 +509,10 @@ impl MintClientExt for ClientArc {
 
     async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount> {
         let mint = self.get_first_module::<MintClientModule>();
-        let OOBNotes {
-            federation_id_prefix,
-            notes,
-        } = oob_notes;
+
+        let federation_id_prefix = oob_notes.federation_id_prefix();
+        let notes = oob_notes.notes().clone();
+
         if federation_id_prefix != mint.federation_id.to_prefix() {
             bail!("Federation ID does not match");
         }
@@ -1747,10 +1819,7 @@ mod tests {
 
     #[test]
     fn decoding_empty_oob_notes_fails() {
-        let empty_oob_notes = OOBNotes {
-            federation_id_prefix: FederationId::dummy().to_prefix(),
-            notes: Default::default(),
-        };
+        let empty_oob_notes = OOBNotes::new(FederationId::dummy().to_prefix(), Default::default());
         let oob_notes_string = empty_oob_notes.to_string();
 
         let res = oob_notes_string.parse::<OOBNotes>();

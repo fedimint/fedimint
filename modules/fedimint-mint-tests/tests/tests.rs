@@ -74,10 +74,7 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
     // Spend from client1 to client2
     let err_msg = client1
         .reissue_external_notes(
-            OOBNotes {
-                federation_id_prefix: client1.federation_id().to_prefix(),
-                notes: Default::default(),
-            },
+            OOBNotes::new(client1.federation_id().to_prefix(), Default::default()),
             (),
         )
         .await
