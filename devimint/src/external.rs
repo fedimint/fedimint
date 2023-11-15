@@ -19,7 +19,7 @@ use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tonic_lnd::lnrpc::policy_update_request::Scope;
 use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
 use tonic_lnd::Client as LndClient;
-use tracing::{info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
@@ -47,7 +47,9 @@ impl Bitcoind {
             .await?;
 
         let url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
+        debug!("Parsed FM_BITCOIN_RPC_URL: {:?}", &url);
         let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
+        debug!("bitcoind host: {:?}, auth: {:?}", &host, auth);
         let client = Arc::new(
             bitcoincore_rpc::Client::new(&host, auth).context("Failed to connect to bitcoind")?,
         );
@@ -70,10 +72,13 @@ impl Bitcoind {
         }
 
         // mine blocks
+        let blocks = 101;
         let address = client.get_new_address(None, None)?;
+        info!("begin mining {:?} blocks to address {:?}", blocks, &address);
         client
-            .generate_to_address(101, &address)
+            .generate_to_address(blocks, &address)
             .context("Failed to generate blocks")?;
+        info!("mined {:?} blocks to address {:?}", blocks, &address);
 
         // wait bitciond is ready
         poll("bitcoind", None, || async {
@@ -82,6 +87,7 @@ impl Bitcoind {
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?;
             if info.blocks > 100 {
+                info!("block count: {:?}", info.blocks);
                 Ok(())
             } else {
                 Err(ControlFlow::Continue(anyhow!(
@@ -567,6 +573,7 @@ impl Electrs {
             p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
             electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
         );
+        debug!("electrs conf: {:?}", conf);
         write_overwrite_async(
             process_mgr.globals.FM_ELECTRS_DIR.join("electrs.toml"),
             conf,
