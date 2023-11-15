@@ -16,9 +16,7 @@ use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{
     LightningClientExt, LightningClientInit, LnPayState, OutgoingLightningPayment,
 };
-use fedimint_mint_client::{
-    MintClientExt, MintClientInit, MintClientModule, MintCommonInit, OOBNotes,
-};
+use fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOBNotes};
 use fedimint_wallet_client::WalletClientInit;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
@@ -65,8 +63,9 @@ pub async fn reissue_notes(
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
-    let operation_id = client.reissue_external_notes(oob_notes, ()).await?;
-    let mut updates = client
+    let mint = &client.get_first_module::<MintClientModule>();
+    let operation_id = mint.reissue_external_notes(oob_notes, ()).await?;
+    let mut updates = mint
         .subscribe_reissue_external_notes(operation_id)
         .await?
         .into_stream();
@@ -83,13 +82,14 @@ pub async fn reissue_notes(
 }
 
 pub async fn do_spend_notes(
-    client: &ClientArc,
+    mint: &ClientArc,
     amount: Amount,
 ) -> anyhow::Result<(OperationId, OOBNotes)> {
-    let (operation_id, oob_notes) = client
+    let mint = &mint.get_first_module::<MintClientModule>();
+    let (operation_id, oob_notes) = mint
         .spend_notes(amount, Duration::from_secs(600), ())
         .await?;
-    let mut updates = client
+    let mut updates = mint
         .subscribe_spend_notes(operation_id)
         .await?
         .into_stream();
@@ -110,6 +110,7 @@ pub async fn await_spend_notes_finish(
     operation_id: OperationId,
 ) -> anyhow::Result<()> {
     let mut updates = client
+        .get_first_module::<MintClientModule>()
         .subscribe_spend_notes(operation_id)
         .await?
         .into_stream();

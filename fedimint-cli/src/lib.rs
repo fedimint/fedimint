@@ -31,7 +31,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_client::{MintClientExt, MintClientInit, SpendableNote};
+use fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
@@ -567,6 +567,7 @@ impl FedimintCli {
 
                 info!("Waiting for restore to complete");
                 let restored_amount = client
+                    .get_first_module::<MintClientModule>()
                     .await_restore_finished()
                     .await
                     .map_err_cli_msg(CliErrorKind::GeneralFailure, "failure")?;

@@ -18,13 +18,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
+use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
 use backup::recovery::{MintRestoreStateMachine, MintRestoreStates};
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::DbKeyPrefix;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::{ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, Executor, ModuleNotifier, State, StateTransition};
@@ -213,77 +213,8 @@ impl OOBNotes {
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-pub trait MintClientExt {
-    /// Try to reissue e-cash notes received from a third party to receive them
-    /// in our wallet. The progress and outcome can be observed using
-    /// [`MintClientExt::subscribe_reissue_external_notes`].
-    async fn reissue_external_notes<M: Serialize + Send>(
-        &self,
-        oob_notes: OOBNotes,
-        extra_meta: M,
-    ) -> anyhow::Result<OperationId>;
-
-    /// Subscribe to updates on the progress of a reissue operation started with
-    /// [`MintClientExt::reissue_external_notes`].
-    async fn subscribe_reissue_external_notes(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReissueExternalNotesState>>;
-
-    /// Fetches and removes notes of *at least* amount `min_amount` from the
-    /// wallet to be sent to the recipient out of band. These spends can be
-    /// canceled by calling [`MintClientExt::try_cancel_spend_notes`] as long as
-    /// the recipient hasn't reissued the e-cash notes themselves yet.
-    ///
-    /// The client will also automatically attempt to cancel the operation after
-    /// `try_cancel_after` time has passed. This is a safety mechanism to avoid
-    /// users forgetting about failed out-of-band transactions. The timeout
-    /// should be chosen such that the recipient (who is potentially offline at
-    /// the time of receiving the e-cash notes) had a reasonable timeframe to
-    /// come online and reissue the notes themselves.
-    async fn spend_notes<M: Serialize + Send>(
-        &self,
-        min_amount: Amount,
-        try_cancel_after: Duration,
-        extra_meta: M,
-    ) -> anyhow::Result<(OperationId, OOBNotes)>;
-
-    /// Same as `spend_notes` but allows different to select notes to be used.
-    async fn spend_notes_with_selector<M: Serialize + Send>(
-        &self,
-        notes_selector: &impl NotesSelector<SpendableNote>,
-        requested_amount: Amount,
-        try_cancel_after: Duration,
-        extra_meta: M,
-    ) -> anyhow::Result<(OperationId, OOBNotes)>;
-
-    /// Validate the given notes and return the total amount of the notes.
-    /// Validation checks that:
-    /// - the federation ID is correct
-    /// - the note has a valid signature
-    /// - the spend key is correct.
-    async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount>;
-
-    /// Try to cancel a spend operation started with
-    /// [`MintClientExt::spend_notes`]. If the e-cash notes have already been
-    /// spent this operation will fail which can be observed using
-    /// [`MintClientExt::subscribe_spend_notes`].
-    async fn try_cancel_spend_notes(&self, operation_id: OperationId);
-
-    /// Subscribe to updates on the progress of a raw e-cash spend operation
-    /// started with [`MintClientExt::spend_notes`].
-    async fn subscribe_spend_notes(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>>;
-
-    /// Awaits the backup restoration to complete
-    async fn await_restore_finished(&self) -> anyhow::Result<Amount>;
-}
-
 /// The high-level state of a reissue operation started with
-/// [`MintClientExt::reissue_external_notes`].
+/// [`MintClientModule::reissue_external_notes`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ReissueExternalNotesState {
     /// The operation has been created and is waiting to be accepted by the
@@ -299,7 +230,7 @@ pub enum ReissueExternalNotesState {
 }
 
 /// The high-level state of a raw e-cash spend operation started with
-/// [`MintClientExt::spend_notes`].
+/// [`MintClientModule::spend_notes`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SpendOOBState {
     /// The e-cash has been selected and given to the caller
@@ -321,311 +252,6 @@ pub enum SpendOOBState {
     /// succeeded, indicating the recipient did not reissue the e-cash to
     /// themselves, meaning the out-of-band spend **failed**.
     Refunded,
-}
-
-#[apply(async_trait_maybe_send!)]
-impl MintClientExt for ClientArc {
-    async fn reissue_external_notes<M: Serialize + Send>(
-        &self,
-        oob_notes: OOBNotes,
-        extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
-        let mint = self.get_first_module::<MintClientModule>();
-
-        let notes = oob_notes.notes().clone();
-        let federation_id_prefix = oob_notes.federation_id_prefix();
-
-        ensure!(
-            notes.total_amount() > Amount::ZERO,
-            "Reissuing zero-amount e-cash isn't supported"
-        );
-
-        if federation_id_prefix != mint.federation_id.to_prefix() {
-            bail!("Federation ID does not match");
-        }
-
-        let operation_id = OperationId(
-            notes
-                .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
-                .into_inner(),
-        );
-
-        let amount = notes.total_amount();
-        let mint_input = mint
-            .create_input_from_notes(operation_id, notes)
-            .await?
-            .into_iter()
-            .map(|input| input.into_dyn(mint.id))
-            .collect();
-
-        let tx = TransactionBuilder::new().with_inputs(mint_input);
-
-        let extra_meta = serde_json::to_value(extra_meta)
-            .expect("MintClientExt::reissue_external_notes extra_meta is serializable");
-        let operation_meta_gen = move |txid, _| MintOperationMeta {
-            variant: MintOperationMetaVariants::Reissuance {
-                out_point: OutPoint { txid, out_idx: 0 },
-            },
-            amount,
-            extra_meta: extra_meta.clone(),
-        };
-
-        let change = self
-            .finalize_and_submit_transaction(
-                operation_id,
-                MintCommonInit::KIND.as_str(),
-                operation_meta_gen,
-                tx,
-            )
-            .await
-            .context("We already reissued these notes")?
-            .1;
-
-        self.await_primary_module_outputs(operation_id, change)
-            .await?;
-
-        Ok(operation_id)
-    }
-
-    async fn subscribe_reissue_external_notes(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReissueExternalNotesState>> {
-        let operation = mint_operation(self, operation_id).await?;
-        let out_point = match operation.meta::<MintOperationMeta>().variant {
-            MintOperationMetaVariants::Reissuance { out_point } => out_point,
-            _ => bail!("Operation is not a reissuance"),
-        };
-        let client = self.clone();
-
-        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
-            stream! {
-                let mint = client.get_first_module::<MintClientModule>();
-
-                yield ReissueExternalNotesState::Created;
-
-                match client
-                    .transaction_updates(operation_id)
-                    .await
-                    .await_tx_accepted(out_point.txid)
-                    .await
-                {
-                    Ok(()) => {
-                        yield ReissueExternalNotesState::Issuing;
-                    }
-                    Err(e) => {
-                        yield ReissueExternalNotesState::Failed(format!("Transaction not accepted {e:?}"));
-                    }
-                }
-
-                match mint.await_output_finalized(operation_id, out_point).await {
-                    Ok(_) => {
-                        yield ReissueExternalNotesState::Done;
-                    },
-                    Err(e) => {
-                        yield ReissueExternalNotesState::Failed(e.to_string());
-                    },
-                }
-            }}
-        ))
-    }
-
-    async fn spend_notes<M: Serialize + Send>(
-        &self,
-        min_amount: Amount,
-        try_cancel_after: Duration,
-        extra_meta: M,
-    ) -> anyhow::Result<(OperationId, OOBNotes)> {
-        self.spend_notes_with_selector(
-            &SelectNotesWithAtleastAmount,
-            min_amount,
-            try_cancel_after,
-            extra_meta,
-        )
-        .await
-    }
-
-    async fn spend_notes_with_selector<M: Serialize + Send>(
-        &self,
-        notes_selector: &impl NotesSelector<SpendableNote>,
-        requested_amount: Amount,
-        try_cancel_after: Duration,
-        extra_meta: M,
-    ) -> anyhow::Result<(OperationId, OOBNotes)> {
-        let mint = self.get_first_module::<MintClientModule>();
-        let mint_id = mint.id;
-        let federation_id_prefix = mint.federation_id.to_prefix();
-        let mint = &*mint;
-        let extra_meta = serde_json::to_value(extra_meta)
-            .expect("MintClientExt::spend_notes extra_meta is serializable");
-
-        self.db()
-            .autocommit(
-                move |dbtx| {
-                    let extra_meta = extra_meta.clone();
-                    Box::pin(async move {
-                        let (operation_id, states, notes) = mint
-                            .spend_notes_oob(
-                                &mut dbtx.dbtx_ref_with_prefix_module_id(mint_id),
-                                notes_selector,
-                                requested_amount,
-                                try_cancel_after,
-                            )
-                            .await?;
-                        let oob_notes = OOBNotes::new(federation_id_prefix, notes);
-
-                        let dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
-
-                        self.add_state_machines(dbtx, dyn_states).await?;
-                        self.operation_log()
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                MintCommonInit::KIND.as_str(),
-                                MintOperationMeta {
-                                    variant: MintOperationMetaVariants::SpendOOB {
-                                        requested_amount,
-                                        oob_notes: oob_notes.clone(),
-                                    },
-                                    amount: oob_notes.total_amount(),
-                                    extra_meta,
-                                },
-                            )
-                            .await;
-
-                        Ok((operation_id, oob_notes))
-                    })
-                },
-                Some(100),
-            )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
-    }
-
-    async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount> {
-        let mint = self.get_first_module::<MintClientModule>();
-
-        let federation_id_prefix = oob_notes.federation_id_prefix();
-        let notes = oob_notes.notes().clone();
-
-        if federation_id_prefix != mint.federation_id.to_prefix() {
-            bail!("Federation ID does not match");
-        }
-
-        let tbs_pks = &mint.cfg.tbs_pks;
-
-        for (idx, (amt, snote)) in notes.iter_items().enumerate() {
-            let key = tbs_pks
-                .get(amt)
-                .ok_or_else(|| anyhow!("Note {idx} uses an invalid amount tier {amt}"))?;
-
-            let note = snote.note();
-            if !note.verify(*key) {
-                bail!("Note {idx} has an invalid federation signature");
-            }
-
-            let expected_nonce = Nonce(snote.spend_key.x_only_public_key().0);
-            if note.nonce != expected_nonce {
-                bail!("Note {idx} cannot be spent using the supplied spend key");
-            }
-        }
-
-        Ok(notes.total_amount())
-    }
-
-    async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
-        let mint = self.get_first_module::<MintClientModule>();
-
-        // TODO: make robust by writing to the DB, this can fail
-        let _ = mint.cancel_oob_payment_bc.send(operation_id);
-    }
-
-    async fn subscribe_spend_notes(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>> {
-        let operation = mint_operation(self, operation_id).await?;
-        if !matches!(
-            operation.meta::<MintOperationMeta>().variant,
-            MintOperationMetaVariants::SpendOOB { .. }
-        ) {
-            bail!("Operation is not a out-of-band spend");
-        };
-
-        let client = self.clone();
-
-        Ok(operation.outcome_or_updates(self.db(), operation_id, || {
-            stream! {
-                let mint = client.get_first_module::<MintClientModule>();
-
-                yield SpendOOBState::Created;
-
-                let refund = mint
-                    .await_spend_oob_refund(operation_id)
-                    .await;
-
-                if refund.user_triggered {
-                    yield SpendOOBState::UserCanceledProcessing;
-
-                    match client
-                        .transaction_updates(operation_id)
-                        .await
-                        .await_tx_accepted(refund.transaction_id)
-                        .await
-                    {
-                        Ok(()) => {
-                            yield SpendOOBState::UserCanceledSuccess;
-                        },
-                        Err(_) => {
-                            yield SpendOOBState::UserCanceledFailure;
-                        }
-                    }
-                } else {
-                    match client
-                        .transaction_updates(operation_id)
-                        .await
-                        .await_tx_accepted(refund.transaction_id)
-                        .await
-                    {
-                        Ok(()) => {
-                            yield SpendOOBState::Refunded;
-                        },
-                        Err(_) => {
-                            yield SpendOOBState::Success;
-                        }
-                    }
-                }
-            }
-        }))
-    }
-
-    /// Waits for the mint backup restoration to finish
-    async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
-        let mint = self.get_first_module::<MintClientModule>();
-        mint.await_restore_finished().await
-    }
-}
-
-async fn mint_operation(
-    client: &ClientArc,
-    operation_id: OperationId,
-) -> anyhow::Result<OperationLogEntry> {
-    let operation = client
-        .operation_log()
-        .get_operation(operation_id)
-        .await
-        .ok_or(anyhow!("Operation not found"))?;
-
-    if operation.operation_module_kind() != MintCommonInit::KIND.as_str() {
-        bail!("Operation is not a mint operation");
-    }
-
-    Ok(operation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -711,6 +337,7 @@ impl ClientModuleInit for MintClientInit {
             secp: Secp256k1::new(),
             notifier: args.notifier().clone(),
             cancel_oob_payment_bc,
+            client_ctx: args.context(),
         })
     }
 }
@@ -748,6 +375,7 @@ pub struct MintClientModule {
     secp: Secp256k1<All>,
     notifier: ModuleNotifier<DynGlobalClientContext, MintClientStateMachines>,
     cancel_oob_payment_bc: tokio::sync::broadcast::Sender<OperationId>,
+    client_ctx: ClientContext<Self>,
 }
 
 // TODO: wrap in Arc
@@ -804,7 +432,7 @@ impl ClientModule for MintClientModule {
 
     async fn handle_cli_command(
         &self,
-        client: &ClientArc,
+        _client: &ClientArc,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         if args.is_empty() {
@@ -831,8 +459,8 @@ impl ClientModule for MintClientModule {
 
                 let amount = oob_notes.total_amount();
 
-                let operation_id = client.reissue_external_notes(oob_notes, ()).await?;
-                let mut updates = client
+                let operation_id = self.reissue_external_notes(oob_notes, ()).await?;
+                let mut updates = self
                     .subscribe_reissue_external_notes(operation_id)
                     .await
                     .unwrap()
@@ -1301,7 +929,7 @@ impl MintClientModule {
         .await
     }
 
-    async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
+    pub async fn await_restore_finished(&self) -> anyhow::Result<Amount> {
         let mut restore_stream = self
             .notifier
             .subscribe(MINT_BACKUP_RESTORE_OPERATION_ID)
@@ -1423,6 +1051,324 @@ impl MintClientModule {
     ) -> (NoteIssuanceRequest, BlindNonce) {
         let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(&self.secp, secret)
+    }
+
+    /// Try to reissue e-cash notes received from a third party to receive them
+    /// in our wallet. The progress and outcome can be observed using
+    /// [`MintClientModule::subscribe_reissue_external_notes`].
+    pub async fn reissue_external_notes<M: Serialize + Send>(
+        &self,
+        oob_notes: OOBNotes,
+        extra_meta: M,
+    ) -> anyhow::Result<OperationId> {
+        let notes = oob_notes.notes().clone();
+        let federation_id_prefix = oob_notes.federation_id_prefix();
+
+        ensure!(
+            notes.total_amount() > Amount::ZERO,
+            "Reissuing zero-amount e-cash isn't supported"
+        );
+
+        if federation_id_prefix != self.federation_id.to_prefix() {
+            bail!("Federation ID does not match");
+        }
+
+        let operation_id = OperationId(
+            notes
+                .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
+                .into_inner(),
+        );
+
+        let amount = notes.total_amount();
+        let mint_input = self
+            .create_input_from_notes(operation_id, notes)
+            .await?
+            .into_iter()
+            .map(|input| input.into_dyn(self.client_ctx.module_instance_id()))
+            .collect();
+
+        let tx = TransactionBuilder::new().with_inputs(mint_input);
+
+        let extra_meta = serde_json::to_value(extra_meta)
+            .expect("MintClientModule::reissue_external_notes extra_meta is serializable");
+        let operation_meta_gen = move |txid, _| MintOperationMeta {
+            variant: MintOperationMetaVariants::Reissuance {
+                out_point: OutPoint { txid, out_idx: 0 },
+            },
+            amount,
+            extra_meta: extra_meta.clone(),
+        };
+
+        let change = self
+            .client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                MintCommonInit::KIND.as_str(),
+                operation_meta_gen,
+                tx,
+            )
+            .await
+            .context("We already reissued these notes")?
+            .1;
+
+        self.client_ctx
+            .await_primary_module_outputs(operation_id, change)
+            .await?;
+
+        Ok(operation_id)
+    }
+
+    /// Subscribe to updates on the progress of a reissue operation started with
+    /// [`MintClientModule::reissue_external_notes`].
+    pub async fn subscribe_reissue_external_notes(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<ReissueExternalNotesState>> {
+        let operation = self.mint_operation(operation_id).await?;
+        let out_point = match operation.meta::<MintOperationMeta>().variant {
+            MintOperationMetaVariants::Reissuance { out_point } => out_point,
+            _ => bail!("Operation is not a reissuance"),
+        };
+
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+            stream! {
+                yield ReissueExternalNotesState::Created;
+
+                match client_ctx
+                    .transaction_updates(operation_id)
+                    .await
+                    .await_tx_accepted(out_point.txid)
+                    .await
+                {
+                    Ok(()) => {
+                        yield ReissueExternalNotesState::Issuing;
+                    }
+                    Err(e) => {
+                        yield ReissueExternalNotesState::Failed(format!("Transaction not accepted {e:?}"));
+                    }
+                }
+
+                match client_ctx.self_ref().await_output_finalized(operation_id, out_point).await {
+                    Ok(_) => {
+                        yield ReissueExternalNotesState::Done;
+                    },
+                    Err(e) => {
+                        yield ReissueExternalNotesState::Failed(e.to_string());
+                    },
+                }
+            }}
+        ))
+    }
+
+    /// Fetches and removes notes of *at least* amount `min_amount` from the
+    /// wallet to be sent to the recipient out of band. These spends can be
+    /// canceled by calling [`MintClientModule::try_cancel_spend_notes`] as long
+    /// as the recipient hasn't reissued the e-cash notes themselves yet.
+    ///
+    /// The client will also automatically attempt to cancel the operation after
+    /// `try_cancel_after` time has passed. This is a safety mechanism to avoid
+    /// users forgetting about failed out-of-band transactions. The timeout
+    /// should be chosen such that the recipient (who is potentially offline at
+    /// the time of receiving the e-cash notes) had a reasonable timeframe to
+    /// come online and reissue the notes themselves.
+    pub async fn spend_notes<M: Serialize + Send>(
+        &self,
+        min_amount: Amount,
+        try_cancel_after: Duration,
+        extra_meta: M,
+    ) -> anyhow::Result<(OperationId, OOBNotes)> {
+        self.spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            min_amount,
+            try_cancel_after,
+            extra_meta,
+        )
+        .await
+    }
+
+    /// Same as `spend_notes` but allows different to select notes to be used.
+    pub async fn spend_notes_with_selector<M: Serialize + Send>(
+        &self,
+        notes_selector: &impl NotesSelector<SpendableNote>,
+        requested_amount: Amount,
+        try_cancel_after: Duration,
+        extra_meta: M,
+    ) -> anyhow::Result<(OperationId, OOBNotes)> {
+        let mint_id = self.client_ctx.module_instance_id();
+        let federation_id_prefix = self.federation_id.to_prefix();
+        let extra_meta = serde_json::to_value(extra_meta)
+            .expect("MintClientModule::spend_notes extra_meta is serializable");
+
+        self.client_ctx
+            .global_db()
+            .autocommit(
+                move |dbtx| {
+                    let extra_meta = extra_meta.clone();
+                    Box::pin(async move {
+                        let (operation_id, states, notes) = self
+                            .spend_notes_oob(
+                                &mut dbtx.dbtx_ref_with_prefix_module_id(mint_id),
+                                notes_selector,
+                                requested_amount,
+                                try_cancel_after,
+                            )
+                            .await?;
+                        let oob_notes = OOBNotes::new(federation_id_prefix, notes);
+
+                        let dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
+
+                        self.client_ctx.add_state_machines(dbtx, dyn_states).await?;
+                        self.client_ctx
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                MintCommonInit::KIND.as_str(),
+                                MintOperationMeta {
+                                    variant: MintOperationMetaVariants::SpendOOB {
+                                        requested_amount,
+                                        oob_notes: oob_notes.clone(),
+                                    },
+                                    amount: oob_notes.total_amount(),
+                                    extra_meta,
+                                },
+                            )
+                            .await;
+
+                        Ok((operation_id, oob_notes))
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    anyhow!("Commit to DB failed: {last_error}")
+                }
+            })
+    }
+
+    /// Validate the given notes and return the total amount of the notes.
+    /// Validation checks that:
+    /// - the federation ID is correct
+    /// - the note has a valid signature
+    /// - the spend key is correct.
+    pub async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount> {
+        let federation_id_prefix = oob_notes.federation_id_prefix();
+        let notes = oob_notes.notes().clone();
+
+        if federation_id_prefix != self.federation_id.to_prefix() {
+            bail!("Federation ID does not match");
+        }
+
+        let tbs_pks = &self.cfg.tbs_pks;
+
+        for (idx, (amt, snote)) in notes.iter_items().enumerate() {
+            let key = tbs_pks
+                .get(amt)
+                .ok_or_else(|| anyhow!("Note {idx} uses an invalid amount tier {amt}"))?;
+
+            let note = snote.note();
+            if !note.verify(*key) {
+                bail!("Note {idx} has an invalid federation signature");
+            }
+
+            let expected_nonce = Nonce(snote.spend_key.x_only_public_key().0);
+            if note.nonce != expected_nonce {
+                bail!("Note {idx} cannot be spent using the supplied spend key");
+            }
+        }
+
+        Ok(notes.total_amount())
+    }
+
+    /// Try to cancel a spend operation started with
+    /// [`MintClientModule::spend_notes`]. If the e-cash notes have already been
+    /// spent this operation will fail which can be observed using
+    /// [`MintClientModule::subscribe_spend_notes`].
+    pub async fn try_cancel_spend_notes(&self, operation_id: OperationId) {
+        // TODO: make robust by writing to the DB, this can fail
+        let _ = self.cancel_oob_payment_bc.send(operation_id);
+    }
+
+    /// Subscribe to updates on the progress of a raw e-cash spend operation
+    /// started with [`MintClientModule::spend_notes`].
+    pub async fn subscribe_spend_notes(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>> {
+        let operation = self.mint_operation(operation_id).await?;
+        if !matches!(
+            operation.meta::<MintOperationMeta>().variant,
+            MintOperationMetaVariants::SpendOOB { .. }
+        ) {
+            bail!("Operation is not a out-of-band spend");
+        };
+
+        let client_ctx = self.client_ctx.clone();
+
+        let global_db = self.client_ctx.global_db();
+        Ok(
+            operation.outcome_or_updates(&global_db, operation_id, move || {
+                stream! {
+                    yield SpendOOBState::Created;
+
+                    let self_ref = client_ctx.self_ref();
+
+                    let refund = self_ref
+                        .await_spend_oob_refund(operation_id)
+                        .await;
+
+                    if refund.user_triggered {
+                        yield SpendOOBState::UserCanceledProcessing;
+
+                        match client_ctx
+                            .transaction_updates(operation_id)
+                            .await
+                            .await_tx_accepted(refund.transaction_id)
+                            .await
+                        {
+                            Ok(()) => {
+                                yield SpendOOBState::UserCanceledSuccess;
+                            },
+                            Err(_) => {
+                                yield SpendOOBState::UserCanceledFailure;
+                            }
+                        }
+                    } else {
+                        match client_ctx
+                            .transaction_updates(operation_id)
+                            .await
+                            .await_tx_accepted(refund.transaction_id)
+                            .await
+                        {
+                            Ok(()) => {
+                                yield SpendOOBState::Refunded;
+                            },
+                            Err(_) => {
+                                yield SpendOOBState::Success;
+                            }
+                        }
+                    }
+                }
+            }),
+        )
+    }
+
+    async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {
+        let operation = self
+            .client_ctx
+            .get_operation(operation_id)
+            .await
+            .ok_or(anyhow!("Operation not found"))?;
+
+        if operation.operation_module_kind() != MintCommonInit::KIND.as_str() {
+            bail!("Operation is not a mint operation");
+        }
+
+        Ok(operation)
     }
 }
 
