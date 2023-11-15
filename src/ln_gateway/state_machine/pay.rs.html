@@ -799,6 +799,48 @@
 <a href="#799" id="799">799</a>
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -822,6 +864,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio_stream::StreamExt;
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use super</span>::{
     GatewayClientContext, GatewayClientExt, GatewayClientStateMachines, GatewayExtReceiveStates,
@@ -1004,6 +1047,7 @@
         contract_id: ContractId,
         context: GatewayClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt; {
+        <span class="macro">debug!</span>(<span class="string">&quot;Await payment parameters for outgoing contract {contract_id:?}&quot;</span>);
         <span class="kw">let </span>account = global_context
             .module_api()
             .wait_contract(contract_id)
@@ -1032,6 +1076,7 @@
                     },
                 })<span class="question-mark">?</span>;
 
+            <span class="macro">debug!</span>(<span class="string">&quot;Consensus block count: {consensus_block_count:?} for outgoing contract {contract_id:?}&quot;</span>);
             <span class="kw">if </span>consensus_block_count.is_none() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
                     contract_id,
@@ -1049,15 +1094,19 @@
                 consensus_block_count.unwrap(),
             )
             .<span class="kw">await
-            </span>.map_err(|e| OutgoingPaymentError {
-                contract_id,
-                contract: <span class="prelude-val">Some</span>(outgoing_contract_account.clone()),
-                error_type: OutgoingPaymentErrorType::InvalidOutgoingContract { error: e },
+            </span>.map_err(|e| {
+                <span class="macro">warn!</span>(<span class="string">&quot;Invalid outgoing contract: {e:?}&quot;</span>);
+                OutgoingPaymentError {
+                    contract_id,
+                    contract: <span class="prelude-val">Some</span>(outgoing_contract_account.clone()),
+                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract { error: e },
+                }
             })<span class="question-mark">?</span>;
-
+            <span class="macro">debug!</span>(<span class="string">&quot;Got payment parameters: {payment_parameters:?} for contract {contract_id:?}&quot;</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>((outgoing_contract_account, payment_parameters));
         }
 
+        <span class="macro">error!</span>(<span class="string">&quot;Contract {contract_id:?} is not an outgoing contract&quot;</span>);
         <span class="prelude-val">Err</span>(OutgoingPaymentError {
             contract_id,
             contract: <span class="prelude-val">None</span>,
@@ -1071,6 +1120,7 @@
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
+        <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage over lightning for contract {contract:?}&quot;</span>);
         <span class="kw">let </span>invoice = buy_preimage.invoice.clone();
         <span class="kw">let </span>max_delay = buy_preimage.max_delay;
         <span class="kw">let </span>max_fee_msat = buy_preimage.max_send_amount.msats;
@@ -1085,6 +1135,7 @@
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(PayInvoiceResponse { preimage, .. }) =&gt; {
+                <span class="macro">debug!</span>(<span class="string">&quot;Preimage received for contract {contract:?}&quot;</span>);
                 <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = preimage.try_into().expect(<span class="string">&quot;Failed to parse preimage&quot;</span>);
                 GatewayPayStateMachine {
                     common,
@@ -1097,6 +1148,7 @@
                 }
             }
             <span class="prelude-val">Err</span>(error) =&gt; {
+                <span class="macro">warn!</span>(<span class="string">&quot;Failed to buy preimage with {error} for contract {contract:?}&quot;</span>);
                 <span class="kw">let </span>outgoing_error = OutgoingPaymentError {
                     contract_id: contract.contract.contract_id(),
                     contract: <span class="prelude-val">Some</span>(contract.clone()),
@@ -1121,24 +1173,29 @@
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
+        <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage via direct swap for contract {contract:?}&quot;</span>);
         <span class="kw">match </span>invoice.try_into() {
             <span class="prelude-val">Ok</span>(swap_params) =&gt; <span class="kw">match </span>client.gateway_handle_direct_swap(swap_params).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(operation_id) =&gt; GatewayPayStateMachine {
-                    common,
-                    state: GatewayPayStates::WaitForSwapPreimage(Box::new(
-                        GatewayPayWaitForSwapPreimage {
-                            contract,
-                            federation_id: client.federation_id(),
-                            operation_id,
-                        },
-                    )),
-                },
+                <span class="prelude-val">Ok</span>(operation_id) =&gt; {
+                    <span class="macro">debug!</span>(<span class="string">&quot;Direct swap initiated for contract {contract:?}&quot;</span>);
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::WaitForSwapPreimage(Box::new(
+                            GatewayPayWaitForSwapPreimage {
+                                contract,
+                                federation_id: client.federation_id(),
+                                operation_id,
+                            },
+                        )),
+                    }
+                }
                 <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">info!</span>(<span class="string">&quot;Failed to initiate direct swap: {e:?} for contract {contract:?}&quot;</span>);
                     <span class="kw">let </span>outgoing_payment_error = OutgoingPaymentError {
                         contract_id: contract.contract.contract_id(),
                         contract: <span class="prelude-val">Some</span>(contract.clone()),
                         error_type: OutgoingPaymentErrorType::SwapFailed {
-                            swap_error: <span class="macro">format!</span>(<span class="string">&quot;Failed to initiate direct swap: {}&quot;</span>, e),
+                            swap_error: <span class="macro">format!</span>(<span class="string">&quot;Failed to initiate direct swap: {e}&quot;</span>),
                         },
                     };
                     GatewayPayStateMachine {
@@ -1153,11 +1210,12 @@
                 }
             },
             <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">info!</span>(<span class="string">&quot;Failed to initiate direct swap: {e:?} for contract {contract:?}&quot;</span>);
                 <span class="kw">let </span>outgoing_payment_error = OutgoingPaymentError {
                     contract_id: contract.contract.contract_id(),
                     contract: <span class="prelude-val">Some</span>(contract.clone()),
                     error_type: OutgoingPaymentErrorType::SwapFailed {
-                        swap_error: <span class="macro">format!</span>(<span class="string">&quot;Failed to initiate direct swap: {}&quot;</span>, e),
+                        swap_error: <span class="macro">format!</span>(<span class="string">&quot;Failed to initiate direct swap: {e}&quot;</span>),
                     },
                 };
                 GatewayPayStateMachine {
@@ -1179,6 +1237,7 @@
     ) -&gt; GatewayPayStateMachine {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>((contract, payment_parameters)) =&gt; {
+                <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage contract {contract:?}&quot;</span>);
                 <span class="comment">// Verify that this client is authorized to receive the preimage.
                 </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">Self</span>::verify_preimage_authentication(
                     <span class="kw-2">&amp;</span>context,
@@ -1188,6 +1247,7 @@
                 )
                 .<span class="kw">await
                 </span>{
+                    <span class="macro">warn!</span>(<span class="string">&quot;Preimage authentication failed: {err} for contract {contract:?}&quot;</span>);
                     <span class="kw">return </span>GatewayPayStateMachine {
                         common,
                         state: GatewayPayStates::CancelContract(Box::new(
@@ -1205,36 +1265,38 @@
                 )
                 .<span class="kw">await
                 </span>{
-                    <span class="kw">return </span><span class="self">Self</span>::buy_preimage_via_direct_swap(
+                    <span class="self">Self</span>::buy_preimage_via_direct_swap(
                         client,
                         payment_parameters.invoice.clone(),
                         contract.clone(),
                         common.clone(),
                     )
-                    .<span class="kw">await</span>;
+                    .<span class="kw">await
+                </span>} <span class="kw">else </span>{
+                    <span class="self">Self</span>::buy_preimage_over_lightning(
+                        context,
+                        payment_parameters,
+                        contract.clone(),
+                        common.clone(),
+                    )
+                    .<span class="kw">await
+                </span>}
+            }
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">warn!</span>(<span class="string">&quot;Failed to get payment parameters: {e:?}&quot;</span>);
+                <span class="kw">match </span>e.contract.clone() {
+                    <span class="prelude-val">Some</span>(contract) =&gt; GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract { contract, error: e },
+                        )),
+                    },
+                    <span class="prelude-val">None </span>=&gt; GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                    },
                 }
-
-                <span class="self">Self</span>::buy_preimage_over_lightning(
-                    context,
-                    payment_parameters,
-                    contract.clone(),
-                    common.clone(),
-                )
-                .<span class="kw">await
-            </span>}
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">match </span>e.contract.clone() {
-                <span class="prelude-val">Some</span>(contract) =&gt; GatewayPayStateMachine {
-                    common,
-                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
-                        contract,
-                        error: e,
-                    })),
-                },
-                <span class="prelude-val">None </span>=&gt; GatewayPayStateMachine {
-                    common,
-                    state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
-                },
-            },
+            }
         }
     }
 
@@ -1405,6 +1467,7 @@
         contract: OutgoingContractAccount,
         preimage: Preimage,
     ) -&gt; GatewayPayStateMachine {
+        <span class="macro">debug!</span>(<span class="string">&quot;Claiming outgoing contract {contract:?}&quot;</span>);
         <span class="kw">let </span>claim_input = contract.claim(preimage.clone());
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, GatewayClientStateMachines&gt; {
             input: claim_input,
@@ -1413,7 +1476,7 @@
         };
 
         <span class="kw">let </span>out_points = global_context.claim_input(dbtx, client_input).<span class="kw">await</span>.<span class="number">1</span>;
-
+        <span class="macro">debug!</span>(<span class="string">&quot;Claimed outgoing contract {contract:?} with out points {out_points:?}&quot;</span>);
         GatewayPayStateMachine {
             common,
             state: GatewayPayStates::Preimage(out_points, preimage),
@@ -1456,6 +1519,7 @@
         operation_id: OperationId,
         contract: OutgoingContractAccount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, OutgoingPaymentError&gt; {
+        <span class="macro">debug!</span>(<span class="string">&quot;Waiting preimage for contract {contract:?}&quot;</span>);
         <span class="kw">let </span>client = context
             .all_clients
             .read()
@@ -1473,25 +1537,38 @@
         <span class="kw">let </span><span class="kw-2">mut </span>stream = client
             .gateway_subscribe_ln_receive(operation_id)
             .<span class="kw">await
-            </span>.map_err(|e| OutgoingPaymentError {
-                contract_id: contract.contract.contract_id(),
-                contract: <span class="prelude-val">Some</span>(contract.clone()),
-                error_type: OutgoingPaymentErrorType::SwapFailed {
-                    swap_error: <span class="macro">format!</span>(<span class="string">&quot;Failed to subscribe to ln receive of direct swap: {}&quot;</span>, e),
-                },
+            </span>.map_err(|e| {
+                <span class="kw">let </span>contract_id = contract.contract.contract_id();
+                <span class="macro">warn!</span>(
+                    <span class="question-mark">?</span>contract_id,
+                    <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e:?}&quot;
+                </span>);
+                OutgoingPaymentError {
+                    contract_id,
+                    contract: <span class="prelude-val">Some</span>(contract.clone()),
+                    error_type: OutgoingPaymentErrorType::SwapFailed {
+                        swap_error: <span class="macro">format!</span>(
+                            <span class="string">&quot;Failed to subscribe to ln receive of direct swap: {e}&quot;
+                        </span>),
+                    },
+                }
             })<span class="question-mark">?
             </span>.into_stream();
 
         <span class="kw">loop </span>{
+            <span class="macro">debug!</span>(<span class="string">&quot;Waiting next state of preimage buy for contract {contract:?}&quot;</span>);
             <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = stream.next().<span class="kw">await </span>{
                 <span class="kw">match </span>state {
                     GatewayExtReceiveStates::Funding =&gt; {
+                        <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Funding&quot;</span>);
                         <span class="kw">continue</span>;
                     }
                     GatewayExtReceiveStates::Preimage(preimage) =&gt; {
+                        <span class="macro">debug!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Received preimage&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
                     }
-                    <span class="kw">_ </span>=&gt; {
+                    other =&gt; {
+                        <span class="macro">warn!</span>(<span class="question-mark">?</span>contract, <span class="string">&quot;Got state {other:?}&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
                             contract_id: contract.contract.contract_id(),
                             contract: <span class="prelude-val">Some</span>(contract),
@@ -1566,6 +1643,7 @@
         common: GatewayPayCommon,
         error: OutgoingPaymentError,
     ) -&gt; GatewayPayStateMachine {
+        <span class="macro">info!</span>(<span class="string">&quot;Canceling outgoing contract {contract:?}&quot;</span>);
         <span class="kw">let </span>cancel_signature = context.secp.sign_schnorr(
             <span class="kw-2">&amp;</span>contract.contract.cancellation_message().into(),
             <span class="kw-2">&amp;</span>context.redeem_key,
@@ -1580,23 +1658,29 @@
         };
 
         <span class="kw">match </span>global_context.fund_output(dbtx, client_output).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>((txid, <span class="kw">_</span>)) =&gt; GatewayPayStateMachine {
-                common,
-                state: GatewayPayStates::Canceled {
-                    txid,
-                    contract_id: contract.contract.contract_id(),
-                    error,
-                },
-            },
-            <span class="prelude-val">Err</span>(e) =&gt; GatewayPayStateMachine {
-                common,
-                state: GatewayPayStates::Failed {
-                    error,
-                    error_message: <span class="macro">format!</span>(
-                        <span class="string">&quot;Failed to submit refund transaction to federation {e:?}&quot;
-                    </span>),
-                },
-            },
+            <span class="prelude-val">Ok</span>((txid, <span class="kw">_</span>)) =&gt; {
+                <span class="macro">info!</span>(<span class="string">&quot;Canceled outgoing contract {contract:?} with txid {txid:?}&quot;</span>);
+                GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::Canceled {
+                        txid,
+                        contract_id: contract.contract.contract_id(),
+                        error,
+                    },
+                }
+            }
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">warn!</span>(<span class="string">&quot;Failed to cancel outgoing contract {contract:?}: {e:?}&quot;</span>);
+                GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::Failed {
+                        error,
+                        error_message: <span class="macro">format!</span>(
+                            <span class="string">&quot;Failed to submit refund transaction to federation {e:?}&quot;
+                        </span>),
+                    },
+                }
+            }
         }
     }
 }

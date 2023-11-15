@@ -1123,6 +1123,9 @@
 <a href="#1123" id="1123">1123</a>
 <a href="#1124" id="1124">1124</a>
 <a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1566,7 +1569,8 @@
             };
             transitions = remaining_transitions;
             <span class="kw">let </span>(transition_outcome, state, transition_fn, meta) = completed_result;
-            <span class="macro">debug!</span>(
+            <span class="comment">// TODO: add a INFO version without all the details
+            </span><span class="macro">debug!</span>(
                 <span class="question-mark">?</span>state,
                 transition_outcome = <span class="question-mark">?</span>AbbreviateJson(<span class="kw-2">&amp;</span>transition_outcome),
                 <span class="string">&quot;Executing state transition&quot;
@@ -1636,7 +1640,9 @@
                     } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
                     AutocommitError::ClosureError { error, .. } =&gt; error,
                 })<span class="question-mark">?</span>;
-            <span class="macro">debug!</span>(
+
+            <span class="comment">// TODO: add a INFO version without all the details
+            </span><span class="macro">debug!</span>(
                 outcome = <span class="question-mark">?</span>active_or_inactive_state,
                 <span class="string">&quot;Finished executing state transition&quot;
             </span>);

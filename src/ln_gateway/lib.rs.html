@@ -1304,6 +1304,18 @@
 <a href="#1304" id="1304">1304</a>
 <a href="#1305" id="1305">1305</a>
 <a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1761,6 +1773,7 @@
                         <span class="kw">let </span><span class="kw-2">mut </span>htlc_task_group = tg.make_subgroup().<span class="kw">await</span>;
                         <span class="kw">let </span>lnrpc_route = <span class="self">self</span>.lightning_builder.build().<span class="kw">await</span>;
 
+                        <span class="macro">debug!</span>(<span class="string">&quot;Will try to intercept HTLC stream...&quot;</span>);
                         <span class="comment">// Re-create the HTLC stream if the connection breaks
                         </span><span class="kw">match </span>lnrpc_route
                             .route_htlcs(<span class="kw-2">&amp;mut </span>htlc_task_group)
@@ -2006,27 +2019,37 @@
 
     <span class="kw">async fn </span>handle_pay_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: PayInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
+            <span class="macro">debug!</span>(<span class="string">&quot;Handling pay invoice message: {payload:?}&quot;</span>);
             <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>contract_id = payload.contract_id;
             <span class="kw">let </span>operation_id = client.gateway_pay_bolt11_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client
                 .gateway_subscribe_ln_pay(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_stream();
-
             <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                 <span class="kw">match </span>update {
-                    GatewayExtPayStates::Success { preimage, .. } =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage),
+                    GatewayExtPayStates::Success { preimage, .. } =&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Successfully paid invoice: {contract_id}&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
+                    }
                     GatewayExtPayStates::Fail {
                         error,
                         error_message,
                     } =&gt; {
-                        <span class="macro">error!</span>(error_message);
+                        <span class="macro">error!</span>(<span class="string">&quot;{error_message} while paying invoice: {contract_id}&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::OutgoingPaymentError(Box::new(error)));
                     }
                     GatewayExtPayStates::Canceled { error } =&gt; {
+                        <span class="macro">error!</span>(<span class="string">&quot;Cancelled with {error} while paying invoice: {contract_id}&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::OutgoingPaymentError(Box::new(error)));
                     }
-                    <span class="kw">_ </span>=&gt; {}
+                    GatewayExtPayStates::Created =&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Got initial state Created while paying invoice: {contract_id}&quot;</span>);
+                    }
+                    other =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;Got state {other:?} while paying invoice: {contract_id}&quot;</span>);
+                    }
                 };
             }
 
@@ -2035,6 +2058,7 @@
             ));
         }
 
+        <span class="macro">warn!</span>(<span class="string">&quot;Gateway is not connected, cannot handle {payload:?}&quot;</span>);
         <span class="prelude-val">Err</span>(GatewayError::Disconnected)
     }
 

@@ -209,6 +209,11 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -218,6 +223,7 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Settle};
@@ -314,15 +320,19 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, CompleteHtlcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = context.notifier.subscribe(common.operation_id).<span class="kw">await</span>;
         <span class="kw">loop </span>{
+            <span class="macro">debug!</span>(<span class="string">&quot;Waiting for preimage for {common:?}&quot;</span>);
             <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
                 <span class="kw">match </span>state.state {
                     IncomingSmStates::Preimage(preimage) =&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;Received preimage for {common:?}&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
                     }
-                    IncomingSmStates::RefundSubmitted { .. } =&gt; {
+                    IncomingSmStates::RefundSubmitted { out_points, error } =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;Refund submitted for {common:?}: {out_points:?} {error}&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
                     }
-                    IncomingSmStates::FundingFailed { error: <span class="kw">_ </span>} =&gt; {
+                    IncomingSmStates::FundingFailed { error } =&gt; {
+                        <span class="macro">warn!</span>(<span class="string">&quot;Funding failed for {common:?}: {error}&quot;</span>);
                         <span class="kw">return </span><span class="prelude-val">Err</span>(CompleteHtlcError::IncomingContractNotFunded);
                     }
                     <span class="kw">_ </span>=&gt; {}

@@ -558,6 +558,33 @@
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
 <a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -967,7 +994,7 @@
             payment_hash,
             ..
         } = request;
-
+        <span class="macro">info!</span>(<span class="string">&quot;LND Paying invoice {invoice:?}&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">Self</span>::connect(
             <span class="self">self</span>.address.clone(),
             <span class="self">self</span>.tls_cert.clone(),
@@ -975,11 +1002,14 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="macro">debug!</span>(<span class="string">&quot;LND got client to pay invoice {invoice:?}, will check if payment already exists&quot;</span>);
+
         <span class="comment">// If the payment exists, that means we&#39;ve already tried to pay the invoice
         </span><span class="kw">let </span>preimage: Vec&lt;u8&gt; = <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = <span class="self">self
             </span>.lookup_payment(payment_hash.clone(), <span class="kw-2">&amp;mut </span>client)
             .<span class="kw">await</span><span class="question-mark">?
         </span>{
+            <span class="macro">info!</span>(<span class="string">&quot;LND payment already exists for invoice {invoice:?}&quot;</span>);
             bitcoin_hashes::hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
                 LightningRpcError::FailedPayment {
                     failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
@@ -997,50 +1027,74 @@
                             <span class="string">&quot;max_fee_msat exceeds valid LND fee limit ranges {error:?}&quot;
                         </span>),
                     })<span class="question-mark">?</span>;
-
+            <span class="macro">debug!</span>(<span class="string">&quot;LND payment does not exist for invoice {invoice:?}, will attempt to pay&quot;</span>);
             <span class="kw">let </span>payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
-                    payment_request: invoice,
+                    payment_request: invoice.clone(),
                     allow_self_payment: <span class="bool-val">true</span>,
-                    no_inflight_updates: <span class="bool-val">true</span>,
+                    no_inflight_updates: <span class="bool-val">false</span>,
                     timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
                     fee_limit_msat,
                     ..Default::default()
                 })
                 .<span class="kw">await
-                </span>.map_err(|status| LightningRpcError::FailedPayment {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to make outgoing payment {status:?}&quot;</span>),
+                </span>.map_err(|status| {
+                    <span class="macro">info!</span>(<span class="string">&quot;LND payment request failed for invoice {invoice:?} with {status:?}&quot;</span>);
+                    LightningRpcError::FailedPayment {
+                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to make outgoing payment {status:?}&quot;</span>),
+                    }
                 })<span class="question-mark">?</span>;
 
-            <span class="kw">match </span>payments.into_inner().message().<span class="kw">await</span>.map_err(|error| {
-                LightningRpcError::FailedPayment {
-                    failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get payment status {error:?}&quot;</span>),
-                }
-            })<span class="question-mark">? </span>{
-                <span class="prelude-val">Some</span>(payment) <span class="kw">if </span>payment.status() == PaymentStatus::Succeeded =&gt; {
-                    bitcoin_hashes::hex::FromHex::from_hex(payment.payment_preimage.as_str())
-                        .map_err(|error| LightningRpcError::FailedPayment {
-                            failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
-                        })<span class="question-mark">?
-                </span>}
-                <span class="prelude-val">Some</span>(payment) =&gt; {
-                    <span class="kw">let </span>failure_reason = payment.failure_reason();
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
-                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;{failure_reason:?}&quot;</span>),
-                    });
-                }
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
-                        failure_reason: <span class="macro">format!</span>(
-                            <span class="string">&quot;Failed to get payment status for payment hash {payment_hash:?}&quot;
-                        </span>),
-                    });
+            <span class="macro">debug!</span>(
+                <span class="string">&quot;LND payment request sent for invoice {invoice:?}, waiting for payment status...&quot;
+            </span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>messages = payments.into_inner();
+            <span class="kw">loop </span>{
+                <span class="kw">match </span>messages
+                    .message()
+                    .<span class="kw">await
+                    </span>.map_err(|error| LightningRpcError::FailedPayment {
+                        failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to get payment status {error:?}&quot;</span>),
+                    }) {
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) <span class="kw">if </span>payment.status() == PaymentStatus::Succeeded =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;LND payment succeeded for invoice {invoice:?}&quot;</span>);
+                        <span class="kw">break </span>bitcoin_hashes::hex::FromHex::from_hex(
+                            payment.payment_preimage.as_str(),
+                        )
+                        .map_err(|error| {
+                            LightningRpcError::FailedPayment {
+                                failure_reason: <span class="macro">format!</span>(<span class="string">&quot;Failed to convert preimage {error:?}&quot;</span>),
+                            }
+                        })<span class="question-mark">?</span>;
+                    }
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) <span class="kw">if </span>payment.status() == PaymentStatus::InFlight =&gt; {
+                        <span class="macro">debug!</span>(<span class="string">&quot;LND payment is inflight&quot;</span>);
+                        <span class="kw">continue</span>;
+                    }
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(payment)) =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with {payment:?}&quot;</span>);
+                        <span class="kw">let </span>failure_reason = payment.failure_reason();
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+                            failure_reason: <span class="macro">format!</span>(<span class="string">&quot;{failure_reason:?}&quot;</span>),
+                        });
+                    }
+                    <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with no payment status&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+                            failure_reason: <span class="macro">format!</span>(
+                                <span class="string">&quot;Failed to get payment status for payment hash {payment_hash:?}&quot;
+                            </span>),
+                        });
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">info!</span>(<span class="string">&quot;LND payment failed for invoice {invoice:?} with {e:?}&quot;</span>);
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(e);
+                    }
                 }
             }
         };
-
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(PayInvoiceResponse { preimage });
+        <span class="prelude-val">Ok</span>(PayInvoiceResponse { preimage })
     }
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">&#39;a</span>&gt;(
