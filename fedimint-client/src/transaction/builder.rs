@@ -4,7 +4,7 @@ use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleI
 use fedimint_core::transaction::Transaction;
 use fedimint_core::Amount;
 use itertools::multiunzip;
-use rand::{CryptoRng, RngCore};
+use rand::{CryptoRng, Rng, RngCore};
 use secp256k1_zkp::Secp256k1;
 
 use crate::module::StateGenerator;
@@ -111,7 +111,9 @@ impl TransactionBuilder {
             .map(|output| (output.output, output.state_machines))
             .unzip();
 
-        let txid = Transaction::tx_hash_from_parts(&inputs, &outputs);
+        let nonce: [u8; 8] = rng.gen();
+
+        let txid = Transaction::tx_hash_from_parts(&inputs, &outputs, nonce);
 
         let signature = if !input_keys.is_empty() {
             let keys = input_keys.into_iter().flatten().collect::<Vec<_>>();
@@ -126,6 +128,7 @@ impl TransactionBuilder {
         let transaction = Transaction {
             inputs,
             outputs,
+            nonce,
             signature,
         };
 
