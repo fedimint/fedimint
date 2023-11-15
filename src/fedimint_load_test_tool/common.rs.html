@@ -321,6 +321,7 @@
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -339,9 +340,7 @@
 <span class="kw">use </span>fedimint_ln_client::{
     LightningClientExt, LightningClientInit, LnPayState, OutgoingLightningPayment,
 };
-<span class="kw">use </span>fedimint_mint_client::{
-    MintClientExt, MintClientInit, MintClientModule, MintCommonInit, OOBNotes,
-};
+<span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOBNotes};
 <span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -388,8 +387,9 @@
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>m = fedimint_core::time::now();
-    <span class="kw">let </span>operation_id = client.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+    <span class="kw">let </span>mint = <span class="kw-2">&amp;</span>client.get_first_module::&lt;MintClientModule&gt;();
+    <span class="kw">let </span>operation_id = mint.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
         .subscribe_reissue_external_notes(operation_id)
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();
@@ -406,13 +406,14 @@
 }
 
 <span class="kw">pub async fn </span>do_spend_notes(
-    client: <span class="kw-2">&amp;</span>ClientArc,
+    mint: <span class="kw-2">&amp;</span>ClientArc,
     amount: Amount,
 ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
-    <span class="kw">let </span>(operation_id, oob_notes) = client
+    <span class="kw">let </span>mint = <span class="kw-2">&amp;</span>mint.get_first_module::&lt;MintClientModule&gt;();
+    <span class="kw">let </span>(operation_id, oob_notes) = mint
         .spend_notes(amount, Duration::from_secs(<span class="number">600</span>), ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+    <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
         .subscribe_spend_notes(operation_id)
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();
@@ -433,6 +434,7 @@
     operation_id: OperationId,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+        .get_first_module::&lt;MintClientModule&gt;()
         .subscribe_spend_notes(operation_id)
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();

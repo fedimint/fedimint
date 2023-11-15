@@ -527,6 +527,12 @@
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
 <a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -548,7 +554,7 @@
     PayType,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
-<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientModule, OOBNotes};
+<span class="kw">use </span>fedimint_mint_client::{MintClientModule, OOBNotes};
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -683,8 +689,10 @@
         ClientCmd::Reissue { oob_notes } =&gt; {
             <span class="kw">let </span>amount = oob_notes.total_amount();
 
-            <span class="kw">let </span>operation_id = client.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+            <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
+
+            <span class="kw">let </span>operation_id = mint.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
                 .subscribe_reissue_external_notes(operation_id)
                 .<span class="kw">await
                 </span>.unwrap()
@@ -702,6 +710,7 @@
         }
         ClientCmd::Spend { amount } =&gt; {
             <span class="kw">let </span>(operation, notes) = client
+                .get_first_module::&lt;MintClientModule&gt;()
                 .spend_notes(amount, Duration::from_secs(<span class="number">3600</span>), ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Spend e-cash operation: {operation}&quot;</span>);
@@ -711,7 +720,10 @@
             }))
         }
         ClientCmd::Validate { oob_notes } =&gt; {
-            <span class="kw">let </span>amount = client.validate_notes(oob_notes).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>amount = client
+                .get_first_module::&lt;MintClientModule&gt;()
+                .validate_notes(oob_notes)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">&quot;amount_msat&quot;</span>: amount,

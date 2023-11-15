@@ -199,7 +199,10 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::marker;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::api::{DynGlobalApi, DynModuleApi};
@@ -235,7 +238,7 @@
     &gt;,
     api: DynGlobalApi,
     module_api: DynModuleApi,
-    context: ClientContext,
+    context: ClientContext&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
 }
 
 <span class="kw">impl</span>&lt;C&gt; ClientModuleInitArgs&lt;C&gt;
@@ -285,7 +288,7 @@
     /// as the outer context is not yet complete. But it can be stored to be
     /// used in the methods of [`ClientModule`], at which point it will be
     /// ready.
-    </span><span class="kw">pub fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientContext {
+    </span><span class="kw">pub fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientContext&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module&gt; {
         <span class="self">self</span>.context.clone()
     }
 }
@@ -377,6 +380,7 @@
                 context: ClientContext {
                     client: final_client,
                     module_instance_id: instance_id,
+                    _marker: marker::PhantomData,
                 },
             })
             .<span class="kw">await</span><span class="question-mark">?

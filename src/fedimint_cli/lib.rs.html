@@ -812,6 +812,7 @@
 <a href="#812" id="812">812</a>
 <a href="#813" id="813">813</a>
 <a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>utils;
 
@@ -845,7 +846,7 @@
 <span class="kw">use </span>fedimint_core::{task, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>fedimint_mint_client::{MintClientExt, MintClientInit, SpendableNote};
+<span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, SpendableNote};
 <span class="kw">use </span>fedimint_server::config::io::SALT_FILE;
 <span class="kw">use </span>fedimint_wallet_client::api::WalletFederationApi;
 <span class="kw">use </span>fedimint_wallet_client::{WalletClientInit, WalletClientModule};
@@ -1381,6 +1382,7 @@ Examples:
 
                 <span class="macro">info!</span>(<span class="string">&quot;Waiting for restore to complete&quot;</span>);
                 <span class="kw">let </span>restored_amount = client
+                    .get_first_module::&lt;MintClientModule&gt;()
                     .await_restore_finished()
                     .<span class="kw">await
                     </span>.map_err_cli_msg(CliErrorKind::GeneralFailure, <span class="string">&quot;failure&quot;</span>)<span class="question-mark">?</span>;
