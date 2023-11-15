@@ -775,7 +775,7 @@ impl Gateway {
                 .await
                 .fetch_add(1, Ordering::SeqCst);
 
-            let federation_id = invite_code.federation_id;
+            let federation_id = invite_code.federation_id();
             let gw_client_cfg = FederationConfig {
                 invite_code,
                 mint_channel_id,
@@ -1006,7 +1006,7 @@ impl Gateway {
             let mut next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 
             for config in configs {
-                let federation_id = config.invite_code.federation_id;
+                let federation_id = config.invite_code.federation_id();
                 let old_client = self.clients.read().await.get(&federation_id).cloned();
                 let all_clients = self.clients.clone();
                 let all_scids = self.scid_to_federation.clone();

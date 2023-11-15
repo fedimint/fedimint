@@ -13,10 +13,10 @@ use anyhow::{anyhow, bail, ensure};
 use bech32::Variant::Bech32m;
 use bech32::{FromBase32, ToBase32};
 use bitcoin::secp256k1;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::sha256;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{
     AWAIT_BLOCK_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
 };
@@ -28,7 +28,6 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, ModuleDecoderRegistry, NumPeers, OutPoint,
     PeerId, TransactionId,
 };
-use fedimint_derive::Decodable;
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
@@ -47,6 +46,7 @@ use crate::backup::ClientBackupSnapshot;
 use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
+use crate::encoding::DecodeError;
 use crate::endpoint_constants::{
     AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
     CLIENT_CONFIG_ENDPOINT, RECOVER_ENDPOINT, SESSION_COUNT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
@@ -488,7 +488,7 @@ where
         invite_code: &InviteCode,
     ) -> FederationResult<ClientConfig> {
         // we have to download the api endpoints first
-        let id = invite_code.federation_id;
+        let id = invite_code.federation_id();
         let qs = FilterMap::new(
             move |cfg: ClientConfig| {
                 if id.0 != cfg.global.api_endpoints.consensus_hash() {
@@ -590,15 +590,106 @@ struct FederationPeer<C> {
 
 /// Information required for client to construct [`WsFederationApi`] instance
 ///
-/// Can be used to download the configs and bootstrap a client
+/// Can be used to download the configs and bootstrap a client.
+///
+/// ## Invariants
+/// Constructors have to guarantee that:
+///   * At least one Api entry is present
+///   * At least one Federation ID is present
+#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
+pub struct InviteCode(Vec<InviteCodeData>);
+
+impl Decodable for InviteCode {
+    fn consensus_decode<R: Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let inner: Vec<InviteCodeData> = Decodable::consensus_decode(r, modules)?;
+
+        if !inner
+            .iter()
+            .any(|data| matches!(data, InviteCodeData::Api { .. }))
+        {
+            return Err(DecodeError::from_str(
+                "No API was provided in the invite code",
+            ));
+        }
+
+        if !inner
+            .iter()
+            .any(|data| matches!(data, InviteCodeData::FederationId(_)))
+        {
+            return Err(DecodeError::from_str(
+                "No Federation ID provided in invite code",
+            ));
+        }
+
+        Ok(InviteCode(inner))
+    }
+}
+
+impl InviteCode {
+    pub fn new(url: SafeUrl, peer: PeerId, federation_id: FederationId) -> Self {
+        InviteCode(vec![
+            InviteCodeData::Api { url, peer },
+            InviteCodeData::FederationId(federation_id),
+        ])
+    }
+
+    /// Returns the API URL of one of the guardians.
+    pub fn url(&self) -> SafeUrl {
+        self.0
+            .iter()
+            .find_map(|data| match data {
+                InviteCodeData::Api { url, .. } => Some(url.clone()),
+                _ => None,
+            })
+            .expect("Ensured by constructor")
+    }
+
+    /// Returns the id of the guardian from which we got the API URL, see
+    /// [`InviteCode::url`].
+    pub fn peer(&self) -> PeerId {
+        self.0
+            .iter()
+            .find_map(|data| match data {
+                InviteCodeData::Api { peer, .. } => Some(*peer),
+                _ => None,
+            })
+            .expect("Ensured by constructor")
+    }
+
+    /// Returns the federation's ID that can be used to authenticate the config
+    /// downloaded from the API.
+    pub fn federation_id(&self) -> FederationId {
+        self.0
+            .iter()
+            .find_map(|data| match data {
+                InviteCodeData::FederationId(federation_id) => Some(*federation_id),
+                _ => None,
+            })
+            .expect("Ensured by constructor")
+    }
+}
+
+/// Data that can be encoded in the invite code. Currently we always just use
+/// one `Api` and one `FederationId` variant in an invite code, but more can be
+/// added in the future while still keeping the invite code readable for older
+/// clients, which will just ignore the new fields.
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
-pub struct InviteCode {
-    /// URL to reach an API that we can download configs from
-    pub url: SafeUrl,
+enum InviteCodeData {
+    /// API endpoint of one of the guardians
+    Api {
+        /// URL to reach an API that we can download configs from
+        url: SafeUrl,
+        /// Peer id of the host from the Url
+        peer: PeerId,
+    },
     /// Authentication id for the federation
-    pub federation_id: FederationId,
-    /// Peer id of the host from the Url
-    pub peer: PeerId,
+    FederationId(FederationId),
+    /// Unknown invite code fields to be defined in the future
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
 }
 
 /// We can represent client invite code as a bech32 string for compactness and
@@ -620,24 +711,9 @@ impl FromStr for InviteCode {
         ensure!(variant == Bech32m, "Expected Bech32m encoding");
 
         let bytes: Vec<u8> = Vec::<u8>::from_base32(&data)?;
-        let mut cursor = Cursor::new(bytes);
-        let mut id_bytes = [0; 32];
-        cursor.read_exact(&mut id_bytes)?;
-        let mut peer_id_bytes = [0; 2];
-        cursor.read_exact(&mut peer_id_bytes)?;
+        let invite = InviteCode::consensus_decode(&mut Cursor::new(bytes), &Default::default())?;
 
-        let mut url_len = [0; 2];
-        cursor.read_exact(&mut url_len)?;
-        let url_len = u16::from_be_bytes(url_len).into();
-        let mut url_bytes = vec![0; url_len];
-        cursor.read_exact(&mut url_bytes)?;
-        let url = std::str::from_utf8(&url_bytes)?;
-
-        Ok(Self {
-            url: url.parse()?,
-            federation_id: FederationId::from_byte_array(id_bytes),
-            peer: PeerId(u16::from_be_bytes(peer_id_bytes)),
-        })
+        Ok(invite)
     }
 }
 
@@ -645,15 +721,12 @@ impl FromStr for InviteCode {
 impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let mut data = vec![];
-        data.extend(self.federation_id.0.into_inner());
-        data.extend(self.peer.0.to_be_bytes());
-        let url_bytes = self.url.as_str().as_bytes();
-        data.extend((url_bytes.len() as u16).to_be_bytes());
-        data.extend(url_bytes);
+
+        self.consensus_encode(&mut data)
+            .expect("Vec<u8> provides capacity");
 
         let encode =
             bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
-
         formatter.write_str(&encode)
     }
 }
@@ -771,7 +844,7 @@ impl WsFederationApi<WsClient> {
         Self::new(
             info.iter()
                 .enumerate()
-                .map(|(id, connect)| (PeerId::from(id as u16), connect.url.clone()))
+                .map(|(id, connect)| (PeerId::from(id as u16), connect.url()))
                 .collect(),
         )
     }
@@ -1153,11 +1226,11 @@ mod tests {
 
     #[test]
     fn converts_invite_code() {
-        let connect = InviteCode {
-            url: "ws://test1".parse().unwrap(),
-            federation_id: FederationId::dummy(),
-            peer: PeerId(1),
-        };
+        let connect = InviteCode::new(
+            "ws://test1".parse().unwrap(),
+            PeerId(1),
+            FederationId::dummy(),
+        );
 
         let bech32 = connect.to_string();
         let connect_parsed = InviteCode::from_str(&bech32).expect("parses");
