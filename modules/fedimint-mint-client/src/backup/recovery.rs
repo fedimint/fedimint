@@ -357,8 +357,15 @@ impl MintRestoreInProgressState {
     }
 
     pub fn handle_input(&mut self, input: &MintInput) {
-        // We attempt to delete any nonce we see as spent, simple
-        self.pending_outputs.remove(&input.note.nonce);
+        match input {
+            MintInput::V0(input) => {
+                // We attempt to delete any nonce we see as spent, simple
+                self.pending_outputs.remove(&input.note.nonce);
+            }
+            MintInput::Default { variant, .. } => {
+                trace!("Ignoring future mint input variant {variant}");
+            }
+        }
     }
 
     pub fn handle_output(

@@ -717,6 +717,7 @@ impl ClientModule for MintClientModule {
         &self,
         input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<TransactionItemAmount> {
+        let input = input.maybe_v0_ref()?;
         Some(TransactionItemAmount {
             amount: input.amount,
             fee: self.cfg.fee_consensus.note_spend_abs,
@@ -1151,7 +1152,7 @@ impl MintClientModule {
             });
 
             inputs.push(ClientInput {
-                input: MintInput { amount, note },
+                input: MintInput::new_v0(amount, note),
                 keys: vec![spendable_note.spend_key],
                 state_machines: sm_gen,
             });

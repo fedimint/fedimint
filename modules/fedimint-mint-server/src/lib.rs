@@ -321,6 +321,8 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b MintInput,
     ) -> Result<InputMeta, MintInputError> {
+        let input = input.ensure_v0_ref()?;
+
         let amount_key = self
             .pub_key
             .get(&input.amount)
@@ -676,10 +678,7 @@ mod test {
 
         // Normal spend works
         let db = Database::new(MemDatabase::new(), Default::default());
-        let input = MintInput {
-            amount: even_denomination_amount,
-            note,
-        };
+        let input = MintInput::new_v0(even_denomination_amount, note);
 
         // Double spend in same epoch is detected
         let mut dbtx = db.begin_transaction().await;

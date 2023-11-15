@@ -191,10 +191,7 @@ async fn try_cancel_oob_spend(
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
     let input = ClientInput {
-        input: MintInput {
-            amount,
-            note: spendable_note.note(),
-        },
+        input: MintInput::new_v0(amount, spendable_note.note()),
         keys: vec![spendable_note.spend_key],
         state_machines: Arc::new(move |txid, input_idx| {
             vec![MintClientStateMachines::Input(MintInputStateMachine {

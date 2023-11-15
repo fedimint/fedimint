@@ -5,7 +5,7 @@ use config::MintClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{plugin_types_trait_impl_common, Amount};
+use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -106,13 +106,21 @@ impl CommonModuleInit for MintCommonInit {
     }
 }
 
+extensible_associated_module_type!(MintInput, MintInputV0, UnknownMintInputVariantError);
+
+impl MintInput {
+    pub fn new_v0(amount: Amount, note: Note) -> MintInput {
+        MintInput::V0(MintInputV0 { amount, note })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintInput {
+pub struct MintInputV0 {
     pub amount: Amount,
     pub note: Note,
 }
 
-impl std::fmt::Display for MintInput {
+impl std::fmt::Display for MintInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Mint Note {}", self.amount)
     }
@@ -189,6 +197,8 @@ pub enum MintInputError {
     InvalidAmountTier(Amount),
     #[error("The note has an invalid signature")]
     InvalidSignature,
+    #[error("The mint input version is not supported by this federation")]
+    UnknownInputVariant(#[from] UnknownMintInputVariantError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
