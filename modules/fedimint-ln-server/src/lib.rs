@@ -14,9 +14,9 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
-    ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
-    WAIT_OFFER_ENDPOINT, WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, WAIT_PREIMAGE_DECRYPTION,
+    ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
+    AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
+    LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -860,7 +860,7 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                WAIT_ACCOUNT_ENDPOINT,
+                AWAIT_ACCOUNT_ENDPOINT,
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     Ok(module
                         .wait_contract_account(context, contract_id)
@@ -868,20 +868,20 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                WAIT_BLOCK_HEIGHT_ENDPOINT,
+                AWAIT_BLOCK_HEIGHT_ENDPOINT,
                 async |module: &Lightning, context, block_height: u64| -> () {
                     module.wait_block_height(block_height, &mut context.dbtx()).await;
                     Ok(())
                 }
             },
             api_endpoint! {
-                WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT,
+                AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT,
                 async |module: &Lightning, context, contract_id: ContractId| -> ContractAccount {
                     Ok(module.wait_outgoing_contract_account_cancelled(context, contract_id).await)
                 }
             },
             api_endpoint! {
-                WAIT_PREIMAGE_DECRYPTION,
+                AWAIT_PREIMAGE_DECRYPTION,
                 async |module: &Lightning, context, contract_id: ContractId| -> (IncomingContractAccount, Option<Preimage>) {
                     Ok(module.wait_preimage_decrypted(context, contract_id).await)
                 }
@@ -895,7 +895,7 @@ impl ServerModule for Lightning {
                }
             },
             api_endpoint! {
-                WAIT_OFFER_ENDPOINT,
+                AWAIT_OFFER_ENDPOINT,
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
                     Ok(module
                         .wait_offer(context, payment_hash)

@@ -17,7 +17,7 @@ fn sanity_ecash_backup_align() {
 #[test]
 fn sanity_ecash_backup_decode_encode() -> Result<()> {
     let orig = ClientBackup {
-        fedimint_block_count: 0,
+        session_count: 0,
         metadata: Metadata::from_raw(vec![1, 2, 3]),
         modules: Default::default(),
     };
@@ -33,7 +33,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
 fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
     let orig = ClientBackup {
         modules: Default::default(),
-        fedimint_block_count: 1,
+        session_count: 1,
         metadata: Metadata::from_raw(vec![1, 2, 3]),
     };
 

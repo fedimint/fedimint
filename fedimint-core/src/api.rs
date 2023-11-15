@@ -48,9 +48,9 @@ use crate::block::Block;
 use crate::core::backup::SignedBackupRequest;
 use crate::core::{Decoder, OutputOutcome};
 use crate::endpoint_constants::{
-    AWAIT_OUTPUT_OUTCOME_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
-    FETCH_BLOCK_COUNT_ENDPOINT, RECOVER_ENDPOINT, TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
-    WAIT_TRANSACTION_ENDPOINT,
+    AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, RECOVER_ENDPOINT, SESSION_COUNT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    VERSION_ENDPOINT,
 };
 use crate::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use crate::query::{
@@ -357,7 +357,7 @@ pub trait GlobalFederationApi {
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<Block>;
 
-    async fn fetch_block_count(&self) -> FederationResult<u64>;
+    async fn session_count(&self) -> FederationResult<u64>;
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId>;
 
@@ -422,7 +422,7 @@ where
         tx: Transaction,
     ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionError>>> {
         self.request_current_consensus(
-            TRANSACTION_ENDPOINT.to_owned(),
+            SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
         )
         .await
@@ -442,9 +442,9 @@ where
         .map_err(|e| anyhow!(e.to_string()))
     }
 
-    async fn fetch_block_count(&self) -> FederationResult<u64> {
+    async fn session_count(&self) -> FederationResult<u64> {
         self.request_current_consensus(
-            FETCH_BLOCK_COUNT_ENDPOINT.to_owned(),
+            SESSION_COUNT_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
         )
         .await
@@ -452,7 +452,7 @@ where
 
     async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {
         self.request_current_consensus(
-            WAIT_TRANSACTION_ENDPOINT.to_owned(),
+            AWAIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(txid),
         )
         .await

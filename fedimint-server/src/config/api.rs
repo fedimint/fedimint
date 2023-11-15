@@ -18,11 +18,11 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, GET_CONFIG_GEN_PEERS_ENDPOINT,
-    GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GET_VERIFY_CONFIG_HASH_ENDPOINT, RUN_DKG_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
+    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, RUN_DKG_ENDPOINT,
+    SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased,
@@ -124,13 +124,13 @@ impl ConfigGenApi {
     }
 
     /// Returns the peers that have called `add_config_gen_peer` on the leader
-    pub async fn get_config_gen_peers(&self) -> ApiResult<Vec<PeerServerParams>> {
+    pub async fn config_gen_peers(&self) -> ApiResult<Vec<PeerServerParams>> {
         let state = self.state.lock().expect("lock poisoned");
         Ok(state.get_peer_info().into_values().collect())
     }
 
     /// Returns default config gen params that can be modified by the leader
-    pub fn get_default_config_gen_params(&self) -> ApiResult<ConfigGenParamsRequest> {
+    pub fn default_config_gen_params(&self) -> ApiResult<ConfigGenParamsRequest> {
         let state = self.state.lock().expect("lock poisoned");
         Ok(state.settings.default_params.clone())
     }
@@ -139,7 +139,7 @@ impl ConfigGenApi {
     ///
     /// The leader passes consensus params, everyone passes local params
     pub async fn set_config_gen_params(&self, request: ConfigGenParamsRequest) -> ApiResult<()> {
-        self.get_consensus_config_gen_params(&request).await?;
+        self.consensus_config_gen_params(&request).await?;
         let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
         state.requested_params = Some(request);
         Ok(())
@@ -153,7 +153,7 @@ impl ConfigGenApi {
     }
 
     /// Gets the consensus config gen params
-    pub async fn get_consensus_config_gen_params(
+    pub async fn consensus_config_gen_params(
         &self,
         request: &ConfigGenParamsRequest,
     ) -> ApiResult<ConfigGenParamsResponse> {
@@ -163,7 +163,7 @@ impl ConfigGenApi {
         let consensus = match local.and_then(|local| local.leader_api_url) {
             Some(leader_url) => {
                 let client = WsAdminClient::new(leader_url.clone());
-                let response = client.get_consensus_config_gen_params().await;
+                let response = client.consensus_config_gen_params().await;
                 response
                     .map_err(|_| ApiError::not_found("Cannot get leader params".to_string()))?
                     .consensus
@@ -222,7 +222,7 @@ impl ConfigGenApi {
 
                 // Get params and registry
                 let request = self_clone.get_requested_params()?;
-                let response = self_clone.get_consensus_config_gen_params(&request).await?;
+                let response = self_clone.consensus_config_gen_params(&request).await?;
                 let (params, registry) = {
                     let state: MutexGuard<'_, ConfigGenState> =
                         self_clone.require_status(ServerStatus::ReadyForConfigGen)?;
@@ -271,7 +271,7 @@ impl ConfigGenApi {
 
     /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
-    pub fn get_verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
+    pub fn verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
         let state = self
             .require_status(ServerStatus::VerifyingConfigs)
             .or_else(|_| self.require_status(ServerStatus::VerifiedConfigs))
@@ -590,16 +590,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            GET_CONFIG_GEN_PEERS_ENDPOINT,
+            CONFIG_GEN_PEERS_ENDPOINT,
             async |config: &ConfigGenApi, _context, _v: ()| -> Vec<PeerServerParams> {
-                config.get_config_gen_peers().await
+                config.config_gen_peers().await
             }
         },
         api_endpoint! {
-            GET_DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
+            DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
             async |config: &ConfigGenApi, context,  _v: ()| -> ConfigGenParamsRequest {
                 check_auth(context)?;
-                config.get_default_config_gen_params()
+                config.default_config_gen_params()
             }
         },
         api_endpoint! {
@@ -610,10 +610,10 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            GET_CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+            CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsResponse {
                 let request = config.get_requested_params()?;
-                config.get_consensus_config_gen_params(&request).await
+                config.consensus_config_gen_params(&request).await
             }
         },
         api_endpoint! {
@@ -624,10 +624,10 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            GET_VERIFY_CONFIG_HASH_ENDPOINT,
+            VERIFY_CONFIG_HASH_ENDPOINT,
             async |config: &ConfigGenApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 check_auth(context)?;
-                config.get_verify_config_hash()
+                config.verify_config_hash()
             }
         },
         api_endpoint! {
@@ -803,7 +803,7 @@ mod tests {
         /// Helper for awaiting all servers have the status
         async fn wait_status(&self, status: ServerStatus) {
             loop {
-                let response = self.client.get_consensus_config_gen_params().await.unwrap();
+                let response = self.client.consensus_config_gen_params().await.unwrap();
                 let mismatched: Vec<_> = response
                     .consensus
                     .peers
@@ -936,7 +936,7 @@ mod tests {
         // Followers can fetch configs
         let mut configs = vec![];
         for peer in &followers {
-            configs.push(peer.client.get_consensus_config_gen_params().await.unwrap());
+            configs.push(peer.client.consensus_config_gen_params().await.unwrap());
         }
         // Confirm all consensus configs are the same
         let mut consensus: Vec<_> = configs.iter().map(|p| p.consensus.clone()).collect();

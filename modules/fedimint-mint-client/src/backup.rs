@@ -21,7 +21,7 @@ pub mod recovery;
 pub struct EcashBackup {
     spendable_notes: TieredMulti<SpendableNote>,
     pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
-    epoch_count: u64,
+    session_count: u64,
     next_note_idx: Tiered<NoteIndex>,
 }
 
@@ -31,7 +31,7 @@ impl EcashBackup {
         Self {
             spendable_notes: TieredMulti::default(),
             pending_notes: vec![],
-            epoch_count: 0,
+            session_count: 0,
             next_note_idx: Tiered::default(),
         }
     }
@@ -46,7 +46,7 @@ impl MintClientModule {
         module_instance_id: ModuleInstanceId,
     ) -> anyhow::Result<EcashBackup> {
         // fetch consensus height first - so we dont miss anything when scanning
-        let fedimint_block_count = api.fetch_block_count().await?;
+        let session_count = api.session_count().await?;
 
         let notes = Self::get_all_spendable_notes(dbtx).await;
 
@@ -88,7 +88,7 @@ impl MintClientModule {
             spendable_notes: notes,
             pending_notes,
             next_note_idx,
-            epoch_count: fedimint_block_count,
+            session_count,
         })
     }
 }

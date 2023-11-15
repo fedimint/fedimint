@@ -6,9 +6,9 @@ use fedimint_core::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
 use fedimint_core::endpoint_constants::{
-    ACCOUNT_ENDPOINT, BLOCK_COUNT_ENDPOINT, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, WAIT_ACCOUNT_ENDPOINT, WAIT_BLOCK_HEIGHT_ENDPOINT,
-    WAIT_OFFER_ENDPOINT, WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, WAIT_PREIMAGE_DECRYPTION,
+    ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
+    AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
+    LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT, REGISTER_GATEWAY_ENDPOINT,
 };
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::query::UnionResponses;
@@ -80,7 +80,7 @@ where
 
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
         self.request_current_consensus(
-            WAIT_ACCOUNT_ENDPOINT.to_string(),
+            AWAIT_ACCOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
         )
         .await
@@ -88,7 +88,7 @@ where
 
     async fn wait_block_height(&self, block_height: u64) -> FederationResult<()> {
         self.request_current_consensus(
-            WAIT_BLOCK_HEIGHT_ENDPOINT.to_string(),
+            AWAIT_BLOCK_HEIGHT_ENDPOINT.to_string(),
             ApiRequestErased::new(block_height),
         )
         .await
@@ -99,7 +99,7 @@ where
         contract: ContractId,
     ) -> FederationResult<ContractAccount> {
         self.request_current_consensus(
-            WAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT.to_string(),
+            AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
         )
         .await
@@ -110,7 +110,7 @@ where
         contract: ContractId,
     ) -> FederationResult<(IncomingContractAccount, Option<Preimage>)> {
         self.request_current_consensus(
-            WAIT_PREIMAGE_DECRYPTION.to_string(),
+            AWAIT_PREIMAGE_DECRYPTION.to_string(),
             ApiRequestErased::new(contract),
         )
         .await
@@ -121,7 +121,7 @@ where
         payment_hash: Sha256Hash,
     ) -> FederationResult<IncomingContractOffer> {
         self.request_current_consensus(
-            WAIT_OFFER_ENDPOINT.to_string(),
+            AWAIT_OFFER_ENDPOINT.to_string(),
             ApiRequestErased::new(payment_hash),
         )
         .await
