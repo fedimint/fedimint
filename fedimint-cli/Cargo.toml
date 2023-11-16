@@ -17,6 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.66"
+async-trait = "0.1.73"
 base64 = "0.20.0"
 bitcoin = "0.29.2"
 bitcoin_hashes = "0.11.0"
@@ -35,6 +36,7 @@ fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 fedimint-logging = { path = "../fedimint-logging" }
 fedimint-server = { path = "../fedimint-server" }
+fs-lock = "0.1.0"
 rand = "0.8"
 serde = { version = "1.0.149", features = [ "derive" ] }
 thiserror = "1.0.39"
