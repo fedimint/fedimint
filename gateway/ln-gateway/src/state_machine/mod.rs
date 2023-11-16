@@ -477,8 +477,8 @@ impl ClientModule for GatewayClientModule {
     fn output_amount(
         &self,
         output: &<Self::Common as fedimint_core::module::ModuleCommon>::Output,
-    ) -> fedimint_core::module::TransactionItemAmount {
-        match output {
+    ) -> Option<TransactionItemAmount> {
+        let amt = match output {
             LightningOutput::Contract(account_output) => TransactionItemAmount {
                 amount: account_output.amount,
                 fee: self.cfg.fee_consensus.contract_output,
@@ -489,7 +489,8 @@ impl ClientModule for GatewayClientModule {
                     fee: Amount::ZERO,
                 }
             }
-        }
+        };
+        Some(amt)
     }
 }
 

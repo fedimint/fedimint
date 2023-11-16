@@ -706,7 +706,9 @@ impl Client {
 
         for output in &builder.outputs {
             let module = self.get_module(output.output.module_instance_id());
-            let item_amount = module.output_amount(&output.output);
+            let item_amount = module.output_amount(&output.output).expect(
+                "We only build transactions with output versions that are supported by the module",
+            );
             out_amount += item_amount.amount;
             fee_amount += item_amount.fee;
         }

@@ -547,11 +547,11 @@ impl ClientModule for WalletClientModule {
     fn output_amount(
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
-    ) -> TransactionItemAmount {
-        TransactionItemAmount {
+    ) -> Option<TransactionItemAmount> {
+        Some(TransactionItemAmount {
             amount: output.amount().into(),
             fee: self.cfg.fee_consensus.peg_out_abs,
-        }
+        })
     }
 }
 

@@ -726,11 +726,11 @@ impl ClientModule for MintClientModule {
     fn output_amount(
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
-    ) -> TransactionItemAmount {
-        TransactionItemAmount {
+    ) -> Option<TransactionItemAmount> {
+        Some(TransactionItemAmount {
             amount: output.amount,
             fee: self.cfg.fee_consensus.note_issuance_abs,
-        }
+        })
     }
 
     async fn handle_cli_command(
