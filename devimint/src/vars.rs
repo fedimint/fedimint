@@ -125,6 +125,7 @@ declare_vars! {
 
         FM_GATEWAY_API_ADDR: String = f!("http://127.0.0.1:{FM_PORT_GW_CLN}");
         FM_GATEWAY_PASSWORD: String = "theresnosecondbest";
+        FM_GATEWAY_FEES: String = "0,0"; // Enable to us to make an unbounded number of payments
 
         FM_CLN_EXTENSION_LISTEN_ADDRESS: String = f!("0.0.0.0:{FM_PORT_CLN_EXTENSION}");
         FM_GATEWAY_LIGHTNING_ADDR: String = f!("http://localhost:{FM_PORT_CLN_EXTENSION}");

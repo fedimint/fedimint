@@ -8,9 +8,10 @@ use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{ClientArc, ClientBuilder, FederationInfo};
+use fedimint_client::{get_invite_code_from_db, ClientArc, ClientBuilder, FederationInfo};
 use fedimint_core::api::InviteCode;
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::db::Database;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{
@@ -128,19 +129,28 @@ pub async fn await_spend_notes_finish(
 }
 
 pub async fn build_client(
-    invite_code: Option<InviteCode>,
+    mut invite_code: Option<InviteCode>,
     rocksdb: Option<&PathBuf>,
-) -> anyhow::Result<ClientArc> {
+) -> anyhow::Result<(ClientArc, Option<InviteCode>)> {
     let mut client_builder = ClientBuilder::default();
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit);
     client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module(1);
-    if let Some(invite_code) = invite_code {
-        client_builder.with_federation_info(FederationInfo::from_invite_code(invite_code).await?);
+    if let Some(invite_code) = &invite_code {
+        client_builder
+            .with_federation_info(FederationInfo::from_invite_code(invite_code.clone()).await?);
     }
     if let Some(rocksdb) = rocksdb {
-        client_builder.with_raw_database(fedimint_rocksdb::RocksDb::open(rocksdb)?)
+        let db = Database::new(
+            fedimint_rocksdb::RocksDb::open(rocksdb)?,
+            Default::default(),
+        );
+        if invite_code.is_none() {
+            // Best effort basis for now
+            invite_code = get_invite_code_from_db(&db).await;
+        }
+        client_builder.with_database(db)
     } else {
         client_builder.with_raw_database(fedimint_core::db::mem_impl::MemDatabase::new())
     }
@@ -159,7 +169,7 @@ pub async fn build_client(
     let client = client_builder
         .build(PlainRootSecretStrategy::to_root_secret(&client_secret))
         .await?;
-    Ok(client)
+    Ok((client, invite_code))
 }
 
 pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Bolt11Invoice, String)> {
@@ -178,6 +188,24 @@ pub async fn lnd_create_invoice(amount: Amount) -> anyhow::Result<(Bolt11Invoice
     Ok((invoice, r_hash))
 }
 
+pub async fn lnd_pay_invoice(invoice: Bolt11Invoice) -> anyhow::Result<()> {
+    let status = cmd!(
+        LnCli,
+        "payinvoice",
+        "--force",
+        "--allow_self_payment",
+        "--json",
+        invoice.to_string()
+    )
+    .out_json()
+    .await?["status"]
+        .as_str()
+        .context("Missing status field")?
+        .to_owned();
+    anyhow::ensure!(status == "SUCCEEDED");
+    Ok(())
+}
+
 pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
     for _ in 0..60 {
         let result = cmd!(LnCli, "lookupinvoice", &r_hash).out_json().await?;
@@ -192,6 +220,7 @@ pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
 }
 
 pub async fn gateway_pay_invoice(
+    prefix: &str,
     client: &ClientArc,
     invoice: Bolt11Invoice,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
@@ -208,7 +237,7 @@ pub async fn gateway_pay_invoice(
     };
     let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
     while let Some(update) = updates.next().await {
-        info!("LnPayState update: {update:?}");
+        info!("{prefix} LnPayState update: {update:?}");
         match update {
             LnPayState::Success { preimage: _ } => {
                 break;
@@ -235,6 +264,17 @@ pub async fn cln_create_invoice(amount: Amount) -> anyhow::Result<(Bolt11Invoice
         .context("Missing bolt11 field")?
         .to_owned();
     Ok((Bolt11Invoice::from_str(&invoice_string)?, label))
+}
+
+pub async fn cln_pay_invoice(invoice: Bolt11Invoice) -> anyhow::Result<()> {
+    let status = cmd!(ClnLightningCli, "pay", invoice.to_string())
+        .out_json()
+        .await?["status"]
+        .as_str()
+        .context("Missing status field")?
+        .to_owned();
+    anyhow::ensure!(status == "complete");
+    Ok(())
 }
 
 pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
@@ -309,7 +349,7 @@ pub async fn remint_denomination(
     tx_subscription
         .await_tx_accepted(txid)
         .await
-        .map_err(|e| anyhow!(e))?;
+        .map_err(|e| anyhow!("{e}"))?;
     dbtx.commit_tx().await;
     for i in 0..quantity {
         let out_point = OutPoint {
