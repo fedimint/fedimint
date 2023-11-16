@@ -143,10 +143,7 @@ impl MintInputStateCreated {
         };
 
         let refund_input = ClientInput::<MintInput, MintClientStateMachines> {
-            input: MintInput {
-                amount,
-                note: spendable_note.note(),
-            },
+            input: MintInput::new_v0(amount, spendable_note.note()),
             keys: vec![spendable_note.spend_key],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

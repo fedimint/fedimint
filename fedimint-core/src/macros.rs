@@ -681,3 +681,82 @@ macro_rules! module_plugin_dyn_newtype_display_passthrough {
         }
     };
 }
+
+// TODO: use concat_ident for error name once it lands in stable, see https://github.com/rust-lang/rust/issues/29599
+/// Wraps a type into an enum with a default variant, this allows to add new
+/// versions of the type in the future. Depending on context unknown versions
+/// may be ignored or lead to errors. E.g. the client might just ignore an
+/// unknown input version since it cannot originate from itself while the server
+/// would reject it for not being able to validate its correctness.
+///
+/// Adding extensibility this way is a last line of defense against breaking
+/// changes, most often other ways of introducing new functionality should be
+/// preferred (e.g. new module versions, pure client-side changes, …).
+#[macro_export]
+macro_rules! extensible_associated_module_type {
+    ($name:ident, $name_v0:ident, $error:ident) => {
+        #[derive(
+            Debug,
+            Clone,
+            Eq,
+            PartialEq,
+            Hash,
+            serde::Deserialize,
+            serde::Serialize,
+            fedimint_core::encoding::Encodable,
+            fedimint_core::encoding::Decodable,
+        )]
+        pub enum $name {
+            V0($name_v0),
+            #[encodable_default]
+            Default {
+                variant: u64,
+                bytes: Vec<u8>,
+            },
+        }
+
+        impl $name {
+            pub fn maybe_v0_ref(&self) -> Option<&$name_v0> {
+                match self {
+                    $name::V0(v0) => Some(v0),
+                    $name::Default { .. } => None,
+                }
+            }
+
+            pub fn ensure_v0_ref(&self) -> Result<&$name_v0, $error> {
+                match self {
+                    $name::V0(v0) => Ok(v0),
+                    $name::Default { variant, .. } => Err($error { variant: *variant }),
+                }
+            }
+        }
+
+        #[derive(
+            Debug,
+            thiserror::Error,
+            Clone,
+            Eq,
+            PartialEq,
+            Hash,
+            serde::Deserialize,
+            serde::Serialize,
+            fedimint_core::encoding::Encodable,
+            fedimint_core::encoding::Decodable,
+        )]
+        #[error("Unknown {} variant {variant}", stringify!($name))]
+        pub struct $error {
+            pub variant: u64,
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    $name::V0(inner) => std::fmt::Display::fmt(inner, f),
+                    $name::Default { variant, .. } => {
+                        write!(f, "Unknown {} (variant={variant})", stringify!($name))
+                    }
+                }
+            }
+        }
+    };
+}

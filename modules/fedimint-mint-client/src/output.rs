@@ -14,7 +14,9 @@ use fedimint_core::query::FilterMapThreshold;
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TransactionId};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce, Note};
+use fedimint_mint_common::{
+    BlindNonce, MintOutputOutcome, Nonce, Note, UnknownMintOutputOutcomeVariantError,
+};
 use secp256k1::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{
@@ -237,9 +239,12 @@ impl MintOutputStatesCreated {
                 Ok(amount_key) => issuance_request
                     .finalize(
                         combine_valid_shares(
-                            blind_signature_shares
-                                .iter()
-                                .map(|(peer, share)| (peer.to_usize(), share.0)),
+                            blind_signature_shares.iter().map(|(peer, share)| {
+                                let share = share.ensure_v0_ref().expect(
+                                    "We only process output outcome versions created by ourselves",
+                                );
+                                (peer.to_usize(), share.0)
+                            }),
                             blind_signature_shares.len(),
                         ),
                         *amount_key,
@@ -281,6 +286,8 @@ impl MintOutputStatesCreated {
     }
 }
 
+/// # Panics
+/// If the given `outcome` is not a [`MintOutputOutcome::V0`] outcome.
 pub fn verify_blind_share(
     peer: PeerId,
     outcome: SerdeOutputOutcome,
@@ -289,7 +296,10 @@ pub fn verify_blind_share(
     decoder: &Decoder,
     peer_tbs_pks: &BTreeMap<PeerId, Tiered<PublicKeyShare>>,
 ) -> anyhow::Result<MintOutputOutcome> {
-    let outcome: MintOutputOutcome = deserialize_outcome(outcome.clone(), decoder)?;
+    let outcome = deserialize_outcome::<MintOutputOutcome>(outcome.clone(), decoder)?;
+    let outcome_v0 = outcome
+        .ensure_v0_ref()
+        .expect("We only process output outcome versions created by ourselves");
 
     let blinded_message = blind_message(request.nonce().to_message(), request.blinding_key);
 
@@ -297,7 +307,7 @@ pub fn verify_blind_share(
         .tier(&amount)
         .map_err(|_| anyhow!("Invalid Amount Tier"))?;
 
-    if !tbs::verify_blind_share(blinded_message, outcome.0, *amount_key) {
+    if !tbs::verify_blind_share(blinded_message, outcome_v0.0, *amount_key) {
         bail!("Invalid blind signature")
     }
 
@@ -406,4 +416,6 @@ pub enum NoteFinalizationError {
     InvalidAmountTier(Amount),
     #[error("The client does not know this issuance")]
     UnknownIssuance,
+    #[error("The client does not know this output outcome version, it likely didn't generate the associated transaction")]
+    UnknownOutputOutcomeVersion(UnknownMintOutputOutcomeVariantError),
 }

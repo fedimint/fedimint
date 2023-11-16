@@ -737,18 +737,21 @@ impl ClientModule for LightningClientModule {
         }
     }
 
-    fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
-        TransactionItemAmount {
+    fn input_amount(
+        &self,
+        input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Option<TransactionItemAmount> {
+        Some(TransactionItemAmount {
             amount: input.amount,
             fee: self.cfg.fee_consensus.contract_input,
-        }
+        })
     }
 
     fn output_amount(
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
-    ) -> TransactionItemAmount {
-        match output {
+    ) -> Option<TransactionItemAmount> {
+        let amt = match output {
             LightningOutput::Contract(account_output) => TransactionItemAmount {
                 amount: account_output.amount,
                 fee: self.cfg.fee_consensus.contract_output,
@@ -759,7 +762,8 @@ impl ClientModule for LightningClientModule {
                     fee: Amount::ZERO,
                 }
             }
-        }
+        };
+        Some(amt)
     }
 }
 

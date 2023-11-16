@@ -321,6 +321,8 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b MintInput,
     ) -> Result<InputMeta, MintInputError> {
+        let input = input.ensure_v0_ref()?;
+
         let amount_key = self
             .pub_key
             .get(&input.amount)
@@ -359,6 +361,8 @@ impl ServerModule for Mint {
         output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, MintOutputError> {
+        let output = output.ensure_v0_ref()?;
+
         let amount_key = self
             .sec_key
             .get(output.amount)
@@ -366,7 +370,7 @@ impl ServerModule for Mint {
 
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),
-            &MintOutputOutcome(sign_blinded_msg(output.blind_nonce.0, *amount_key)),
+            &MintOutputOutcome::new_v0(sign_blinded_msg(output.blind_nonce.0, *amount_key)),
         )
         .await;
 
@@ -676,10 +680,7 @@ mod test {
 
         // Normal spend works
         let db = Database::new(MemDatabase::new(), Default::default());
-        let input = MintInput {
-            amount: even_denomination_amount,
-            note,
-        };
+        let input = MintInput::new_v0(even_denomination_amount, note);
 
         // Double spend in same epoch is detected
         let mut dbtx = db.begin_transaction().await;
@@ -747,7 +748,7 @@ mod fedimint_migration_tests {
         let blind_signature_share = sign_blinded_msg(blinded_message, secret_key_share);
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),
-            &MintOutputOutcome(blind_signature_share),
+            &MintOutputOutcome::new_v0(blind_signature_share),
         )
         .await;
 

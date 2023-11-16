@@ -5,8 +5,9 @@ use config::MintClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{plugin_types_trait_impl_common, Amount};
+use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
+use tbs::BlindedSignatureShare;
 use thiserror::Error;
 use tracing::error;
 
@@ -21,10 +22,15 @@ const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 /// By default, the maximum notes per denomination when change-making for users
 pub const DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = 3;
 
-/// Data structures taking into account different amount tiers
-
+/// The mint module currently doesn't define any consensus items and generally
+/// throws an error on encountering one. To allow old clients to still decode
+/// blocks in the future, should we decide to add consensus items, this has to
+/// be an enum with only a default variant.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct MintConsensusItem;
+pub enum MintConsensusItem {
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
+}
 
 impl std::fmt::Display for MintConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -106,34 +112,65 @@ impl CommonModuleInit for MintCommonInit {
     }
 }
 
+extensible_associated_module_type!(MintInput, MintInputV0, UnknownMintInputVariantError);
+
+impl MintInput {
+    pub fn new_v0(amount: Amount, note: Note) -> MintInput {
+        MintInput::V0(MintInputV0 { amount, note })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintInput {
+pub struct MintInputV0 {
     pub amount: Amount,
     pub note: Note,
 }
 
-impl std::fmt::Display for MintInput {
+impl std::fmt::Display for MintInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Mint Note {}", self.amount)
     }
 }
 
+extensible_associated_module_type!(MintOutput, MintOutputV0, UnknownMintOutputVariantError);
+
+impl MintOutput {
+    pub fn new_v0(amount: Amount, blind_nonce: BlindNonce) -> MintOutput {
+        MintOutput::V0(MintOutputV0 {
+            amount,
+            blind_nonce,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutput {
+pub struct MintOutputV0 {
     pub amount: Amount,
     pub blind_nonce: BlindNonce,
 }
 
-impl std::fmt::Display for MintOutput {
+impl std::fmt::Display for MintOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Mint Note {}", self.amount)
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputOutcome(pub tbs::BlindedSignatureShare);
+extensible_associated_module_type!(
+    MintOutputOutcome,
+    MintOutputOutcomeV0,
+    UnknownMintOutputOutcomeVariantError
+);
 
-impl std::fmt::Display for MintOutputOutcome {
+impl MintOutputOutcome {
+    pub fn new_v0(blind_signature_share: BlindedSignatureShare) -> MintOutputOutcome {
+        MintOutputOutcome::V0(MintOutputOutcomeV0(blind_signature_share))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct MintOutputOutcomeV0(pub tbs::BlindedSignatureShare);
+
+impl std::fmt::Display for MintOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "MintOutputOutcome")
     }
@@ -189,10 +226,14 @@ pub enum MintInputError {
     InvalidAmountTier(Amount),
     #[error("The note has an invalid signature")]
     InvalidSignature,
+    #[error("The mint input version is not supported by this federation")]
+    UnknownInputVariant(#[from] UnknownMintInputVariantError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum MintOutputError {
     #[error("The note has an invalid amount not issued by the mint: {0:?}")]
     InvalidAmountTier(Amount),
+    #[error("The mint output version is not supported by this federation")]
+    UnknownOutputVariant(#[from] UnknownMintOutputVariantError),
 }

@@ -357,8 +357,15 @@ impl MintRestoreInProgressState {
     }
 
     pub fn handle_input(&mut self, input: &MintInput) {
-        // We attempt to delete any nonce we see as spent, simple
-        self.pending_outputs.remove(&input.note.nonce);
+        match input {
+            MintInput::V0(input) => {
+                // We attempt to delete any nonce we see as spent, simple
+                self.pending_outputs.remove(&input.note.nonce);
+            }
+            MintInput::Default { variant, .. } => {
+                trace!("Ignoring future mint input variant {variant}");
+            }
+        }
     }
 
     pub fn handle_output(
@@ -367,6 +374,14 @@ impl MintRestoreInProgressState {
         output: &MintOutput,
         secret: &DerivableSecret,
     ) {
+        let output = match output {
+            MintOutput::V0(output) => output,
+            MintOutput::Default { variant, .. } => {
+                trace!("Ignoring future mint output variant {variant}");
+                return;
+            }
+        };
+
         // There is nothing preventing other users from creating valid
         // transactions mining notes to our own blind nonce, possibly
         // even racing with us. Including amount in blind nonce

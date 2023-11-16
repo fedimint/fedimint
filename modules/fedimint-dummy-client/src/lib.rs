@@ -66,21 +66,24 @@ impl ClientModule for DummyClientModule {
         }
     }
 
-    fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
-        TransactionItemAmount {
+    fn input_amount(
+        &self,
+        input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Option<TransactionItemAmount> {
+        Some(TransactionItemAmount {
             amount: input.amount,
             fee: self.cfg.tx_fee,
-        }
+        })
     }
 
     fn output_amount(
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
-    ) -> TransactionItemAmount {
-        TransactionItemAmount {
+    ) -> Option<TransactionItemAmount> {
+        Some(TransactionItemAmount {
             amount: output.amount,
             fee: self.cfg.tx_fee,
-        }
+        })
     }
 
     fn supports_being_primary(&self) -> bool {

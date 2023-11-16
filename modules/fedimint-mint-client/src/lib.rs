@@ -413,21 +413,27 @@ impl ClientModule for MintClientModule {
         }
     }
 
-    fn input_amount(&self, input: &<Self::Common as ModuleCommon>::Input) -> TransactionItemAmount {
-        TransactionItemAmount {
+    fn input_amount(
+        &self,
+        input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Option<TransactionItemAmount> {
+        let input = input.maybe_v0_ref()?;
+        Some(TransactionItemAmount {
             amount: input.amount,
             fee: self.cfg.fee_consensus.note_spend_abs,
-        }
+        })
     }
 
     fn output_amount(
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
-    ) -> TransactionItemAmount {
-        TransactionItemAmount {
+    ) -> Option<TransactionItemAmount> {
+        let output = output.maybe_v0_ref()?;
+
+        Some(TransactionItemAmount {
             amount: output.amount,
             fee: self.cfg.fee_consensus.note_issuance_abs,
-        }
+        })
     }
 
     async fn handle_cli_command(
@@ -736,10 +742,7 @@ impl MintClientModule {
                 );
 
                 outputs.push(ClientOutput {
-                    output: MintOutput {
-                        amount,
-                        blind_nonce,
-                    },
+                    output: MintOutput::new_v0(amount, blind_nonce),
                     state_machines: state_generator,
                 });
             }
@@ -848,7 +851,7 @@ impl MintClientModule {
             });
 
             inputs.push(ClientInput {
-                input: MintInput { amount, note },
+                input: MintInput::new_v0(amount, note),
                 keys: vec![spendable_note.spend_key],
                 state_machines: sm_gen,
             });
