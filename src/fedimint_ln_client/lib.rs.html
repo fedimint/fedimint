@@ -1342,6 +1342,10 @@
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
 <a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -2081,18 +2085,21 @@
         }
     }
 
-    <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; TransactionItemAmount {
-        TransactionItemAmount {
+    <span class="kw">fn </span>input_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: input.amount,
             fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
-        }
+        })
     }
 
     <span class="kw">fn </span>output_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-    ) -&gt; TransactionItemAmount {
-        <span class="kw">match </span>output {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>amt = <span class="kw">match </span>output {
             LightningOutput::Contract(account_output) =&gt; TransactionItemAmount {
                 amount: account_output.amount,
                 fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
@@ -2103,7 +2110,8 @@
                     fee: Amount::ZERO,
                 }
             }
-        }
+        };
+        <span class="prelude-val">Some</span>(amt)
     }
 }
 

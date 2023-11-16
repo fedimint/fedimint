@@ -878,6 +878,7 @@
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 
@@ -1201,6 +1202,8 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>MintInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, MintInputError&gt; {
+        <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
+
         <span class="kw">let </span>amount_key = <span class="self">self
             </span>.pub_key
             .get(<span class="kw-2">&amp;</span>input.amount)
@@ -1239,6 +1242,8 @@
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintOutput,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, MintOutputError&gt; {
+        <span class="kw">let </span>output = output.ensure_v0_ref()<span class="question-mark">?</span>;
+
         <span class="kw">let </span>amount_key = <span class="self">self
             </span>.sec_key
             .get(output.amount)
@@ -1246,7 +1251,7 @@
 
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>MintOutputOutcomeKey(out_point),
-            <span class="kw-2">&amp;</span>MintOutputOutcome(sign_blinded_msg(output.blind_nonce.<span class="number">0</span>, <span class="kw-2">*</span>amount_key)),
+            <span class="kw-2">&amp;</span>MintOutputOutcome::new_v0(sign_blinded_msg(output.blind_nonce.<span class="number">0</span>, <span class="kw-2">*</span>amount_key)),
         )
         .<span class="kw">await</span>;
 
@@ -1556,10 +1561,7 @@
 
         <span class="comment">// Normal spend works
         </span><span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
-        <span class="kw">let </span>input = MintInput {
-            amount: even_denomination_amount,
-            note,
-        };
+        <span class="kw">let </span>input = MintInput::new_v0(even_denomination_amount, note);
 
         <span class="comment">// Double spend in same epoch is detected
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
@@ -1627,7 +1629,7 @@
         <span class="kw">let </span>blind_signature_share = sign_blinded_msg(blinded_message, secret_key_share);
         dbtx.insert_new_entry(
             <span class="kw-2">&amp;</span>MintOutputOutcomeKey(out_point),
-            <span class="kw-2">&amp;</span>MintOutputOutcome(blind_signature_share),
+            <span class="kw-2">&amp;</span>MintOutputOutcome::new_v0(blind_signature_share),
         )
         .<span class="kw">await</span>;
 

@@ -1762,6 +1762,14 @@
 <a href="#1762" id="1762">1762</a>
 <a href="#1763" id="1763">1763</a>
 <a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
+<a href="#1772" id="1772">1772</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2446,6 +2454,10 @@
     }
 
     <span class="doccomment">/// Determines if a transaction is underfunded, overfunded or balanced
+    ///
+    /// # Panics
+    /// If any of the input or output versions in the transaction builder are
+    /// unknown by the respective module.
     </span><span class="kw">fn </span>transaction_builder_balance(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         builder: <span class="kw-2">&amp;</span>TransactionBuilder,
@@ -2457,14 +2469,18 @@
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>builder.inputs {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(input.input.module_instance_id());
-            <span class="kw">let </span>item_amount = module.input_amount(<span class="kw-2">&amp;</span>input.input);
+            <span class="kw">let </span>item_amount = module.input_amount(<span class="kw-2">&amp;</span>input.input).expect(
+                <span class="string">&quot;We only build transactions with input versions that are supported by the module&quot;</span>,
+            );
             in_amount += item_amount.amount;
             fee_amount += item_amount.fee;
         }
 
         <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>builder.outputs {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(output.output.module_instance_id());
-            <span class="kw">let </span>item_amount = module.output_amount(<span class="kw-2">&amp;</span>output.output);
+            <span class="kw">let </span>item_amount = module.output_amount(<span class="kw-2">&amp;</span>output.output).expect(
+                <span class="string">&quot;We only build transactions with output versions that are supported by the module&quot;</span>,
+            );
             out_amount += item_amount.amount;
             fee_amount += item_amount.fee;
         }

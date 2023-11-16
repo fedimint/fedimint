@@ -210,9 +210,6 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -406,10 +403,7 @@
     global_context: DynGlobalClientContext,
 ) -&gt; TransactionId {
     <span class="kw">let </span>input = ClientInput {
-        input: MintInput {
-            amount,
-            note: spendable_note.note(),
-        },
+        input: MintInput::new_v0(amount, spendable_note.note()),
         keys: <span class="macro">vec!</span>[spendable_note.spend_key],
         state_machines: Arc::new(<span class="kw">move </span>|txid, input_idx| {
             <span class="macro">vec!</span>[MintClientStateMachines::Input(MintInputStateMachine {

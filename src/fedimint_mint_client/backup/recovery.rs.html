@@ -592,6 +592,21 @@
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
@@ -951,8 +966,15 @@
     }
 
     <span class="kw">pub fn </span>handle_input(<span class="kw-2">&amp;mut </span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>MintInput) {
-        <span class="comment">// We attempt to delete any nonce we see as spent, simple
-        </span><span class="self">self</span>.pending_outputs.remove(<span class="kw-2">&amp;</span>input.note.nonce);
+        <span class="kw">match </span>input {
+            MintInput::V0(input) =&gt; {
+                <span class="comment">// We attempt to delete any nonce we see as spent, simple
+                </span><span class="self">self</span>.pending_outputs.remove(<span class="kw-2">&amp;</span>input.note.nonce);
+            }
+            MintInput::Default { variant, .. } =&gt; {
+                <span class="macro">trace!</span>(<span class="string">&quot;Ignoring future mint input variant {variant}&quot;</span>);
+            }
+        }
     }
 
     <span class="kw">pub fn </span>handle_output(
@@ -961,6 +983,14 @@
         output: <span class="kw-2">&amp;</span>MintOutput,
         secret: <span class="kw-2">&amp;</span>DerivableSecret,
     ) {
+        <span class="kw">let </span>output = <span class="kw">match </span>output {
+            MintOutput::V0(output) =&gt; output,
+            MintOutput::Default { variant, .. } =&gt; {
+                <span class="macro">trace!</span>(<span class="string">&quot;Ignoring future mint output variant {variant}&quot;</span>);
+                <span class="kw">return</span>;
+            }
+        };
+
         <span class="comment">// There is nothing preventing other users from creating valid
         // transactions mining notes to our own blind nonce, possibly
         // even racing with us. Including amount in blind nonce

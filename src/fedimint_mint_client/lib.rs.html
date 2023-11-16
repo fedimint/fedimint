@@ -1773,6 +1773,9 @@
 <a href="#1773" id="1773">1773</a>
 <a href="#1774" id="1774">1774</a>
 <a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2188,21 +2191,27 @@
         }
     }
 
-    <span class="kw">fn </span>input_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; TransactionItemAmount {
-        TransactionItemAmount {
+    <span class="kw">fn </span>input_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>input = input.maybe_v0_ref()<span class="question-mark">?</span>;
+        <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: input.amount,
             fee: <span class="self">self</span>.cfg.fee_consensus.note_spend_abs,
-        }
+        })
     }
 
     <span class="kw">fn </span>output_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-    ) -&gt; TransactionItemAmount {
-        TransactionItemAmount {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>output = output.maybe_v0_ref()<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: output.amount,
             fee: <span class="self">self</span>.cfg.fee_consensus.note_issuance_abs,
-        }
+        })
     }
 
     <span class="kw">async fn </span>handle_cli_command(
@@ -2511,10 +2520,7 @@
                 </span>);
 
                 outputs.push(ClientOutput {
-                    output: MintOutput {
-                        amount,
-                        blind_nonce,
-                    },
+                    output: MintOutput::new_v0(amount, blind_nonce),
                     state_machines: state_generator,
                 });
             }
@@ -2623,7 +2629,7 @@
             });
 
             inputs.push(ClientInput {
-                input: MintInput { amount, note },
+                input: MintInput::new_v0(amount, note),
                 keys: <span class="macro">vec!</span>[spendable_note.spend_key],
                 state_machines: sm_gen,
             });

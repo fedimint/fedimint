@@ -407,6 +407,18 @@
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -423,7 +435,9 @@
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, NumPeers, OutPoint, PeerId, Tiered, TransactionId};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce, Note};
+<span class="kw">use </span>fedimint_mint_common::{
+    BlindNonce, MintOutputOutcome, Nonce, Note, UnknownMintOutputOutcomeVariantError,
+};
 <span class="kw">use </span>secp256k1::{KeyPair, Secp256k1, Signing};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{
@@ -646,9 +660,12 @@
                 <span class="prelude-val">Ok</span>(amount_key) =&gt; issuance_request
                     .finalize(
                         combine_valid_shares(
-                            blind_signature_shares
-                                .iter()
-                                .map(|(peer, share)| (peer.to_usize(), share.<span class="number">0</span>)),
+                            blind_signature_shares.iter().map(|(peer, share)| {
+                                <span class="kw">let </span>share = share.ensure_v0_ref().expect(
+                                    <span class="string">&quot;We only process output outcome versions created by ourselves&quot;</span>,
+                                );
+                                (peer.to_usize(), share.<span class="number">0</span>)
+                            }),
                             blind_signature_shares.len(),
                         ),
                         <span class="kw-2">*</span>amount_key,
@@ -690,7 +707,9 @@
     }
 }
 
-<span class="kw">pub fn </span>verify_blind_share(
+<span class="doccomment">/// # Panics
+/// If the given `outcome` is not a [`MintOutputOutcome::V0`] outcome.
+</span><span class="kw">pub fn </span>verify_blind_share(
     peer: PeerId,
     outcome: SerdeOutputOutcome,
     amount: Amount,
@@ -698,7 +717,10 @@
     decoder: <span class="kw-2">&amp;</span>Decoder,
     peer_tbs_pks: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
 ) -&gt; anyhow::Result&lt;MintOutputOutcome&gt; {
-    <span class="kw">let </span>outcome: MintOutputOutcome = deserialize_outcome(outcome.clone(), decoder)<span class="question-mark">?</span>;
+    <span class="kw">let </span>outcome = deserialize_outcome::&lt;MintOutputOutcome&gt;(outcome.clone(), decoder)<span class="question-mark">?</span>;
+    <span class="kw">let </span>outcome_v0 = outcome
+        .ensure_v0_ref()
+        .expect(<span class="string">&quot;We only process output outcome versions created by ourselves&quot;</span>);
 
     <span class="kw">let </span>blinded_message = blind_message(request.nonce().to_message(), request.blinding_key);
 
@@ -706,7 +728,7 @@
         .tier(<span class="kw-2">&amp;</span>amount)
         .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">&quot;Invalid Amount Tier&quot;</span>))<span class="question-mark">?</span>;
 
-    <span class="kw">if </span>!tbs::verify_blind_share(blinded_message, outcome.<span class="number">0</span>, <span class="kw-2">*</span>amount_key) {
+    <span class="kw">if </span>!tbs::verify_blind_share(blinded_message, outcome_v0.<span class="number">0</span>, <span class="kw-2">*</span>amount_key) {
         <span class="macro">bail!</span>(<span class="string">&quot;Invalid blind signature&quot;</span>)
     }
 
@@ -815,5 +837,7 @@
     </span>InvalidAmountTier(Amount),
     <span class="attr">#[error(<span class="string">&quot;The client does not know this issuance&quot;</span>)]
     </span>UnknownIssuance,
+    <span class="attr">#[error(<span class="string">&quot;The client does not know this output outcome version, it likely didn&#39;t generate the associated transaction&quot;</span>)]
+    </span>UnknownOutputOutcomeVersion(UnknownMintOutputOutcomeVariantError),
 }
 </code></pre></div></section></main></body></html>

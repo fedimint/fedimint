@@ -771,6 +771,7 @@
 <a href="#771" id="771">771</a>
 <a href="#772" id="772">772</a>
 <a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -1284,18 +1285,18 @@
     <span class="kw">fn </span>input_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>fedimint_core::module::ModuleCommon&gt;::Input,
-    ) -&gt; fedimint_core::module::TransactionItemAmount {
-        TransactionItemAmount {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: input.amount,
             fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
-        }
+        })
     }
 
     <span class="kw">fn </span>output_amount(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>fedimint_core::module::ModuleCommon&gt;::Output,
-    ) -&gt; fedimint_core::module::TransactionItemAmount {
-        <span class="kw">match </span>output {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>amt = <span class="kw">match </span>output {
             LightningOutput::Contract(account_output) =&gt; TransactionItemAmount {
                 amount: account_output.amount,
                 fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
@@ -1306,7 +1307,8 @@
                     fee: Amount::ZERO,
                 }
             }
-        }
+        };
+        <span class="prelude-val">Some</span>(amt)
     }
 }
 
