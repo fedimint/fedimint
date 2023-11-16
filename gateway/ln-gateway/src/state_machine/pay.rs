@@ -49,7 +49,7 @@ use crate::state_machine::GatewayClientModule;
 ///    CancelContract -- cancel tx submission successful --> Canceled
 ///    CancelContract -- cancel tx submission unsuccessful --> Failed
 /// ```
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub enum GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
     CancelContract(Box<GatewayPayCancelContract>),
@@ -68,12 +68,12 @@ pub enum GatewayPayStates {
     },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayCommon {
     pub operation_id: OperationId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayStateMachine {
     pub common: GatewayPayCommon,
     pub state: GatewayPayStates,
@@ -168,7 +168,7 @@ impl Display for OutgoingPaymentError {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayInvoice {
     pub pay_invoice_payload: PayInvoicePayload,
 }
@@ -182,20 +182,104 @@ impl GatewayPayInvoice {
     ) -> Vec<StateTransition<GatewayPayStateMachine>> {
         let payload = self.pay_invoice_payload.clone();
         vec![StateTransition::new(
-            Self::await_get_payment_parameters(
+            Self::fetch_parameters_and_pay(
                 global_context,
-                self.pay_invoice_payload.contract_id,
+                payload.clone(),
                 context.clone(),
+                common.clone(),
             ),
-            move |_dbtx, result, _old_state| {
-                Box::pin(Self::transition_buy_preimage(
-                    context.clone(),
-                    result,
-                    common.clone(),
-                    payload.clone(),
-                ))
-            },
+            move |_dbtx, result, _old_state| Box::pin(futures::future::ready(result)),
         )]
+    }
+
+    async fn fetch_parameters_and_pay(
+        global_context: DynGlobalClientContext,
+        pay_invoice_payload: PayInvoicePayload,
+        context: GatewayClientContext,
+        common: GatewayPayCommon,
+    ) -> GatewayPayStateMachine {
+        match Self::await_get_payment_parameters(
+            global_context,
+            pay_invoice_payload.contract_id,
+            context.clone(),
+        )
+        .await
+        {
+            Ok((contract, payment_parameters)) => {
+                Self::buy_preimage(
+                    context.clone(),
+                    contract.clone(),
+                    payment_parameters.clone(),
+                    common.clone(),
+                    pay_invoice_payload.clone(),
+                )
+                .await
+            }
+            Err(e) => {
+                warn!("Failed to get payment parameters: {e:?}");
+                match e.contract.clone() {
+                    Some(contract) => GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract { contract, error: e },
+                        )),
+                    },
+                    None => GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                    },
+                }
+            }
+        }
+    }
+
+    async fn buy_preimage(
+        context: GatewayClientContext,
+        contract: OutgoingContractAccount,
+        payment_parameters: PaymentParameters,
+        common: GatewayPayCommon,
+        payload: PayInvoicePayload,
+    ) -> GatewayPayStateMachine {
+        debug!("Buying preimage contract {contract:?}");
+        // Verify that this client is authorized to receive the preimage.
+        if let Err(err) = Self::verify_preimage_authentication(
+            &context,
+            payload.payment_hash,
+            payload.preimage_auth,
+            contract.clone(),
+        )
+        .await
+        {
+            warn!("Preimage authentication failed: {err} for contract {contract:?}");
+            return GatewayPayStateMachine {
+                common,
+                state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                    contract,
+                    error: err,
+                })),
+            };
+        }
+
+        if let Some(client) =
+            Self::check_swap_to_federation(context.clone(), payment_parameters.invoice.clone())
+                .await
+        {
+            Self::buy_preimage_via_direct_swap(
+                client,
+                payment_parameters.invoice.clone(),
+                contract.clone(),
+                common.clone(),
+            )
+            .await
+        } else {
+            Self::buy_preimage_over_lightning(
+                context,
+                payment_parameters,
+                contract.clone(),
+                common.clone(),
+            )
+            .await
+        }
     }
 
     async fn await_get_payment_parameters(
@@ -389,77 +473,6 @@ impl GatewayPayInvoice {
         }
     }
 
-    async fn transition_buy_preimage(
-        context: GatewayClientContext,
-        result: Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError>,
-        common: GatewayPayCommon,
-        payload: PayInvoicePayload,
-    ) -> GatewayPayStateMachine {
-        match result {
-            Ok((contract, payment_parameters)) => {
-                debug!("Buying preimage contract {contract:?}");
-                // Verify that this client is authorized to receive the preimage.
-                if let Err(err) = Self::verify_preimage_authentication(
-                    &context,
-                    payload.payment_hash,
-                    payload.preimage_auth,
-                    contract.clone(),
-                )
-                .await
-                {
-                    warn!("Preimage authentication failed: {err} for contract {contract:?}");
-                    return GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::CancelContract(Box::new(
-                            GatewayPayCancelContract {
-                                contract,
-                                error: err,
-                            },
-                        )),
-                    };
-                }
-
-                if let Some(client) = Self::check_swap_to_federation(
-                    context.clone(),
-                    payment_parameters.invoice.clone(),
-                )
-                .await
-                {
-                    Self::buy_preimage_via_direct_swap(
-                        client,
-                        payment_parameters.invoice.clone(),
-                        contract.clone(),
-                        common.clone(),
-                    )
-                    .await
-                } else {
-                    Self::buy_preimage_over_lightning(
-                        context,
-                        payment_parameters,
-                        contract.clone(),
-                        common.clone(),
-                    )
-                    .await
-                }
-            }
-            Err(e) => {
-                warn!("Failed to get payment parameters: {e:?}");
-                match e.contract.clone() {
-                    Some(contract) => GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::CancelContract(Box::new(
-                            GatewayPayCancelContract { contract, error: e },
-                        )),
-                    },
-                    None => GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
-                    },
-                }
-            }
-        }
-    }
-
     /// Verifies that the supplied `preimage_auth` is the same as the
     /// `preimage_auth` that initiated the payment. If it is not, then this
     /// will return an error because this client is not authorized to receive
@@ -589,7 +602,7 @@ pub struct PaymentParameters {
     invoice: lightning_invoice::Bolt11Invoice,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayClaimOutgoingContract {
     contract: OutgoingContractAccount,
     preimage: Preimage,
@@ -644,7 +657,7 @@ impl GatewayPayClaimOutgoingContract {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayWaitForSwapPreimage {
     contract: OutgoingContractAccount,
     federation_id: FederationId,
@@ -766,7 +779,7 @@ impl GatewayPayWaitForSwapPreimage {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayCancelContract {
     contract: OutgoingContractAccount,
     error: OutgoingPaymentError,
