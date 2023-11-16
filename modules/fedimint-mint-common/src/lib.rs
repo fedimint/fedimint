@@ -22,10 +22,15 @@ const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 /// By default, the maximum notes per denomination when change-making for users
 pub const DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = 3;
 
-/// Data structures taking into account different amount tiers
-
+/// The mint module currently doesn't define any consensus items and generally
+/// throws an error on encountering one. To allow old clients to still decode
+/// blocks in the future, should we decide to add consensus items, this has to
+/// be an enum with only a default variant.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct MintConsensusItem;
+pub enum MintConsensusItem {
+    #[encodable_default]
+    Default { variant: u64, bytes: Vec<u8> },
+}
 
 impl std::fmt::Display for MintConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
