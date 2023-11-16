@@ -1,4 +1,5 @@
 mod client;
+mod db_locked;
 mod utils;
 
 use core::fmt;
@@ -13,6 +14,7 @@ use std::time::Duration;
 use std::{fs, result};
 
 use clap::{CommandFactory, Parser, Subcommand};
+use db_locked::{Locked, LockedBuilder};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -272,10 +274,16 @@ impl Opts {
         Ok(ApiAuth(password))
     }
 
-    fn load_rocks_db(&self) -> CliResult<fedimint_rocksdb::RocksDb> {
+    async fn load_rocks_db(&self) -> CliResult<Locked<fedimint_rocksdb::RocksDb>> {
         let db_path = self.workdir()?.join("client.db");
-        fedimint_rocksdb::RocksDb::open(db_path)
-            .map_err_cli_msg(CliErrorKind::IOError, "could not open transaction db")
+        let lock_path = db_path.with_extension("db.lock");
+        Ok(LockedBuilder::new(&lock_path)
+            .await
+            .map_err_cli_msg(CliErrorKind::IOError, "could not lock database")?
+            .with_db(
+                fedimint_rocksdb::RocksDb::open(db_path)
+                    .map_err_cli_msg(CliErrorKind::IOError, "could not open database")?,
+            ))
     }
 
     async fn build_client_ng(
@@ -310,7 +318,7 @@ impl Opts {
         module_inits: &ClientModuleInitRegistry,
         invite_code: Option<InviteCode>,
     ) -> CliResult<fedimint_client::ClientBuilder> {
-        let db = self.load_rocks_db()?;
+        let db = self.load_rocks_db().await?;
 
         let mut client_builder = ClientBuilder::default();
         client_builder.with_module_inits(module_inits.clone());
@@ -507,7 +515,7 @@ impl FedimintCli {
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
         match cli.command.clone() {
             Command::InviteCode => {
-                let rockdb = cli.load_rocks_db()?;
+                let rockdb = cli.load_rocks_db().await?;
                 let db = fedimint_core::db::Database::new(rockdb, Default::default());
                 let invite_code = get_invite_code_from_db(&db)
                     .await
