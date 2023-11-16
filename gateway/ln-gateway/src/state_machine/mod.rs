@@ -467,11 +467,11 @@ impl ClientModule for GatewayClientModule {
     fn input_amount(
         &self,
         input: &<Self::Common as fedimint_core::module::ModuleCommon>::Input,
-    ) -> fedimint_core::module::TransactionItemAmount {
-        TransactionItemAmount {
+    ) -> Option<TransactionItemAmount> {
+        Some(TransactionItemAmount {
             amount: input.amount,
             fee: self.cfg.fee_consensus.contract_input,
-        }
+        })
     }
 
     fn output_amount(

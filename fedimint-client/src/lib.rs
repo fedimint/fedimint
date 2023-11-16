@@ -682,6 +682,10 @@ impl Client {
     }
 
     /// Determines if a transaction is underfunded, overfunded or balanced
+    ///
+    /// # Panics
+    /// If any of the input or output versions in the transaction builder are
+    /// unknown by the respective module.
     fn transaction_builder_balance(
         &self,
         builder: &TransactionBuilder,
@@ -693,7 +697,9 @@ impl Client {
 
         for input in &builder.inputs {
             let module = self.get_module(input.input.module_instance_id());
-            let item_amount = module.input_amount(&input.input);
+            let item_amount = module.input_amount(&input.input).expect(
+                "We only build transactions with input versions that are supported by the module",
+            );
             in_amount += item_amount.amount;
             fee_amount += item_amount.fee;
         }
