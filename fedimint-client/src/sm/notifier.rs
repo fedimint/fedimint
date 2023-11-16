@@ -29,7 +29,7 @@ pub struct Notifier<GC> {
 
 impl<GC> Notifier<GC> {
     pub fn new(db: Database) -> Self {
-        let (sender, _receiver) = tokio::sync::broadcast::channel(100);
+        let (sender, _receiver) = tokio::sync::broadcast::channel(10_000);
         Self {
             broadcast: sender,
             db,
