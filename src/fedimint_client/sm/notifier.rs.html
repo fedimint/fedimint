@@ -231,7 +231,7 @@
 
 <span class="kw">impl</span>&lt;GC&gt; Notifier&lt;GC&gt; {
     <span class="kw">pub fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>(sender, _receiver) = tokio::sync::broadcast::channel(<span class="number">100</span>);
+        <span class="kw">let </span>(sender, _receiver) = tokio::sync::broadcast::channel(<span class="number">10_000</span>);
         <span class="self">Self </span>{
             broadcast: sender,
             db,
