@@ -40,7 +40,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace};
 
 use crate::backup::ClientBackupSnapshot;
 use crate::block::Block;
@@ -928,8 +928,10 @@ impl<C: JsonRpcClient> FederationPeer<C> {
                             .await?
                     }
                     Err(err) => {
-                        // Warn instead of Error because we will probably retry connecting later
-                        warn!(
+                        // Low logging level because we will probably retry connecting later
+                        // we are going to retry, and a Federation peer being down is a fact
+                        // of life, and nothing to warn about right away
+                        debug!(
                             target: LOG_NET_API,
                             peer_id = %self.peer_id,
                             %err, "Unable to connect to peer");
