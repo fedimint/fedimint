@@ -74,8 +74,8 @@ impl TracingSetup {
             // We prefix everything with a default general log level and
             // good per-module specific default. User provided RUST_LOG
             // can override one or both
-            "info,jsonrpsee_core::client::async_client=off,{}",
-            var
+            "info,{},{},{}",
+            "jsonrpsee_core::client::async_client=off", "AlephBFT-=error", var
         ))?;
 
         let fmt_writer = if let Some(file) = self.with_file.take() {
