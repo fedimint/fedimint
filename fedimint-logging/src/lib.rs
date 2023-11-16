@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io;
+use std::{env, io};
 
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -68,8 +68,15 @@ impl TracingSetup {
     /// Initialize the logging, must be called for tracing to begin
     pub fn init(&mut self) -> anyhow::Result<()> {
         use tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
-        let filter_layer =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+        let var = env::var(tracing_subscriber::EnvFilter::DEFAULT_ENV).unwrap_or_default();
+        let filter_layer = EnvFilter::builder().parse(format!(
+            // We prefix everything with a default general log level and
+            // good per-module specific default. User provided RUST_LOG
+            // can override one or both
+            "info,jsonrpsee_core::client::async_client=off,{}",
+            var
+        ))?;
 
         let fmt_writer = if let Some(file) = self.with_file.take() {
             BoxMakeWriter::new(Tee::new(io::stderr, file))
