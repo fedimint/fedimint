@@ -813,7 +813,16 @@
 <a href="#813" id="813">813</a>
 <a href="#814" id="814">814</a>
 <a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
+<span class="kw">mod </span>db_locked;
 <span class="kw">mod </span>utils;
 
 <span class="kw">use </span>core::fmt;
@@ -828,6 +837,7 @@
 <span class="kw">use </span>std::{fs, result};
 
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
+<span class="kw">use </span>db_locked::{Locked, LockedBuilder};
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -1087,10 +1097,16 @@
         <span class="prelude-val">Ok</span>(ApiAuth(password))
     }
 
-    <span class="kw">fn </span>load_rocks_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;fedimint_rocksdb::RocksDb&gt; {
+    <span class="kw">async fn </span>load_rocks_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;Locked&lt;fedimint_rocksdb::RocksDb&gt;&gt; {
         <span class="kw">let </span>db_path = <span class="self">self</span>.workdir()<span class="question-mark">?</span>.join(<span class="string">&quot;client.db&quot;</span>);
-        fedimint_rocksdb::RocksDb::open(db_path)
-            .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>)
+        <span class="kw">let </span>lock_path = db_path.with_extension(<span class="string">&quot;db.lock&quot;</span>);
+        <span class="prelude-val">Ok</span>(LockedBuilder::new(<span class="kw-2">&amp;</span>lock_path)
+            .<span class="kw">await
+            </span>.map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;could not lock database&quot;</span>)<span class="question-mark">?
+            </span>.with_db(
+                fedimint_rocksdb::RocksDb::open(db_path)
+                    .map_err_cli_msg(CliErrorKind::IOError, <span class="string">&quot;could not open database&quot;</span>)<span class="question-mark">?</span>,
+            ))
     }
 
     <span class="kw">async fn </span>build_client_ng(
@@ -1125,7 +1141,7 @@
         module_inits: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         invite_code: <span class="prelude-ty">Option</span>&lt;InviteCode&gt;,
     ) -&gt; CliResult&lt;fedimint_client::ClientBuilder&gt; {
-        <span class="kw">let </span>db = <span class="self">self</span>.load_rocks_db()<span class="question-mark">?</span>;
+        <span class="kw">let </span>db = <span class="self">self</span>.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = ClientBuilder::default();
         client_builder.with_module_inits(module_inits.clone());
@@ -1322,7 +1338,7 @@ Examples:
     <span class="kw">async fn </span>handle_command(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: Opts) -&gt; CliOutputResult {
         <span class="kw">match </span>cli.command.clone() {
             Command::InviteCode =&gt; {
-                <span class="kw">let </span>rockdb = cli.load_rocks_db()<span class="question-mark">?</span>;
+                <span class="kw">let </span>rockdb = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>db = fedimint_core::db::Database::new(rockdb, Default::default());
                 <span class="kw">let </span>invite_code = get_invite_code_from_db(<span class="kw-2">&amp;</span>db)
                     .<span class="kw">await
