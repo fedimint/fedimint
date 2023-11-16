@@ -2587,23 +2587,23 @@
 
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>GatewayError {
-    <span class="attr">#[error(<span class="string">&quot;Federation error: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Federation error: {}&quot;</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>FederationError(<span class="attr">#[from] </span>FederationError),
-    <span class="attr">#[error(<span class="string">&quot;Other: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Other: {}&quot;</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>ClientStateMachineError(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">&quot;Failed to open the database: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Failed to open the database: {}&quot;</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>DatabaseError(anyhow::Error),
     <span class="attr">#[error(<span class="string">&quot;Federation client error&quot;</span>)]
     </span>LightningRpcError(<span class="attr">#[from] </span>LightningRpcError),
-    <span class="attr">#[error(<span class="string">&quot;Outgoing Payment Error {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Outgoing Payment Error {}&quot;</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>OutgoingPaymentError(<span class="attr">#[from] </span>Box&lt;OutgoingPaymentError&gt;),
-    <span class="attr">#[error(<span class="string">&quot;Invalid Metadata: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Invalid Metadata: {}&quot;</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>InvalidMetadata(String),
-    <span class="attr">#[error(<span class="string">&quot;Unexpected state: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Unexpected state: {}&quot;</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>UnexpectedState(String),
     <span class="attr">#[error(<span class="string">&quot;The gateway is disconnected&quot;</span>)]
     </span>Disconnected,
-    <span class="attr">#[error(<span class="string">&quot;Error configuring the gateway: {}&quot;</span>, OptStacktrace(<span class="number">0</span>))]
+    <span class="attr">#[error(<span class="string">&quot;Error configuring the gateway: {}&quot;</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>GatewayConfigurationError(String),
     <span class="attr">#[error(<span class="string">&quot;Unsupported Network: {0}&quot;</span>)]
     </span>UnsupportedNetwork(Network),
