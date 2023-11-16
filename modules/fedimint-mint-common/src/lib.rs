@@ -7,6 +7,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
 use serde::{Deserialize, Serialize};
+use tbs::BlindedSignatureShare;
 use thiserror::Error;
 use tracing::error;
 
@@ -149,10 +150,22 @@ impl std::fmt::Display for MintOutputV0 {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutputOutcome(pub tbs::BlindedSignatureShare);
+extensible_associated_module_type!(
+    MintOutputOutcome,
+    MintOutputOutcomeV0,
+    UnknownMintOutputOutcomeVariantError
+);
 
-impl std::fmt::Display for MintOutputOutcome {
+impl MintOutputOutcome {
+    pub fn new_v0(blind_signature_share: BlindedSignatureShare) -> MintOutputOutcome {
+        MintOutputOutcome::V0(MintOutputOutcomeV0(blind_signature_share))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct MintOutputOutcomeV0(pub tbs::BlindedSignatureShare);
+
+impl std::fmt::Display for MintOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "MintOutputOutcome")
     }

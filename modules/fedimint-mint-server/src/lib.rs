@@ -370,7 +370,7 @@ impl ServerModule for Mint {
 
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),
-            &MintOutputOutcome(sign_blinded_msg(output.blind_nonce.0, *amount_key)),
+            &MintOutputOutcome::new_v0(sign_blinded_msg(output.blind_nonce.0, *amount_key)),
         )
         .await;
 
@@ -748,7 +748,7 @@ mod fedimint_migration_tests {
         let blind_signature_share = sign_blinded_msg(blinded_message, secret_key_share);
         dbtx.insert_new_entry(
             &MintOutputOutcomeKey(out_point),
-            &MintOutputOutcome(blind_signature_share),
+            &MintOutputOutcome::new_v0(blind_signature_share),
         )
         .await;
 
