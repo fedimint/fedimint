@@ -361,6 +361,8 @@ impl ServerModule for Mint {
         output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, MintOutputError> {
+        let output = output.ensure_v0_ref()?;
+
         let amount_key = self
             .sec_key
             .get(output.amount)

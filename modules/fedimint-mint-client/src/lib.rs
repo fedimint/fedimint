@@ -728,6 +728,8 @@ impl ClientModule for MintClientModule {
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<TransactionItemAmount> {
+        let output = output.maybe_v0_ref()?;
+
         Some(TransactionItemAmount {
             amount: output.amount,
             fee: self.cfg.fee_consensus.note_issuance_abs,
@@ -1040,10 +1042,7 @@ impl MintClientModule {
                 );
 
                 outputs.push(ClientOutput {
-                    output: MintOutput {
-                        amount,
-                        blind_nonce,
-                    },
+                    output: MintOutput::new_v0(amount, blind_nonce),
                     state_machines: state_generator,
                 });
             }

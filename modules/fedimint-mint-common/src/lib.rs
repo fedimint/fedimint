@@ -126,13 +126,24 @@ impl std::fmt::Display for MintInputV0 {
     }
 }
 
+extensible_associated_module_type!(MintOutput, MintOutputV0, UnknownMintOutputVariantError);
+
+impl MintOutput {
+    pub fn new_v0(amount: Amount, blind_nonce: BlindNonce) -> MintOutput {
+        MintOutput::V0(MintOutputV0 {
+            amount,
+            blind_nonce,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct MintOutput {
+pub struct MintOutputV0 {
     pub amount: Amount,
     pub blind_nonce: BlindNonce,
 }
 
-impl std::fmt::Display for MintOutput {
+impl std::fmt::Display for MintOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Mint Note {}", self.amount)
     }
@@ -205,4 +216,6 @@ pub enum MintInputError {
 pub enum MintOutputError {
     #[error("The note has an invalid amount not issued by the mint: {0:?}")]
     InvalidAmountTier(Amount),
+    #[error("The mint output version is not supported by this federation")]
+    UnknownOutputVariant(#[from] UnknownMintOutputVariantError),
 }
