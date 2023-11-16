@@ -1,7 +1,7 @@
-use std::env;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use std::{env, ffi};
 
 use anyhow::{anyhow, Context, Result};
 use bitcoincore_rpc::bitcoin;
@@ -22,7 +22,7 @@ use fedimint_logging::LOG_DEVIMINT;
 use ln_gateway::rpc::GatewayInfo;
 use tokio::fs;
 use tokio::net::TcpStream;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 pub async fn latency_tests(dev_fed: DevFed) -> Result<()> {
     #[allow(unused_variables)]
@@ -1215,7 +1215,10 @@ enum Cmd {
     /// esplora, and a federation sized from FM_FED_SIZE it opens LN channel
     /// between the two nodes. it connects the gateways to the federation.
     /// it finally switches to use the CLN gateway using the fedimint-cli
-    DevFed,
+    DevFed {
+        #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
+        exec: Option<Vec<ffi::OsString>>,
+    },
     /// Runs bitcoind, spins up FM_FED_SIZE worth of fedimints
     RunUi,
     /// `devfed` then spawns faucet for wasm tests
@@ -1388,17 +1391,25 @@ async fn handle_command() -> Result<()> {
                     .await?;
             task_group.make_handle().make_shutdown_rx().await.await;
         }
-        Cmd::DevFed => {
+        Cmd::DevFed { exec } => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let main = async move {
-                let dev_fed = dev_fed(&process_mgr).await?;
-                tokio::try_join!(
-                    dev_fed.fed.pegin(10_000),
-                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
-                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
-                )?;
-                let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
-                Ok::<_, anyhow::Error>(daemons)
+            let main = {
+                let task_group = task_group.clone();
+                async move {
+                    let dev_fed = dev_fed(&process_mgr).await?;
+                    tokio::try_join!(
+                        dev_fed.fed.pegin(10_000),
+                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
+                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                    )?;
+                    let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+
+                    if let Some(exec) = exec {
+                        exec_user_command(exec).await?;
+                        task_group.shutdown();
+                    }
+                    Ok::<_, anyhow::Error>(daemons)
+                }
             };
             cleanup_on_exit(main, task_group).await?;
         }
@@ -1471,6 +1482,26 @@ async fn handle_command() -> Result<()> {
             gw_reboot_test(dev_fed, &process_mgr).await?;
         }
         Cmd::Rpc(rpc) => rpc_command(rpc, args.common).await?,
+    }
+    Ok(())
+}
+
+async fn exec_user_command(exec: Vec<ffi::OsString>) -> Result<(), anyhow::Error> {
+    let cmd_str = exec
+        .join(ffi::OsStr::new(" "))
+        .to_string_lossy()
+        .to_string();
+    info!(cmd = %cmd_str, "Executing user command");
+    if !tokio::process::Command::new(&exec[0])
+        .args(&exec[1..])
+        .kill_on_drop(true)
+        .status()
+        .await
+        .with_context(|| format!("Executing user command failed: {cmd_str}"))?
+        .success()
+    {
+        error!(cmd = %cmd_str, "User command failed");
+        return Err(anyhow!("User command failed: {cmd_str}"));
     }
     Ok(())
 }
