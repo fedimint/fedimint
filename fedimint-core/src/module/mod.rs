@@ -43,7 +43,7 @@ use crate::{
 #[derive(Debug, PartialEq)]
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
-    pub pub_keys: Vec<XOnlyPublicKey>,
+    pub pub_key: XOnlyPublicKey,
 }
 
 /// Information about the amount represented by an input or output.

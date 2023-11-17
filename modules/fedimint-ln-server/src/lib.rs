@@ -619,7 +619,7 @@ impl ServerModule for Lightning {
                 amount: input.amount,
                 fee: self.cfg.consensus.fee_consensus.contract_input,
             },
-            pub_keys: vec![pub_key],
+            pub_key,
         })
     }
 
@@ -1309,9 +1309,9 @@ mod tests {
                 amount,
                 fee: Amount { msats: 0 },
             },
-            pub_keys: vec![preimage
+            pub_key: preimage
                 .to_public_key()
-                .expect("should create Schnorr pubkey from preimage")],
+                .expect("should create Schnorr pubkey from preimage"),
         };
 
         assert_eq!(processed_input_meta, expected_input_meta);
@@ -1371,7 +1371,7 @@ mod tests {
                 amount,
                 fee: Amount { msats: 0 },
             },
-            pub_keys: vec![gateway_key],
+            pub_key: gateway_key,
         };
 
         assert_eq!(processed_input_meta, expected_input_meta);
