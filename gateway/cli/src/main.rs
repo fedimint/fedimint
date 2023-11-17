@@ -1,7 +1,8 @@
-use bitcoin::{Address, Amount};
+use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::BitcoinAmountOrAll;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
@@ -45,7 +46,7 @@ pub enum Commands {
         federation_id: FederationId,
         /// The amount to withdraw
         #[clap(long)]
-        amount: Amount,
+        amount: BitcoinAmountOrAll,
         /// The address to send the funds to
         #[clap(long)]
         address: Address,

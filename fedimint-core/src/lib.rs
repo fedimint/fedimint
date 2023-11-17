@@ -146,6 +146,28 @@ pub fn sats(amount: u64) -> Amount {
     Amount::from_sats(amount)
 }
 
+/// Amount of bitcoin to send, or "all" to send all available funds
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum BitcoinAmountOrAll {
+    Amount(#[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount),
+    All,
+}
+
+impl FromStr for BitcoinAmountOrAll {
+    type Err = bitcoin::util::amount::ParseAmountError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        if s == "all" {
+            Ok(BitcoinAmountOrAll::All)
+        } else {
+            bitcoin::Amount::from_str(s)
+                .map(BitcoinAmountOrAll::Amount)
+                .map_err(|_| bitcoin::util::amount::ParseAmountError::InvalidFormat)
+        }
+    }
+}
+
 /// `OutPoint` represents a globally unique output in a transaction
 ///
 /// Hence, a transaction ID and the output index is required.

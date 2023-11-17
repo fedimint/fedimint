@@ -8,7 +8,7 @@ use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::hex::{FromHex, ToHex};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::Amount;
+use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};
@@ -50,8 +50,7 @@ pub struct DepositAddressPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WithdrawPayload {
     pub federation_id: FederationId,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
+    pub amount: BitcoinAmountOrAll,
     pub address: Address,
 }
 

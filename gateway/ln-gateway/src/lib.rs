@@ -43,7 +43,7 @@ use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::now;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{push_db_pair_items, Amount};
+use fedimint_core::{push_db_pair_items, Amount, BitcoinAmountOrAll};
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
@@ -674,13 +674,27 @@ impl Gateway {
             address,
             federation_id,
         } = payload;
-
         let client = self.select_client(federation_id).await?;
-        // TODO: This should probably be passed in as a parameter
         let wallet_module = client.get_first_module::<WalletClientModule>();
-        let fees = wallet_module
-            .get_withdraw_fees(address.clone(), amount)
-            .await?;
+
+        // TODO: Fees should probably be passed in as a parameter
+        let (amount, fees) = match amount {
+            // If the amount is "all", then we need to subtract the fees from
+            // the amount we are withdrawing
+            BitcoinAmountOrAll::All => {
+                let balance = bitcoin::Amount::from_sat(client.get_balance().await.msats * 1000);
+                let fees = wallet_module
+                    .get_withdraw_fees(address.clone(), balance)
+                    .await?;
+                (balance - fees.amount(), fees)
+            }
+            BitcoinAmountOrAll::Amount(amount) => (
+                amount,
+                wallet_module
+                    .get_withdraw_fees(address.clone(), amount)
+                    .await?,
+            ),
+        };
 
         let operation_id = wallet_module.withdraw(address, amount, fees).await?;
         let mut updates = wallet_module

@@ -13,7 +13,7 @@ use fedimint_client::ClientArc;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::time::now;
-use fedimint_core::{Amount, ParseAmountError, TieredSummary};
+use fedimint_core::{Amount, BitcoinAmountOrAll, ParseAmountError, TieredSummary};
 use fedimint_ln_client::{
     InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
@@ -91,7 +91,7 @@ pub enum ClientCmd {
     /// Withdraw funds from the federation
     Withdraw {
         #[clap(long)]
-        amount: bitcoin::Amount,
+        amount: BitcoinAmountOrAll,
         #[clap(long)]
         address: bitcoin::Address,
     },
@@ -439,9 +439,24 @@ pub async fn handle_command(
         }
         ClientCmd::Withdraw { amount, address } => {
             let wallet_module = client.get_first_module::<WalletClientModule>();
-            let fees = wallet_module
-                .get_withdraw_fees(address.clone(), amount)
-                .await?;
+            let (amount, fees) = match amount {
+                // If the amount is "all", then we need to subtract the fees from
+                // the amount we are withdrawing
+                BitcoinAmountOrAll::All => {
+                    let balance =
+                        bitcoin::Amount::from_sat(client.get_balance().await.msats * 1000);
+                    let fees = wallet_module
+                        .get_withdraw_fees(address.clone(), balance)
+                        .await?;
+                    (balance - fees.amount(), fees)
+                }
+                BitcoinAmountOrAll::Amount(amount) => (
+                    amount,
+                    wallet_module
+                        .get_withdraw_fees(address.clone(), amount)
+                        .await?,
+                ),
+            };
             let absolute_fees = fees.amount();
 
             info!("Attempting withdraw with fees: {fees:?}");

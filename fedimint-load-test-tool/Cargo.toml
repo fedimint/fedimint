@@ -14,7 +14,7 @@ path = "src/main.rs"
 anyhow = "1"
 base64 = "0.20.0"
 bitcoin = "0.29.2"
-clap = { version = "4", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
+clap = { version = "4.1.6", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env" ], default-features = false }
 devimint = { path = "../devimint" }
 fedimint-client = { path = "../fedimint-client" }
 fedimint-core ={ path = "../fedimint-core" }
