@@ -6,10 +6,11 @@ use std::{ffi, marker, ops};
 
 use anyhow::bail;
 use fedimint_core::api::DynGlobalApi;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
-use fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
+use fedimint_core::db::{Database, DatabaseTransaction, DatabaseTransactionRef};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -18,6 +19,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
+use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
 use crate::sm::{Context, DynContext, DynState, Executor, State};
@@ -62,6 +64,7 @@ impl FinalClient {
 pub struct ClientContext<M> {
     client: FinalClient,
     module_instance_id: ModuleInstanceId,
+    module_db: Database,
     _marker: marker::PhantomData<M>,
 }
 
@@ -69,6 +72,7 @@ impl<M> Clone for ClientContext<M> {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
+            module_db: self.module_db.clone(),
             module_instance_id: self.module_instance_id,
             _marker: marker::PhantomData,
         }
@@ -179,6 +183,25 @@ where
             .await
     }
 
+    // TODO: unify with `Self::get_operation`
+    pub async fn get_operation_2(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<oplog::OperationLogEntry> {
+        let operation = self
+            .client
+            .get()
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .ok_or(anyhow::anyhow!("Operation not found"))?;
+
+        if operation.operation_module_kind() != M::kind().as_str() {
+            bail!("Operation is not a lightning operation");
+        }
+
+        Ok(operation)
+    }
     pub async fn get_operation(
         &self,
         operation_id: OperationId,
@@ -192,6 +215,10 @@ where
 
     pub fn global_db(&self) -> fedimint_core::db::Database {
         self.client.get().db().clone()
+    }
+
+    pub fn module_db(&self) -> &Database {
+        &self.module_db
     }
 
     pub async fn add_state_machines(
@@ -214,6 +241,18 @@ where
             .operation_log()
             .add_operation_log_entry(dbtx, operation_id, operation_type, operation_meta)
             .await
+    }
+
+    pub async fn has_active_states(&self, op_id: OperationId) -> bool {
+        self.client.get().has_active_states(op_id).await
+    }
+
+    pub fn get_config(&self) -> ClientConfig {
+        self.client.get().get_config().clone()
+    }
+
+    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+        self.client.get().get_internal_payment_markers()
     }
 }
 

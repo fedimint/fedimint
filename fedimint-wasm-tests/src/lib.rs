@@ -74,7 +74,7 @@ mod tests {
     use fedimint_client::derivable_secret::DerivableSecret;
     use fedimint_core::Amount;
     use fedimint_ln_client::{
-        LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+        LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -88,14 +88,17 @@ mod tests {
     }
 
     async fn set_gateway(client: &fedimint_client::ClientArc) -> anyhow::Result<()> {
-        let gws = client.fetch_registered_gateways().await?;
+        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let gws = lightning_module.fetch_registered_gateways().await?;
         let gw_api = faucet::gateway_api().await?;
         let lnd_gw = gws
             .into_iter()
             .find(|x| x.info.api.to_string() == gw_api)
             .expect("no gateway with api");
 
-        client.set_active_gateway(&lnd_gw.info.gateway_id).await?;
+        lightning_module
+            .set_active_gateway(&lnd_gw.info.gateway_id)
+            .await?;
         Ok(())
     }
 
@@ -104,12 +107,16 @@ mod tests {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
         set_gateway(&client).await?;
-        let (opid, invoice) = client
+        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let (opid, invoice) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
-        let mut updates = client.subscribe_ln_receive(opid).await?.into_stream();
+        let mut updates = lightning_module
+            .subscribe_ln_receive(opid)
+            .await?
+            .into_stream();
         while let Some(update) = updates.next().await {
             match update {
                 LnReceiveState::Claimed => return Ok(()),
@@ -139,12 +146,16 @@ mod tests {
         let client = client(&faucet::invite_code().await?.parse()?).await?;
         client.start_executor().await;
         set_gateway(&client).await?;
-        let (opid, invoice) = client
+        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let (opid, invoice) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(21), "test".to_string(), None, ())
             .await?;
         faucet::pay_invoice(&invoice.to_string()).await?;
 
-        let mut updates = client.subscribe_ln_receive(opid).await?.into_stream();
+        let mut updates = lightning_module
+            .subscribe_ln_receive(opid)
+            .await?
+            .into_stream();
 
         loop {
             match updates.next().await {
@@ -162,12 +173,16 @@ mod tests {
             payment_type,
             contract_id: _,
             fee: _,
-        } = client.pay_bolt11_invoice(bolt11.parse()?).await?;
+        } = lightning_module.pay_bolt11_invoice(bolt11.parse()?).await?;
         let PayType::Lightning(operation_id) = payment_type else {
             unreachable!("paying invoice over lightning");
         };
 
-        let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
+        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let mut updates = lightning_module
+            .subscribe_ln_pay(operation_id)
+            .await?
+            .into_stream();
 
         loop {
             match updates.next().await {

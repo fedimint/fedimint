@@ -8,8 +8,8 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
-    InternalPayState, LightningClientExt, LightningClientInit, LightningOperationMeta, LnPayState,
-    LnReceiveState, OutgoingLightningPayment, PayType,
+    InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
+    LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::ln_operation;
@@ -58,15 +58,36 @@ async fn can_switch_active_gateway() -> anyhow::Result<()> {
     // Client selects a gateway by default
     gateway1.connect_fed(&fed).await;
     let key1 = gateway1.get_gateway_id();
-    assert_eq!(client.select_active_gateway().await?.gateway_id, key1);
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()
+            .select_active_gateway()
+            .await?
+            .gateway_id,
+        key1
+    );
 
     gateway2.connect_fed(&fed).await;
     let key2 = gateway1.get_gateway_id();
-    let gateways = client.fetch_registered_gateways().await.unwrap();
+    let gateways = client
+        .get_first_module::<LightningClientModule>()
+        .fetch_registered_gateways()
+        .await
+        .unwrap();
     assert_eq!(gateways.len(), 2);
 
-    client.set_active_gateway(&key2).await?;
-    assert_eq!(client.select_active_gateway().await?.gateway_id, key2);
+    client
+        .get_first_module::<LightningClientModule>()
+        .set_active_gateway(&key2)
+        .await?;
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()
+            .select_active_gateway()
+            .await?
+            .gateway_id,
+        key2
+    );
     Ok(())
 }
 
@@ -83,6 +104,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
 
     let extra_meta = "internal payment with no gateway registered".to_string();
     let (op, invoice) = client1
+        .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(
             sats(250),
             "with-markers".to_string(),
@@ -90,7 +112,11 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
             extra_meta.clone(),
         )
         .await?;
-    let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
@@ -99,10 +125,17 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2.pay_bolt11_invoice(invoice).await?;
+    } = client2
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice)
+        .await?;
     match payment_type {
         PayType::Internal(op_id) => {
-            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
             assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
@@ -138,9 +171,14 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 
     // TEST internal payment when there are no gateways registered
     let (op, invoice) = client1
+        .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(sats(250), "with-markers".to_string(), None, ())
         .await?;
-    let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
@@ -148,10 +186,17 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2.pay_bolt11_invoice(invoice.clone()).await?;
+    } = client2
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice.clone())
+        .await?;
     match payment_type {
         PayType::Internal(op_id) => {
-            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
             assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
@@ -168,10 +213,17 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2.pay_bolt11_invoice(invoice).await?;
+    } = client2
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice)
+        .await?;
     match payment_type {
         PayType::Internal(op_id) => {
-            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
         }
@@ -209,10 +261,17 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client1.pay_bolt11_invoice(invoice.clone()).await?;
+    } = client1
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice.clone())
+        .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
-            let mut sub = client1.subscribe_ln_pay(operation_id).await?.into_stream();
+            let mut sub = client1
+                .get_first_module::<LightningClientModule>()
+                .subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
             assert_eq!(sub.ok().await?, LnPayState::Funded);
@@ -227,10 +286,17 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2.pay_bolt11_invoice(invoice.clone()).await?;
+    } = client2
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice.clone())
+        .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
-            let mut sub = client2.subscribe_ln_pay(operation_id).await?.into_stream();
+            let mut sub = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
             assert_eq!(sub.ok().await?, LnPayState::Funded);
@@ -264,10 +330,17 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client.pay_bolt11_invoice(invoice.clone()).await?;
+    } = client
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice.clone())
+        .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
-            let mut sub = client.subscribe_ln_pay(operation_id).await?.into_stream();
+            let mut sub = client
+                .get_first_module::<LightningClientModule>()
+                .subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
             assert_eq!(sub.ok().await?, LnPayState::Funded);
@@ -284,10 +357,17 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client.pay_bolt11_invoice(invoice).await?;
+    } = client
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice)
+        .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
-            let mut sub = client.subscribe_ln_pay(operation_id).await?.into_stream();
+            let mut sub = client
+                .get_first_module::<LightningClientModule>()
+                .subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
             assert_eq!(sub.ok().await?, LnPayState::Funded);
@@ -317,9 +397,14 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 
     // TEST internal payment when there are no gateways registered
     let (op, invoice) = client1
+        .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(sats(250), "with-markers".to_string(), None, ())
         .await?;
-    let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
@@ -327,10 +412,17 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2.pay_bolt11_invoice(invoice).await?;
+    } = client2
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice)
+        .await?;
     match payment_type {
         PayType::Internal(op_id) => {
-            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
             assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
@@ -344,9 +436,14 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     gateway(&fixtures, &fed).await;
 
     let (op, invoice) = client1
+        .get_first_module::<LightningClientModule>()
         .create_bolt11_invoice(sats(250), "with-gateway-hint".to_string(), None, ())
         .await?;
-    let mut sub1 = client1.subscribe_ln_receive(op).await?.into_stream();
+    let mut sub1 = client1
+        .get_first_module::<LightningClientModule>()
+        .subscribe_ln_receive(op)
+        .await?
+        .into_stream();
     assert_eq!(sub1.ok().await?, LnReceiveState::Created);
     assert_matches!(sub1.ok().await?, LnReceiveState::WaitingForPayment { .. });
 
@@ -354,10 +451,17 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client2.pay_bolt11_invoice(invoice).await?;
+    } = client2
+        .get_first_module::<LightningClientModule>()
+        .pay_bolt11_invoice(invoice)
+        .await?;
     match payment_type {
         PayType::Internal(op_id) => {
-            let mut sub2 = client2.subscribe_internal_pay(op_id).await?.into_stream();
+            let mut sub2 = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_internal_pay(op_id)
+                .await?
+                .into_stream();
             assert_eq!(sub2.ok().await?, InternalPayState::Funding);
             assert_matches!(sub2.ok().await?, InternalPayState::Preimage { .. });
             assert_eq!(sub1.ok().await?, LnReceiveState::Funded);
@@ -388,6 +492,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     .unwrap();
 
     let error = client1
+        .get_first_module::<LightningClientModule>()
         .pay_bolt11_invoice(signet_invoice)
         .await
         .unwrap_err();
