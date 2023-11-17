@@ -23,13 +23,12 @@ use thiserror::Error;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 
-use super::{
-    GatewayClientContext, GatewayClientExt, GatewayClientStateMachines, GatewayExtReceiveStates,
-};
+use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 use crate::db::PreimageAuthentication;
 use crate::fetch_lightning_node_info;
 use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 use crate::lnrpc_client::LightningRpcError;
+use crate::state_machine::GatewayClientModule;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes the Lightning payment on behalf of
@@ -332,7 +331,11 @@ impl GatewayPayInvoice {
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage via direct swap for contract {contract:?}");
         match invoice.try_into() {
-            Ok(swap_params) => match client.gateway_handle_direct_swap(swap_params).await {
+            Ok(swap_params) => match client
+                .get_first_module::<GatewayClientModule>()
+                .gateway_handle_direct_swap(swap_params)
+                .await
+            {
                 Ok(operation_id) => {
                     debug!("Direct swap initiated for contract {contract:?}");
                     GatewayPayStateMachine {
@@ -692,6 +695,7 @@ impl GatewayPayWaitForSwapPreimage {
             })?;
 
         let mut stream = client
+            .get_first_module::<GatewayClientModule>()
             .gateway_subscribe_ln_receive(operation_id)
             .await
             .map_err(|e| {

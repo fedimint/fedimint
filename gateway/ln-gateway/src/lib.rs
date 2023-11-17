@@ -63,7 +63,7 @@ use rpc::{FederationInfo, SetConfigurationPayload};
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 use state_machine::pay::OutgoingPaymentError;
-use state_machine::GatewayClientExt;
+use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -564,7 +564,11 @@ impl Gateway {
                         if let Some(client) = client {
                             let htlc = htlc_request.clone().try_into();
                             if let Ok(htlc) = htlc {
-                                match client.gateway_handle_intercepted_htlc(htlc).await {
+                                match client
+                                    .get_first_module::<GatewayClientModule>()
+                                    .gateway_handle_intercepted_htlc(htlc)
+                                    .await
+                                {
                                     Ok(_) => continue,
                                     Err(e) => {
                                         info!("Got error intercepting HTLC: {e:?}, will retry...")
@@ -724,8 +728,9 @@ impl Gateway {
             debug!("Handling pay invoice message: {payload:?}");
             let client = self.select_client(payload.federation_id).await?;
             let contract_id = payload.contract_id;
-            let operation_id = client.gateway_pay_bolt11_invoice(payload).await?;
-            let mut updates = client
+            let gateway_module = &client.get_first_module::<GatewayClientModule>();
+            let operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).await?;
+            let mut updates = gateway_module
                 .gateway_subscribe_ln_pay(operation_id)
                 .await?
                 .into_stream();
@@ -830,6 +835,7 @@ impl Gateway {
                 .await?;
 
             client
+                .get_first_module::<GatewayClientModule>()
                 .register_with_federation(
                     self.gateway_parameters.api_addr.clone(),
                     route_hints,
@@ -1081,7 +1087,7 @@ impl Gateway {
                                 match Self::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints).await {
                                     Ok(route_hints) => {
                                         for (federation_id, client) in gateway.clients.read().await.iter() {
-                                            if let Err(e) = client
+                                            if let Err(e) = client.get_first_module::<GatewayClientModule>()
                                                 .register_with_federation(
                                                     gateway.gateway_parameters.api_addr.clone(),
                                                     route_hints.clone(),
