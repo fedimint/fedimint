@@ -125,10 +125,6 @@
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
@@ -253,11 +249,7 @@
 
 <span class="kw">impl </span>IncomingContractAccount {
     <span class="kw">pub fn </span>claim(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LightningInput {
-        LightningInput {
-            contract_id: <span class="self">self</span>.contract.contract_id(),
-            amount: <span class="self">self</span>.amount,
-            witness: <span class="prelude-val">None</span>,
-        }
+        LightningInput::new_v0(<span class="self">self</span>.contract.contract_id(), <span class="self">self</span>.amount, <span class="prelude-val">None</span>)
     }
 }
 </code></pre></div></section></main></body></html>

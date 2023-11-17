@@ -1648,10 +1648,10 @@
             <span class="kw-2">&amp;</span>contract.contract.cancellation_message().into(),
             <span class="kw-2">&amp;</span>context.redeem_key,
         );
-        <span class="kw">let </span>cancel_output = LightningOutput::CancelOutgoing {
-            contract: contract.contract.contract_id(),
-            gateway_signature: cancel_signature,
-        };
+        <span class="kw">let </span>cancel_output = LightningOutput::new_v0_cancel_outgoing(
+            contract.contract.contract_id(),
+            cancel_signature,
+        );
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachines&gt; {
             output: cancel_output,
             state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),

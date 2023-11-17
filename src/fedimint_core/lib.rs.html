@@ -436,6 +436,28 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_core;
 
@@ -582,6 +604,28 @@
 <span class="doccomment">/// Shorthand for [`Amount::from_sats`]
 </span><span class="kw">pub fn </span>sats(amount: u64) -&gt; Amount {
     Amount::from_sats(amount)
+}
+
+<span class="doccomment">/// Amount of bitcoin to send, or &quot;all&quot; to send all available funds
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+</span><span class="kw">pub enum </span>BitcoinAmountOrAll {
+    Amount(<span class="attr">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)] </span>bitcoin::Amount),
+    All,
+}
+
+<span class="kw">impl </span>FromStr <span class="kw">for </span>BitcoinAmountOrAll {
+    <span class="kw">type </span><span class="prelude-val">Err </span>= bitcoin::util::amount::ParseAmountError;
+
+    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+        <span class="kw">if </span>s == <span class="string">&quot;all&quot; </span>{
+            <span class="prelude-val">Ok</span>(BitcoinAmountOrAll::All)
+        } <span class="kw">else </span>{
+            bitcoin::Amount::from_str(s)
+                .map(BitcoinAmountOrAll::Amount)
+                .map_err(|<span class="kw">_</span>| bitcoin::util::amount::ParseAmountError::InvalidFormat)
+        }
+    }
 }
 
 <span class="doccomment">/// `OutPoint` represents a globally unique output in a transaction

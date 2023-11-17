@@ -213,7 +213,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, FundedContract, IdentifiableContract, PreimageDecryptionShare};
-<span class="kw">use crate</span>::{ContractAccount, LightningGatewayRegistration, LightningOutputOutcome};
+<span class="kw">use crate</span>::{ContractAccount, LightningGatewayRegistration, LightningOutputOutcomeV0};
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -257,7 +257,7 @@
 
 <span class="macro">impl_db_record!</span>(
     key = ContractUpdateKey,
-    value = LightningOutputOutcome,
+    value = LightningOutputOutcomeV0,
     db_prefix = DbKeyPrefix::ContractUpdate,
 );
 <span class="macro">impl_db_lookup!</span>(

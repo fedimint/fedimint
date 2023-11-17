@@ -1311,6 +1311,16 @@
 <a href="#1311" id="1311">1311</a>
 <a href="#1312" id="1312">1312</a>
 <a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1361,7 +1371,7 @@
 <span class="kw">use </span>fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
-    LightningOutput,
+    LightningOutput, LightningOutputV0,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>incoming::IncomingSmError;
@@ -1621,6 +1631,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>input = input.maybe_v0_ref()<span class="question-mark">?</span>;
+
         <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: input.amount,
             fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
@@ -1631,12 +1643,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>output = output.maybe_v0_ref()<span class="question-mark">?</span>;
+
         <span class="kw">let </span>amt = <span class="kw">match </span>output {
-            LightningOutput::Contract(account_output) =&gt; TransactionItemAmount {
+            LightningOutputV0::Contract(account_output) =&gt; TransactionItemAmount {
                 amount: account_output.amount,
                 fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
             },
-            LightningOutput::Offer(<span class="kw">_</span>) | LightningOutput::CancelOutgoing { .. } =&gt; {
+            LightningOutputV0::Offer(<span class="kw">_</span>) | LightningOutputV0::CancelOutgoing { .. } =&gt; {
                 TransactionItemAmount {
                     amount: Amount::ZERO,
                     fee: Amount::ZERO,
@@ -1741,7 +1755,7 @@
         fed_id: FederationId,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) -&gt; anyhow::Result&lt;(
-        ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
+        ClientOutput&lt;LightningOutputV0, LightningClientStateMachines&gt;,
         ContractId,
     )&gt; {
         <span class="kw">let </span>federation_currency = network_to_currency(<span class="self">self</span>.cfg.network);
@@ -1825,7 +1839,7 @@
             )]
         });
 
-        <span class="kw">let </span>ln_output = LightningOutput::Contract(ContractOutput {
+        <span class="kw">let </span>ln_output = LightningOutputV0::Contract(ContractOutput {
             amount: contract_amount,
             contract: Contract::Outgoing(contract),
         });
@@ -1847,7 +1861,7 @@
         operation_id: OperationId,
         invoice: Bolt11Invoice,
     ) -&gt; anyhow::Result&lt;(
-        ClientOutput&lt;LightningOutput, LightningClientStateMachines&gt;,
+        ClientOutput&lt;LightningOutputV0, LightningClientStateMachines&gt;,
         ContractId,
     )&gt; {
         <span class="kw">let </span>payment_hash = invoice.payment_hash();
@@ -1867,7 +1881,7 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, LightningClientStateMachines&gt; {
+        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0, LightningClientStateMachines&gt; {
             output: incoming_output,
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[LightningClientStateMachines::InternalPay(
@@ -2061,7 +2075,7 @@
             )]
         });
 
-        <span class="kw">let </span>ln_output = LightningOutput::Offer(IncomingContractOffer {
+        <span class="kw">let </span>ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
@@ -2180,7 +2194,7 @@
             )
             .<span class="kw">await</span>;
 
-        <span class="kw">let </span>(pay_type, output, contract_id) = <span class="kw">if </span>is_internal_payment {
+        <span class="kw">let </span>(pay_type, client_output, contract_id) = <span class="kw">if </span>is_internal_payment {
             <span class="kw">let </span>(output, contract_id) = <span class="self">self
                 </span>.create_incoming_output(operation_id, invoice.clone())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2210,8 +2224,8 @@
 
         <span class="comment">// TODO: return fee from create_outgoing_output or even let user supply
         // it/bounds for it
-        </span><span class="kw">let </span>fee = <span class="kw">match </span><span class="kw-2">&amp;</span>output.output {
-            LightningOutput::Contract(contract) =&gt; {
+        </span><span class="kw">let </span>fee = <span class="kw">match </span><span class="kw-2">&amp;</span>client_output.output {
+            LightningOutputV0::Contract(contract) =&gt; {
                 <span class="kw">let </span>fee_msat = contract
                     .amount
                     .msats
@@ -2225,8 +2239,14 @@
             }
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;User client will only create contract outputs on spend&quot;</span>),
         };
-        <span class="kw">let </span>tx = TransactionBuilder::new()
-            .with_output(output.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()));
+
+        <span class="kw">let </span>dyn_client_output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            state_machines: client_output.state_machines,
+        }
+        .into_dyn(<span class="self">self</span>.client_ctx.module_instance_id());
+
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
         <span class="kw">let </span>operation_meta_gen = |txid, change| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
             invoice: invoice.clone(),
@@ -2582,7 +2602,7 @@
     payment_hash: sha256::Hash,
     amount_msat: Amount,
     redeem_key: secp256k1::KeyPair,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(LightningOutput, ContractId), IncomingSmError&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(LightningOutputV0, ContractId), IncomingSmError&gt; {
     <span class="kw">let </span>offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key).<span class="number">0</span>;
     <span class="kw">let </span>contract = IncomingContract {
@@ -2592,7 +2612,7 @@
         gateway_key: our_pub_key,
     };
     <span class="kw">let </span>contract_id = contract.contract_id();
-    <span class="kw">let </span>incoming_output = LightningOutput::Contract(ContractOutput {
+    <span class="kw">let </span>incoming_output = LightningOutputV0::Contract(ContractOutput {
         amount: offer.amount,
         contract: Contract::Incoming(contract),
     });

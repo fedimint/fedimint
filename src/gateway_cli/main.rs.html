@@ -175,10 +175,12 @@
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
+<a href="#178" id="178">178</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_core::BitcoinAmountOrAll;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
@@ -222,7 +224,7 @@
         </span>federation_id: FederationId,
         <span class="doccomment">/// The amount to withdraw
         </span><span class="attr">#[clap(long)]
-        </span>amount: Amount,
+        </span>amount: BitcoinAmountOrAll,
         <span class="doccomment">/// The address to send the funds to
         </span><span class="attr">#[clap(long)]
         </span>address: Address,
