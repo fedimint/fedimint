@@ -19,7 +19,7 @@ use std::{cmp, mem};
 
 use anyhow::format_err;
 use bitcoin_hashes::hex::{FromHex, ToHex};
-pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
+pub use fedimint_derive::{Decodable, Encodable};
 use lightning::util::ser::{Readable, Writeable};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

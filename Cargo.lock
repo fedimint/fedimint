@@ -1385,7 +1385,6 @@ dependencies = [
 name = "fedimint-derive"
 version = "0.2.0-alpha"
 dependencies = [
- "heck",
  "itertools 0.11.0",
  "proc-macro2",
  "quote 1.0.33",

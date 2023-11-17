@@ -1,6 +1,5 @@
 #![cfg_attr(feature = "diagnostics", feature(proc_macro_diagnostic))]
 
-use heck::ToSnakeCase;
 use itertools::Itertools;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
@@ -10,82 +9,6 @@ use syn::token::Comma;
 use syn::{
     parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Field, Fields, Index, Variant,
 };
-
-#[proc_macro_derive(UnzipConsensus)]
-pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
-    let DeriveInput { ident, data, .. } = parse_macro_input!(input);
-
-    let variants = match data {
-        syn::Data::Enum(DataEnum { variants, .. }) => variants
-            .iter()
-            .map(|variant| {
-                let fields = variant.fields.iter().collect::<Vec<_>>();
-
-                if fields.len() != 1 || fields[0].ident.is_some() {
-                    return Err("UnzipConsensus only supports 1-tuple variants");
-                }
-
-                Ok((variant.ident.clone(), fields[0].ty.clone()))
-            })
-            .collect::<std::result::Result<Vec<_>, _>>(),
-        _ => Err("UnzipConsensus can only be derived for enums"),
-    };
-
-    #[allow(unreachable_code)]
-    let variants = match variants {
-        Ok(variants) => variants,
-        Err(e) => {
-            #[cfg(feature = "diagnostics")]
-            ident.span().unstable().error(e).emit();
-            #[cfg(not(feature = "diagnostics"))]
-            panic!("Error: {e}");
-            return TokenStream::new();
-        }
-    };
-
-    let unzip_struct_ident = format_ident!("Unzip{}", ident);
-    let (unzip_s_ident, unzip_s_type): (Vec<_>, Vec<_>) = variants
-        .iter()
-        .map(|(ident, ty)| (format_ident!("{}", ident.to_string().to_snake_case()), ty))
-        .unzip();
-    let unzip_e_ident = variants.iter().map(|(ident, _)| ident).collect::<Vec<_>>();
-    let unzip_fn_ident = format_ident!("unzip_{}", ident.to_string().to_snake_case());
-    let unzip_trait_ident = format_ident!("IterUnzip{}", ident);
-
-    let output = quote! {
-        pub trait #unzip_trait_ident {
-            fn #unzip_fn_ident(self) -> #unzip_struct_ident;
-        }
-
-        pub struct #unzip_struct_ident {
-            #(pub #unzip_s_ident: Vec<(PeerId, #unzip_s_type)>),*
-        }
-
-        impl<I> #unzip_trait_ident for I
-        where
-            I: Iterator<Item = (PeerId, #ident)>,
-        {
-            fn #unzip_fn_ident(mut self) -> #unzip_struct_ident {
-                #(let mut #unzip_s_ident = Vec::new();)*
-
-                while let Some((peer, consensus_item)) = self.next() {
-                    match consensus_item {
-                        #(#ident::#unzip_e_ident(item) => {
-                            #unzip_s_ident.push((peer, item));
-                        })*
-                    }
-                }
-
-                #unzip_struct_ident {
-                    #(#unzip_s_ident),*
-                }
-            }
-        }
-
-    };
-
-    output.into()
-}
 
 fn do_not_ignore(field: &Field) -> bool {
     !field

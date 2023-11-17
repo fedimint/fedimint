@@ -6,7 +6,7 @@ use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{plugin_types_trait_impl_common, Feerate, PeerId};
 use impl_tools::autoimpl;
@@ -34,9 +34,7 @@ pub type PartialSig = Vec<u8>;
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
 
-#[derive(
-    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum WalletConsensusItem {
     BlockCount(u32), /* FIXME: use block hash instead, but needs more complicated
                       * * verification logic */
