@@ -87,10 +87,10 @@ pub struct TimeReporter {
 }
 
 impl TimeReporter {
-    pub fn new(name: &'static str) -> Self {
+    pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
         Self {
             inner: Some(TimeReporterInner {
-                name: Cow::from(name),
+                name: name.into(),
                 level: Level::DEBUG,
                 start: crate::time::now(),
                 threshold: None,

@@ -22,6 +22,7 @@ use fedimint_core::module::registry::{
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 use fedimint_core::query::FilterMap;
 use fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
+use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, PeerId};
 use futures::StreamExt;
@@ -580,6 +581,8 @@ impl ConsensusServer {
         let mut audit = Audit::default();
 
         for (module_instance_id, _, module) in self.modules.iter_modules() {
+            let _module_audit_timing =
+                TimeReporter::new(format!("audit module {module_instance_id}"));
             module
                 .audit(
                     &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
