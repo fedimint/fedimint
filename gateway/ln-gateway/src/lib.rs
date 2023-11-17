@@ -93,10 +93,10 @@ const DEFAULT_NUM_ROUTE_HINTS: u32 = 0;
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
 
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
-    /// Base routing fee. Default is 0 msat
+    // Base routing fee. Default is 0 msat
     base_msat: 0,
-    /// Liquidity-based routing fee in millionths of a routed amount.
-    /// In other words, 10000 is 1%. The default is 10000 (1%).
+    // Liquidity-based routing fee in millionths of a routed amount.
+    // In other words, 10000 is 1%. The default is 10000 (1%).
     proportional_millionths: 10000,
 };
 
