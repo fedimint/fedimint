@@ -1082,14 +1082,10 @@ impl MintClientModule {
         );
 
         let amount = notes.total_amount();
-        let mint_input = self
-            .create_input_from_notes(operation_id, notes)
-            .await?
-            .into_iter()
-            .map(|input| input.into_dyn(self.client_ctx.module_instance_id()))
-            .collect();
+        let mint_input = self.create_input_from_notes(operation_id, notes).await?;
 
-        let tx = TransactionBuilder::new().with_inputs(mint_input);
+        let tx =
+            TransactionBuilder::new().with_inputs(self.client_ctx.map_dyn(mint_input).collect());
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::reissue_external_notes extra_meta is serializable");
