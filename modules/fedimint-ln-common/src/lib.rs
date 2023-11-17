@@ -173,8 +173,28 @@ pub struct ContractAccount {
     pub contract: contracts::FundedContract,
 }
 
+extensible_associated_module_type!(
+    LightningOutputOutcome,
+    LightningOutputOutcomeV0,
+    UnknownLightningOutputOutcomeVariantError
+);
+
+impl LightningOutputOutcome {
+    pub fn new_v0_contract(id: ContractId, outcome: ContractOutcome) -> LightningOutputOutcome {
+        LightningOutputOutcome::V0(LightningOutputOutcomeV0::Contract { id, outcome })
+    }
+
+    pub fn new_v0_offer(id: OfferId) -> LightningOutputOutcome {
+        LightningOutputOutcome::V0(LightningOutputOutcomeV0::Offer { id })
+    }
+
+    pub fn new_v0_cancel_outgoing(id: ContractId) -> LightningOutputOutcome {
+        LightningOutputOutcome::V0(LightningOutputOutcomeV0::CancelOutgoingContract { id })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum LightningOutputOutcome {
+pub enum LightningOutputOutcomeV0 {
     Contract {
         id: ContractId,
         outcome: ContractOutcome,
@@ -187,26 +207,26 @@ pub enum LightningOutputOutcome {
     },
 }
 
-impl LightningOutputOutcome {
+impl LightningOutputOutcomeV0 {
     pub fn is_permanent(&self) -> bool {
         match self {
-            LightningOutputOutcome::Contract { id: _, outcome } => outcome.is_permanent(),
-            LightningOutputOutcome::Offer { .. } => true,
-            LightningOutputOutcome::CancelOutgoingContract { .. } => true,
+            LightningOutputOutcomeV0::Contract { id: _, outcome } => outcome.is_permanent(),
+            LightningOutputOutcomeV0::Offer { .. } => true,
+            LightningOutputOutcomeV0::CancelOutgoingContract { .. } => true,
         }
     }
 }
 
-impl std::fmt::Display for LightningOutputOutcome {
+impl std::fmt::Display for LightningOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LightningOutputOutcome::Contract { id, .. } => {
+            LightningOutputOutcomeV0::Contract { id, .. } => {
                 write!(f, "LN Contract {id}")
             }
-            LightningOutputOutcome::Offer { id } => {
+            LightningOutputOutcomeV0::Offer { id } => {
                 write!(f, "LN Offer {id}")
             }
-            LightningOutputOutcome::CancelOutgoingContract { id: contract_id } => {
+            LightningOutputOutcomeV0::CancelOutgoingContract { id: contract_id } => {
                 write!(f, "LN Outgoing Contract Cancellation {contract_id}")
             }
         }

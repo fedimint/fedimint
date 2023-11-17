@@ -6,7 +6,7 @@ use strum_macros::EnumIter;
 
 use crate::contracts::incoming::IncomingContractOffer;
 use crate::contracts::{ContractId, FundedContract, IdentifiableContract, PreimageDecryptionShare};
-use crate::{ContractAccount, LightningGatewayRegistration, LightningOutputOutcome};
+use crate::{ContractAccount, LightningGatewayRegistration, LightningOutputOutcomeV0};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -50,7 +50,7 @@ pub struct ContractUpdateKeyPrefix;
 
 impl_db_record!(
     key = ContractUpdateKey,
-    value = LightningOutputOutcome,
+    value = LightningOutputOutcomeV0,
     db_prefix = DbKeyPrefix::ContractUpdate,
 );
 impl_db_lookup!(
