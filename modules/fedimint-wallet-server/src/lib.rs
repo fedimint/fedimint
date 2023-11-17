@@ -63,7 +63,7 @@ use fedimint_wallet_common::db::{
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
-use fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError};
+use fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
 use futures::StreamExt;
 use miniscript::psbt::PsbtExt;
 use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
@@ -525,6 +525,8 @@ impl ServerModule for Wallet {
         output: &'a WalletOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, WalletOutputError> {
+        let output = output.ensure_v0_ref()?;
+
         let change_tweak = self.consensus_nonce(dbtx).await;
 
         let mut tx = self.create_peg_out_tx(dbtx, output, &change_tweak).await?;
@@ -1082,11 +1084,11 @@ impl Wallet {
     async fn create_peg_out_tx(
         &self,
         dbtx: &mut DatabaseTransactionRef<'_>,
-        output: &WalletOutput,
+        output: &WalletOutputV0,
         change_tweak: &[u8; 32],
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         match output {
-            WalletOutput::PegOut(peg_out) => self.offline_wallet().create_tx(
+            WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
                 peg_out.recipient.script_pubkey(),
                 vec![],
@@ -1095,7 +1097,7 @@ impl Wallet {
                 change_tweak,
                 None,
             ),
-            WalletOutput::Rbf(rbf) => {
+            WalletOutputV0::Rbf(rbf) => {
                 let tx = dbtx
                     .get_value(&PendingTransactionKey(rbf.txid))
                     .await
@@ -1189,11 +1191,11 @@ impl<'a> StatelessWallet<'a> {
     fn validate_tx(
         &self,
         tx: &UnsignedTransaction,
-        output: &WalletOutput,
+        output: &WalletOutputV0,
         consensus_fee_rate: Feerate,
         network: Network,
     ) -> Result<(), WalletOutputError> {
-        if let WalletOutput::PegOut(peg_out) = output {
+        if let WalletOutputV0::PegOut(peg_out) = output {
             if !peg_out.recipient.is_valid_for_network(network) {
                 return Err(WalletOutputError::WrongNetwork(
                     network,
@@ -1218,8 +1220,8 @@ impl<'a> StatelessWallet<'a> {
         // Validate added fees are above the min relay tx fee
         // BIP-0125 requires 1 sat/vb for RBF by default (same as normal txs)
         let fees = match output {
-            WalletOutput::PegOut(pegout) => pegout.fees,
-            WalletOutput::Rbf(rbf) => rbf.fees,
+            WalletOutputV0::PegOut(pegout) => pegout.fees,
+            WalletOutputV0::Rbf(rbf) => rbf.fees,
         };
         if fees.fee_rate.sats_per_kvb < DEFAULT_MIN_RELAY_TX_FEE as u64 {
             return Err(WalletOutputError::BelowMinRelayFee);
@@ -1519,7 +1521,7 @@ mod tests {
     use bitcoin::Network::{Bitcoin, Testnet};
     use bitcoin::{Address, Amount, Network, OutPoint, Txid};
     use fedimint_core::{BitcoinHash, Feerate};
-    use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutput};
+    use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
 
     use crate::common::PegInDescriptor;
@@ -1614,7 +1616,7 @@ mod tests {
         assert_eq!(res, Err(WalletOutputError::PegOutUnderDustLimit));
 
         // tx is invalid for network
-        let output = WalletOutput::PegOut(PegOut {
+        let output = WalletOutputV0::PegOut(PegOut {
             recipient,
             amount: Amount::from_sat(1000),
             fees: PegOutFees::new(100, weight),
@@ -1623,8 +1625,8 @@ mod tests {
         assert_eq!(res, Err(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 
-    fn rbf(sats_per_kvb: u64, total_weight: u64) -> WalletOutput {
-        WalletOutput::Rbf(Rbf {
+    fn rbf(sats_per_kvb: u64, total_weight: u64) -> WalletOutputV0 {
+        WalletOutputV0::Rbf(Rbf {
             fees: PegOutFees::new(sats_per_kvb, total_weight),
             txid: Txid::all_zeros(),
         })

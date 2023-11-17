@@ -3,7 +3,7 @@ use std::hash::Hasher;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
+use bitcoin::{Address, Amount, BlockHash, Network, Script, Transaction, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
@@ -213,8 +213,31 @@ impl std::fmt::Display for WalletInputV0 {
     }
 }
 
+extensible_associated_module_type!(
+    WalletOutput,
+    WalletOutputV0,
+    UnknownWalletOutputVariantError
+);
+
+impl WalletOutput {
+    pub fn new_v0_peg_out(
+        recipient: Address,
+        amount: bitcoin::Amount,
+        fees: PegOutFees,
+    ) -> WalletOutput {
+        WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
+            recipient,
+            amount,
+            fees,
+        }))
+    }
+    pub fn new_v0_rbf(fees: PegOutFees, txid: Txid) -> WalletOutput {
+        WalletOutput::V0(WalletOutputV0::Rbf(Rbf { fees, txid }))
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum WalletOutput {
+pub enum WalletOutputV0 {
     PegOut(PegOut),
     Rbf(Rbf),
 }
@@ -228,22 +251,22 @@ pub struct Rbf {
     pub txid: Txid,
 }
 
-impl WalletOutput {
+impl WalletOutputV0 {
     pub fn amount(&self) -> Amount {
         match self {
-            WalletOutput::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
-            WalletOutput::Rbf(rbf) => rbf.fees.amount(),
+            WalletOutputV0::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
+            WalletOutputV0::Rbf(rbf) => rbf.fees.amount(),
         }
     }
 }
 
-impl std::fmt::Display for WalletOutput {
+impl std::fmt::Display for WalletOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WalletOutput::PegOut(pegout) => {
+            WalletOutputV0::PegOut(pegout) => {
                 write!(f, "Wallet PegOut {} to {}", pegout.amount, pegout.recipient)
             }
-            WalletOutput::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
+            WalletOutputV0::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
         }
     }
 }
@@ -322,6 +345,8 @@ pub enum WalletOutputError {
     TxWeightIncorrect(u64, u64),
     #[error("Peg-out fee rate is below min relay fee")]
     BelowMinRelayFee,
+    #[error("The wallet output version is not supported by this federation")]
+    UnknownOutputVariant(#[from] UnknownWalletOutputVariantError),
 }
 
 #[derive(Debug, Error)]
