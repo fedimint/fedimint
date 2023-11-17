@@ -538,6 +538,9 @@ impl ServerModule for Lightning {
                 dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
                     .await;
             }
+            LightningConsensusItem::Default { variant, .. } => {
+                bail!("Unknown lightning consensus item received, variant={variant}");
+            }
         }
 
         Ok(())

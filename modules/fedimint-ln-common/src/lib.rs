@@ -315,6 +315,11 @@ pub struct LightningGateway {
 pub enum LightningConsensusItem {
     DecryptPreimage(ContractId, PreimageDecryptionShare),
     BlockCount(u64),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 impl std::fmt::Display for LightningConsensusItem {
@@ -324,6 +329,9 @@ impl std::fmt::Display for LightningConsensusItem {
                 write!(f, "LN Decryption Share for contract {contract_id}")
             }
             LightningConsensusItem::BlockCount(count) => write!(f, "LN block count {count}"),
+            LightningConsensusItem::Default { variant, .. } => {
+                write!(f, "Unknown LN CI variant={variant}")
+            }
         }
     }
 }
