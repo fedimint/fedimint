@@ -533,6 +533,11 @@
 <a href="#533" id="533">533</a>
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -555,7 +560,7 @@
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
 <span class="kw">use </span>fedimint_mint_client::{MintClientModule, OOBNotes};
-<span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
+<span class="kw">use </span>fedimint_wallet_client::{WalletClientModule, WithdrawState};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -868,6 +873,7 @@
         }
         ClientCmd::DepositAddress =&gt; {
             <span class="kw">let </span>(operation_id, address) = client
+                .get_first_module::&lt;WalletClientModule&gt;()
                 .get_deposit_address(now() + Duration::from_secs(<span class="number">600</span>))
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json! </span>{
@@ -879,6 +885,7 @@
         }
         ClientCmd::AwaitDeposit { operation_id } =&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+                .get_first_module::&lt;WalletClientModule&gt;()
                 .subscribe_deposit_updates(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_stream();
@@ -962,14 +969,17 @@
             }))
         }
         ClientCmd::Withdraw { amount, address } =&gt; {
-            <span class="kw">let </span>fees = client.get_withdraw_fee(address.clone(), amount).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>wallet_module = client.get_first_module::&lt;WalletClientModule&gt;();
+            <span class="kw">let </span>fees = wallet_module
+                .get_withdraw_fees(address.clone(), amount)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>absolute_fees = fees.amount();
 
             <span class="macro">info!</span>(<span class="string">&quot;Attempting withdraw with fees: {fees:?}&quot;</span>);
 
-            <span class="kw">let </span>operation_id = client.withdraw(address, amount, fees).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>operation_id = wallet_module.withdraw(address, amount, fees).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = wallet_module
                 .subscribe_withdraw_updates(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_stream();

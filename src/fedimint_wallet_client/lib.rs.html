@@ -701,50 +701,6 @@
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
-<a href="#704" id="704">704</a>
-<a href="#705" id="705">705</a>
-<a href="#706" id="706">706</a>
-<a href="#707" id="707">707</a>
-<a href="#708" id="708">708</a>
-<a href="#709" id="709">709</a>
-<a href="#710" id="710">710</a>
-<a href="#711" id="711">711</a>
-<a href="#712" id="712">712</a>
-<a href="#713" id="713">713</a>
-<a href="#714" id="714">714</a>
-<a href="#715" id="715">715</a>
-<a href="#716" id="716">716</a>
-<a href="#717" id="717">717</a>
-<a href="#718" id="718">718</a>
-<a href="#719" id="719">719</a>
-<a href="#720" id="720">720</a>
-<a href="#721" id="721">721</a>
-<a href="#722" id="722">722</a>
-<a href="#723" id="723">723</a>
-<a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
-<a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
-<a href="#740" id="740">740</a>
-<a href="#741" id="741">741</a>
-<a href="#742" id="742">742</a>
-<a href="#743" id="743">743</a>
-<a href="#744" id="744">744</a>
-<a href="#745" id="745">745</a>
-<a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">mod </span>client_db;
@@ -762,12 +718,12 @@
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -797,53 +753,6 @@
 
 <span class="kw">const </span>WALLET_TWEAK_CHILD_ID: ChildId = ChildId(<span class="number">0</span>);
 
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>WalletClientExt {
-    <span class="kw">async fn </span>get_deposit_address(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        valid_until: SystemTime,
-    ) -&gt; anyhow::Result&lt;(OperationId, Address)&gt;;
-
-    <span class="kw">async fn </span>subscribe_deposit_updates(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;DepositState&gt;&gt;;
-
-    <span class="doccomment">/// Fetches the fees that would need to be paid to make the withdraw request
-    /// using [`WalletClientExt::withdraw`] work *right now*.
-    ///
-    /// Note that we do not receive a guarantee that these fees will be valid in
-    /// the future, thus even the next second using these fees *may* fail.
-    /// The caller should be prepared to retry with a new fee estimate.
-    </span><span class="kw">async fn </span>get_withdraw_fee(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin::Address,
-        amount: bitcoin::Amount,
-    ) -&gt; anyhow::Result&lt;PegOutFees&gt;;
-
-    <span class="doccomment">/// Attempt to withdraw a given `amount` of Bitcoin to a destination
-    /// `address`. The caller has to supply the fee rate to be used which can be
-    /// fetched using [`WalletClientExt::get_withdraw_fee`] and should be
-    /// acknowledged by the user since it can be unexpectedly high.
-    </span><span class="kw">async fn </span>withdraw(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin::Address,
-        amount: bitcoin::Amount,
-        fee: PegOutFees,
-    ) -&gt; anyhow::Result&lt;OperationId&gt;;
-
-    <span class="doccomment">/// Attempt to increase the fee of a onchain withdraw transaction using
-    /// replace by fee (RBF).
-    /// This can prevent transactions from getting stuck
-    /// in the mempool
-    </span><span class="kw">async fn </span>rbf_withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, rbf: Rbf) -&gt; anyhow::Result&lt;OperationId&gt;;
-
-    <span class="kw">async fn </span>subscribe_withdraw_updates(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;WithdrawState&gt;&gt;;
-}
-
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BitcoinTransactionData {
     <span class="doccomment">/// The bitcoin transaction is saved as soon as we see it so the transaction
@@ -871,281 +780,6 @@
     // Refunded,
     // RefundFailed(String),
 </span>}
-
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>WalletClientExt <span class="kw">for </span>ClientArc {
-    <span class="kw">async fn </span>get_deposit_address(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        valid_until: SystemTime,
-    ) -&gt; anyhow::Result&lt;(OperationId, Address)&gt; {
-        <span class="kw">let </span>wallet_client = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;();
-        <span class="kw">let </span>wallet_client_id = wallet_client.id;
-
-        <span class="kw">let </span>(operation_id, address) = <span class="self">self
-            </span>.db()
-            .autocommit(
-                |dbtx| {
-                    Box::pin(<span class="kw">async </span>{
-                        <span class="kw">let </span>(operation_id, sm, address) = wallet_client
-                            .get_deposit_address(
-                                valid_until,
-                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(wallet_client_id),
-                            )
-                            .<span class="kw">await</span>;
-
-                        <span class="comment">// Begin watching the script address
-                        </span>wallet_client
-                            .rpc
-                            .watch_script_history(<span class="kw-2">&amp;</span>address.script_pubkey())
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-                        <span class="self">self</span>.add_state_machines(
-                            dbtx,
-                            <span class="macro">vec!</span>[DynState::from_typed(wallet_client.id, sm)],
-                        )
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="self">self</span>.operation_log()
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                WalletCommonInit::KIND.as_str(),
-                                WalletOperationMeta::Deposit {
-                                    address: address.clone(),
-                                    expires_at: valid_until,
-                                },
-                            )
-                            .<span class="kw">await</span>;
-
-                        <span class="prelude-val">Ok</span>((operation_id, address))
-                    })
-                },
-                <span class="prelude-val">Some</span>(<span class="number">100</span>),
-            )
-            .<span class="kw">await
-            </span>.map_err(|e| <span class="kw">match </span>e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
-                AutocommitError::ClosureError { error, .. } =&gt; error,
-            })<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>((operation_id, address))
-    }
-
-    <span class="kw">async fn </span>subscribe_deposit_updates(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;DepositState&gt;&gt; {
-        <span class="kw">let </span>wallet_client = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;();
-
-        <span class="kw">let </span>operation_log_entry = <span class="self">self
-            </span>.operation_log()
-            .get_operation(operation_id)
-            .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
-
-        <span class="kw">if </span>operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
-        }
-
-        <span class="kw">let </span>operation_meta = operation_log_entry.meta::&lt;WalletOperationMeta&gt;();
-
-        <span class="kw">if </span>!<span class="macro">matches!</span>(operation_meta, WalletOperationMeta::Deposit { .. }) {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a deposit operation&quot;</span>);
-        }
-
-        <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = wallet_client.notifier.subscribe(operation_id).<span class="kw">await</span>;
-        <span class="kw">let </span>tx_subscriber = <span class="self">self</span>.transaction_updates(operation_id).<span class="kw">await</span>;
-        <span class="kw">let </span>client = <span class="self">self</span>.clone();
-
-        <span class="prelude-val">Ok</span>(
-            operation_log_entry.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
-                <span class="macro">stream! </span>{
-                    <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
-                        <span class="prelude-val">Some</span>(DepositStates::Created(<span class="kw">_</span>)) =&gt; {
-                            <span class="kw">yield </span>DepositState::WaitingForTransaction;
-                        },
-                        <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
-                        },
-                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
-                    }
-
-                    <span class="kw">let </span>tx_data = <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
-                        <span class="prelude-val">Some</span>(DepositStates::WaitingForConfirmations(inner)) =&gt; {
-                            <span class="kw">let </span>tx_data = BitcoinTransactionData { btc_transaction: inner.btc_transaction, out_idx: inner.out_idx };
-                            <span class="kw">yield </span>DepositState::WaitingForConfirmation(tx_data.clone());
-                            tx_data
-                        },
-                        <span class="prelude-val">Some</span>(DepositStates::TimedOut(<span class="kw">_</span>)) =&gt; {
-                            <span class="kw">yield </span>DepositState::Failed(<span class="string">&quot;Deposit timed out&quot;</span>.to_string());
-                            <span class="kw">return</span>;
-                        },
-                        <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
-                        },
-                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
-                    };
-
-                    <span class="kw">let </span>claiming = <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
-                        <span class="prelude-val">Some</span>(DepositStates::Claiming(claiming)) =&gt; claiming,
-                        <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
-                        },
-                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
-                    };
-                    <span class="kw">yield </span>DepositState::Confirmed(tx_data.clone());
-
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).<span class="kw">await </span>{
-                        <span class="kw">yield </span>DepositState::Failed(<span class="macro">format!</span>(<span class="string">&quot;Failed to claim: {e:?}&quot;</span>));
-                        <span class="kw">return</span>;
-                    }
-
-
-                        client.await_primary_module_outputs(operation_id, claiming.change)
-                            .<span class="kw">await
-                            </span>.expect(<span class="string">&quot;Cannot fail if tx was accepted and federation is honest&quot;</span>);
-
-                    <span class="kw">yield </span>DepositState::Claimed(tx_data.clone());
-                }
-            }),
-        )
-    }
-
-    <span class="kw">async fn </span>get_withdraw_fee(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: Address,
-        amount: bitcoin::Amount,
-    ) -&gt; anyhow::Result&lt;PegOutFees&gt; {
-        <span class="kw">let </span>wallet_client = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;();
-
-        wallet_client.get_withdraw_fees(address, amount).<span class="kw">await
-    </span>}
-
-    <span class="kw">async fn </span>withdraw(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: Address,
-        amount: bitcoin::Amount,
-        fee: PegOutFees,
-    ) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="kw">let </span>wallet_client = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;();
-
-        <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
-
-        <span class="kw">let </span>withdraw_output = wallet_client
-            .create_withdraw_output(operation_id, address.clone(), amount, fee)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>tx_builder =
-            TransactionBuilder::new().with_output(withdraw_output.into_dyn(wallet_client.id));
-
-        <span class="self">self</span>.finalize_and_submit_transaction(
-            operation_id,
-            WalletCommonInit::KIND.as_str(),
-            <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta::Withdraw {
-                address: address.clone(),
-                amount,
-                fee,
-                change,
-            },
-            tx_builder,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(operation_id)
-    }
-
-    <span class="kw">async fn </span>rbf_withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, rbf: Rbf) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="kw">let </span>wallet_client = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;();
-
-        <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
-
-        <span class="kw">let </span>withdraw_output = wallet_client
-            .create_rbf_withdraw_output(operation_id, rbf.clone())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>tx_builder =
-            TransactionBuilder::new().with_output(withdraw_output.into_dyn(wallet_client.id));
-
-        <span class="self">self</span>.finalize_and_submit_transaction(
-            operation_id,
-            WalletCommonInit::KIND.as_str(),
-            <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta::RbfWithdraw {
-                rbf: rbf.clone(),
-                change,
-            },
-            tx_builder,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(operation_id)
-    }
-
-    <span class="kw">async fn </span>subscribe_withdraw_updates(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;WithdrawState&gt;&gt; {
-        <span class="kw">let </span>wallet_client = <span class="self">self</span>.get_first_module::&lt;WalletClientModule&gt;();
-
-        <span class="kw">let </span>operation = <span class="self">self
-            </span>.operation_log()
-            .get_operation(operation_id)
-            .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
-
-        <span class="kw">if </span>operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
-        }
-
-        <span class="kw">let </span>operation_meta = operation.meta::&lt;WalletOperationMeta&gt;();
-
-        <span class="kw">let </span>(WalletOperationMeta::Withdraw { change, .. }
-        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
-        <span class="kw">else </span>{
-            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a withdraw operation&quot;</span>);
-        };
-
-        <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = wallet_client.notifier.subscribe(operation_id).<span class="kw">await</span>;
-        <span class="kw">let </span>client = <span class="self">self</span>.clone();
-
-        <span class="prelude-val">Ok</span>(
-            operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, <span class="kw">move </span>|| {
-                <span class="macro">stream! </span>{
-                    <span class="kw">match </span>next_withdraw_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
-                        <span class="prelude-val">Some</span>(WithdrawStates::Created(<span class="kw">_</span>)) =&gt; {
-                            <span class="kw">yield </span>WithdrawState::Created;
-                        },
-                        <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
-                        },
-                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
-                    }
-
-                    <span class="comment">// TODO: get rid of awaiting change here, there has to be a better way to make tests deterministic
-
-                        // Swallowing potential errors since the transaction failing  is handled by
-                        // output outcome fetching already
-                        </span><span class="kw">let _ </span>= client
-                            .await_primary_module_outputs(operation_id, change)
-                            .<span class="kw">await</span>;
-
-
-                    <span class="kw">match </span>next_withdraw_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
-                        <span class="prelude-val">Some</span>(WithdrawStates::Aborted(inner)) =&gt; {
-                            <span class="kw">yield </span>WithdrawState::Failed(inner.error);
-                        },
-                        <span class="prelude-val">Some</span>(WithdrawStates::Success(inner)) =&gt; {
-                            <span class="kw">yield </span>WithdrawState::Succeeded(inner.txid);
-                        },
-                        <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
-                        },
-                        <span class="prelude-val">None </span>=&gt; {},
-                    }
-                }
-            }),
-        )
-    }
-}
 
 <span class="kw">async fn </span>next_deposit_state&lt;S&gt;(stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Option</span>&lt;DepositStates&gt;
 <span class="kw">where
@@ -1232,6 +866,7 @@
             notifier: args.notifier().clone(),
             rpc: create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>,
             secp: Default::default(),
+            client_ctx: args.context(),
         })
     }
 }
@@ -1264,6 +899,7 @@
     notifier: ModuleNotifier&lt;DynGlobalClientContext, WalletClientStates&gt;,
     rpc: DynBitcoindRpc,
     secp: Secp256k1&lt;All&gt;,
+    client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>WalletClientModule {
@@ -1331,7 +967,7 @@
         <span class="self">self</span>.cfg.network
     }
 
-    <span class="kw">pub async fn </span>get_deposit_address(
+    <span class="kw">pub async fn </span>get_deposit_address_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         valid_until: SystemTime,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransactionRef&lt;<span class="lifetime">&#39;_</span>&gt;,
@@ -1363,7 +999,13 @@
         (operation_id, deposit_sm, address)
     }
 
-    <span class="kw">pub async fn </span>get_withdraw_fees(
+    <span class="doccomment">/// Fetches the fees that would need to be paid to make the withdraw request
+    /// using [`Self::withdraw`] work *right now*.
+    ///
+    /// Note that we do not receive a guarantee that these fees will be valid in
+    /// the future, thus even the next second using these fees *may* fail.
+    /// The caller should be prepared to retry with a new fee estimate.
+    </span><span class="kw">pub async fn </span>get_withdraw_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: bitcoin::Address,
         amount: bitcoin::Amount,
@@ -1426,6 +1068,276 @@
             output,
             state_machines: Arc::new(sm_gen),
         })
+    }
+
+    <span class="kw">pub async fn </span>get_deposit_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        valid_until: SystemTime,
+    ) -&gt; anyhow::Result&lt;(OperationId, Address)&gt; {
+        <span class="kw">let </span>(operation_id, address) = <span class="self">self
+            </span>.client_ctx
+            .global_db()
+            .autocommit(
+                |dbtx| {
+                    Box::pin(<span class="kw">async </span>{
+                        <span class="kw">let </span>(operation_id, sm, address) = <span class="self">self
+                            </span>.get_deposit_address_inner(
+                                valid_until,
+                                <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(
+                                    <span class="self">self</span>.client_ctx.module_instance_id(),
+                                ),
+                            )
+                            .<span class="kw">await</span>;
+
+                        <span class="comment">// Begin watching the script address
+                        </span><span class="self">self</span>.rpc
+                            .watch_script_history(<span class="kw-2">&amp;</span>address.script_pubkey())
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                        <span class="self">self</span>.client_ctx
+                            .add_state_machines(
+                                dbtx,
+                                <span class="macro">vec!</span>[DynState::from_typed(
+                                    <span class="self">self</span>.client_ctx.module_instance_id(),
+                                    sm,
+                                )],
+                            )
+                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="self">self</span>.client_ctx
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta::Deposit {
+                                    address: address.clone(),
+                                    expires_at: valid_until,
+                                },
+                            )
+                            .<span class="kw">await</span>;
+
+                        <span class="prelude-val">Ok</span>((operation_id, address))
+                    })
+                },
+                <span class="prelude-val">Some</span>(<span class="number">100</span>),
+            )
+            .<span class="kw">await
+            </span>.map_err(|e| <span class="kw">match </span>e {
+                AutocommitError::CommitFailed {
+                    last_error,
+                    attempts,
+                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
+                AutocommitError::ClosureError { error, .. } =&gt; error,
+            })<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>((operation_id, address))
+    }
+
+    <span class="kw">pub async fn </span>subscribe_deposit_updates(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;DepositState&gt;&gt; {
+        <span class="kw">let </span>operation_log_entry = <span class="self">self
+            </span>.client_ctx
+            .get_operation(operation_id)
+            .<span class="kw">await
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
+            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
+        }
+
+        <span class="kw">let </span>operation_meta = operation_log_entry.meta::&lt;WalletOperationMeta&gt;();
+
+        <span class="kw">if </span>!<span class="macro">matches!</span>(operation_meta, WalletOperationMeta::Deposit { .. }) {
+            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a deposit operation&quot;</span>);
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
+        <span class="kw">let </span>tx_subscriber = <span class="self">self</span>.client_ctx.transaction_updates(operation_id).<span class="kw">await</span>;
+
+        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
+        <span class="prelude-val">Ok</span>(
+            operation_log_entry.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+                <span class="macro">stream! </span>{
+
+                    <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(DepositStates::Created(<span class="kw">_</span>)) =&gt; {
+                            <span class="kw">yield </span>DepositState::WaitingForTransaction;
+                        },
+                        <span class="prelude-val">Some</span>(s) =&gt; {
+                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                        },
+                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
+                    }
+
+                    <span class="kw">let </span>tx_data = <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(DepositStates::WaitingForConfirmations(inner)) =&gt; {
+                            <span class="kw">let </span>tx_data = BitcoinTransactionData { btc_transaction: inner.btc_transaction, out_idx: inner.out_idx };
+                            <span class="kw">yield </span>DepositState::WaitingForConfirmation(tx_data.clone());
+                            tx_data
+                        },
+                        <span class="prelude-val">Some</span>(DepositStates::TimedOut(<span class="kw">_</span>)) =&gt; {
+                            <span class="kw">yield </span>DepositState::Failed(<span class="string">&quot;Deposit timed out&quot;</span>.to_string());
+                            <span class="kw">return</span>;
+                        },
+                        <span class="prelude-val">Some</span>(s) =&gt; {
+                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                        },
+                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
+                    };
+
+                    <span class="kw">let </span>claiming = <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(DepositStates::Claiming(claiming)) =&gt; claiming,
+                        <span class="prelude-val">Some</span>(s) =&gt; {
+                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                        },
+                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
+                    };
+                    <span class="kw">yield </span>DepositState::Confirmed(tx_data.clone());
+
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).<span class="kw">await </span>{
+                        <span class="kw">yield </span>DepositState::Failed(<span class="macro">format!</span>(<span class="string">&quot;Failed to claim: {e:?}&quot;</span>));
+                        <span class="kw">return</span>;
+                    }
+
+
+                    client_ctx.await_primary_module_outputs(operation_id, claiming.change)
+                        .<span class="kw">await
+                        </span>.expect(<span class="string">&quot;Cannot fail if tx was accepted and federation is honest&quot;</span>);
+
+                    <span class="kw">yield </span>DepositState::Claimed(tx_data.clone());
+                }
+            }),
+        )
+    }
+
+    <span class="doccomment">/// Attempt to withdraw a given `amount` of Bitcoin to a destination
+    /// `address`. The caller has to supply the fee rate to be used which can be
+    /// fetched using [`Self::get_withdraw_fees`] and should be
+    /// acknowledged by the user since it can be unexpectedly high.
+    </span><span class="kw">pub async fn </span>withdraw(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: bitcoin::Address,
+        amount: bitcoin::Amount,
+        fee: PegOutFees,
+    ) -&gt; anyhow::Result&lt;OperationId&gt; {
+        {
+            <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
+
+            <span class="kw">let </span>withdraw_output = <span class="self">self
+                </span>.create_withdraw_output(operation_id, address.clone(), amount, fee)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>tx_builder = TransactionBuilder::new()
+                .with_output(withdraw_output.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()));
+
+            <span class="self">self</span>.client_ctx
+                .finalize_and_submit_transaction(
+                    operation_id,
+                    WalletCommonInit::KIND.as_str(),
+                    <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta::Withdraw {
+                        address: address.clone(),
+                        amount,
+                        fee,
+                        change,
+                    },
+                    tx_builder,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="prelude-val">Ok</span>(operation_id)
+        }
+    }
+
+    <span class="doccomment">/// Attempt to increase the fee of a onchain withdraw transaction using
+    /// replace by fee (RBF).
+    /// This can prevent transactions from getting stuck
+    /// in the mempool
+    </span><span class="kw">pub async fn </span>rbf_withdraw(<span class="kw-2">&amp;</span><span class="self">self</span>, rbf: Rbf) -&gt; anyhow::Result&lt;OperationId&gt; {
+        <span class="kw">let </span>operation_id = OperationId(thread_rng().gen());
+
+        <span class="kw">let </span>withdraw_output = <span class="self">self
+            </span>.create_rbf_withdraw_output(operation_id, rbf.clone())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>tx_builder = TransactionBuilder::new()
+            .with_output(withdraw_output.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()));
+
+        <span class="self">self</span>.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                WalletCommonInit::KIND.as_str(),
+                <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta::RbfWithdraw {
+                    rbf: rbf.clone(),
+                    change,
+                },
+                tx_builder,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(operation_id)
+    }
+
+    <span class="kw">pub async fn </span>subscribe_withdraw_updates(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;WithdrawState&gt;&gt; {
+        <span class="kw">let </span>operation = <span class="self">self
+            </span>.client_ctx
+            .get_operation(operation_id)
+            .<span class="kw">await
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">&quot;Operation not found: {operation_id}&quot;</span>))<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
+            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a wallet operation&quot;</span>);
+        }
+
+        <span class="kw">let </span>operation_meta = operation.meta::&lt;WalletOperationMeta&gt;();
+
+        <span class="kw">let </span>(WalletOperationMeta::Withdraw { change, .. }
+        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
+        <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a withdraw operation&quot;</span>);
+        };
+
+        <span class="kw">let </span><span class="kw-2">mut </span>operation_stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
+        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
+
+        <span class="prelude-val">Ok</span>(
+            operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+                <span class="macro">stream! </span>{
+                    <span class="kw">match </span>next_withdraw_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(WithdrawStates::Created(<span class="kw">_</span>)) =&gt; {
+                            <span class="kw">yield </span>WithdrawState::Created;
+                        },
+                        <span class="prelude-val">Some</span>(s) =&gt; {
+                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                        },
+                        <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
+                    }
+
+                    <span class="comment">// TODO: get rid of awaiting change here, there has to be a better way to make tests deterministic
+
+                        // Swallowing potential errors since the transaction failing  is handled by
+                        // output outcome fetching already
+                        </span><span class="kw">let _ </span>= client_ctx
+                            .await_primary_module_outputs(operation_id, change)
+                            .<span class="kw">await</span>;
+
+
+                    <span class="kw">match </span>next_withdraw_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(WithdrawStates::Aborted(inner)) =&gt; {
+                            <span class="kw">yield </span>WithdrawState::Failed(inner.error);
+                        },
+                        <span class="prelude-val">Some</span>(WithdrawStates::Success(inner)) =&gt; {
+                            <span class="kw">yield </span>WithdrawState::Succeeded(inner.txid);
+                        },
+                        <span class="prelude-val">Some</span>(s) =&gt; {
+                            <span class="macro">panic!</span>(<span class="string">&quot;Unexpected state {s:?}&quot;</span>)
+                        },
+                        <span class="prelude-val">None </span>=&gt; {},
+                    }
+                }
+            }),
+        )
     }
 }
 

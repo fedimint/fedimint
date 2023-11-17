@@ -1316,6 +1316,12 @@
 <a href="#1316" id="1316">1316</a>
 <a href="#1317" id="1317">1317</a>
 <a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1368,7 +1374,9 @@
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
-<span class="kw">use </span>fedimint_wallet_client::{WalletClientExt, WalletClientInit, WalletCommonInit, WithdrawState};
+<span class="kw">use </span>fedimint_wallet_client::{
+    WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
+};
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::Action;
 <span class="kw">use </span>gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
@@ -1978,7 +1986,8 @@
         <span class="kw">let </span>(<span class="kw">_</span>, address) = <span class="self">self
             </span>.select_client(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>))
+            </span>.get_first_module::&lt;WalletClientModule&gt;()
+            .get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(address)
     }
@@ -1992,10 +2001,13 @@
 
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// TODO: This should probably be passed in as a parameter
-        </span><span class="kw">let </span>fees = client.get_withdraw_fee(address.clone(), amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>wallet_module = client.get_first_module::&lt;WalletClientModule&gt;();
+        <span class="kw">let </span>fees = wallet_module
+            .get_withdraw_fees(address.clone(), amount)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>operation_id = client.withdraw(address, amount, fees).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+        <span class="kw">let </span>operation_id = wallet_module.withdraw(address, amount, fees).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_stream();
