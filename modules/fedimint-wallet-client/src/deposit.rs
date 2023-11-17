@@ -265,7 +265,7 @@ async fn transition_btc_tx_confirmed(
         _ => panic!("Invalid previous state"),
     };
 
-    let wallet_input = WalletInput(Box::new(
+    let wallet_input = WalletInput::new_v0(
         PegInProof::new(
             txout_proof,
             awaiting_confirmation_state.btc_transaction,
@@ -276,7 +276,7 @@ async fn transition_btc_tx_confirmed(
                 .to_x_only_pubkey(),
         )
         .expect("TODO: handle API returning faulty proofs"),
-    ));
+    );
     let client_input = ClientInput::<WalletInput, WalletClientStates> {
         input: wallet_input,
         keys: vec![awaiting_confirmation_state.tweak_key],

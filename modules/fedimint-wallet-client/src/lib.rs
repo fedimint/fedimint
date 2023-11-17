@@ -218,6 +218,8 @@ impl ClientModule for WalletClientModule {
         &self,
         input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<TransactionItemAmount> {
+        let input = input.maybe_v0_ref()?;
+
         Some(TransactionItemAmount {
             amount: Amount::from_sats(input.0.tx_output().value),
             fee: self.cfg.fee_consensus.peg_in_abs,

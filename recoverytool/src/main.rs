@@ -261,6 +261,8 @@ fn input_tweaks_output_present(
                             .as_any()
                             .downcast_ref::<WalletInput>()
                             .expect("Instance id mapping incorrect")
+                            .ensure_v0_ref()
+                            .expect("recoverytool only supports v0 wallet inputs")
                             .0
                             .tweak_contract_key()
                             .serialize(),

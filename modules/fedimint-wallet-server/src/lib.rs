@@ -484,6 +484,8 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b WalletInput,
     ) -> Result<InputMeta, WalletInputError> {
+        let input = input.ensure_v0_ref()?;
+
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletInputError::UnknownPegInProofBlock(
                 input.proof_block(),

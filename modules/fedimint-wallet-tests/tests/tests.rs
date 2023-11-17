@@ -475,12 +475,12 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
             }
         })
         .context("expected to find peg-in output")?;
-    let input = fedimint_wallet_common::WalletInput(Box::new(PegInProof::new(
+    let input = fedimint_wallet_common::WalletInput::new_v0(PegInProof::new(
         proof,
         transaction,
         output_index.try_into()?,
         x_only_pk,
-    )?));
+    )?);
 
     match wallet
         .process_input(

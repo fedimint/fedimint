@@ -8,7 +8,9 @@ use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{plugin_types_trait_impl_common, Feerate, PeerId};
+use fedimint_core::{
+    extensible_associated_module_type, plugin_types_trait_impl_common, Feerate, PeerId,
+};
 use impl_tools::autoimpl;
 use miniscript::Descriptor;
 use serde::{Deserialize, Serialize};
@@ -189,11 +191,19 @@ impl CommonModuleInit for WalletCommonInit {
     }
 }
 
+extensible_associated_module_type!(WalletInput, WalletInputV0, UnknownWalletInputVariantError);
+
+impl WalletInput {
+    pub fn new_v0(peg_in_proof: PegInProof) -> WalletInput {
+        WalletInput::V0(WalletInputV0(Box::new(peg_in_proof)))
+    }
+}
+
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletInput(pub Box<PegInProof>);
+pub struct WalletInputV0(pub Box<PegInProof>);
 
-impl std::fmt::Display for WalletInput {
+impl std::fmt::Display for WalletInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -292,6 +302,8 @@ pub enum WalletInputError {
     PegInProofError(#[from] PegInProofError),
     #[error("The peg-in was already claimed")]
     PegInAlreadyClaimed,
+    #[error("The wallet input version is not supported by this federation")]
+    UnknownInputVariant(#[from] UnknownWalletInputVariantError),
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
