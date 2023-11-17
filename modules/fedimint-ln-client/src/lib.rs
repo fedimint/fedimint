@@ -801,13 +801,30 @@ impl LightningClientModule {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         match dbtx.get_value(&LightningGatewayKey).await {
             Some(active_gateway) => Ok(active_gateway.info),
-            None => self
-                .fetch_registered_gateways()
-                .await?
-                .into_iter()
-                .map(|gw| gw.info)
-                .choose(&mut rand::thread_rng())
-                .ok_or(anyhow::anyhow!("Could not find any gateways")),
+            None => {
+                let gateways = self.fetch_registered_gateways().await?;
+
+                let vetted = gateways
+                    .clone()
+                    .into_iter()
+                    .filter(|g| g.vetted)
+                    .collect::<Vec<_>>();
+                if !vetted.is_empty() {
+                    debug!("Choosing a vetted gateway");
+                    vetted
+                        .into_iter()
+                        .map(|gw| gw.info)
+                        .choose(&mut rand::thread_rng())
+                        .ok_or(anyhow::anyhow!("Could not choose a vetted gateway"))
+                } else {
+                    debug!("Choosing a random gateway");
+                    gateways
+                        .into_iter()
+                        .map(|gw| gw.info)
+                        .choose(&mut rand::thread_rng())
+                        .ok_or(anyhow::anyhow!("Could not choose a gateway"))
+                }
+            }
         }
     }
 
