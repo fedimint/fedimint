@@ -14,7 +14,7 @@ use tracing::{error, instrument};
 
 use super::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, InfoPayload,
-    RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    LeaveFedPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 use crate::db::GatewayConfiguration;
 use crate::{Gateway, GatewayError};
@@ -38,6 +38,7 @@ pub async fn run_webserver(
             .route("/address", post(address))
             .route("/withdraw", post(withdraw))
             .route("/connect-fed", post(connect_fed))
+            .route("/leave-fed", post(leave_fed))
             .route("/backup", post(backup))
             .route("/restore", post(restore))
             .route("/set_configuration", post(set_configuration))
@@ -135,6 +136,16 @@ async fn connect_fed(
 ) -> Result<impl IntoResponse, GatewayError> {
     let fed = gateway.handle_connect_federation(payload).await?;
     Ok(Json(json!(fed)))
+}
+
+/// Leave a federation
+#[instrument(skip_all, err)]
+async fn leave_fed(
+    Extension(mut gateway): Extension<Gateway>,
+    Json(payload): Json<LeaveFedPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    gateway.handle_leave_federation(payload).await?;
+    Ok(Json(json!(())))
 }
 
 /// Backup a gateway actor state

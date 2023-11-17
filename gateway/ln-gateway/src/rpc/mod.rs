@@ -24,6 +24,11 @@ pub struct ConnectFedPayload {
     pub invite_code: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LeaveFedPayload {
+    pub federation_id: FederationId,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfoPayload;
 

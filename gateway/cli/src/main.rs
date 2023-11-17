@@ -5,8 +5,8 @@ use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
-    SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, LeaveFedPayload,
+    RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
 use serde::Serialize;
 
@@ -54,6 +54,11 @@ pub enum Commands {
     ConnectFed {
         /// InviteCode code to connect to the federation
         invite_code: String,
+    },
+    /// Leave a federation
+    LeaveFed {
+        #[clap(long)]
+        federation_id: FederationId,
     },
     /// Make a backup of snapshot of all ecash
     Backup {
@@ -134,6 +139,11 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             print_response(response).await;
+        }
+        Commands::LeaveFed { federation_id } => {
+            client()
+                .leave_federation(LeaveFedPayload { federation_id })
+                .await?;
         }
         Commands::Backup { federation_id } => {
             client().backup(BackupPayload { federation_id }).await?;
