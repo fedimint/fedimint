@@ -164,6 +164,17 @@ where
         typed.into_dyn(self.module_instance_id())
     }
 
+    pub fn map_dyn<'s, 'i, 'o, I>(
+        &'s self,
+        typed: impl IntoIterator<Item = I> + 'i,
+    ) -> impl Iterator<Item = <I as IntoDynInstance>::DynType> + 'o
+    where
+        I: IntoDynInstance,
+        'i: 'o,
+        's: 'o,
+    {
+        typed.into_iter().map(move |i| self.make_dyn(i))
+    }
     /// Turn a typed [`ClientOutput`] into a dyn version
     pub fn make_client_output<O, S>(&self, output: ClientOutput<O, S>) -> ClientOutput
     where
