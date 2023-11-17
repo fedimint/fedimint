@@ -177,6 +177,7 @@ where
                 context: ClientContext {
                     client: final_client,
                     module_instance_id: instance_id,
+                    module_db: db.with_prefix_module_id(instance_id),
                     _marker: marker::PhantomData,
                 },
             })

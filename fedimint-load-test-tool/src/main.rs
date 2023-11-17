@@ -20,7 +20,7 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::spawn;
 use fedimint_core::util::{BoxFuture, SafeUrl};
 use fedimint_core::Amount;
-use fedimint_ln_client::{LightningClientExt, LnReceiveState};
+use fedimint_ln_client::{LightningClientModule, LnReceiveState};
 use fedimint_mint_client::OOBNotes;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
@@ -867,7 +867,8 @@ async fn do_self_payment(
     let (operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender).await?;
     let pay_invoice_time = fedimint_core::time::now();
-    client.pay_bolt11_invoice(invoice).await?;
+    let lightning_module = client.get_first_module::<LightningClientModule>();
+    lightning_module.pay_bolt11_invoice(invoice).await?;
     wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).await?;
     Ok(())
 }
@@ -883,7 +884,8 @@ async fn do_partner_ping_pong(
     let (operation_id, invoice) =
         client_create_invoice(partner, invoice_amount, event_sender).await?;
     let pay_invoice_time = fedimint_core::time::now();
-    client.pay_bolt11_invoice(invoice).await?;
+    let lightning_module = client.get_first_module::<LightningClientModule>();
+    lightning_module.pay_bolt11_invoice(invoice).await?;
     wait_invoice_payment(
         prefix,
         partner,
@@ -896,7 +898,8 @@ async fn do_partner_ping_pong(
     let (operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender).await?;
     let pay_invoice_time = fedimint_core::time::now();
-    partner.pay_bolt11_invoice(invoice).await?;
+    let partner_lightning_module = partner.get_first_module::<LightningClientModule>();
+    partner_lightning_module.pay_bolt11_invoice(invoice).await?;
     wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).await?;
     Ok(())
 }
@@ -908,7 +911,8 @@ async fn wait_invoice_payment(
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
     pay_invoice_time: std::time::SystemTime,
 ) -> anyhow::Result<()> {
-    let mut updates = client
+    let lightning_module = client.get_first_module::<LightningClientModule>();
+    let mut updates = lightning_module
         .subscribe_ln_receive(operation_id)
         .await?
         .into_stream();
@@ -938,7 +942,8 @@ async fn client_create_invoice(
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<(fedimint_core::core::OperationId, Bolt11Invoice)> {
     let create_invoice_time = fedimint_core::time::now();
-    let (operation_id, invoice) = client
+    let lightning_module = client.get_first_module::<LightningClientModule>();
+    let (operation_id, invoice) = lightning_module
         .create_bolt11_invoice(invoice_amount, "".into(), None, ())
         .await?;
     event_sender.send(MetricEvent {

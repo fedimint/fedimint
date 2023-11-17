@@ -15,7 +15,7 @@ use fedimint_core::db::Database;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredSummary};
 use fedimint_ln_client::{
-    LightningClientExt, LightningClientInit, LnPayState, OutgoingLightningPayment,
+    LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
 use fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOBNotes};
 use fedimint_wallet_client::WalletClientInit;
@@ -226,16 +226,20 @@ pub async fn gateway_pay_invoice(
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
+    let lightning_module = &client.get_first_module::<LightningClientModule>();
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
         fee: _,
-    } = client.pay_bolt11_invoice(invoice).await?;
+    } = lightning_module.pay_bolt11_invoice(invoice).await?;
     let operation_id = match payment_type {
         fedimint_ln_client::PayType::Internal(_) => bail!("Internal payment not expected"),
         fedimint_ln_client::PayType::Lightning(operation_id) => operation_id,
     };
-    let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
+    let mut updates = lightning_module
+        .subscribe_ln_pay(operation_id)
+        .await?
+        .into_stream();
     while let Some(update) = updates.next().await {
         info!("{prefix} LnPayState update: {update:?}");
         match update {
@@ -293,7 +297,10 @@ pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
 
 pub async fn switch_default_gateway(client: &ClientArc, gateway_id: &str) -> anyhow::Result<()> {
     let gateway_id = parse_gateway_id(gateway_id)?;
-    client.set_active_gateway(&gateway_id).await?;
+    client
+        .get_first_module::<LightningClientModule>()
+        .set_active_gateway(&gateway_id)
+        .await?;
     Ok(())
 }
 

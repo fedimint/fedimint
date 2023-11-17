@@ -15,7 +15,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::time::now;
 use fedimint_core::{Amount, ParseAmountError, TieredSummary};
 use fedimint_ln_client::{
-    InternalPayState, LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment,
+    InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
 };
 use fedimint_ln_common::contracts::ContractId;
@@ -199,9 +199,10 @@ pub async fn handle_command(
             description,
             expiry_time,
         } => {
-            client.select_active_gateway().await?;
+            let lightning_module = client.get_first_module::<LightningClientModule>();
+            lightning_module.select_active_gateway().await?;
 
-            let (operation_id, invoice) = client
+            let (operation_id, invoice) = lightning_module
                 .create_bolt11_invoice(amount, description, expiry_time, ())
                 .await?;
             Ok(serde_json::to_value(LnInvoiceResponse {
@@ -211,7 +212,8 @@ pub async fn handle_command(
             .unwrap())
         }
         ClientCmd::AwaitInvoice { operation_id } => {
-            let mut updates = client
+            let lightning_module = &client.get_first_module::<LightningClientModule>();
+            let mut updates = lightning_module
                 .subscribe_ln_receive(operation_id)
                 .await?
                 .into_stream();
@@ -234,18 +236,19 @@ pub async fn handle_command(
             ))
         }
         ClientCmd::LnPay { bolt11 } => {
-            client.select_active_gateway().await?;
+            let lightning_module = client.get_first_module::<LightningClientModule>();
+            lightning_module.select_active_gateway().await?;
 
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee,
-            } = client.pay_bolt11_invoice(bolt11).await?;
+            } = lightning_module.pay_bolt11_invoice(bolt11).await?;
             info!("Gateway fee: {fee}");
 
             match payment_type {
                 PayType::Internal(operation_id) => {
-                    let mut updates = client
+                    let mut updates = lightning_module
                         .subscribe_internal_pay(operation_id)
                         .await?
                         .into_stream();
@@ -276,7 +279,11 @@ pub async fn handle_command(
                     }
                 }
                 PayType::Lightning(operation_id) => {
-                    let mut updates = client.subscribe_ln_pay(operation_id).await?.into_stream();
+                    let lightning_module = client.get_first_module::<LightningClientModule>();
+                    let mut updates = lightning_module
+                        .subscribe_ln_pay(operation_id)
+                        .await?
+                        .into_stream();
 
                     while let Some(update) = updates.next().await {
                         match update {
@@ -303,13 +310,14 @@ pub async fn handle_command(
             Err(anyhow::anyhow!("Lightning Payment failed"))
         }
         ClientCmd::ListGateways => {
-            let gateways = client.fetch_registered_gateways().await?;
+            let lightning_module = client.get_first_module::<LightningClientModule>();
+            let gateways = lightning_module.fetch_registered_gateways().await?;
             if gateways.is_empty() {
                 return Ok(serde_json::to_value(Vec::<String>::new()).unwrap());
             }
 
             let mut gateways_json = json!(&gateways);
-            let active_gateway = client.select_active_gateway().await?;
+            let active_gateway = lightning_module.select_active_gateway().await?;
 
             gateways_json
                 .as_array_mut()
@@ -325,8 +333,9 @@ pub async fn handle_command(
             Ok(serde_json::to_value(gateways_json).unwrap())
         }
         ClientCmd::SwitchGateway { gateway_id } => {
-            client.set_active_gateway(&gateway_id).await?;
-            let gateway = client.select_active_gateway().await?;
+            let lightning_module = client.get_first_module::<LightningClientModule>();
+            lightning_module.set_active_gateway(&gateway_id).await?;
+            let gateway = lightning_module.select_active_gateway().await?;
             let mut gateway_json = json!(&gateway);
             gateway_json["active"] = json!(true);
             Ok(serde_json::to_value(gateway_json).unwrap())
