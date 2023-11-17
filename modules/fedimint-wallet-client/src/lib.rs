@@ -15,12 +15,12 @@ use client_db::DbKeyPrefix;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::{ClientModule, IClientModule};
+use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -50,53 +50,6 @@ use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
 
-#[apply(async_trait_maybe_send!)]
-pub trait WalletClientExt {
-    async fn get_deposit_address(
-        &self,
-        valid_until: SystemTime,
-    ) -> anyhow::Result<(OperationId, Address)>;
-
-    async fn subscribe_deposit_updates(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositState>>;
-
-    /// Fetches the fees that would need to be paid to make the withdraw request
-    /// using [`WalletClientExt::withdraw`] work *right now*.
-    ///
-    /// Note that we do not receive a guarantee that these fees will be valid in
-    /// the future, thus even the next second using these fees *may* fail.
-    /// The caller should be prepared to retry with a new fee estimate.
-    async fn get_withdraw_fee(
-        &self,
-        address: bitcoin::Address,
-        amount: bitcoin::Amount,
-    ) -> anyhow::Result<PegOutFees>;
-
-    /// Attempt to withdraw a given `amount` of Bitcoin to a destination
-    /// `address`. The caller has to supply the fee rate to be used which can be
-    /// fetched using [`WalletClientExt::get_withdraw_fee`] and should be
-    /// acknowledged by the user since it can be unexpectedly high.
-    async fn withdraw(
-        &self,
-        address: bitcoin::Address,
-        amount: bitcoin::Amount,
-        fee: PegOutFees,
-    ) -> anyhow::Result<OperationId>;
-
-    /// Attempt to increase the fee of a onchain withdraw transaction using
-    /// replace by fee (RBF).
-    /// This can prevent transactions from getting stuck
-    /// in the mempool
-    async fn rbf_withdraw(&self, rbf: Rbf) -> anyhow::Result<OperationId>;
-
-    async fn subscribe_withdraw_updates(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<WithdrawState>>;
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BitcoinTransactionData {
     /// The bitcoin transaction is saved as soon as we see it so the transaction
@@ -123,281 +76,6 @@ pub enum WithdrawState {
     // TODO: track refund
     // Refunded,
     // RefundFailed(String),
-}
-
-#[apply(async_trait_maybe_send!)]
-impl WalletClientExt for ClientArc {
-    async fn get_deposit_address(
-        &self,
-        valid_until: SystemTime,
-    ) -> anyhow::Result<(OperationId, Address)> {
-        let wallet_client = self.get_first_module::<WalletClientModule>();
-        let wallet_client_id = wallet_client.id;
-
-        let (operation_id, address) = self
-            .db()
-            .autocommit(
-                |dbtx| {
-                    Box::pin(async {
-                        let (operation_id, sm, address) = wallet_client
-                            .get_deposit_address(
-                                valid_until,
-                                &mut dbtx.dbtx_ref_with_prefix_module_id(wallet_client_id),
-                            )
-                            .await;
-
-                        // Begin watching the script address
-                        wallet_client
-                            .rpc
-                            .watch_script_history(&address.script_pubkey())
-                            .await?;
-
-                        self.add_state_machines(
-                            dbtx,
-                            vec![DynState::from_typed(wallet_client.id, sm)],
-                        )
-                        .await?;
-                        self.operation_log()
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                WalletCommonInit::KIND.as_str(),
-                                WalletOperationMeta::Deposit {
-                                    address: address.clone(),
-                                    expires_at: valid_until,
-                                },
-                            )
-                            .await;
-
-                        Ok((operation_id, address))
-                    })
-                },
-                Some(100),
-            )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
-                AutocommitError::ClosureError { error, .. } => error,
-            })?;
-
-        Ok((operation_id, address))
-    }
-
-    async fn subscribe_deposit_updates(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositState>> {
-        let wallet_client = self.get_first_module::<WalletClientModule>();
-
-        let operation_log_entry = self
-            .operation_log()
-            .get_operation(operation_id)
-            .await
-            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
-
-        if operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            bail!("Operation is not a wallet operation");
-        }
-
-        let operation_meta = operation_log_entry.meta::<WalletOperationMeta>();
-
-        if !matches!(operation_meta, WalletOperationMeta::Deposit { .. }) {
-            bail!("Operation is not a deposit operation");
-        }
-
-        let mut operation_stream = wallet_client.notifier.subscribe(operation_id).await;
-        let tx_subscriber = self.transaction_updates(operation_id).await;
-        let client = self.clone();
-
-        Ok(
-            operation_log_entry.outcome_or_updates(self.db(), operation_id, || {
-                stream! {
-                    match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::Created(_)) => {
-                            yield DepositState::WaitingForTransaction;
-                        },
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => return,
-                    }
-
-                    let tx_data = match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::WaitingForConfirmations(inner)) => {
-                            let tx_data = BitcoinTransactionData { btc_transaction: inner.btc_transaction, out_idx: inner.out_idx };
-                            yield DepositState::WaitingForConfirmation(tx_data.clone());
-                            tx_data
-                        },
-                        Some(DepositStates::TimedOut(_)) => {
-                            yield DepositState::Failed("Deposit timed out".to_string());
-                            return;
-                        },
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => return,
-                    };
-
-                    let claiming = match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::Claiming(claiming)) => claiming,
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => return,
-                    };
-                    yield DepositState::Confirmed(tx_data.clone());
-
-                    if let Err(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).await {
-                        yield DepositState::Failed(format!("Failed to claim: {e:?}"));
-                        return;
-                    }
-
-
-                        client.await_primary_module_outputs(operation_id, claiming.change)
-                            .await
-                            .expect("Cannot fail if tx was accepted and federation is honest");
-
-                    yield DepositState::Claimed(tx_data.clone());
-                }
-            }),
-        )
-    }
-
-    async fn get_withdraw_fee(
-        &self,
-        address: Address,
-        amount: bitcoin::Amount,
-    ) -> anyhow::Result<PegOutFees> {
-        let wallet_client = self.get_first_module::<WalletClientModule>();
-
-        wallet_client.get_withdraw_fees(address, amount).await
-    }
-
-    async fn withdraw(
-        &self,
-        address: Address,
-        amount: bitcoin::Amount,
-        fee: PegOutFees,
-    ) -> anyhow::Result<OperationId> {
-        let wallet_client = self.get_first_module::<WalletClientModule>();
-
-        let operation_id = OperationId(thread_rng().gen());
-
-        let withdraw_output = wallet_client
-            .create_withdraw_output(operation_id, address.clone(), amount, fee)
-            .await?;
-        let tx_builder =
-            TransactionBuilder::new().with_output(withdraw_output.into_dyn(wallet_client.id));
-
-        self.finalize_and_submit_transaction(
-            operation_id,
-            WalletCommonInit::KIND.as_str(),
-            move |_, change| WalletOperationMeta::Withdraw {
-                address: address.clone(),
-                amount,
-                fee,
-                change,
-            },
-            tx_builder,
-        )
-        .await?;
-
-        Ok(operation_id)
-    }
-
-    async fn rbf_withdraw(&self, rbf: Rbf) -> anyhow::Result<OperationId> {
-        let wallet_client = self.get_first_module::<WalletClientModule>();
-
-        let operation_id = OperationId(thread_rng().gen());
-
-        let withdraw_output = wallet_client
-            .create_rbf_withdraw_output(operation_id, rbf.clone())
-            .await?;
-        let tx_builder =
-            TransactionBuilder::new().with_output(withdraw_output.into_dyn(wallet_client.id));
-
-        self.finalize_and_submit_transaction(
-            operation_id,
-            WalletCommonInit::KIND.as_str(),
-            move |_, change| WalletOperationMeta::RbfWithdraw {
-                rbf: rbf.clone(),
-                change,
-            },
-            tx_builder,
-        )
-        .await?;
-
-        Ok(operation_id)
-    }
-
-    async fn subscribe_withdraw_updates(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<WithdrawState>> {
-        let wallet_client = self.get_first_module::<WalletClientModule>();
-
-        let operation = self
-            .operation_log()
-            .get_operation(operation_id)
-            .await
-            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
-
-        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            bail!("Operation is not a wallet operation");
-        }
-
-        let operation_meta = operation.meta::<WalletOperationMeta>();
-
-        let (WalletOperationMeta::Withdraw { change, .. }
-        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
-        else {
-            bail!("Operation is not a withdraw operation");
-        };
-
-        let mut operation_stream = wallet_client.notifier.subscribe(operation_id).await;
-        let client = self.clone();
-
-        Ok(
-            operation.outcome_or_updates(self.db(), operation_id, move || {
-                stream! {
-                    match next_withdraw_state(&mut operation_stream).await {
-                        Some(WithdrawStates::Created(_)) => {
-                            yield WithdrawState::Created;
-                        },
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => return,
-                    }
-
-                    // TODO: get rid of awaiting change here, there has to be a better way to make tests deterministic
-
-                        // Swallowing potential errors since the transaction failing  is handled by
-                        // output outcome fetching already
-                        let _ = client
-                            .await_primary_module_outputs(operation_id, change)
-                            .await;
-
-
-                    match next_withdraw_state(&mut operation_stream).await {
-                        Some(WithdrawStates::Aborted(inner)) => {
-                            yield WithdrawState::Failed(inner.error);
-                        },
-                        Some(WithdrawStates::Success(inner)) => {
-                            yield WithdrawState::Succeeded(inner.txid);
-                        },
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => {},
-                    }
-                }
-            }),
-        )
-    }
 }
 
 async fn next_deposit_state<S>(stream: &mut S) -> Option<DepositStates>
@@ -485,6 +163,7 @@ impl ClientModuleInit for WalletClientInit {
             notifier: args.notifier().clone(),
             rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
             secp: Default::default(),
+            client_ctx: args.context(),
         })
     }
 }
@@ -517,6 +196,7 @@ pub struct WalletClientModule {
     notifier: ModuleNotifier<DynGlobalClientContext, WalletClientStates>,
     rpc: DynBitcoindRpc,
     secp: Secp256k1<All>,
+    client_ctx: ClientContext<Self>,
 }
 
 impl ClientModule for WalletClientModule {
@@ -584,7 +264,7 @@ impl WalletClientModule {
         self.cfg.network
     }
 
-    pub async fn get_deposit_address(
+    pub async fn get_deposit_address_inner(
         &self,
         valid_until: SystemTime,
         dbtx: &mut DatabaseTransactionRef<'_>,
@@ -616,6 +296,12 @@ impl WalletClientModule {
         (operation_id, deposit_sm, address)
     }
 
+    /// Fetches the fees that would need to be paid to make the withdraw request
+    /// using [`Self::withdraw`] work *right now*.
+    ///
+    /// Note that we do not receive a guarantee that these fees will be valid in
+    /// the future, thus even the next second using these fees *may* fail.
+    /// The caller should be prepared to retry with a new fee estimate.
     pub async fn get_withdraw_fees(
         &self,
         address: bitcoin::Address,
@@ -679,6 +365,276 @@ impl WalletClientModule {
             output,
             state_machines: Arc::new(sm_gen),
         })
+    }
+
+    pub async fn get_deposit_address(
+        &self,
+        valid_until: SystemTime,
+    ) -> anyhow::Result<(OperationId, Address)> {
+        let (operation_id, address) = self
+            .client_ctx
+            .global_db()
+            .autocommit(
+                |dbtx| {
+                    Box::pin(async {
+                        let (operation_id, sm, address) = self
+                            .get_deposit_address_inner(
+                                valid_until,
+                                &mut dbtx.dbtx_ref_with_prefix_module_id(
+                                    self.client_ctx.module_instance_id(),
+                                ),
+                            )
+                            .await;
+
+                        // Begin watching the script address
+                        self.rpc
+                            .watch_script_history(&address.script_pubkey())
+                            .await?;
+
+                        self.client_ctx
+                            .add_state_machines(
+                                dbtx,
+                                vec![DynState::from_typed(
+                                    self.client_ctx.module_instance_id(),
+                                    sm,
+                                )],
+                            )
+                            .await?;
+                        self.client_ctx
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta::Deposit {
+                                    address: address.clone(),
+                                    expires_at: valid_until,
+                                },
+                            )
+                            .await;
+
+                        Ok((operation_id, address))
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|e| match e {
+                AutocommitError::CommitFailed {
+                    last_error,
+                    attempts,
+                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
+                AutocommitError::ClosureError { error, .. } => error,
+            })?;
+
+        Ok((operation_id, address))
+    }
+
+    pub async fn subscribe_deposit_updates(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositState>> {
+        let operation_log_entry = self
+            .client_ctx
+            .get_operation(operation_id)
+            .await
+            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
+
+        if operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
+            bail!("Operation is not a wallet operation");
+        }
+
+        let operation_meta = operation_log_entry.meta::<WalletOperationMeta>();
+
+        if !matches!(operation_meta, WalletOperationMeta::Deposit { .. }) {
+            bail!("Operation is not a deposit operation");
+        }
+
+        let mut operation_stream = self.notifier.subscribe(operation_id).await;
+        let tx_subscriber = self.client_ctx.transaction_updates(operation_id).await;
+
+        let client_ctx = self.client_ctx.clone();
+        Ok(
+            operation_log_entry.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+                stream! {
+
+                    match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::Created(_)) => {
+                            yield DepositState::WaitingForTransaction;
+                        },
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => return,
+                    }
+
+                    let tx_data = match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::WaitingForConfirmations(inner)) => {
+                            let tx_data = BitcoinTransactionData { btc_transaction: inner.btc_transaction, out_idx: inner.out_idx };
+                            yield DepositState::WaitingForConfirmation(tx_data.clone());
+                            tx_data
+                        },
+                        Some(DepositStates::TimedOut(_)) => {
+                            yield DepositState::Failed("Deposit timed out".to_string());
+                            return;
+                        },
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => return,
+                    };
+
+                    let claiming = match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::Claiming(claiming)) => claiming,
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => return,
+                    };
+                    yield DepositState::Confirmed(tx_data.clone());
+
+                    if let Err(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).await {
+                        yield DepositState::Failed(format!("Failed to claim: {e:?}"));
+                        return;
+                    }
+
+
+                    client_ctx.await_primary_module_outputs(operation_id, claiming.change)
+                        .await
+                        .expect("Cannot fail if tx was accepted and federation is honest");
+
+                    yield DepositState::Claimed(tx_data.clone());
+                }
+            }),
+        )
+    }
+
+    /// Attempt to withdraw a given `amount` of Bitcoin to a destination
+    /// `address`. The caller has to supply the fee rate to be used which can be
+    /// fetched using [`Self::get_withdraw_fees`] and should be
+    /// acknowledged by the user since it can be unexpectedly high.
+    pub async fn withdraw(
+        &self,
+        address: bitcoin::Address,
+        amount: bitcoin::Amount,
+        fee: PegOutFees,
+    ) -> anyhow::Result<OperationId> {
+        {
+            let operation_id = OperationId(thread_rng().gen());
+
+            let withdraw_output = self
+                .create_withdraw_output(operation_id, address.clone(), amount, fee)
+                .await?;
+            let tx_builder = TransactionBuilder::new()
+                .with_output(withdraw_output.into_dyn(self.client_ctx.module_instance_id()));
+
+            self.client_ctx
+                .finalize_and_submit_transaction(
+                    operation_id,
+                    WalletCommonInit::KIND.as_str(),
+                    move |_, change| WalletOperationMeta::Withdraw {
+                        address: address.clone(),
+                        amount,
+                        fee,
+                        change,
+                    },
+                    tx_builder,
+                )
+                .await?;
+
+            Ok(operation_id)
+        }
+    }
+
+    /// Attempt to increase the fee of a onchain withdraw transaction using
+    /// replace by fee (RBF).
+    /// This can prevent transactions from getting stuck
+    /// in the mempool
+    pub async fn rbf_withdraw(&self, rbf: Rbf) -> anyhow::Result<OperationId> {
+        let operation_id = OperationId(thread_rng().gen());
+
+        let withdraw_output = self
+            .create_rbf_withdraw_output(operation_id, rbf.clone())
+            .await?;
+        let tx_builder = TransactionBuilder::new()
+            .with_output(withdraw_output.into_dyn(self.client_ctx.module_instance_id()));
+
+        self.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                WalletCommonInit::KIND.as_str(),
+                move |_, change| WalletOperationMeta::RbfWithdraw {
+                    rbf: rbf.clone(),
+                    change,
+                },
+                tx_builder,
+            )
+            .await?;
+
+        Ok(operation_id)
+    }
+
+    pub async fn subscribe_withdraw_updates(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<WithdrawState>> {
+        let operation = self
+            .client_ctx
+            .get_operation(operation_id)
+            .await
+            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
+
+        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
+            bail!("Operation is not a wallet operation");
+        }
+
+        let operation_meta = operation.meta::<WalletOperationMeta>();
+
+        let (WalletOperationMeta::Withdraw { change, .. }
+        | WalletOperationMeta::RbfWithdraw { change, .. }) = operation_meta
+        else {
+            bail!("Operation is not a withdraw operation");
+        };
+
+        let mut operation_stream = self.notifier.subscribe(operation_id).await;
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(
+            operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+                stream! {
+                    match next_withdraw_state(&mut operation_stream).await {
+                        Some(WithdrawStates::Created(_)) => {
+                            yield WithdrawState::Created;
+                        },
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => return,
+                    }
+
+                    // TODO: get rid of awaiting change here, there has to be a better way to make tests deterministic
+
+                        // Swallowing potential errors since the transaction failing  is handled by
+                        // output outcome fetching already
+                        let _ = client_ctx
+                            .await_primary_module_outputs(operation_id, change)
+                            .await;
+
+
+                    match next_withdraw_state(&mut operation_stream).await {
+                        Some(WithdrawStates::Aborted(inner)) => {
+                            yield WithdrawState::Failed(inner.error);
+                        },
+                        Some(WithdrawStates::Success(inner)) => {
+                            yield WithdrawState::Succeeded(inner.txid);
+                        },
+                        Some(s) => {
+                            panic!("Unexpected state {s:?}")
+                        },
+                        None => {},
+                    }
+                }
+            }),
+        )
     }
 }
 
