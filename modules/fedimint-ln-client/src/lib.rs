@@ -939,13 +939,12 @@ impl LightningClientModule {
             _ => unreachable!("User client will only create contract outputs on spend"),
         };
 
-        let dyn_client_output = ClientOutput {
+        let output = self.client_ctx.make_client_output(ClientOutput {
             output: LightningOutput::V0(client_output.output),
             state_machines: client_output.state_machines,
-        }
-        .into_dyn(self.client_ctx.module_instance_id());
+        });
 
-        let tx = TransactionBuilder::new().with_output(dyn_client_output);
+        let tx = TransactionBuilder::new().with_output(output);
         let operation_meta_gen = |txid, change| {
             LightningOperationMeta::Pay(LightningOperationMetaPay {
                 out_point: OutPoint { txid, out_idx: 0 },
@@ -1125,8 +1124,7 @@ impl LightningClientModule {
                 self.cfg.network,
             )
             .await?;
-        let tx = TransactionBuilder::new()
-            .with_output(output.into_dyn(self.client_ctx.module_instance_id()));
+        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
         let operation_meta_gen = |txid, _| LightningOperationMeta::Receive {
             out_point: OutPoint { txid, out_idx: 0 },

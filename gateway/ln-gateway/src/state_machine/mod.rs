@@ -411,13 +411,12 @@ impl GatewayClientModule {
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
 
-        let dyn_client_output = ClientOutput {
+        let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
             state_machines: client_output.state_machines,
-        }
-        .into_dyn(self.client_ctx.module_instance_id());
+        };
 
-        let tx = TransactionBuilder::new().with_output(dyn_client_output);
+        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
@@ -438,13 +437,12 @@ impl GatewayClientModule {
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
 
-        let dyn_client_output = ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            state_machines: client_output.state_machines,
-        }
-        .into_dyn(self.client_ctx.module_instance_id());
-
-        let tx = TransactionBuilder::new().with_output(dyn_client_output);
+        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(
+            ClientOutput {
+                output: LightningOutput::V0(client_output.output),
+                state_machines: client_output.state_machines,
+            },
+        ));
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
@@ -531,7 +529,7 @@ impl GatewayClientModule {
 
                         let dyn_states = state_machines
                             .into_iter()
-                            .map(|s| s.into_dyn(self.client_ctx.module_instance_id()))
+                            .map(|s| self.client_ctx.make_dyn(s))
                             .collect();
 
                             match self.client_ctx.add_state_machines(dbtx, dyn_states).await {
