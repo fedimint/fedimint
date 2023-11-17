@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::bail;
+use anyhow::anyhow;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction,
@@ -27,6 +27,7 @@ use super::state::StateTransitionFunction;
 use crate::sm::notifier::Notifier;
 use crate::sm::state::{DynContext, DynState};
 use crate::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
+use crate::{AddStateMachinesError, AddStateMachinesResult};
 
 /// After how many attempts a DB transaction is aborted with an error
 const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
@@ -104,7 +105,7 @@ where
                     last_error,
                     attempts,
                 } => last_error.context(format!("Failed to commit after {attempts} attempts")),
-                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::ClosureError { error, .. } => anyhow!("{error:?}"),
             })?;
 
         // TODO: notify subscribers to state changes?
@@ -124,14 +125,14 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         states: Vec<DynState<GC>>,
-    ) -> anyhow::Result<()> {
+    ) -> AddStateMachinesResult {
         for state in states {
             if !self
                 .inner
                 .module_contexts
                 .contains_key(&state.module_instance_id())
             {
-                bail!("Unknown module");
+                return Err(AddStateMachinesError::Other(anyhow!("Unknown module")));
             }
 
             let is_active_state = dbtx
@@ -144,7 +145,7 @@ where
                 .is_some();
 
             if is_active_state || is_inactive_state {
-                bail!("State already exists in database!")
+                return Err(AddStateMachinesError::StateAlreadyExists);
             }
 
             let context = {
@@ -162,7 +163,9 @@ where
                     .expect("No such module"),
                 &context,
             ) {
-                bail!("State is already terminal, adding it to the executor doesn't make sense.")
+                return Err(AddStateMachinesError::Other(anyhow!(
+                    "State is already terminal, adding it to the executor doesn't make sense."
+                )));
             }
 
             dbtx.insert_entry(

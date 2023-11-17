@@ -82,13 +82,29 @@ use crate::receive::{
 /// client can get refund
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
 pub enum PayType {
     // Payment from this client to another user within the federation
     Internal(OperationId),
     // Payment from this client to another user, facilitated by a gateway
     Lightning(OperationId),
+}
+
+impl PayType {
+    pub fn operation_id(&self) -> OperationId {
+        match self {
+            PayType::Internal(operation_id) | PayType::Lightning(operation_id) => *operation_id,
+        }
+    }
+
+    pub fn payment_type(&self) -> String {
+        match self {
+            PayType::Internal(_) => "internal",
+            PayType::Lightning(_) => "lightning",
+        }
+        .into()
+    }
 }
 
 /// The high-level state of an pay operation internal to the federation,
@@ -179,13 +195,19 @@ async fn invoice_routes_back_to_federation(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub struct LightningOperationMetaPay {
+    pub out_point: OutPoint,
+    pub invoice: Bolt11Invoice,
+    pub fee: Amount,
+    pub change: Vec<OutPoint>,
+    pub is_internal_payment: bool,
+    pub contract_id: ContractId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LightningOperationMeta {
-    Pay {
-        out_point: OutPoint,
-        invoice: Bolt11Invoice,
-        fee: Amount,
-        change: Vec<OutPoint>,
-    },
+    Pay(LightningOperationMetaPay),
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
@@ -924,11 +946,15 @@ impl LightningClientModule {
         .into_dyn(self.client_ctx.module_instance_id());
 
         let tx = TransactionBuilder::new().with_output(dyn_client_output);
-        let operation_meta_gen = |txid, change| LightningOperationMeta::Pay {
-            out_point: OutPoint { txid, out_idx: 0 },
-            invoice: invoice.clone(),
-            fee,
-            change,
+        let operation_meta_gen = |txid, change| {
+            LightningOperationMeta::Pay(LightningOperationMetaPay {
+                out_point: OutPoint { txid, out_idx: 0 },
+                invoice: invoice.clone(),
+                fee,
+                change,
+                is_internal_payment,
+                contract_id,
+            })
         };
 
         // Write the new payment index into the database, fail the payment if the commit
@@ -949,6 +975,17 @@ impl LightningClientModule {
             contract_id,
             fee,
         })
+    }
+
+    pub async fn get_ln_pay_details_for(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<LightningOperationMetaPay> {
+        let operation = self.client_ctx.get_operation_2(operation_id).await?;
+        let LightningOperationMeta::Pay(pay) = operation.meta::<LightningOperationMeta>() else {
+            anyhow::bail!("Operation is not a lightning payment")
+        };
+        Ok(pay)
     }
 
     pub async fn subscribe_internal_pay(
@@ -991,12 +1028,12 @@ impl LightningClientModule {
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
         let operation = self.client_ctx.get_operation_2(operation_id).await?;
         let (out_point, _, change) = match operation.meta::<LightningOperationMeta>() {
-            LightningOperationMeta::Pay {
+            LightningOperationMeta::Pay(LightningOperationMetaPay {
                 out_point,
                 invoice,
                 change,
                 ..
-            } => (out_point, invoice, change),
+            }) => (out_point, invoice, change),
             _ => bail!("Operation is not a lightning payment"),
         };
 

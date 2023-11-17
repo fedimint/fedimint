@@ -334,7 +334,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
-            // Create invoice that cannout be paid
+            // Create invoice that cannot be paid
             let invoice = other_lightning_client
                 .unpayable_invoice(sats(250), None)
                 .unwrap();

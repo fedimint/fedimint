@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
+use anyhow::bail;
 use fedimint_core::time::now;
 use fedimint_logging::LOG_TASK;
 #[cfg(target_family = "wasm")]
@@ -268,9 +269,7 @@ impl TaskGroup {
             Ok(())
         } else {
             let num_errors = errors.len();
-            Err(anyhow::Error::msg(format!(
-                "{num_errors} tasks did not finish cleanly: {errors:?}"
-            )))
+            bail!("{num_errors} tasks did not finish cleanly: {errors:?}")
         }
     }
 

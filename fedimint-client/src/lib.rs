@@ -114,6 +114,7 @@ use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::DeriveableSecretClientExt;
+use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
 use tracing::{debug, error, info, warn};
@@ -164,6 +165,16 @@ pub type InstancelessDynClientOutput = ClientOutput<
     Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext> + 'static)>,
 >;
 
+#[derive(Debug, Error)]
+pub enum AddStateMachinesError {
+    #[error("State already exists in database")]
+    StateAlreadyExists,
+    #[error("Got {0}")]
+    Other(#[from] anyhow::Error),
+}
+
+pub type AddStateMachinesResult = Result<(), AddStateMachinesError>;
+
 #[apply(async_trait_maybe_send!)]
 pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// Returned a reference client's module API client, so that module-specific
@@ -206,7 +217,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
-    ) -> anyhow::Result<()>;
+    ) -> AddStateMachinesResult;
 
     async fn transaction_update_stream(
         &self,
@@ -304,7 +315,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         sm: S,
-    ) -> anyhow::Result<()>
+    ) -> AddStateMachinesResult
     where
         S: State<GlobalContext = DynGlobalClientContext> + MaybeSend + MaybeSync + 'static,
     {
@@ -424,7 +435,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
-    ) -> anyhow::Result<()> {
+    ) -> AddStateMachinesResult {
         let state = DynState::from_parts(self.module_instance_id, sm);
 
         self.client
@@ -748,7 +759,7 @@ impl Client {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         states: Vec<DynState<DynGlobalClientContext>>,
-    ) -> anyhow::Result<()> {
+    ) -> AddStateMachinesResult {
         self.executor.add_state_machines_dbtx(dbtx, states).await
     }
 
