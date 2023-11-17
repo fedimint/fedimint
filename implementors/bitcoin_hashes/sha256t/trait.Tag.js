@@ -1,3 +1,3 @@
 (function() {var implementors = {
-"fedimint_mint_client":[["impl Tag for <a class=\"struct\" href=\"fedimint_mint_client/struct.OOBReissueTag.html\" title=\"struct fedimint_mint_client::OOBReissueTag\">OOBReissueTag</a>"],["impl Tag for <a class=\"struct\" href=\"fedimint_mint_client/struct.OOBSpendTag.html\" title=\"struct fedimint_mint_client::OOBSpendTag\">OOBSpendTag</a>"]]
+"fedimint_mint_client":[["impl Tag for <a class=\"struct\" href=\"fedimint_mint_client/struct.OOBSpendTag.html\" title=\"struct fedimint_mint_client::OOBSpendTag\">OOBSpendTag</a>"],["impl Tag for <a class=\"struct\" href=\"fedimint_mint_client/struct.OOBReissueTag.html\" title=\"struct fedimint_mint_client::OOBReissueTag\">OOBReissueTag</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

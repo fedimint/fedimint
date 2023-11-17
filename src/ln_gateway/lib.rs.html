@@ -1336,6 +1336,12 @@
 <a href="#1336" id="1336">1336</a>
 <a href="#1337" id="1337">1337</a>
 <a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>lnd;
@@ -1401,7 +1407,7 @@
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
-<span class="kw">use </span>state_machine::GatewayClientExt;
+<span class="kw">use </span>state_machine::GatewayClientModule;
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::Mutex;
@@ -1902,7 +1908,11 @@
                         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
                             <span class="kw">let </span>htlc = htlc_request.clone().try_into();
                             <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
-                                <span class="kw">match </span>client.gateway_handle_intercepted_htlc(htlc).<span class="kw">await </span>{
+                                <span class="kw">match </span>client
+                                    .get_first_module::&lt;GatewayClientModule&gt;()
+                                    .gateway_handle_intercepted_htlc(htlc)
+                                    .<span class="kw">await
+                                </span>{
                                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">continue</span>,
                                     <span class="prelude-val">Err</span>(e) =&gt; {
                                         <span class="macro">info!</span>(<span class="string">&quot;Got error intercepting HTLC: {e:?}, will retry...&quot;</span>)
@@ -2062,8 +2072,9 @@
             <span class="macro">debug!</span>(<span class="string">&quot;Handling pay invoice message: {payload:?}&quot;</span>);
             <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>contract_id = payload.contract_id;
-            <span class="kw">let </span>operation_id = client.gateway_pay_bolt11_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+            <span class="kw">let </span>gateway_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;GatewayClientModule&gt;();
+            <span class="kw">let </span>operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = gateway_module
                 .gateway_subscribe_ln_pay(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_stream();
@@ -2168,6 +2179,7 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             client
+                .get_first_module::&lt;GatewayClientModule&gt;()
                 .register_with_federation(
                     <span class="self">self</span>.gateway_parameters.api_addr.clone(),
                     route_hints,
@@ -2419,7 +2431,7 @@
                                 <span class="kw">match </span><span class="self">Self</span>::fetch_lightning_route_hints(lnrpc.clone(), gateway_config.num_route_hints).<span class="kw">await </span>{
                                     <span class="prelude-val">Ok</span>(route_hints) =&gt; {
                                         <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>gateway.clients.read().<span class="kw">await</span>.iter() {
-                                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client
+                                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client.get_first_module::&lt;GatewayClientModule&gt;()
                                                 .register_with_federation(
                                                     gateway.gateway_parameters.api_addr.clone(),
                                                     route_hints.clone(),

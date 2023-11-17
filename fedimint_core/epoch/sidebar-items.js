@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ConsensusItem"],"struct":["UnzipConsensusItem"],"trait":["IterUnzipConsensusItem"]};
+window.SIDEBAR_ITEMS = {"enum":["ConsensusItem"]};

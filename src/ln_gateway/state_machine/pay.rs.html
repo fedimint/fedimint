@@ -841,6 +841,10 @@
 <a href="#841" id="841">841</a>
 <a href="#842" id="842">842</a>
 <a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -866,13 +870,12 @@
 <span class="kw">use </span>tokio_stream::StreamExt;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
-<span class="kw">use super</span>::{
-    GatewayClientContext, GatewayClientExt, GatewayClientStateMachines, GatewayExtReceiveStates,
-};
+<span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::PreimageAuthentication;
 <span class="kw">use </span><span class="kw">crate</span>::fetch_lightning_node_info;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
 <span class="kw">use </span><span class="kw">crate</span>::lnrpc_client::LightningRpcError;
+<span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// State machine that executes the Lightning payment on behalf of
@@ -1175,7 +1178,11 @@
     ) -&gt; GatewayPayStateMachine {
         <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage via direct swap for contract {contract:?}&quot;</span>);
         <span class="kw">match </span>invoice.try_into() {
-            <span class="prelude-val">Ok</span>(swap_params) =&gt; <span class="kw">match </span>client.gateway_handle_direct_swap(swap_params).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(swap_params) =&gt; <span class="kw">match </span>client
+                .get_first_module::&lt;GatewayClientModule&gt;()
+                .gateway_handle_direct_swap(swap_params)
+                .<span class="kw">await
+            </span>{
                 <span class="prelude-val">Ok</span>(operation_id) =&gt; {
                     <span class="macro">debug!</span>(<span class="string">&quot;Direct swap initiated for contract {contract:?}&quot;</span>);
                     GatewayPayStateMachine {
@@ -1535,6 +1542,7 @@
             })<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>stream = client
+            .get_first_module::&lt;GatewayClientModule&gt;()
             .gateway_subscribe_ln_receive(operation_id)
             .<span class="kw">await
             </span>.map_err(|e| {

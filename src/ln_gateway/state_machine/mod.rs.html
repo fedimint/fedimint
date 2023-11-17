@@ -744,52 +744,6 @@
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
 <a href="#746" id="746">746</a>
-<a href="#747" id="747">747</a>
-<a href="#748" id="748">748</a>
-<a href="#749" id="749">749</a>
-<a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
-<a href="#755" id="755">755</a>
-<a href="#756" id="756">756</a>
-<a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
-<a href="#767" id="767">767</a>
-<a href="#768" id="768">768</a>
-<a href="#769" id="769">769</a>
-<a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a>
-<a href="#772" id="772">772</a>
-<a href="#773" id="773">773</a>
-<a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
-<a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-<a href="#792" id="792">792</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -800,12 +754,12 @@
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -824,8 +778,8 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::{
-    ln_operation, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
+    LightningClientContext, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
+    LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
@@ -850,7 +804,7 @@
 <span class="kw">pub const </span>INITIAL_REGISTER_BACKOFF_DURATION: Duration = Duration::from_secs(<span class="number">15</span>);
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
-/// [`GatewayClientExt::gateway_pay_bolt11_invoice`].
+/// [`GatewayClientModule::gateway_pay_bolt11_invoice`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>GatewayExtPayStates {
     Created,
@@ -874,7 +828,7 @@
 }
 
 <span class="doccomment">/// The high-level state of an intercepted HTLC operation started with
-/// [`GatewayClientExt::gateway_handle_intercepted_htlc`].
+/// [`GatewayClientModule::gateway_handle_intercepted_htlc`].
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>GatewayExtReceiveStates {
     Funding,
@@ -896,300 +850,6 @@
 </span><span class="kw">pub enum </span>GatewayMeta {
     Pay,
     Receive,
-}
-
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>GatewayClientExt {
-    <span class="doccomment">/// Pay lightning invoice on behalf of federation user
-    </span><span class="kw">async fn </span>gateway_pay_bolt11_invoice(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pay_invoice_payload: PayInvoicePayload,
-    ) -&gt; anyhow::Result&lt;OperationId&gt;;
-
-    <span class="doccomment">/// Subscribe to updates when the gateway is paying an invoice
-    </span><span class="kw">async fn </span>gateway_subscribe_ln_pay(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt;;
-
-    <span class="doccomment">/// Register gateway with federation
-    </span><span class="kw">async fn </span>register_with_federation(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: SafeUrl,
-        route_hints: Vec&lt;RouteHint&gt;,
-        time_to_live: Duration,
-        gateway_id: secp256k1::PublicKey,
-    ) -&gt; anyhow::Result&lt;()&gt;;
-
-    <span class="doccomment">/// Attempt fulfill HTLC by buying preimage from the federation
-    </span><span class="kw">async fn </span>gateway_handle_intercepted_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: Htlc) -&gt; anyhow::Result&lt;OperationId&gt;;
-
-    <span class="doccomment">/// Attempt buying preimage from this federation in order to fulfill a pay
-    /// request in another federation served by this gateway. In direct swap
-    /// scenario, the gateway DOES NOT send payment over the lightning network
-    </span><span class="kw">async fn </span>gateway_handle_direct_swap(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        swap_params: SwapParameters,
-    ) -&gt; anyhow::Result&lt;OperationId&gt;;
-
-    <span class="doccomment">/// Subscribe to updates when the gateway is handling an intercepted HTLC,
-    /// or direct swap between federations
-    </span><span class="kw">async fn </span>gateway_subscribe_ln_receive(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt;;
-}
-
-<span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl </span>GatewayClientExt <span class="kw">for </span>ClientArc {
-    <span class="doccomment">/// Pays a LN invoice with our available funds
-    </span><span class="kw">async fn </span>gateway_pay_bolt11_invoice(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pay_invoice_payload: PayInvoicePayload,
-    ) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="kw">let </span>lightning = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
-        <span class="kw">let </span>payload = pay_invoice_payload.clone();
-
-        <span class="self">self</span>.db()
-            .autocommit(
-                |dbtx| {
-                    Box::pin(<span class="kw">async </span>{
-                        <span class="kw">let </span>operation_id = OperationId(payload.contract_id.into_inner());
-
-                        <span class="kw">let </span>state_machines =
-                            <span class="macro">vec!</span>[GatewayClientStateMachines::Pay(GatewayPayStateMachine {
-                                common: GatewayPayCommon { operation_id },
-                                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
-                                    pay_invoice_payload: payload.clone(),
-                                }),
-                            })];
-
-                        <span class="kw">let </span>dyn_states = state_machines
-                            .into_iter()
-                            .map(|s| s.into_dyn(lightning.id))
-                            .collect();
-
-                        <span class="self">self</span>.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="self">self</span>.operation_log()
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                KIND.as_str(),
-                                GatewayMeta::Pay,
-                            )
-                            .<span class="kw">await</span>;
-
-                        <span class="prelude-val">Ok</span>(operation_id)
-                    })
-                },
-                <span class="prelude-val">Some</span>(<span class="number">100</span>),
-            )
-            .<span class="kw">await
-            </span>.map_err(|e| <span class="kw">match </span>e {
-                AutocommitError::ClosureError { error, .. } =&gt; error,
-                AutocommitError::CommitFailed { last_error, .. } =&gt; {
-                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
-                }
-            })
-    }
-
-    <span class="kw">async fn </span>gateway_subscribe_ln_pay(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
-            </span>.get_first_module::&lt;GatewayClientModule&gt;()
-            .notifier
-            .subscribe(operation_id)
-            .<span class="kw">await</span>;
-        <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>client = <span class="self">self</span>.clone();
-
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
-            <span class="macro">stream! </span>{
-                <span class="kw">yield </span>GatewayExtPayStates::Created;
-
-                <span class="kw">loop </span>{
-                    <span class="macro">debug!</span>(<span class="string">&quot;Getting next ln pay state for {operation_id}&quot;</span>);
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
-                        <span class="kw">match </span>state.state {
-                            GatewayPayStates::Preimage(out_points, preimage) =&gt; {
-                                <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
-
-                                <span class="kw">match </span>client.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Success&quot;</span>);
-                                        <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
-                                        <span class="kw">return</span>;
-
-                                    }
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for outputs {out_points:?}&quot;</span>);
-                                        <span class="comment">// TODO: yield something here?
-                                    </span>}
-                                }
-                            }
-                            GatewayPayStates::Canceled { txid, contract_id, error } =&gt; {
-                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Trying to cancel contract {contract_id:?} due to {error:?}&quot;</span>);
-                                <span class="kw">match </span>client.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(()) =&gt; {
-                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Canceled contract {contract_id:?} due to {error:?}&quot;</span>);
-                                        <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
-                                        <span class="kw">return</span>;
-                                    }
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for transaction {txid} to be accepted for&quot;</span>);
-                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">&quot;Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}&quot;</span>) };
-                                    }
-                                }
-                            }
-                            GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">&quot;Yielding OfferDoesNotExist state for {operation_id} and contract {contract_id}&quot;</span>);
-                                <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
-                            }
-                            GatewayPayStates::Failed{ error, error_message } =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">&quot;Yielding Fail state for {operation_id} due to {error:?} {error_message:?}&quot;</span>);
-                                <span class="kw">yield </span>GatewayExtPayStates::Fail{ error, error_message };
-                            },
-                            GatewayPayStates::PayInvoice(<span class="kw">_</span>) =&gt; {
-                                <span class="macro">debug!</span>(<span class="string">&quot;Got initial state PayInvoice while awaiting for output of {operation_id}&quot;</span>);
-                            }
-                            other =&gt; {
-                                <span class="macro">info!</span>(<span class="string">&quot;Got state {other:?} while awaiting for output of {operation_id}&quot;</span>);
-                            }
-                        }
-                    } <span class="kw">else </span>{
-                        <span class="macro">warn!</span>(<span class="string">&quot;Got None while getting next ln pay state for {operation_id}&quot;</span>);
-                    }
-                }
-            }
-        }))
-    }
-
-    <span class="doccomment">/// Register this gateway with the federation
-    </span><span class="kw">async fn </span>register_with_federation(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: SafeUrl,
-        route_hints: Vec&lt;RouteHint&gt;,
-        time_to_live: Duration,
-        gateway_id: secp256k1::PublicKey,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>gateway = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
-        <span class="kw">let </span>registration_info = gateway.to_gateway_registration_info(
-            route_hints,
-            time_to_live,
-            gateway_api,
-            gateway_id,
-        );
-
-        <span class="kw">let </span>federation_id = <span class="self">self</span>.get_config().global.federation_id();
-        gateway
-            .register_with_federation(federation_id, registration_info)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="doccomment">/// Handles an intercepted HTLC by buying a preimage from the federation
-    </span><span class="kw">async fn </span>gateway_handle_intercepted_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: Htlc) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Handling intercepted HTLC {htlc:?}&quot;</span>);
-        <span class="kw">let </span>gateway = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
-        <span class="kw">let </span>(operation_id, client_output) = gateway
-            .create_funding_incoming_contract_output_from_htlc(htlc.clone())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>dyn_client_output = ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            state_machines: client_output.state_machines,
-        }
-        .into_dyn(gateway.id);
-
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
-        <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
-        <span class="self">self</span>.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Submitted transaction for HTLC {htlc:?}&quot;</span>);
-        <span class="prelude-val">Ok</span>(operation_id)
-    }
-
-    <span class="kw">async fn </span>gateway_subscribe_ln_receive(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt; {
-        <span class="kw">let </span>operation = ln_operation(<span class="self">self</span>, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
-            </span>.get_first_module::&lt;GatewayClientModule&gt;()
-            .notifier
-            .subscribe(operation_id)
-            .<span class="kw">await</span>;
-        <span class="kw">let </span>client = <span class="self">self</span>.clone();
-
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="self">self</span>.db(), operation_id, || {
-            <span class="macro">stream! </span>{
-                <span class="kw">yield </span>GatewayExtReceiveStates::Funding;
-
-                <span class="kw">let </span>state = <span class="kw">loop </span>{
-                    <span class="macro">debug!</span>(<span class="string">&quot;Getting next ln receive state for {operation_id}&quot;</span>);
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
-                        <span class="kw">match </span>state.state {
-                            IncomingSmStates::Preimage(preimage) =&gt;{
-                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Received preimage&quot;</span>);
-                                <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage)
-                            },
-                            IncomingSmStates::RefundSubmitted { out_points, error } =&gt; {
-                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Refund submitted for {out_points:?} {error}&quot;</span>);
-                                <span class="kw">match </span>client.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Refund success&quot;</span>);
-                                        <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess { out_points, error }
-                                    },
-                                    <span class="prelude-val">Err</span>(e) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for refund outputs {out_points:?}&quot;</span>);
-                                        <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error }
-                                    },
-                                }
-                            },
-                            IncomingSmStates::FundingFailed { error } =&gt; {
-                                <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Funding failed: {error:?}&quot;</span>);
-                                <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed{ error }
-                            },
-                            other =&gt; {
-                                <span class="macro">debug!</span>(<span class="string">&quot;Got state {other:?} while awaiting for output of {operation_id}&quot;</span>);
-                            }
-                        }
-                    }
-                };
-                <span class="kw">yield </span>state;
-            }
-        }))
-    }
-
-    <span class="doccomment">/// Handles a direct swap request by buying a preimage from the federation
-    </span><span class="kw">async fn </span>gateway_handle_direct_swap(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        swap_params: SwapParameters,
-    ) -&gt; anyhow::Result&lt;OperationId&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Handling direct swap {swap_params:?}&quot;</span>);
-        <span class="kw">let </span>gateway = <span class="self">self</span>.get_first_module::&lt;GatewayClientModule&gt;();
-        <span class="kw">let </span>(operation_id, client_output) = gateway
-            .create_funding_incoming_contract_output_from_swap(swap_params.clone())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>dyn_client_output = ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            state_machines: client_output.state_machines,
-        }
-        .into_dyn(gateway.id);
-
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
-        <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
-        <span class="self">self</span>.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(
-            <span class="question-mark">?</span>operation_id,
-            <span class="string">&quot;Submitted transaction for direct swap {swap_params:?}&quot;
-        </span>);
-        <span class="prelude-val">Ok</span>(operation_id)
-    }
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -1245,6 +905,7 @@
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
             fees: <span class="self">self</span>.fees,
             gateway_db: <span class="self">self</span>.gateway_db.clone(),
+            client_ctx: args.context(),
         })
     }
 }
@@ -1292,6 +953,7 @@
     fees: RoutingFees,
     module_api: DynModuleApi,
     gateway_db: Database,
+    client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModule {
@@ -1371,7 +1033,7 @@
         }
     }
 
-    <span class="kw">async fn </span>register_with_federation(
+    <span class="kw">async fn </span>register_with_federation_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: FederationId,
         registration: LightningGatewayAnnouncement,
@@ -1463,6 +1125,252 @@
             }),
         };
         <span class="prelude-val">Ok</span>((operation_id, client_output))
+    }
+
+    <span class="doccomment">/// Register gateway with federation
+    </span><span class="kw">pub async fn </span>register_with_federation(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        gateway_api: SafeUrl,
+        route_hints: Vec&lt;RouteHint&gt;,
+        time_to_live: Duration,
+        gateway_id: secp256k1::PublicKey,
+    ) -&gt; anyhow::Result&lt;()&gt; {
+        {
+            <span class="kw">let </span>registration_info = <span class="self">self</span>.to_gateway_registration_info(
+                route_hints,
+                time_to_live,
+                gateway_api,
+                gateway_id,
+            );
+
+            <span class="kw">let </span>federation_id = <span class="self">self</span>.client_ctx.get_config().global.federation_id();
+            <span class="self">self</span>.register_with_federation_inner(federation_id, registration_info)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(())
+        }
+    }
+
+    <span class="doccomment">/// Attempt fulfill HTLC by buying preimage from the federation
+    </span><span class="kw">pub async fn </span>gateway_handle_intercepted_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: Htlc) -&gt; anyhow::Result&lt;OperationId&gt; {
+        <span class="macro">debug!</span>(<span class="string">&quot;Handling intercepted HTLC {htlc:?}&quot;</span>);
+        <span class="kw">let </span>(operation_id, client_output) = <span class="self">self
+            </span>.create_funding_incoming_contract_output_from_htlc(htlc.clone())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>dyn_client_output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            state_machines: client_output.state_machines,
+        }
+        .into_dyn(<span class="self">self</span>.client_ctx.module_instance_id());
+
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
+        <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
+        <span class="self">self</span>.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Submitted transaction for HTLC {htlc:?}&quot;</span>);
+        <span class="prelude-val">Ok</span>(operation_id)
+    }
+
+    <span class="doccomment">/// Attempt buying preimage from this federation in order to fulfill a pay
+    /// request in another federation served by this gateway. In direct swap
+    /// scenario, the gateway DOES NOT send payment over the lightning network
+    </span><span class="kw">async fn </span>gateway_handle_direct_swap(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        swap_params: SwapParameters,
+    ) -&gt; anyhow::Result&lt;OperationId&gt; {
+        <span class="macro">debug!</span>(<span class="string">&quot;Handling direct swap {swap_params:?}&quot;</span>);
+        <span class="kw">let </span>(operation_id, client_output) = <span class="self">self
+            </span>.create_funding_incoming_contract_output_from_swap(swap_params.clone())
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>dyn_client_output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            state_machines: client_output.state_machines,
+        }
+        .into_dyn(<span class="self">self</span>.client_ctx.module_instance_id());
+
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
+        <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
+        <span class="self">self</span>.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(
+            <span class="question-mark">?</span>operation_id,
+            <span class="string">&quot;Submitted transaction for direct swap {swap_params:?}&quot;
+        </span>);
+        <span class="prelude-val">Ok</span>(operation_id)
+    }
+
+    <span class="doccomment">/// Subscribe to updates when the gateway is handling an intercepted HTLC,
+    /// or direct swap between federations
+    </span><span class="kw">pub async fn </span>gateway_subscribe_ln_receive(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtReceiveStates&gt;&gt; {
+        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation_2(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
+        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
+
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
+            <span class="macro">stream! </span>{
+
+                <span class="kw">yield </span>GatewayExtReceiveStates::Funding;
+
+                <span class="kw">let </span>state = <span class="kw">loop </span>{
+                    <span class="macro">debug!</span>(<span class="string">&quot;Getting next ln receive state for {operation_id}&quot;</span>);
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
+                        <span class="kw">match </span>state.state {
+                            IncomingSmStates::Preimage(preimage) =&gt;{
+                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Received preimage&quot;</span>);
+                                <span class="kw">break </span>GatewayExtReceiveStates::Preimage(preimage)
+                            },
+                            IncomingSmStates::RefundSubmitted { out_points, error } =&gt; {
+                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Refund submitted for {out_points:?} {error}&quot;</span>);
+                                <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
+                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Refund success&quot;</span>);
+                                        <span class="kw">break </span>GatewayExtReceiveStates::RefundSuccess { out_points, error }
+                                    },
+                                    <span class="prelude-val">Err</span>(e) =&gt; {
+                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for refund outputs {out_points:?}&quot;</span>);
+                                        <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error }
+                                    },
+                                }
+                            },
+                            IncomingSmStates::FundingFailed { error } =&gt; {
+                                <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Funding failed: {error:?}&quot;</span>);
+                                <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed{ error }
+                            },
+                            other =&gt; {
+                                <span class="macro">debug!</span>(<span class="string">&quot;Got state {other:?} while awaiting for output of {operation_id}&quot;</span>);
+                            }
+                        }
+                    }
+                };
+                <span class="kw">yield </span>state;
+            }
+        }))
+    }
+
+    <span class="doccomment">/// Pay lightning invoice on behalf of federation user
+    </span><span class="kw">pub async fn </span>gateway_pay_bolt11_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        pay_invoice_payload: PayInvoicePayload,
+    ) -&gt; anyhow::Result&lt;OperationId&gt; {
+        <span class="kw">let </span>payload = pay_invoice_payload.clone();
+
+        <span class="self">self</span>.client_ctx
+            .global_db()
+            .autocommit(
+                |dbtx| {
+                    Box::pin(<span class="kw">async </span>{
+                        <span class="kw">let </span>operation_id = OperationId(payload.contract_id.into_inner());
+
+                        <span class="kw">let </span>state_machines =
+                            <span class="macro">vec!</span>[GatewayClientStateMachines::Pay(GatewayPayStateMachine {
+                                common: GatewayPayCommon { operation_id },
+                                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
+                                    pay_invoice_payload: payload.clone(),
+                                }),
+                            })];
+
+                        <span class="kw">let </span>dyn_states = state_machines
+                            .into_iter()
+                            .map(|s| s.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()))
+                            .collect();
+
+                        <span class="self">self</span>.client_ctx.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="self">self</span>.client_ctx
+                            .add_operation_log_entry(
+                                dbtx,
+                                operation_id,
+                                KIND.as_str(),
+                                GatewayMeta::Pay,
+                            )
+                            .<span class="kw">await</span>;
+
+                        <span class="prelude-val">Ok</span>(operation_id)
+                    })
+                },
+                <span class="prelude-val">Some</span>(<span class="number">100</span>),
+            )
+            .<span class="kw">await
+            </span>.map_err(|e| <span class="kw">match </span>e {
+                AutocommitError::ClosureError { error, .. } =&gt; error,
+                AutocommitError::CommitFailed { last_error, .. } =&gt; {
+                    <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Commit to DB failed: {last_error}&quot;</span>)
+                }
+            })
+    }
+
+    <span class="kw">pub async fn </span>gateway_subscribe_ln_pay(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;GatewayExtPayStates&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
+        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation_2(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
+
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
+            <span class="macro">stream! </span>{
+                <span class="kw">yield </span>GatewayExtPayStates::Created;
+
+                <span class="kw">loop </span>{
+                    <span class="macro">debug!</span>(<span class="string">&quot;Getting next ln pay state for {operation_id}&quot;</span>);
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
+                        <span class="kw">match </span>state.state {
+                            GatewayPayStates::Preimage(out_points, preimage) =&gt; {
+                                <span class="kw">yield </span>GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
+
+                                <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
+                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Success&quot;</span>);
+                                        <span class="kw">yield </span>GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
+                                        <span class="kw">return</span>;
+
+                                    }
+                                    <span class="prelude-val">Err</span>(e) =&gt; {
+                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for outputs {out_points:?}&quot;</span>);
+                                        <span class="comment">// TODO: yield something here?
+                                    </span>}
+                                }
+                            }
+                            GatewayPayStates::Canceled { txid, contract_id, error } =&gt; {
+                                <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Trying to cancel contract {contract_id:?} due to {error:?}&quot;</span>);
+                                <span class="kw">match </span>client_ctx.transaction_updates(operation_id).<span class="kw">await</span>.await_tx_accepted(txid).<span class="kw">await </span>{
+                                    <span class="prelude-val">Ok</span>(()) =&gt; {
+                                        <span class="macro">debug!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Canceled contract {contract_id:?} due to {error:?}&quot;</span>);
+                                        <span class="kw">yield </span>GatewayExtPayStates::Canceled{ error };
+                                        <span class="kw">return</span>;
+                                    }
+                                    <span class="prelude-val">Err</span>(e) =&gt; {
+                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">&quot;Got failure {e:?} while awaiting for transaction {txid} to be accepted for&quot;</span>);
+                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">&quot;Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}&quot;</span>) };
+                                    }
+                                }
+                            }
+                            GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
+                                <span class="macro">warn!</span>(<span class="string">&quot;Yielding OfferDoesNotExist state for {operation_id} and contract {contract_id}&quot;</span>);
+                                <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
+                            }
+                            GatewayPayStates::Failed{ error, error_message } =&gt; {
+                                <span class="macro">warn!</span>(<span class="string">&quot;Yielding Fail state for {operation_id} due to {error:?} {error_message:?}&quot;</span>);
+                                <span class="kw">yield </span>GatewayExtPayStates::Fail{ error, error_message };
+                            },
+                            GatewayPayStates::PayInvoice(<span class="kw">_</span>) =&gt; {
+                                <span class="macro">debug!</span>(<span class="string">&quot;Got initial state PayInvoice while awaiting for output of {operation_id}&quot;</span>);
+                            }
+                            other =&gt; {
+                                <span class="macro">info!</span>(<span class="string">&quot;Got state {other:?} while awaiting for output of {operation_id}&quot;</span>);
+                            }
+                        }
+                    } <span class="kw">else </span>{
+                        <span class="macro">warn!</span>(<span class="string">&quot;Got None while getting next ln pay state for {operation_id}&quot;</span>);
+                    }
+                }
+            }
+        }))
     }
 }
 
