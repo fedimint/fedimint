@@ -331,17 +331,74 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin::util::psbt::raw::ProprietaryKey;
 <span class="kw">use </span>bitcoin::util::psbt::PartiallySignedTransaction;
-<span class="kw">use </span>bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{Address, Amount, BlockHash, Network, Script, Transaction, Txid};
 <span class="kw">use </span>config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-<span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Feerate, PeerId};
+<span class="kw">use </span>fedimint_core::{
+    extensible_associated_module_type, plugin_types_trait_impl_common, Feerate, PeerId,
+};
 <span class="kw">use </span>impl_tools::autoimpl;
 <span class="kw">use </span>miniscript::Descriptor;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -367,14 +424,17 @@
 
 <span class="kw">pub type </span>PegInDescriptor = Descriptor&lt;CompressedPublicKey&gt;;
 
-<span class="attr">#[derive(
-    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
-)]
+<span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>WalletConsensusItem {
     BlockCount(u32), <span class="comment">/* FIXME: use block hash instead, but needs more complicated
                       * * verification logic */
     </span>Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
+    <span class="attr">#[encodable_default]
+    </span>Default {
+        variant: u64,
+        bytes: Vec&lt;u8&gt;,
+    },
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletConsensusItem {
@@ -392,6 +452,9 @@
             }
             WalletConsensusItem::PegOutSignature(sig) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;Wallet PegOut signature for Bitcoin TxId {}&quot;</span>, sig.txid)
+            }
+            WalletConsensusItem::Default { variant, .. } =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">&quot;Unknown Wallet CI variant={variant}&quot;</span>)
             }
         }
     }
@@ -497,12 +560,24 @@
     <span class="kw">pub </span>fees: PegOutFees,
 }
 
+<span class="macro">extensible_associated_module_type!</span>(
+    WalletOutputOutcome,
+    WalletOutputOutcomeV0,
+    UnknownWalletOutputOutcomeVariantError
+);
+
+<span class="kw">impl </span>WalletOutputOutcome {
+    <span class="kw">pub fn </span>new_v0(txid: bitcoin::Txid) -&gt; WalletOutputOutcome {
+        WalletOutputOutcome::V0(WalletOutputOutcomeV0(txid))
+    }
+}
+
 <span class="doccomment">/// Contains the Bitcoin transaction id of the transaction created by the
 /// withdraw request
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>WalletOutputOutcome(<span class="kw">pub </span>bitcoin::Txid);
+</span><span class="kw">pub struct </span>WalletOutputOutcomeV0(<span class="kw">pub </span>bitcoin::Txid);
 
-<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletOutputOutcome {
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletOutputOutcomeV0 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="macro">write!</span>(f, <span class="string">&quot;Wallet PegOut Bitcoin TxId {}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>)
     }
@@ -522,11 +597,19 @@
     }
 }
 
+<span class="macro">extensible_associated_module_type!</span>(WalletInput, WalletInputV0, UnknownWalletInputVariantError);
+
+<span class="kw">impl </span>WalletInput {
+    <span class="kw">pub fn </span>new_v0(peg_in_proof: PegInProof) -&gt; WalletInput {
+        WalletInput::V0(WalletInputV0(Box::new(peg_in_proof)))
+    }
+}
+
 <span class="attr">#[autoimpl(Deref, DerefMut using <span class="self">self</span>.<span class="number">0</span>)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>WalletInput(<span class="kw">pub </span>Box&lt;PegInProof&gt;);
+</span><span class="kw">pub struct </span>WalletInputV0(<span class="kw">pub </span>Box&lt;PegInProof&gt;);
 
-<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletInput {
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletInputV0 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="macro">write!</span>(
             f,
@@ -536,8 +619,31 @@
     }
 }
 
+<span class="macro">extensible_associated_module_type!</span>(
+    WalletOutput,
+    WalletOutputV0,
+    UnknownWalletOutputVariantError
+);
+
+<span class="kw">impl </span>WalletOutput {
+    <span class="kw">pub fn </span>new_v0_peg_out(
+        recipient: Address,
+        amount: bitcoin::Amount,
+        fees: PegOutFees,
+    ) -&gt; WalletOutput {
+        WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
+            recipient,
+            amount,
+            fees,
+        }))
+    }
+    <span class="kw">pub fn </span>new_v0_rbf(fees: PegOutFees, txid: Txid) -&gt; WalletOutput {
+        WalletOutput::V0(WalletOutputV0::Rbf(Rbf { fees, txid }))
+    }
+}
+
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>WalletOutput {
+</span><span class="kw">pub enum </span>WalletOutputV0 {
     PegOut(PegOut),
     Rbf(Rbf),
 }
@@ -551,22 +657,22 @@
     </span><span class="kw">pub </span>txid: Txid,
 }
 
-<span class="kw">impl </span>WalletOutput {
+<span class="kw">impl </span>WalletOutputV0 {
     <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="kw">match </span><span class="self">self </span>{
-            WalletOutput::PegOut(pegout) =&gt; pegout.amount + pegout.fees.amount(),
-            WalletOutput::Rbf(rbf) =&gt; rbf.fees.amount(),
+            WalletOutputV0::PegOut(pegout) =&gt; pegout.amount + pegout.fees.amount(),
+            WalletOutputV0::Rbf(rbf) =&gt; rbf.fees.amount(),
         }
     }
 }
 
-<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletOutput {
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>WalletOutputV0 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
-            WalletOutput::PegOut(pegout) =&gt; {
+            WalletOutputV0::PegOut(pegout) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">&quot;Wallet PegOut {} to {}&quot;</span>, pegout.amount, pegout.recipient)
             }
-            WalletOutput::Rbf(rbf) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;Wallet RBF {:?} to {}&quot;</span>, rbf.fees, rbf.txid),
+            WalletOutputV0::Rbf(rbf) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;Wallet RBF {:?} to {}&quot;</span>, rbf.fees, rbf.txid),
         }
     }
 }
@@ -625,6 +731,8 @@
     </span>PegInProofError(<span class="attr">#[from] </span>PegInProofError),
     <span class="attr">#[error(<span class="string">&quot;The peg-in was already claimed&quot;</span>)]
     </span>PegInAlreadyClaimed,
+    <span class="attr">#[error(<span class="string">&quot;The wallet input version is not supported by this federation&quot;</span>)]
+    </span>UnknownInputVariant(<span class="attr">#[from] </span>UnknownWalletInputVariantError),
 }
 
 <span class="attr">#[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
@@ -643,6 +751,8 @@
     </span>TxWeightIncorrect(u64, u64),
     <span class="attr">#[error(<span class="string">&quot;Peg-out fee rate is below min relay fee&quot;</span>)]
     </span>BelowMinRelayFee,
+    <span class="attr">#[error(<span class="string">&quot;The wallet output version is not supported by this federation&quot;</span>)]
+    </span>UnknownOutputVariant(<span class="attr">#[from] </span>UnknownWalletOutputVariantError),
 }
 
 <span class="attr">#[derive(Debug, Error)]

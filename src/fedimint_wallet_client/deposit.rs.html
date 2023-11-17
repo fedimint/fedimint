@@ -597,7 +597,7 @@
         <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;Invalid previous state&quot;</span>),
     };
 
-    <span class="kw">let </span>wallet_input = WalletInput(Box::new(
+    <span class="kw">let </span>wallet_input = WalletInput::new_v0(
         PegInProof::new(
             txout_proof,
             awaiting_confirmation_state.btc_transaction,
@@ -608,7 +608,7 @@
                 .to_x_only_pubkey(),
         )
         .expect(<span class="string">&quot;TODO: handle API returning faulty proofs&quot;</span>),
-    ));
+    );
     <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput, WalletClientStates&gt; {
         input: wallet_input,
         keys: <span class="macro">vec!</span>[awaiting_confirmation_state.tweak_key],

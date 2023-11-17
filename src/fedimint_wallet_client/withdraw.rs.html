@@ -138,6 +138,9 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::Txid;
@@ -222,7 +225,10 @@
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(outcome) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(outcome.<span class="number">0</span>);
+                <span class="kw">return </span>outcome
+                    .ensure_v0_ref()
+                    .map(|outcome| outcome.<span class="number">0</span>)
+                    .map_err(|e| e.to_string())
             }
             <span class="prelude-val">Err</span>(OutputOutcomeError::Federation(e)) <span class="kw">if </span>e.is_retryable() =&gt; {
                 <span class="macro">debug!</span>(

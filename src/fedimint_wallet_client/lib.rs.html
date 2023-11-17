@@ -921,6 +921,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>input = input.maybe_v0_ref()<span class="question-mark">?</span>;
+
         <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: Amount::from_sats(input.<span class="number">0</span>.tx_output().value),
             fee: <span class="self">self</span>.cfg.fee_consensus.peg_in_abs,
@@ -931,6 +933,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+        <span class="kw">let </span>output = output.maybe_v0_ref()<span class="question-mark">?</span>;
+
         <span class="prelude-val">Some</span>(TransactionItemAmount {
             amount: output.amount().into(),
             fee: <span class="self">self</span>.cfg.fee_consensus.peg_out_abs,
@@ -1027,11 +1031,7 @@
     ) -&gt; anyhow::Result&lt;ClientOutput&lt;WalletOutput, WalletClientStates&gt;&gt; {
         check_address(<span class="kw-2">&amp;</span>address, <span class="self">self</span>.cfg.network)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>output = WalletOutput::PegOut(PegOut {
-            recipient: address,
-            amount,
-            fees,
-        });
+        <span class="kw">let </span>output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
         <span class="kw">let </span>sm_gen = <span class="kw">move </span>|txid, out_idx| {
             <span class="macro">vec!</span>[WalletClientStates::Withdraw(WithdrawStateMachine {
@@ -1053,7 +1053,7 @@
         operation_id: OperationId,
         rbf: Rbf,
     ) -&gt; anyhow::Result&lt;ClientOutput&lt;WalletOutput, WalletClientStates&gt;&gt; {
-        <span class="kw">let </span>output = WalletOutput::Rbf(rbf);
+        <span class="kw">let </span>output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
         <span class="kw">let </span>sm_gen = <span class="kw">move </span>|txid, out_idx| {
             <span class="macro">vec!</span>[WalletClientStates::Withdraw(WithdrawStateMachine {
