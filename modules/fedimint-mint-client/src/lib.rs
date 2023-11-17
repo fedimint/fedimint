@@ -29,7 +29,7 @@ use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, Executor, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, ClientArc, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -438,7 +438,6 @@ impl ClientModule for MintClientModule {
 
     async fn handle_cli_command(
         &self,
-        _client: &ClientArc,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         if args.is_empty() {
