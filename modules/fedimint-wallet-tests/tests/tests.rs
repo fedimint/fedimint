@@ -100,7 +100,6 @@ async fn await_consensus_to_catch_up(client: &ClientArc, block_count: u64) -> an
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
 async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -143,7 +142,6 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
 async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -168,6 +166,10 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fees = wallet_module
         .get_withdraw_fees(address.clone(), peg_out)
         .await?;
+    assert_eq!(
+        fees.total_weight, 871,
+        "stateless wallet should have constructed a tx with a total weight=871"
+    );
     let op = wallet_module
         .withdraw(address.clone(), peg_out, fees)
         .await?;
@@ -184,7 +186,15 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         WithdrawState::Succeeded(txid) => txid,
         other => panic!("Unexpected state: {other:?}"),
     };
-    bitcoin.get_mempool_tx_fee(&txid).await;
+
+    let expected_tx_fee = {
+        let witness_scale_factor = 4;
+        let sats_per_vbyte = fees.fee_rate.sats_per_kvb / 1000;
+        let tx_vbytes = (fees.total_weight + witness_scale_factor - 1) / witness_scale_factor;
+        Amount::from_sats(sats_per_vbyte * tx_vbytes)
+    };
+    let tx_fee = bitcoin.get_mempool_tx_fee(&txid).await;
+    assert_eq!(tx_fee, expected_tx_fee);
 
     let received = bitcoin.mine_block_and_get_received(&address).await;
     assert_eq!(received, peg_out.into());
@@ -192,7 +202,6 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
 async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -242,7 +251,6 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
 async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
@@ -410,7 +418,6 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-//#[ignore]
 async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let bitcoin = fixtures.bitcoin();

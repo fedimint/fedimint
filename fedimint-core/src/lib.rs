@@ -433,9 +433,19 @@ pub struct Feerate {
 
 impl Feerate {
     pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
-        let sats = self.sats_per_kvb * weight / 1000;
+        let sats = weight_to_vbytes(weight) * self.sats_per_kvb / 1000;
         bitcoin::Amount::from_sat(sats)
     }
+}
+
+const WITNESS_SCALE_FACTOR: u64 = bitcoin::blockdata::constants::WITNESS_SCALE_FACTOR as u64;
+
+/// Converts weight to virtual bytes, defined in [BIP-141] as weight / 4
+/// (rounded up to the next integer).
+///
+/// [BIP-141]: https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#transaction-size-calculations
+pub fn weight_to_vbytes(weight: u64) -> u64 {
+    (weight + WITNESS_SCALE_FACTOR - 1) / WITNESS_SCALE_FACTOR
 }
 
 #[derive(Debug, Error)]
@@ -456,5 +466,18 @@ mod tests {
     #[test]
     fn scalar_multiplication_by_amount() {
         assert_eq!(123 * Amount::from_msats(1000), Amount::from_msats(123_000));
+    }
+
+    #[test]
+    fn converts_weight_to_vbytes() {
+        assert_eq!(1, weight_to_vbytes(4));
+        assert_eq!(2, weight_to_vbytes(5));
+    }
+
+    #[test]
+    fn calculate_fee() {
+        let feerate = Feerate { sats_per_kvb: 1000 };
+        assert_eq!(bitcoin::Amount::from_sat(25), feerate.calculate_fee(100));
+        assert_eq!(bitcoin::Amount::from_sat(26), feerate.calculate_fee(101));
     }
 }
