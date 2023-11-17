@@ -43,8 +43,8 @@ use ln_gateway::gateway_lnrpc::GetNodeInfoResponse;
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::{BalancePayload, ConnectFedPayload, SetConfigurationPayload};
 use ln_gateway::state_machine::{
-    GatewayClientExt, GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates,
-    GatewayExtReceiveStates, GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
+    GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
+    GatewayMeta, Htlc, GW_ANNOUNCEMENT_TTL,
 };
 use ln_gateway::utils::retry;
 use ln_gateway::{GatewayState, DEFAULT_FEES, DEFAULT_NETWORK};
@@ -164,8 +164,12 @@ async fn pay_valid_invoice(
                 preimage_auth: Hash::hash(&[0; 32]),
             };
 
-            let gw_pay_op = client.gateway_pay_bolt11_invoice(payload).await?;
+            let gw_pay_op = client
+                .get_first_module::<GatewayClientModule>()
+                .gateway_pay_bolt11_invoice(payload)
+                .await?;
             let mut gw_pay_sub = client
+                .get_first_module::<GatewayClientModule>()
                 .gateway_subscribe_ln_pay(gw_pay_op)
                 .await?
                 .into_stream();
@@ -358,8 +362,12 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
-                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(payload).await?;
+                    let gw_pay_op = gateway
+                        .get_first_module::<GatewayClientModule>()
+                        .gateway_pay_bolt11_invoice(payload)
+                        .await?;
                     let mut gw_pay_sub = gateway
+                        .get_first_module::<GatewayClientModule>()
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
                         .into_stream();
@@ -412,8 +420,12 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
             incoming_chan_id: 2,
             htlc_id: 1,
         };
-        let intercept_op = gateway.gateway_handle_intercepted_htlc(htlc).await?;
+        let intercept_op = gateway
+            .get_first_module::<GatewayClientModule>()
+            .gateway_handle_intercepted_htlc(htlc)
+            .await?;
         let mut intercept_sub = gateway
+            .get_first_module::<GatewayClientModule>()
             .gateway_subscribe_ln_receive(intercept_op)
             .await?
             .into_stream();
@@ -454,7 +466,11 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
             htlc_id: 1,
         };
 
-        match gateway.gateway_handle_intercepted_htlc(htlc).await {
+        match gateway
+            .get_first_module::<GatewayClientModule>()
+            .gateway_handle_intercepted_htlc(htlc)
+            .await
+        {
             Ok(_) => panic!(
                 "Expected incoming offer validation to fail because the offer does not exist"
             ),
@@ -493,7 +509,11 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         };
 
         // Attempt to route an HTLC while the gateway has no funds
-        match gateway.gateway_handle_intercepted_htlc(htlc).await {
+        match gateway
+            .get_first_module::<GatewayClientModule>()
+            .gateway_handle_intercepted_htlc(htlc)
+            .await
+        {
             Ok(_) => panic!("Expected incoming offer validation to fail due to lack of funds"),
             Err(e) => assert_eq!(e.to_string(), "Insufficient funds".to_string()),
         }
@@ -579,8 +599,12 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 htlc_id: 1,
             };
 
-            let intercept_op = gateway.gateway_handle_intercepted_htlc(htlc).await?;
+            let intercept_op = gateway
+                .get_first_module::<GatewayClientModule>()
+                .gateway_handle_intercepted_htlc(htlc)
+                .await?;
             let mut intercept_sub = gateway
+                .get_first_module::<GatewayClientModule>()
                 .gateway_subscribe_ln_receive(intercept_op)
                 .await?
                 .into_stream();
@@ -625,6 +649,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let fake_route_hints = Vec::new();
     // Register with the federation with a low TTL to verify it will re-register
     gateway
+        .get_first_module::<GatewayClientModule>()
         .register_with_federation(
             fake_api.clone(),
             fake_route_hints.clone(),
@@ -642,6 +667,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     fake_api = SafeUrl::from_str("http://127.0.0.1:8176").unwrap();
 
     gateway
+        .get_first_module::<GatewayClientModule>()
         .register_with_federation(
             fake_api.clone(),
             fake_route_hints,
@@ -701,8 +727,12 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
-                    let gw_pay_op = gateway.gateway_pay_bolt11_invoice(payload).await?;
+                    let gw_pay_op = gateway
+                        .get_first_module::<GatewayClientModule>()
+                        .gateway_pay_bolt11_invoice(payload)
+                        .await?;
                     let mut gw_pay_sub = gateway
+                        .get_first_module::<GatewayClientModule>()
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
                         .into_stream();
