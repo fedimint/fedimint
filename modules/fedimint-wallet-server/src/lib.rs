@@ -474,6 +474,9 @@ impl ServerModule for Wallet {
                     dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
                 }
             }
+            WalletConsensusItem::Default { variant, .. } => {
+                bail!("Received wallet consensus item with unknown variant {variant}");
+            }
         }
 
         Ok(())
