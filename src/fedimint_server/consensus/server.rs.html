@@ -732,6 +732,9 @@
 <a href="#732" id="732">732</a>
 <a href="#733" id="733">733</a>
 <a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -756,6 +759,7 @@
 <span class="kw">use </span>fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 <span class="kw">use </span>fedimint_core::query::FilterMap;
 <span class="kw">use </span>fedimint_core::task::{sleep, spawn, RwLock, TaskGroup, TaskHandle};
+<span class="kw">use </span>fedimint_core::timing::TimeReporter;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{timing, PeerId};
 <span class="kw">use </span>futures::StreamExt;
@@ -1314,6 +1318,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
 
         <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span><span class="self">self</span>.modules.iter_modules() {
+            <span class="kw">let </span>_module_audit_timing =
+                TimeReporter::new(<span class="macro">format!</span>(<span class="string">&quot;audit module {module_instance_id}&quot;</span>));
             module
                 .audit(
                     <span class="kw-2">&amp;mut </span>dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
