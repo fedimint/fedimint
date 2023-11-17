@@ -538,6 +538,15 @@
 <a href="#538" id="538">538</a>
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -555,7 +564,7 @@
 <span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::{Amount, ParseAmountError, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
-    InternalPayState, LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment,
+    InternalPayState, LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment,
     PayType,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::ContractId;
@@ -739,9 +748,10 @@
             description,
             expiry_time,
         } =&gt; {
-            client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>(operation_id, invoice) = client
+            <span class="kw">let </span>(operation_id, invoice) = lightning_module
                 .create_bolt11_invoice(amount, description, expiry_time, ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(serde_json::to_value(LnInvoiceResponse {
@@ -751,7 +761,8 @@
             .unwrap())
         }
         ClientCmd::AwaitInvoice { operation_id } =&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+            <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
                 .subscribe_ln_receive(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_stream();
@@ -774,18 +785,19 @@
             </span>))
         }
         ClientCmd::LnPay { bolt11 } =&gt; {
-            client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>OutgoingLightningPayment {
                 payment_type,
                 contract_id,
                 fee,
-            } = client.pay_bolt11_invoice(bolt11).<span class="kw">await</span><span class="question-mark">?</span>;
+            } = lightning_module.pay_bolt11_invoice(bolt11).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">&quot;Gateway fee: {fee}&quot;</span>);
 
             <span class="kw">match </span>payment_type {
                 PayType::Internal(operation_id) =&gt; {
-                    <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+                    <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
                         .subscribe_internal_pay(operation_id)
                         .<span class="kw">await</span><span class="question-mark">?
                         </span>.into_stream();
@@ -816,7 +828,11 @@
                     }
                 }
                 PayType::Lightning(operation_id) =&gt; {
-                    <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_pay(operation_id).<span class="kw">await</span><span class="question-mark">?</span>.into_stream();
+                    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+                    <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
+                        .subscribe_ln_pay(operation_id)
+                        .<span class="kw">await</span><span class="question-mark">?
+                        </span>.into_stream();
 
                     <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                         <span class="kw">match </span>update {
@@ -843,13 +859,14 @@
             <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Lightning Payment failed&quot;</span>))
         }
         ClientCmd::ListGateways =&gt; {
-            <span class="kw">let </span>gateways = client.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>gateways = lightning_module.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if </span>gateways.is_empty() {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(serde_json::to_value(Vec::&lt;String&gt;::new()).unwrap());
             }
 
             <span class="kw">let </span><span class="kw-2">mut </span>gateways_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways);
-            <span class="kw">let </span>active_gateway = client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>active_gateway = lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
             gateways_json
                 .as_array_mut()
@@ -865,8 +882,9 @@
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateways_json).unwrap())
         }
         ClientCmd::SwitchGateway { gateway_id } =&gt; {
-            client.set_active_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>gateway = client.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            lightning_module.set_active_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>gateway = lightning_module.select_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
             gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
             <span class="prelude-val">Ok</span>(serde_json::to_value(gateway_json).unwrap())

@@ -185,6 +185,21 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::FederationInfo;
@@ -261,7 +276,7 @@
     <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
     <span class="kw">use </span>fedimint_core::Amount;
     <span class="kw">use </span>fedimint_ln_client::{
-        LightningClientExt, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+        LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>wasm_bindgen_test::wasm_bindgen_test;
@@ -275,14 +290,17 @@
     }
 
     <span class="kw">async fn </span>set_gateway(client: <span class="kw-2">&amp;</span>fedimint_client::ClientArc) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>gws = client.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>gws = lightning_module.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>gw_api = faucet::gateway_api().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_gw = gws
             .into_iter()
             .find(|x| x.info.api.to_string() == gw_api)
             .expect(<span class="string">&quot;no gateway with api&quot;</span>);
 
-        client.set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.info.gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        lightning_module
+            .set_active_gateway(<span class="kw-2">&amp;</span>lnd_gw.info.gateway_id)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -291,12 +309,16 @@
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         client.start_executor().<span class="kw">await</span>;
         set_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(opid, invoice) = client
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>(opid, invoice) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         faucet::pay_invoice(<span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_receive(opid).<span class="kw">await</span><span class="question-mark">?</span>.into_stream();
+        <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
+            .subscribe_ln_receive(opid)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_stream();
         <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
             <span class="kw">match </span>update {
                 LnReceiveState::Claimed =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
@@ -326,12 +348,16 @@
         <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         client.start_executor().<span class="kw">await</span>;
         set_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(opid, invoice) = client
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>(opid, invoice) = lightning_module
             .create_bolt11_invoice(Amount::from_sats(<span class="number">21</span>), <span class="string">&quot;test&quot;</span>.to_string(), <span class="prelude-val">None</span>, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         faucet::pay_invoice(<span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_receive(opid).<span class="kw">await</span><span class="question-mark">?</span>.into_stream();
+        <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
+            .subscribe_ln_receive(opid)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_stream();
 
         <span class="kw">loop </span>{
             <span class="kw">match </span>updates.next().<span class="kw">await </span>{
@@ -349,12 +375,16 @@
             payment_type,
             contract_id: <span class="kw">_</span>,
             fee: <span class="kw">_</span>,
-        } = client.pay_bolt11_invoice(bolt11.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        } = lightning_module.pay_bolt11_invoice(bolt11.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>PayType::Lightning(operation_id) = payment_type <span class="kw">else </span>{
             <span class="macro">unreachable!</span>(<span class="string">&quot;paying invoice over lightning&quot;</span>);
         };
 
-        <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_pay(operation_id).<span class="kw">await</span><span class="question-mark">?</span>.into_stream();
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
+            .subscribe_ln_pay(operation_id)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_stream();
 
         <span class="kw">loop </span>{
             <span class="kw">match </span>updates.next().<span class="kw">await </span>{

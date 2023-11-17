@@ -362,6 +362,13 @@
 <a href="#362" id="362">362</a>
 <a href="#363" id="363">363</a>
 <a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::time::Duration;
@@ -379,7 +386,7 @@
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredSummary};
 <span class="kw">use </span>fedimint_ln_client::{
-    LightningClientExt, LightningClientInit, LnPayState, OutgoingLightningPayment,
+    LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintClientModule, MintCommonInit, OOBNotes};
 <span class="kw">use </span>fedimint_wallet_client::WalletClientInit;
@@ -590,16 +597,20 @@
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>m = fedimint_core::time::now();
+    <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;();
     <span class="kw">let </span>OutgoingLightningPayment {
         payment_type,
         contract_id: <span class="kw">_</span>,
         fee: <span class="kw">_</span>,
-    } = client.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+    } = lightning_module.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>operation_id = <span class="kw">match </span>payment_type {
         fedimint_ln_client::PayType::Internal(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">&quot;Internal payment not expected&quot;</span>),
         fedimint_ln_client::PayType::Lightning(operation_id) =&gt; operation_id,
     };
-    <span class="kw">let </span><span class="kw-2">mut </span>updates = client.subscribe_ln_pay(operation_id).<span class="kw">await</span><span class="question-mark">?</span>.into_stream();
+    <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
+        .subscribe_ln_pay(operation_id)
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.into_stream();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
         <span class="macro">info!</span>(<span class="string">&quot;{prefix} LnPayState update: {update:?}&quot;</span>);
         <span class="kw">match </span>update {
@@ -657,7 +668,10 @@
 
 <span class="kw">pub async fn </span>switch_default_gateway(client: <span class="kw-2">&amp;</span>ClientArc, gateway_id: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>gateway_id = parse_gateway_id(gateway_id)<span class="question-mark">?</span>;
-    client.set_active_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await</span><span class="question-mark">?</span>;
+    client
+        .get_first_module::&lt;LightningClientModule&gt;()
+        .set_active_gateway(<span class="kw-2">&amp;</span>gateway_id)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 

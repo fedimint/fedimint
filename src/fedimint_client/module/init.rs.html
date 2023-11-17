@@ -201,6 +201,7 @@
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::marker;
 <span class="kw">use </span>std::sync::Arc;
@@ -380,6 +381,7 @@
                 context: ClientContext {
                     client: final_client,
                     module_instance_id: instance_id,
+                    module_db: db.with_prefix_module_id(instance_id),
                     _marker: marker::PhantomData,
                 },
             })

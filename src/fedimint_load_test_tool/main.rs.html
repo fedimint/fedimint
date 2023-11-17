@@ -1229,6 +1229,11 @@
 <a href="#1229" id="1229">1229</a>
 <a href="#1230" id="1230">1230</a>
 <a href="#1231" id="1231">1231</a>
+<a href="#1232" id="1232">1232</a>
+<a href="#1233" id="1233">1233</a>
+<a href="#1234" id="1234">1234</a>
+<a href="#1235" id="1235">1235</a>
+<a href="#1236" id="1236">1236</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1251,7 +1256,7 @@
 <span class="kw">use </span>fedimint_core::task::spawn;
 <span class="kw">use </span>fedimint_core::util::{BoxFuture, SafeUrl};
 <span class="kw">use </span>fedimint_core::Amount;
-<span class="kw">use </span>fedimint_ln_client::{LightningClientExt, LnReceiveState};
+<span class="kw">use </span>fedimint_ln_client::{LightningClientModule, LnReceiveState};
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -2098,7 +2103,8 @@
     <span class="kw">let </span>(operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-    client.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    lightning_module.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
@@ -2114,7 +2120,8 @@
     </span><span class="kw">let </span>(operation_id, invoice) =
         client_create_invoice(partner, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-    client.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    lightning_module.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(
         prefix,
         partner,
@@ -2127,7 +2134,8 @@
     </span><span class="kw">let </span>(operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-    partner.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>partner_lightning_module = partner.get_first_module::&lt;LightningClientModule&gt;();
+    partner_lightning_module.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
     wait_invoice_payment(prefix, client, operation_id, event_sender, pay_invoice_time).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
@@ -2139,7 +2147,8 @@
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
     pay_invoice_time: std::time::SystemTime,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>updates = client
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
         .subscribe_ln_receive(operation_id)
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_stream();
@@ -2169,7 +2178,8 @@
     event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;(fedimint_core::core::OperationId, Bolt11Invoice)&gt; {
     <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
-    <span class="kw">let </span>(operation_id, invoice) = client
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>(operation_id, invoice) = lightning_module
         .create_bolt11_invoice(invoice_amount, <span class="string">&quot;&quot;</span>.into(), <span class="prelude-val">None</span>, ())
         .<span class="kw">await</span><span class="question-mark">?</span>;
     event_sender.send(MetricEvent {
