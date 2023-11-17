@@ -525,7 +525,7 @@ impl WalletClientModule {
                 .create_withdraw_output(operation_id, address.clone(), amount, fee)
                 .await?;
             let tx_builder = TransactionBuilder::new()
-                .with_output(withdraw_output.into_dyn(self.client_ctx.module_instance_id()));
+                .with_output(self.client_ctx.make_client_output(withdraw_output));
 
             self.client_ctx
                 .finalize_and_submit_transaction(
@@ -556,7 +556,7 @@ impl WalletClientModule {
             .create_rbf_withdraw_output(operation_id, rbf.clone())
             .await?;
         let tx_builder = TransactionBuilder::new()
-            .with_output(withdraw_output.into_dyn(self.client_ctx.module_instance_id()));
+            .with_output(self.client_ctx.make_client_output(withdraw_output));
 
         self.client_ctx
             .finalize_and_submit_transaction(
