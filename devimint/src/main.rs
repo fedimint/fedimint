@@ -1210,7 +1210,10 @@ async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result
 enum Cmd {
     /// Spins up bitcoind, cln, lnd, electrs, esplora, and opens a channel
     /// between the two lightning nodes
-    ExternalDaemons,
+    ExternalDaemons {
+        #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
+        exec: Option<Vec<ffi::OsString>>,
+    },
     /// Spins up bitcoind, cln w/ gateway, lnd w/ gateway, a faucet, electrs,
     /// esplora, and a federation sized from FM_FED_SIZE it opens LN channel
     /// between the two nodes. it connects the gateways to the federation.
@@ -1222,7 +1225,10 @@ enum Cmd {
     /// Runs bitcoind, spins up FM_FED_SIZE worth of fedimints
     RunUi,
     /// `devfed` then spawns faucet for wasm tests
-    WasmTestSetup,
+    WasmTestSetup {
+        #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
+        exec: Option<Vec<ffi::OsString>>,
+    },
     /// `devfed` then checks the average latency of reissuing ecash, LN receive,
     /// and LN send
     LatencyTests,
@@ -1255,9 +1261,30 @@ enum RpcCmd {
 #[derive(Parser)]
 struct CommonArgs {
     #[clap(short = 'd', long, env = "FM_TEST_DIR")]
-    test_dir: PathBuf,
-    #[clap(short = 'n', long, env = "FM_FED_SIZE")]
+    test_dir: Option<PathBuf>,
+    #[clap(short = 'n', long, env = "FM_FED_SIZE", default_value = "4")]
     fed_size: usize,
+
+    #[clap(long, env = "FM_LINK_TEST_DIR")]
+    /// Create a link to the test dir under this path
+    link_test_dir: Option<PathBuf>,
+}
+
+impl CommonArgs {
+    pub fn mk_test_dir(&self) -> anyhow::Result<PathBuf> {
+        let path = self.test_dir();
+
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("Creating tmp directory {}", path.display()))?;
+
+        Ok(path)
+    }
+
+    pub fn test_dir(&self) -> PathBuf {
+        self.test_dir.clone().unwrap_or_else(|| {
+            std::env::temp_dir().join(format!("devimint-{}", std::process::id()))
+        })
+    }
 }
 
 #[derive(Parser)]
@@ -1324,7 +1351,8 @@ use std::str::FromStr;
 use fedimint_core::encoding::Decodable;
 
 async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
-    let globals = vars::Global::new(&arg.test_dir, arg.fed_size).await?;
+    let globals = vars::Global::new(&arg.mk_test_dir()?, arg.fed_size).await?;
+
     let log_file = fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -1338,6 +1366,10 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         .with_file(Some(log_file))
         .init()?;
 
+    if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
+        update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
+    }
+
     let mut env_string = String::new();
     for (var, value) in globals.vars() {
         debug!(var, value, "Env variable set");
@@ -1350,6 +1382,24 @@ async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     let task_group = TaskGroup::new();
     task_group.install_kill_handler();
     Ok((process_mgr, task_group))
+}
+
+async fn update_test_dir_link(link_test_dir: &Path, test_dir: &Path) -> Result<(), anyhow::Error> {
+    if let Ok(existing) = fs::read_link(link_test_dir).await {
+        if existing != test_dir {
+            info!(
+                old = %existing.display(),
+                new = %test_dir.display(),
+                link = %link_test_dir.display(),
+                "Updating exinst test dir link"
+            );
+
+            fs::remove_file(link_test_dir).await?;
+        }
+    }
+    info!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
+    fs::symlink(&test_dir, link_test_dir).await?;
+    Ok(())
 }
 
 async fn cleanup_on_exit<T>(
@@ -1384,11 +1434,15 @@ async fn cleanup_on_exit<T>(
 async fn handle_command() -> Result<()> {
     let args = Args::parse();
     match args.command {
-        Cmd::ExternalDaemons => {
+        Cmd::ExternalDaemons { exec } => {
             let (process_mgr, task_group) = setup(args.common).await?;
             let _daemons =
                 write_ready_file(&process_mgr.globals, external_daemons(&process_mgr).await)
                     .await?;
+            if let Some(exec) = exec {
+                exec_user_command(exec).await?;
+                task_group.shutdown();
+            }
             task_group.make_handle().make_shutdown_rx().await.await;
         }
         Cmd::DevFed { exec } => {
@@ -1413,32 +1467,39 @@ async fn handle_command() -> Result<()> {
             };
             cleanup_on_exit(main, task_group).await?;
         }
-        Cmd::WasmTestSetup => {
+        Cmd::WasmTestSetup { exec } => {
             let (process_mgr, task_group) = setup(args.common).await?;
-            let main = async move {
-                let dev_fed = dev_fed(&process_mgr).await?;
-                let (_, _, _, faucet) = tokio::try_join!(
-                    dev_fed.fed.pegin(10_000),
-                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
-                    dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
-                    async {
-                        let faucet = process_mgr.spawn_daemon("faucet", cmd!("faucet")).await?;
+            let main = {
+                let task_group = task_group.clone();
+                async move {
+                    let dev_fed = dev_fed(&process_mgr).await?;
+                    let (_, _, _, faucet) = tokio::try_join!(
+                        dev_fed.fed.pegin(10_000),
+                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
+                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                        async {
+                            let faucet = process_mgr.spawn_daemon("faucet", cmd!("faucet")).await?;
 
-                        poll("waiting for faucet startup", None, || async {
-                            TcpStream::connect(format!(
-                                "127.0.0.1:{}",
-                                process_mgr.globals.FM_PORT_FAUCET
-                            ))
-                            .await
-                            .context("connect to faucet")
-                            .map_err(ControlFlow::Continue)
-                        })
-                        .await?;
-                        Ok(faucet)
-                    },
-                )?;
-                let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
-                Ok::<_, anyhow::Error>((daemons, faucet))
+                            poll("waiting for faucet startup", None, || async {
+                                TcpStream::connect(format!(
+                                    "127.0.0.1:{}",
+                                    process_mgr.globals.FM_PORT_FAUCET
+                                ))
+                                .await
+                                .context("connect to faucet")
+                                .map_err(ControlFlow::Continue)
+                            })
+                            .await?;
+                            Ok(faucet)
+                        },
+                    )?;
+                    let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+                    if let Some(exec) = exec {
+                        exec_user_command(exec).await?;
+                        task_group.shutdown();
+                    }
+                    Ok::<_, anyhow::Error>((daemons, faucet))
+                }
             };
             cleanup_on_exit(main, task_group).await?;
         }
@@ -1522,7 +1583,7 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
     match rpc {
         RpcCmd::Env => {
-            let env_file = common.test_dir.join("env");
+            let env_file = common.test_dir().join("env");
             poll("env file", None, || async {
                 if fs::try_exists(&env_file)
                     .await
@@ -1540,7 +1601,7 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
             Ok(())
         }
         RpcCmd::Wait => {
-            let ready_file = common.test_dir.join("ready");
+            let ready_file = common.test_dir().join("ready");
             poll("ready file", 60, || async {
                 if fs::try_exists(&ready_file)
                     .await
@@ -1557,8 +1618,9 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
             print!("{env}");
 
             // Append invite code to devimint env
-            let env_file = common.test_dir.join("env");
-            let invite_file = common.test_dir.join("cfg/invite-code");
+            let test_dir = &common.test_dir();
+            let env_file = test_dir.join("env");
+            let invite_file = test_dir.join("cfg/invite-code");
             if fs::try_exists(&env_file).await.ok().unwrap_or(false)
                 && fs::try_exists(&invite_file).await.ok().unwrap_or(false)
             {
@@ -1566,7 +1628,7 @@ async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
                 let mut env_string = fs::read_to_string(&env_file).await?;
                 writeln!(env_string, r#"export FM_INVITE_CODE="{invite}""#)?;
                 std::env::set_var("FM_INVITE_CODE", invite);
-                write_overwrite_async(common.test_dir.join("env"), env_string).await?;
+                write_overwrite_async(env_file, env_string).await?;
             }
 
             Ok(())

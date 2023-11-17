@@ -4,15 +4,19 @@ set -euo pipefail
 
 export RUST_LOG="${RUST_LOG:-info}"
 
-source ./scripts/lib.sh
-source ./scripts/build.sh
+source scripts/_common.sh
+build_workspace
+add_target_dir_to_path
+make_fm_test_marker
 
-devimint wasm-test-setup &
-auto_kill_last_cmd
 
-eval "$(devimint env)"
-devimint wait
+function run_tests() {
+  set -euo pipefail
 
-echo Funding LND gateway e-cash wallet ...
+  echo Funding LND gateway e-cash wallet ...
 
-WASM_BINDGEN_TEST_TIMEOUT=120 wasm-pack test --firefox --headless fedimint-wasm-tests
+  WASM_BINDGEN_TEST_TIMEOUT=120 wasm-pack test --firefox --headless fedimint-wasm-tests
+}
+export -f run_tests
+
+devimint wasm-test-setup --exec bash -c run_tests
