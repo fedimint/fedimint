@@ -71,18 +71,10 @@ pub struct OutgoingContractAccount {
 
 impl OutgoingContractAccount {
     pub fn claim(&self, preimage: Preimage) -> LightningInput {
-        LightningInput {
-            contract_id: self.contract.contract_id(),
-            amount: self.amount,
-            witness: Some(preimage),
-        }
+        LightningInput::new_v0(self.contract.contract_id(), self.amount, Some(preimage))
     }
 
     pub fn refund(&self) -> LightningInput {
-        LightningInput {
-            contract_id: self.contract.contract_id(),
-            amount: self.amount,
-            witness: None,
-        }
+        LightningInput::new_v0(self.contract.contract_id(), self.amount, None)
     }
 }

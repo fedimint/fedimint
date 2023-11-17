@@ -805,10 +805,10 @@ impl GatewayPayCancelContract {
             &contract.contract.cancellation_message().into(),
             &context.redeem_key,
         );
-        let cancel_output = LightningOutput::CancelOutgoing {
-            contract: contract.contract.contract_id(),
-            gateway_signature: cancel_signature,
-        };
+        let cancel_output = LightningOutput::new_v0_cancel_outgoing(
+            contract.contract.contract_id(),
+            cancel_signature,
+        );
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
             output: cancel_output,
             state_machines: Arc::new(|_, _| vec![]),

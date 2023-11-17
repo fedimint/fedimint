@@ -48,7 +48,7 @@ use fedimint_ln_common::contracts::{
 use fedimint_ln_common::{
     ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningModuleTypes,
-    LightningOutput,
+    LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use incoming::IncomingSmError;
@@ -308,6 +308,8 @@ impl ClientModule for LightningClientModule {
         &self,
         input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<TransactionItemAmount> {
+        let input = input.maybe_v0_ref()?;
+
         Some(TransactionItemAmount {
             amount: input.amount,
             fee: self.cfg.fee_consensus.contract_input,
@@ -318,12 +320,14 @@ impl ClientModule for LightningClientModule {
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<TransactionItemAmount> {
+        let output = output.maybe_v0_ref()?;
+
         let amt = match output {
-            LightningOutput::Contract(account_output) => TransactionItemAmount {
+            LightningOutputV0::Contract(account_output) => TransactionItemAmount {
                 amount: account_output.amount,
                 fee: self.cfg.fee_consensus.contract_output,
             },
-            LightningOutput::Offer(_) | LightningOutput::CancelOutgoing { .. } => {
+            LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
                 TransactionItemAmount {
                     amount: Amount::ZERO,
                     fee: Amount::ZERO,
@@ -428,7 +432,7 @@ impl LightningClientModule {
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
     ) -> anyhow::Result<(
-        ClientOutput<LightningOutput, LightningClientStateMachines>,
+        ClientOutput<LightningOutputV0, LightningClientStateMachines>,
         ContractId,
     )> {
         let federation_currency = network_to_currency(self.cfg.network);
@@ -512,7 +516,7 @@ impl LightningClientModule {
             )]
         });
 
-        let ln_output = LightningOutput::Contract(ContractOutput {
+        let ln_output = LightningOutputV0::Contract(ContractOutput {
             amount: contract_amount,
             contract: Contract::Outgoing(contract),
         });
@@ -534,7 +538,7 @@ impl LightningClientModule {
         operation_id: OperationId,
         invoice: Bolt11Invoice,
     ) -> anyhow::Result<(
-        ClientOutput<LightningOutput, LightningClientStateMachines>,
+        ClientOutput<LightningOutputV0, LightningClientStateMachines>,
         ContractId,
     )> {
         let payment_hash = invoice.payment_hash();
@@ -554,7 +558,7 @@ impl LightningClientModule {
         )
         .await?;
 
-        let client_output = ClientOutput::<LightningOutput, LightningClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutputV0, LightningClientStateMachines> {
             output: incoming_output,
             state_machines: Arc::new(move |txid, _| {
                 vec![LightningClientStateMachines::InternalPay(
@@ -748,7 +752,7 @@ impl LightningClientModule {
             )]
         });
 
-        let ln_output = LightningOutput::Offer(IncomingContractOffer {
+        let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
@@ -867,7 +871,7 @@ impl LightningClientModule {
             )
             .await;
 
-        let (pay_type, output, contract_id) = if is_internal_payment {
+        let (pay_type, client_output, contract_id) = if is_internal_payment {
             let (output, contract_id) = self
                 .create_incoming_output(operation_id, invoice.clone())
                 .await?;
@@ -897,8 +901,8 @@ impl LightningClientModule {
 
         // TODO: return fee from create_outgoing_output or even let user supply
         // it/bounds for it
-        let fee = match &output.output {
-            LightningOutput::Contract(contract) => {
+        let fee = match &client_output.output {
+            LightningOutputV0::Contract(contract) => {
                 let fee_msat = contract
                     .amount
                     .msats
@@ -912,8 +916,14 @@ impl LightningClientModule {
             }
             _ => unreachable!("User client will only create contract outputs on spend"),
         };
-        let tx = TransactionBuilder::new()
-            .with_output(output.into_dyn(self.client_ctx.module_instance_id()));
+
+        let dyn_client_output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            state_machines: client_output.state_machines,
+        }
+        .into_dyn(self.client_ctx.module_instance_id());
+
+        let tx = TransactionBuilder::new().with_output(dyn_client_output);
         let operation_meta_gen = |txid, change| LightningOperationMeta::Pay {
             out_point: OutPoint { txid, out_idx: 0 },
             invoice: invoice.clone(),
@@ -1269,7 +1279,7 @@ pub async fn create_incoming_contract_output(
     payment_hash: sha256::Hash,
     amount_msat: Amount,
     redeem_key: secp256k1::KeyPair,
-) -> Result<(LightningOutput, ContractId), IncomingSmError> {
+) -> Result<(LightningOutputV0, ContractId), IncomingSmError> {
     let offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).await?;
     let our_pub_key = secp256k1::XOnlyPublicKey::from_keypair(&redeem_key).0;
     let contract = IncomingContract {
@@ -1279,7 +1289,7 @@ pub async fn create_incoming_contract_output(
         gateway_key: our_pub_key,
     };
     let contract_id = contract.contract_id();
-    let incoming_output = LightningOutput::Contract(ContractOutput {
+    let incoming_output = LightningOutputV0::Contract(ContractOutput {
         amount: offer.amount,
         contract: Contract::Incoming(contract),
     });

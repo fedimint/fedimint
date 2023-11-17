@@ -50,7 +50,8 @@ use fedimint_ln_common::db::{
 use fedimint_ln_common::{
     ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
     LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
-    LightningOutput, LightningOutputError, LightningOutputOutcome,
+    LightningOutput, LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0,
+    LightningOutputV0,
 };
 use fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
@@ -153,7 +154,7 @@ impl ModuleInit for LightningInit {
                         dbtx,
                         ContractUpdateKeyPrefix,
                         ContractUpdateKey,
-                        LightningOutputOutcome,
+                        LightningOutputOutcomeV0,
                         lightning,
                         "Contract Updates"
                     );
@@ -508,8 +509,9 @@ impl ServerModule for Lightning {
                     .get_value(&ContractUpdateKey(out_point))
                     .await
                     .expect("outcome was created on funding");
+
                 let incoming_contract_outcome_preimage = match &mut outcome {
-                    LightningOutputOutcome::Contract {
+                    LightningOutputOutcomeV0::Contract {
                         outcome: ContractOutcome::Incoming(decryption_outcome),
                         ..
                     } => decryption_outcome,
@@ -536,6 +538,9 @@ impl ServerModule for Lightning {
                 dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
                     .await;
             }
+            LightningConsensusItem::Default { variant, .. } => {
+                bail!("Unknown lightning consensus item received, variant={variant}");
+            }
         }
 
         Ok(())
@@ -546,6 +551,8 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b LightningInput,
     ) -> Result<InputMeta, LightningInputError> {
+        let input = input.ensure_v0_ref()?;
+
         let mut account = dbtx
             .get_value(&ContractKey(input.contract_id))
             .await
@@ -629,8 +636,10 @@ impl ServerModule for Lightning {
         output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, LightningOutputError> {
+        let output = output.ensure_v0_ref()?;
+
         match output {
-            LightningOutput::Contract(contract) => {
+            LightningOutputV0::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
                 if let Contract::Incoming(incoming) = &contract.contract {
                     let offer = dbtx
@@ -694,7 +703,7 @@ impl ServerModule for Lightning {
 
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
-                    &LightningOutputOutcome::Contract {
+                    &LightningOutputOutcomeV0::Contract {
                         id: contract.contract.contract_id(),
                         outcome: contract.contract.to_outcome(),
                     },
@@ -728,7 +737,7 @@ impl ServerModule for Lightning {
                     fee: self.cfg.consensus.fee_consensus.contract_output,
                 })
             }
-            LightningOutput::Offer(offer) => {
+            LightningOutputV0::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
                     return Err(LightningOutputError::InvalidEncryptedPreimage);
                 }
@@ -747,7 +756,7 @@ impl ServerModule for Lightning {
 
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
-                    &LightningOutputOutcome::Offer { id: offer.id() },
+                    &LightningOutputOutcomeV0::Offer { id: offer.id() },
                 )
                 .await;
 
@@ -759,7 +768,7 @@ impl ServerModule for Lightning {
 
                 Ok(TransactionItemAmount::ZERO)
             }
-            LightningOutput::CancelOutgoing {
+            LightningOutputV0::CancelOutgoing {
                 contract,
                 gateway_signature,
             } => {
@@ -806,7 +815,7 @@ impl ServerModule for Lightning {
 
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
-                    &LightningOutputOutcome::CancelOutgoingContract { id: *contract },
+                    &LightningOutputOutcomeV0::CancelOutgoingContract { id: *contract },
                 )
                 .await;
 
@@ -822,7 +831,9 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransactionRef<'_>,
         out_point: OutPoint,
     ) -> Option<LightningOutputOutcome> {
-        dbtx.get_value(&ContractUpdateKey(out_point)).await
+        dbtx.get_value(&ContractUpdateKey(out_point))
+            .await
+            .map(LightningOutputOutcome::V0)
     }
 
     async fn audit(
@@ -1212,7 +1223,7 @@ mod tests {
             encrypted_preimage: encrypted_preimage.clone(),
             expiry_time: None,
         };
-        let output = LightningOutput::Offer(offer);
+        let output = LightningOutput::new_v0_offer(offer);
         let out_point = OutPoint {
             txid: TransactionId::all_zeros(),
             out_idx: 0,
@@ -1237,7 +1248,7 @@ mod tests {
             encrypted_preimage,
             expiry_time: None,
         };
-        let output2 = LightningOutput::Offer(offer2);
+        let output2 = LightningOutput::new_v0_offer(offer2);
         let out_point2 = OutPoint {
             txid: TransactionId::all_zeros(),
             out_idx: 1,
@@ -1283,11 +1294,7 @@ mod tests {
         let contract_id = funded_incoming_contract.contract_id();
         let audit_key = LightningAuditItemKey::from_funded_contract(&funded_incoming_contract);
         let amount = Amount { msats: 1000 };
-        let lightning_input = LightningInput {
-            contract_id,
-            amount,
-            witness: None,
-        };
+        let lightning_input = LightningInput::new_v0(contract_id, amount, None);
 
         module_dbtx.insert_new_entry(&audit_key, &amount).await;
         module_dbtx
@@ -1344,11 +1351,7 @@ mod tests {
         let contract_id = outgoing_contract.contract_id();
         let audit_key = LightningAuditItemKey::from_funded_contract(&outgoing_contract);
         let amount = Amount { msats: 1000 };
-        let lightning_input = LightningInput {
-            contract_id,
-            amount,
-            witness: Some(preimage.clone()),
-        };
+        let lightning_input = LightningInput::new_v0(contract_id, amount, Some(preimage.clone()));
 
         module_dbtx.insert_new_entry(&audit_key, &amount).await;
         module_dbtx
@@ -1411,7 +1414,7 @@ mod fedimint_migration_tests {
         LightningGatewayKey, LightningGatewayKeyPrefix, OfferKey, OfferKeyPrefix,
         ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
     };
-    use fedimint_ln_common::{LightningCommonInit, LightningGateway};
+    use fedimint_ln_common::{LightningCommonInit, LightningGateway, LightningOutputOutcomeV0};
     use fedimint_testing::db::{
         prepare_db_migration_snapshot, validate_migrations, BYTE_32, BYTE_8, STRING_64,
     };
@@ -1423,10 +1426,7 @@ mod fedimint_migration_tests {
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
 
-    use crate::{
-        ContractAccount, Lightning, LightningGatewayRegistration, LightningInit,
-        LightningOutputOutcome,
-    };
+    use crate::{ContractAccount, Lightning, LightningGatewayRegistration, LightningInit};
 
     /// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -1492,7 +1492,7 @@ mod fedimint_migration_tests {
             txid: TransactionId::from_slice(&BYTE_32).unwrap(),
             out_idx: 0,
         });
-        let lightning_output_outcome = LightningOutputOutcome::Offer {
+        let lightning_output_outcome = LightningOutputOutcomeV0::Offer {
             id: OfferId::from_str(STRING_64).unwrap(),
         };
         dbtx.insert_new_entry(&contract_update_key, &lightning_output_outcome)

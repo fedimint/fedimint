@@ -25,7 +25,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{plugin_types_trait_impl_common, Amount};
+use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -37,8 +37,28 @@ use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, Preimage
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
+extensible_associated_module_type!(
+    LightningInput,
+    LightningInputV0,
+    UnknownLightningInputVariantError
+);
+
+impl LightningInput {
+    pub fn new_v0(
+        contract_id: ContractId,
+        amount: Amount,
+        witness: Option<Preimage>,
+    ) -> LightningInput {
+        LightningInput::V0(LightningInputV0 {
+            contract_id,
+            amount,
+            witness,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct LightningInput {
+pub struct LightningInputV0 {
     pub contract_id: contracts::ContractId,
     /// While for now we only support spending the entire contract we need to
     /// avoid
@@ -49,13 +69,39 @@ pub struct LightningInput {
     pub witness: Option<Preimage>,
 }
 
-impl std::fmt::Display for LightningInput {
+impl std::fmt::Display for LightningInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Lightning Contract {} with amount {}",
             self.contract_id, self.amount
         )
+    }
+}
+
+extensible_associated_module_type!(
+    LightningOutput,
+    LightningOutputV0,
+    UnknownLightningOutputVariantError
+);
+
+impl LightningOutput {
+    pub fn new_v0_contract(contract: ContractOutput) -> LightningOutput {
+        LightningOutput::V0(LightningOutputV0::Contract(contract))
+    }
+
+    pub fn new_v0_offer(offer: contracts::incoming::IncomingContractOffer) -> LightningOutput {
+        LightningOutput::V0(LightningOutputV0::Offer(offer))
+    }
+
+    pub fn new_v0_cancel_outgoing(
+        contract: ContractId,
+        gateway_signature: secp256k1::schnorr::Signature,
+    ) -> LightningOutput {
+        LightningOutput::V0(LightningOutputV0::CancelOutgoing {
+            contract,
+            gateway_signature,
+        })
     }
 }
 
@@ -72,7 +118,7 @@ impl std::fmt::Display for LightningInput {
 /// allow 0-input, 1-output transactions for that to allow users to receive
 /// their first notes via LN without already having notes.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum LightningOutput {
+pub enum LightningOutputV0 {
     /// Fund contract
     Contract(ContractOutput),
     /// Create incoming contract offer
@@ -86,10 +132,10 @@ pub enum LightningOutput {
     },
 }
 
-impl std::fmt::Display for LightningOutput {
+impl std::fmt::Display for LightningOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LightningOutput::Contract(ContractOutput { amount, contract }) => match contract {
+            LightningOutputV0::Contract(ContractOutput { amount, contract }) => match contract {
                 Contract::Incoming(incoming) => {
                     write!(
                         f,
@@ -105,10 +151,10 @@ impl std::fmt::Display for LightningOutput {
                     )
                 }
             },
-            LightningOutput::Offer(offer) => {
+            LightningOutputV0::Offer(offer) => {
                 write!(f, "LN offer for {} with hash {}", offer.amount, offer.hash)
             }
-            LightningOutput::CancelOutgoing { contract, .. } => {
+            LightningOutputV0::CancelOutgoing { contract, .. } => {
                 write!(f, "LN outgoing contract cancellation {contract}")
             }
         }
@@ -127,8 +173,28 @@ pub struct ContractAccount {
     pub contract: contracts::FundedContract,
 }
 
+extensible_associated_module_type!(
+    LightningOutputOutcome,
+    LightningOutputOutcomeV0,
+    UnknownLightningOutputOutcomeVariantError
+);
+
+impl LightningOutputOutcome {
+    pub fn new_v0_contract(id: ContractId, outcome: ContractOutcome) -> LightningOutputOutcome {
+        LightningOutputOutcome::V0(LightningOutputOutcomeV0::Contract { id, outcome })
+    }
+
+    pub fn new_v0_offer(id: OfferId) -> LightningOutputOutcome {
+        LightningOutputOutcome::V0(LightningOutputOutcomeV0::Offer { id })
+    }
+
+    pub fn new_v0_cancel_outgoing(id: ContractId) -> LightningOutputOutcome {
+        LightningOutputOutcome::V0(LightningOutputOutcomeV0::CancelOutgoingContract { id })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum LightningOutputOutcome {
+pub enum LightningOutputOutcomeV0 {
     Contract {
         id: ContractId,
         outcome: ContractOutcome,
@@ -141,26 +207,26 @@ pub enum LightningOutputOutcome {
     },
 }
 
-impl LightningOutputOutcome {
+impl LightningOutputOutcomeV0 {
     pub fn is_permanent(&self) -> bool {
         match self {
-            LightningOutputOutcome::Contract { id: _, outcome } => outcome.is_permanent(),
-            LightningOutputOutcome::Offer { .. } => true,
-            LightningOutputOutcome::CancelOutgoingContract { .. } => true,
+            LightningOutputOutcomeV0::Contract { id: _, outcome } => outcome.is_permanent(),
+            LightningOutputOutcomeV0::Offer { .. } => true,
+            LightningOutputOutcomeV0::CancelOutgoingContract { .. } => true,
         }
     }
 }
 
-impl std::fmt::Display for LightningOutputOutcome {
+impl std::fmt::Display for LightningOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LightningOutputOutcome::Contract { id, .. } => {
+            LightningOutputOutcomeV0::Contract { id, .. } => {
                 write!(f, "LN Contract {id}")
             }
-            LightningOutputOutcome::Offer { id } => {
+            LightningOutputOutcomeV0::Offer { id } => {
                 write!(f, "LN Offer {id}")
             }
-            LightningOutputOutcome::CancelOutgoingContract { id: contract_id } => {
+            LightningOutputOutcomeV0::CancelOutgoingContract { id: contract_id } => {
                 write!(f, "LN Outgoing Contract Cancellation {contract_id}")
             }
         }
@@ -249,6 +315,11 @@ pub struct LightningGateway {
 pub enum LightningConsensusItem {
     DecryptPreimage(ContractId, PreimageDecryptionShare),
     BlockCount(u64),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 impl std::fmt::Display for LightningConsensusItem {
@@ -258,6 +329,9 @@ impl std::fmt::Display for LightningConsensusItem {
                 write!(f, "LN Decryption Share for contract {contract_id}")
             }
             LightningConsensusItem::BlockCount(count) => write!(f, "LN block count {count}"),
+            LightningConsensusItem::Default { variant, .. } => {
+                write!(f, "Unknown LN CI variant={variant}")
+            }
         }
     }
 }
@@ -457,6 +531,8 @@ pub enum LightningInputError {
     InvalidPreimage,
     #[error("Incoming contract not ready to be spent yet, decryption in progress")]
     ContractNotReady,
+    #[error("The lightning input version is not supported by this federation")]
+    UnknownInputVariant(#[from] UnknownLightningInputVariantError),
 }
 
 #[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
@@ -477,6 +553,8 @@ pub enum LightningOutputError {
     NotOutgoingContract,
     #[error("Cancellation request wasn't properly signed")]
     InvalidCancellationSignature,
+    #[error("The lightning output version is not supported by this federation")]
+    UnknownOutputVariant(#[from] UnknownLightningOutputVariantError),
 }
 
 pub async fn ln_operation(
