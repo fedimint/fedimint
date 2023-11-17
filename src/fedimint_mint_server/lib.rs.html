@@ -1232,7 +1232,7 @@
                 amount: input.amount,
                 fee: <span class="self">self</span>.cfg.consensus.fee_consensus.note_spend_abs,
             },
-            pub_keys: <span class="macro">vec!</span>[<span class="kw-2">*</span>input.note.spend_key()],
+            pub_key: <span class="kw-2">*</span>input.note.spend_key(),
         })
     }
 

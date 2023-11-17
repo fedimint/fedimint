@@ -565,7 +565,7 @@
                 fee: <span class="self">self</span>.cfg.consensus.tx_fee,
             },
             <span class="comment">// IMPORTANT: include the pubkey to validate the user signed this tx
-            </span>pub_keys: <span class="macro">vec!</span>[input.account],
+            </span>pub_key: input.account,
         })
     }
 

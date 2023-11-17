@@ -2335,7 +2335,7 @@
                 amount: input.amount,
                 fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_input,
             },
-            pub_keys: <span class="macro">vec!</span>[pub_key],
+            pub_key,
         })
     }
 
@@ -3025,9 +3025,9 @@
                 amount,
                 fee: Amount { msats: <span class="number">0 </span>},
             },
-            pub_keys: <span class="macro">vec!</span>[preimage
+            pub_key: preimage
                 .to_public_key()
-                .expect(<span class="string">&quot;should create Schnorr pubkey from preimage&quot;</span>)],
+                .expect(<span class="string">&quot;should create Schnorr pubkey from preimage&quot;</span>),
         };
 
         <span class="macro">assert_eq!</span>(processed_input_meta, expected_input_meta);
@@ -3087,7 +3087,7 @@
                 amount,
                 fee: Amount { msats: <span class="number">0 </span>},
             },
-            pub_keys: <span class="macro">vec!</span>[gateway_key],
+            pub_key: gateway_key,
         };
 
         <span class="macro">assert_eq!</span>(processed_input_meta, expected_input_meta);
