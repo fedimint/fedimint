@@ -133,8 +133,15 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs::File;
-<span class="kw">use </span>std::io;
+<span class="kw">use </span>std::{env, io};
 
 <span class="kw">use </span>tracing_subscriber::layer::SubscriberExt;
 <span class="kw">use </span>tracing_subscriber::util::SubscriberInitExt;
@@ -203,8 +210,15 @@
     <span class="doccomment">/// Initialize the logging, must be called for tracing to begin
     </span><span class="kw">pub fn </span>init(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">use </span>tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
-        <span class="kw">let </span>filter_layer =
-            EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>));
+
+        <span class="kw">let </span>var = env::var(tracing_subscriber::EnvFilter::DEFAULT_ENV).unwrap_or_default();
+        <span class="kw">let </span>filter_layer = EnvFilter::builder().parse(<span class="macro">format!</span>(
+            <span class="comment">// We prefix everything with a default general log level and
+            // good per-module specific default. User provided RUST_LOG
+            // can override one or both
+            </span><span class="string">&quot;info,{},{},{}&quot;</span>,
+            <span class="string">&quot;jsonrpsee_core::client::async_client=off&quot;</span>, <span class="string">&quot;AlephBFT-=error&quot;</span>, var
+        ))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>fmt_writer = <span class="kw">if let </span><span class="prelude-val">Some</span>(file) = <span class="self">self</span>.with_file.take() {
             BoxMakeWriter::new(Tee::new(io::stderr, file))
