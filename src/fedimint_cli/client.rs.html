@@ -1014,11 +1014,11 @@
                     .context(<span class="string">&quot;No module with this kind found&quot;</span>)<span class="question-mark">?</span>,
             };
 
-            <span class="kw">let </span>module_client = client
+            client
                 .get_module_client_dyn(module_instance_id)
-                .context(<span class="string">&quot;Module not found&quot;</span>)<span class="question-mark">?</span>;
-
-            module_client.handle_cli_command(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>args).<span class="kw">await
+                .context(<span class="string">&quot;Module not found&quot;</span>)<span class="question-mark">?
+                </span>.handle_cli_command(<span class="kw-2">&amp;</span>args)
+                .<span class="kw">await
         </span>}
         ClientCmd::Config =&gt; {
             <span class="kw">let </span>config = client.get_config_json();
