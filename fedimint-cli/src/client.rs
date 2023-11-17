@@ -474,11 +474,11 @@ pub async fn handle_command(
                     .context("No module with this kind found")?,
             };
 
-            let module_client = client
+            client
                 .get_module_client_dyn(module_instance_id)
-                .context("Module not found")?;
-
-            module_client.handle_cli_command(&client, &args).await
+                .context("Module not found")?
+                .handle_cli_command(&args)
+                .await
         }
         ClientCmd::Config => {
             let config = client.get_config_json();

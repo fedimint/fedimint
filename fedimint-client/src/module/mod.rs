@@ -249,7 +249,6 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     async fn handle_cli_command(
         &self,
-        _client: &ClientArc,
         _args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
         Err(anyhow::format_err!(
@@ -475,11 +474,8 @@ pub trait IClientModule: Debug {
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
 
-    async fn handle_cli_command(
-        &self,
-        client: &ClientArc,
-        args: &[ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value>;
+    async fn handle_cli_command(&self, args: &[ffi::OsString])
+        -> anyhow::Result<serde_json::Value>;
 
     fn input_amount(&self, input: &DynInput) -> Option<TransactionItemAmount>;
 
@@ -564,10 +560,9 @@ where
 
     async fn handle_cli_command(
         &self,
-        client: &ClientArc,
         args: &[ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
-        <T as ClientModule>::handle_cli_command(self, client, args).await
+        <T as ClientModule>::handle_cli_command(self, args).await
     }
 
     fn input_amount(&self, input: &DynInput) -> Option<TransactionItemAmount> {
