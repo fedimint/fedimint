@@ -79,6 +79,32 @@ impl std::fmt::Display for LightningInputV0 {
     }
 }
 
+extensible_associated_module_type!(
+    LightningOutput,
+    LightningOutputV0,
+    UnknownLightningOutputVariantError
+);
+
+impl LightningOutput {
+    pub fn new_v0_contract(contract: ContractOutput) -> LightningOutput {
+        LightningOutput::V0(LightningOutputV0::Contract(contract))
+    }
+
+    pub fn new_v0_offer(offer: contracts::incoming::IncomingContractOffer) -> LightningOutput {
+        LightningOutput::V0(LightningOutputV0::Offer(offer))
+    }
+
+    pub fn new_v0_cancel_outgoing(
+        contract: ContractId,
+        gateway_signature: secp256k1::schnorr::Signature,
+    ) -> LightningOutput {
+        LightningOutput::V0(LightningOutputV0::CancelOutgoing {
+            contract,
+            gateway_signature,
+        })
+    }
+}
+
 /// Represents an output of the Lightning module.
 ///
 /// There are three sub-types:
@@ -92,7 +118,7 @@ impl std::fmt::Display for LightningInputV0 {
 /// allow 0-input, 1-output transactions for that to allow users to receive
 /// their first notes via LN without already having notes.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum LightningOutput {
+pub enum LightningOutputV0 {
     /// Fund contract
     Contract(ContractOutput),
     /// Create incoming contract offer
@@ -106,10 +132,10 @@ pub enum LightningOutput {
     },
 }
 
-impl std::fmt::Display for LightningOutput {
+impl std::fmt::Display for LightningOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LightningOutput::Contract(ContractOutput { amount, contract }) => match contract {
+            LightningOutputV0::Contract(ContractOutput { amount, contract }) => match contract {
                 Contract::Incoming(incoming) => {
                     write!(
                         f,
@@ -125,10 +151,10 @@ impl std::fmt::Display for LightningOutput {
                     )
                 }
             },
-            LightningOutput::Offer(offer) => {
+            LightningOutputV0::Offer(offer) => {
                 write!(f, "LN offer for {} with hash {}", offer.amount, offer.hash)
             }
-            LightningOutput::CancelOutgoing { contract, .. } => {
+            LightningOutputV0::CancelOutgoing { contract, .. } => {
                 write!(f, "LN outgoing contract cancellation {contract}")
             }
         }
@@ -499,6 +525,8 @@ pub enum LightningOutputError {
     NotOutgoingContract,
     #[error("Cancellation request wasn't properly signed")]
     InvalidCancellationSignature,
+    #[error("The lightning output version is not supported by this federation")]
+    UnknownOutputVariant(#[from] UnknownLightningOutputVariantError),
 }
 
 pub async fn ln_operation(

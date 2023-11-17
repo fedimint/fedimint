@@ -526,7 +526,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             let amount = sats(100);
             let preimage = sha256(&[0]);
-            let ln_output = LightningOutput::Offer(IncomingContractOffer {
+            let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
                 amount,
                 hash: *invoice.payment_hash(),
                 encrypted_preimage: EncryptedPreimage::new(

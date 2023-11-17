@@ -33,7 +33,7 @@ use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     ln_operation, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, KIND,
+    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
@@ -301,10 +301,17 @@ impl GatewayClientExt for ClientArc {
     async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
         let gateway = self.get_first_module::<GatewayClientModule>();
-        let (operation_id, output) = gateway
+        let (operation_id, client_output) = gateway
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
+
+        let dyn_client_output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            state_machines: client_output.state_machines,
+        }
+        .into_dyn(gateway.id);
+
+        let tx = TransactionBuilder::new().with_output(dyn_client_output);
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
@@ -371,10 +378,17 @@ impl GatewayClientExt for ClientArc {
     ) -> anyhow::Result<OperationId> {
         debug!("Handling direct swap {swap_params:?}");
         let gateway = self.get_first_module::<GatewayClientModule>();
-        let (operation_id, output) = gateway
+        let (operation_id, client_output) = gateway
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
-        let tx = TransactionBuilder::new().with_output(output.into_dyn(gateway.id));
+
+        let dyn_client_output = ClientOutput {
+            output: LightningOutput::V0(client_output.output),
+            state_machines: client_output.state_machines,
+        }
+        .into_dyn(gateway.id);
+
+        let tx = TransactionBuilder::new().with_output(dyn_client_output);
         let operation_meta_gen = |_: TransactionId, _: Vec<OutPoint>| GatewayMeta::Receive;
         self.finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
@@ -524,12 +538,14 @@ impl ClientModule for GatewayClientModule {
         &self,
         output: &<Self::Common as fedimint_core::module::ModuleCommon>::Output,
     ) -> Option<TransactionItemAmount> {
+        let output = output.maybe_v0_ref()?;
+
         let amt = match output {
-            LightningOutput::Contract(account_output) => TransactionItemAmount {
+            LightningOutputV0::Contract(account_output) => TransactionItemAmount {
                 amount: account_output.amount,
                 fee: self.cfg.fee_consensus.contract_output,
             },
-            LightningOutput::Offer(_) | LightningOutput::CancelOutgoing { .. } => {
+            LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
                 TransactionItemAmount {
                     amount: Amount::ZERO,
                     fee: Amount::ZERO,
@@ -582,7 +598,7 @@ impl GatewayClientModule {
     ) -> Result<
         (
             OperationId,
-            ClientOutput<LightningOutput, GatewayClientStateMachines>,
+            ClientOutput<LightningOutputV0, GatewayClientStateMachines>,
         ),
         IncomingSmError,
     > {
@@ -595,7 +611,7 @@ impl GatewayClientModule {
         )
         .await?;
 
-        let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
             output: incoming_output,
             state_machines: Arc::new(move |txid, _| {
                 vec![
@@ -627,7 +643,7 @@ impl GatewayClientModule {
     ) -> Result<
         (
             OperationId,
-            ClientOutput<LightningOutput, GatewayClientStateMachines>,
+            ClientOutput<LightningOutputV0, GatewayClientStateMachines>,
         ),
         IncomingSmError,
     > {
@@ -641,7 +657,7 @@ impl GatewayClientModule {
         )
         .await?;
 
-        let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
+        let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
             output: incoming_output,
             state_machines: Arc::new(move |txid, _| {
                 vec![GatewayClientStateMachines::Receive(IncomingStateMachine {

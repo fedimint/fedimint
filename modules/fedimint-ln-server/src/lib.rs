@@ -50,7 +50,7 @@ use fedimint_ln_common::db::{
 use fedimint_ln_common::{
     ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
     LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
-    LightningOutput, LightningOutputError, LightningOutputOutcome,
+    LightningOutput, LightningOutputError, LightningOutputOutcome, LightningOutputV0,
 };
 use fedimint_metrics::{
     histogram_opts, lazy_static, opts, prometheus, register_histogram, register_int_counter,
@@ -631,8 +631,10 @@ impl ServerModule for Lightning {
         output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, LightningOutputError> {
+        let output = output.ensure_v0_ref()?;
+
         match output {
-            LightningOutput::Contract(contract) => {
+            LightningOutputV0::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
                 if let Contract::Incoming(incoming) = &contract.contract {
                     let offer = dbtx
@@ -730,7 +732,7 @@ impl ServerModule for Lightning {
                     fee: self.cfg.consensus.fee_consensus.contract_output,
                 })
             }
-            LightningOutput::Offer(offer) => {
+            LightningOutputV0::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
                     return Err(LightningOutputError::InvalidEncryptedPreimage);
                 }
@@ -761,7 +763,7 @@ impl ServerModule for Lightning {
 
                 Ok(TransactionItemAmount::ZERO)
             }
-            LightningOutput::CancelOutgoing {
+            LightningOutputV0::CancelOutgoing {
                 contract,
                 gateway_signature,
             } => {
@@ -1214,7 +1216,7 @@ mod tests {
             encrypted_preimage: encrypted_preimage.clone(),
             expiry_time: None,
         };
-        let output = LightningOutput::Offer(offer);
+        let output = LightningOutput::new_v0_offer(offer);
         let out_point = OutPoint {
             txid: TransactionId::all_zeros(),
             out_idx: 0,
@@ -1239,7 +1241,7 @@ mod tests {
             encrypted_preimage,
             expiry_time: None,
         };
-        let output2 = LightningOutput::Offer(offer2);
+        let output2 = LightningOutput::new_v0_offer(offer2);
         let out_point2 = OutPoint {
             txid: TransactionId::all_zeros(),
             out_idx: 1,
