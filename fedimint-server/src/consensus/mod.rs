@@ -30,10 +30,10 @@ pub async fn process_transaction_with_dbtx(
             .map_err(TransactionError::Input)?;
 
         funding_verifier.add_input(meta.amount);
-        public_keys.push(meta.pub_keys);
+        public_keys.push(meta.pub_key);
     }
 
-    transaction.validate_signature(public_keys.into_iter().flatten())?;
+    transaction.validate_signature(public_keys.into_iter())?;
 
     for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
         let amount = modules

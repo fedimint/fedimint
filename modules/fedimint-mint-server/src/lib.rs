@@ -351,7 +351,7 @@ impl ServerModule for Mint {
                 amount: input.amount,
                 fee: self.cfg.consensus.fee_consensus.note_spend_abs,
             },
-            pub_keys: vec![*input.note.spend_key()],
+            pub_key: *input.note.spend_key(),
         })
     }
 
