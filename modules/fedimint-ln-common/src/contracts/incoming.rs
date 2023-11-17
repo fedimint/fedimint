@@ -122,10 +122,6 @@ pub struct IncomingContractAccount {
 
 impl IncomingContractAccount {
     pub fn claim(&self) -> LightningInput {
-        LightningInput {
-            contract_id: self.contract.contract_id(),
-            amount: self.amount,
-            witness: None,
-        }
+        LightningInput::new_v0(self.contract.contract_id(), self.amount, None)
     }
 }

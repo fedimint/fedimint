@@ -546,6 +546,8 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransactionRef<'c>,
         input: &'b LightningInput,
     ) -> Result<InputMeta, LightningInputError> {
+        let input = input.ensure_v0_ref()?;
+
         let mut account = dbtx
             .get_value(&ContractKey(input.contract_id))
             .await
@@ -1283,11 +1285,7 @@ mod tests {
         let contract_id = funded_incoming_contract.contract_id();
         let audit_key = LightningAuditItemKey::from_funded_contract(&funded_incoming_contract);
         let amount = Amount { msats: 1000 };
-        let lightning_input = LightningInput {
-            contract_id,
-            amount,
-            witness: None,
-        };
+        let lightning_input = LightningInput::new_v0(contract_id, amount, None);
 
         module_dbtx.insert_new_entry(&audit_key, &amount).await;
         module_dbtx
@@ -1344,11 +1342,7 @@ mod tests {
         let contract_id = outgoing_contract.contract_id();
         let audit_key = LightningAuditItemKey::from_funded_contract(&outgoing_contract);
         let amount = Amount { msats: 1000 };
-        let lightning_input = LightningInput {
-            contract_id,
-            amount,
-            witness: Some(preimage.clone()),
-        };
+        let lightning_input = LightningInput::new_v0(contract_id, amount, Some(preimage.clone()));
 
         module_dbtx.insert_new_entry(&audit_key, &amount).await;
         module_dbtx

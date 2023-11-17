@@ -25,7 +25,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{plugin_types_trait_impl_common, Amount};
+use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Amount};
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -37,8 +37,28 @@ use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, Preimage
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
 const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion(0);
 
+extensible_associated_module_type!(
+    LightningInput,
+    LightningInputV0,
+    UnknownLightningInputVariantError
+);
+
+impl LightningInput {
+    pub fn new_v0(
+        contract_id: ContractId,
+        amount: Amount,
+        witness: Option<Preimage>,
+    ) -> LightningInput {
+        LightningInput::V0(LightningInputV0 {
+            contract_id,
+            amount,
+            witness,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct LightningInput {
+pub struct LightningInputV0 {
     pub contract_id: contracts::ContractId,
     /// While for now we only support spending the entire contract we need to
     /// avoid
@@ -49,7 +69,7 @@ pub struct LightningInput {
     pub witness: Option<Preimage>,
 }
 
-impl std::fmt::Display for LightningInput {
+impl std::fmt::Display for LightningInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -457,6 +477,8 @@ pub enum LightningInputError {
     InvalidPreimage,
     #[error("Incoming contract not ready to be spent yet, decryption in progress")]
     ContractNotReady,
+    #[error("The lightning input version is not supported by this federation")]
+    UnknownInputVariant(#[from] UnknownLightningInputVariantError),
 }
 
 #[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
