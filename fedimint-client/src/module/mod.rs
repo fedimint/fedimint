@@ -22,7 +22,7 @@ use fedimint_core::{
 use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
-use crate::sm::{Context, DynContext, DynState, Executor, State};
+use crate::sm::{ActiveState, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
     oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
@@ -284,6 +284,26 @@ where
 
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
         self.client.get().has_active_states(op_id).await
+    }
+
+    pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveState)> {
+        self.client
+            .get()
+            .executor
+            .get_active_states()
+            .await
+            .into_iter()
+            .filter(|s| s.0.module_instance_id() == self.module_instance_id())
+            .map(|s| {
+                (
+                    s.0.as_any()
+                        .downcast_ref::<M::States>()
+                        .expect("incorrect output type passed to module plugin")
+                        .clone(),
+                    s.1,
+                )
+            })
+            .collect()
     }
 
     pub fn get_config(&self) -> ClientConfig {
