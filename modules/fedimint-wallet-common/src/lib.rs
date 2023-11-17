@@ -3,12 +3,14 @@ use std::hash::Hasher;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::{Amount, BlockHash, Network, Script, Transaction, Txid};
+use bitcoin::{Address, Amount, BlockHash, Network, Script, Transaction, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::{Decodable, Encodable, UnzipConsensus};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{plugin_types_trait_impl_common, Feerate, PeerId};
+use fedimint_core::{
+    extensible_associated_module_type, plugin_types_trait_impl_common, Feerate, PeerId,
+};
 use impl_tools::autoimpl;
 use miniscript::Descriptor;
 use serde::{Deserialize, Serialize};
@@ -34,14 +36,17 @@ pub type PartialSig = Vec<u8>;
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
 
-#[derive(
-    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum WalletConsensusItem {
     BlockCount(u32), /* FIXME: use block hash instead, but needs more complicated
                       * * verification logic */
     Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 impl std::fmt::Display for WalletConsensusItem {
@@ -59,6 +64,9 @@ impl std::fmt::Display for WalletConsensusItem {
             }
             WalletConsensusItem::PegOutSignature(sig) => {
                 write!(f, "Wallet PegOut signature for Bitcoin TxId {}", sig.txid)
+            }
+            WalletConsensusItem::Default { variant, .. } => {
+                write!(f, "Unknown Wallet CI variant={variant}")
             }
         }
     }
@@ -164,12 +172,24 @@ pub struct PegOut {
     pub fees: PegOutFees,
 }
 
+extensible_associated_module_type!(
+    WalletOutputOutcome,
+    WalletOutputOutcomeV0,
+    UnknownWalletOutputOutcomeVariantError
+);
+
+impl WalletOutputOutcome {
+    pub fn new_v0(txid: bitcoin::Txid) -> WalletOutputOutcome {
+        WalletOutputOutcome::V0(WalletOutputOutcomeV0(txid))
+    }
+}
+
 /// Contains the Bitcoin transaction id of the transaction created by the
 /// withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletOutputOutcome(pub bitcoin::Txid);
+pub struct WalletOutputOutcomeV0(pub bitcoin::Txid);
 
-impl std::fmt::Display for WalletOutputOutcome {
+impl std::fmt::Display for WalletOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Wallet PegOut Bitcoin TxId {}", self.0)
     }
@@ -189,11 +209,19 @@ impl CommonModuleInit for WalletCommonInit {
     }
 }
 
+extensible_associated_module_type!(WalletInput, WalletInputV0, UnknownWalletInputVariantError);
+
+impl WalletInput {
+    pub fn new_v0(peg_in_proof: PegInProof) -> WalletInput {
+        WalletInput::V0(WalletInputV0(Box::new(peg_in_proof)))
+    }
+}
+
 #[autoimpl(Deref, DerefMut using self.0)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletInput(pub Box<PegInProof>);
+pub struct WalletInputV0(pub Box<PegInProof>);
 
-impl std::fmt::Display for WalletInput {
+impl std::fmt::Display for WalletInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -203,8 +231,31 @@ impl std::fmt::Display for WalletInput {
     }
 }
 
+extensible_associated_module_type!(
+    WalletOutput,
+    WalletOutputV0,
+    UnknownWalletOutputVariantError
+);
+
+impl WalletOutput {
+    pub fn new_v0_peg_out(
+        recipient: Address,
+        amount: bitcoin::Amount,
+        fees: PegOutFees,
+    ) -> WalletOutput {
+        WalletOutput::V0(WalletOutputV0::PegOut(PegOut {
+            recipient,
+            amount,
+            fees,
+        }))
+    }
+    pub fn new_v0_rbf(fees: PegOutFees, txid: Txid) -> WalletOutput {
+        WalletOutput::V0(WalletOutputV0::Rbf(Rbf { fees, txid }))
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum WalletOutput {
+pub enum WalletOutputV0 {
     PegOut(PegOut),
     Rbf(Rbf),
 }
@@ -218,22 +269,22 @@ pub struct Rbf {
     pub txid: Txid,
 }
 
-impl WalletOutput {
+impl WalletOutputV0 {
     pub fn amount(&self) -> Amount {
         match self {
-            WalletOutput::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
-            WalletOutput::Rbf(rbf) => rbf.fees.amount(),
+            WalletOutputV0::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
+            WalletOutputV0::Rbf(rbf) => rbf.fees.amount(),
         }
     }
 }
 
-impl std::fmt::Display for WalletOutput {
+impl std::fmt::Display for WalletOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WalletOutput::PegOut(pegout) => {
+            WalletOutputV0::PegOut(pegout) => {
                 write!(f, "Wallet PegOut {} to {}", pegout.amount, pegout.recipient)
             }
-            WalletOutput::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
+            WalletOutputV0::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
         }
     }
 }
@@ -292,6 +343,8 @@ pub enum WalletInputError {
     PegInProofError(#[from] PegInProofError),
     #[error("The peg-in was already claimed")]
     PegInAlreadyClaimed,
+    #[error("The wallet input version is not supported by this federation")]
+    UnknownInputVariant(#[from] UnknownWalletInputVariantError),
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
@@ -310,6 +363,8 @@ pub enum WalletOutputError {
     TxWeightIncorrect(u64, u64),
     #[error("Peg-out fee rate is below min relay fee")]
     BelowMinRelayFee,
+    #[error("The wallet output version is not supported by this federation")]
+    UnknownOutputVariant(#[from] UnknownWalletOutputVariantError),
 }
 
 #[derive(Debug, Error)]

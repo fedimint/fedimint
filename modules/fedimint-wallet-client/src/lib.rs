@@ -218,6 +218,8 @@ impl ClientModule for WalletClientModule {
         &self,
         input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<TransactionItemAmount> {
+        let input = input.maybe_v0_ref()?;
+
         Some(TransactionItemAmount {
             amount: Amount::from_sats(input.0.tx_output().value),
             fee: self.cfg.fee_consensus.peg_in_abs,
@@ -228,6 +230,8 @@ impl ClientModule for WalletClientModule {
         &self,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<TransactionItemAmount> {
+        let output = output.maybe_v0_ref()?;
+
         Some(TransactionItemAmount {
             amount: output.amount().into(),
             fee: self.cfg.fee_consensus.peg_out_abs,
@@ -324,11 +328,7 @@ impl WalletClientModule {
     ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
         check_address(&address, self.cfg.network)?;
 
-        let output = WalletOutput::PegOut(PegOut {
-            recipient: address,
-            amount,
-            fees,
-        });
+        let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
         let sm_gen = move |txid, out_idx| {
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
@@ -350,7 +350,7 @@ impl WalletClientModule {
         operation_id: OperationId,
         rbf: Rbf,
     ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
-        let output = WalletOutput::Rbf(rbf);
+        let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
         let sm_gen = move |txid, out_idx| {
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
