@@ -19,9 +19,7 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::{
-    DepositState, WalletClientExt, WalletClientInit, WalletClientModule, WithdrawState,
-};
+use fedimint_wallet_client::{DepositState, WalletClientInit, WalletClientModule, WithdrawState};
 use fedimint_wallet_common::config::{WalletConfig, WalletGenParams};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
@@ -57,7 +55,8 @@ async fn peg_in<'a>(
     let mut balance_sub = client.subscribe_balance_changes().await;
     assert_eq!(balance_sub.ok().await?, sats(0));
 
-    let (op, address) = client.get_deposit_address(valid_until).await?;
+    let wallet_module = &client.get_first_module::<WalletClientModule>();
+    let (op, address) = wallet_module.get_deposit_address(valid_until).await?;
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(&address, bsats(PEG_IN_AMOUNT_SATS))
@@ -67,7 +66,7 @@ async fn peg_in<'a>(
         .await?
         .context("expected tx to be mined")?;
     info!(?height, ?tx, "Peg-in transaction mined");
-    let sub = client.subscribe_deposit_updates(op).await?;
+    let sub = wallet_module.subscribe_deposit_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, DepositState::WaitingForTransaction);
     assert_matches!(sub.ok().await?, DepositState::WaitingForConfirmation { .. });
@@ -165,15 +164,20 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     // Peg-out test, requires block to recognize change UTXOs
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
-    let fees = client.get_withdraw_fee(address.clone(), peg_out).await?;
-    let op = client.withdraw(address.clone(), peg_out, fees).await?;
+    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let fees = wallet_module
+        .get_withdraw_fees(address.clone(), peg_out)
+        .await?;
+    let op = wallet_module
+        .withdraw(address.clone(), peg_out, fees)
+        .await?;
 
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
     assert_eq!(client.get_balance().await, balance_after_peg_out);
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
 
-    let sub = client.subscribe_withdraw_updates(op).await?;
+    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
     let txid = match sub.ok().await? {
@@ -215,13 +219,17 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
         fee_rate: Feerate { sats_per_kvb: 0 },
         total_weight: 0,
     };
-    let op = client.withdraw(address.clone(), peg_out, fees).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let op = wallet_module
+        .withdraw(address.clone(), peg_out, fees)
+        .await?;
     assert_eq!(
         balance_sub.next().await.unwrap(),
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS)
     );
 
-    let sub = client.subscribe_withdraw_updates(op).await?;
+    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
     assert!(matches!(sub.ok().await?, WithdrawState::Failed(_)));
@@ -255,10 +263,15 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     info!("Peg-in finished for test peg_outs_support_rbf");
     let address = bitcoin.get_new_address().await;
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
-    let fees = client.get_withdraw_fee(address.clone(), peg_out).await?;
-    let op = client.withdraw(address.clone(), peg_out, fees).await?;
+    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let fees = wallet_module
+        .get_withdraw_fees(address.clone(), peg_out)
+        .await?;
+    let op = wallet_module
+        .withdraw(address.clone(), peg_out, fees)
+        .await?;
 
-    let sub = client.subscribe_withdraw_updates(op).await?;
+    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
     let state = sub.ok().await?;
@@ -279,8 +292,9 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
         fees: PegOutFees::new(1000, fees.total_weight),
         txid,
     };
-    let op = client.rbf_withdraw(rbf.clone()).await?;
-    let sub = client.subscribe_withdraw_updates(op).await?;
+    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let op = wallet_module.rbf_withdraw(rbf.clone()).await?;
+    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
     let txid = match sub.ok().await? {
@@ -331,10 +345,11 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
     let address = bitcoin.get_new_address().await;
     let peg_out1 = PEG_OUT_AMOUNT_SATS;
-    let fees1 = client
-        .get_withdraw_fee(address.clone(), bsats(peg_out1))
+    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let fees1 = wallet_module
+        .get_withdraw_fees(address.clone(), bsats(peg_out1))
         .await?;
-    let op = client
+    let op = wallet_module
         .withdraw(address.clone(), bsats(peg_out1), fees1)
         .await?;
     let balance_after_peg_out =
@@ -342,7 +357,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     assert_eq!(client.get_balance().await, balance_after_peg_out);
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
 
-    let sub = client.subscribe_withdraw_updates(op).await?;
+    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
     let txid = match sub.ok().await? {
@@ -357,8 +372,8 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     // See: https://github.com/fedimint/fedimint/issues/3604
     let address = bitcoin.get_new_address().await;
     let peg_out2 = PEG_OUT_AMOUNT_SATS;
-    let fees2 = client
-        .get_withdraw_fee(address.clone(), bsats(peg_out2))
+    let fees2 = wallet_module
+        .get_withdraw_fees(address.clone(), bsats(peg_out2))
         .await;
     // Must fail because change UTXOs are still being confirmed
     assert!(fees2.is_err());
@@ -367,13 +382,13 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay + 1).await;
     await_consensus_to_catch_up(&client, current_block + 1).await?;
     // Now change UTXOs are available and we can peg-out again
-    let fees2 = client
-        .get_withdraw_fee(address.clone(), bsats(peg_out2))
+    let fees2 = wallet_module
+        .get_withdraw_fees(address.clone(), bsats(peg_out2))
         .await?;
-    let op = client
+    let op = wallet_module
         .withdraw(address.clone(), bsats(peg_out2), fees2)
         .await?;
-    let sub = client.subscribe_withdraw_updates(op).await?;
+    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
     let txid = match sub.ok().await? {

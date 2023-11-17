@@ -20,7 +20,7 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::contracts::ContractId;
 use fedimint_mint_client::{MintClientModule, OOBNotes};
-use fedimint_wallet_client::{WalletClientExt, WalletClientModule, WithdrawState};
+use fedimint_wallet_client::{WalletClientModule, WithdrawState};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -333,6 +333,7 @@ pub async fn handle_command(
         }
         ClientCmd::DepositAddress => {
             let (operation_id, address) = client
+                .get_first_module::<WalletClientModule>()
                 .get_deposit_address(now() + Duration::from_secs(600))
                 .await?;
             Ok(serde_json::json! {
@@ -344,6 +345,7 @@ pub async fn handle_command(
         }
         ClientCmd::AwaitDeposit { operation_id } => {
             let mut updates = client
+                .get_first_module::<WalletClientModule>()
                 .subscribe_deposit_updates(operation_id)
                 .await?
                 .into_stream();
@@ -427,14 +429,17 @@ pub async fn handle_command(
             }))
         }
         ClientCmd::Withdraw { amount, address } => {
-            let fees = client.get_withdraw_fee(address.clone(), amount).await?;
+            let wallet_module = client.get_first_module::<WalletClientModule>();
+            let fees = wallet_module
+                .get_withdraw_fees(address.clone(), amount)
+                .await?;
             let absolute_fees = fees.amount();
 
             info!("Attempting withdraw with fees: {fees:?}");
 
-            let operation_id = client.withdraw(address, amount, fees).await?;
+            let operation_id = wallet_module.withdraw(address, amount, fees).await?;
 
-            let mut updates = client
+            let mut updates = wallet_module
                 .subscribe_withdraw_updates(operation_id)
                 .await?
                 .into_stream();

@@ -50,7 +50,9 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
-use fedimint_wallet_client::{WalletClientExt, WalletClientInit, WalletCommonInit, WithdrawState};
+use fedimint_wallet_client::{
+    WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
+};
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
 use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
@@ -660,6 +662,7 @@ impl Gateway {
         let (_, address) = self
             .select_client(payload.federation_id)
             .await?
+            .get_first_module::<WalletClientModule>()
             .get_deposit_address(now() + Duration::from_secs(86400 * 365))
             .await?;
         Ok(address)
@@ -674,10 +677,13 @@ impl Gateway {
 
         let client = self.select_client(federation_id).await?;
         // TODO: This should probably be passed in as a parameter
-        let fees = client.get_withdraw_fee(address.clone(), amount).await?;
+        let wallet_module = client.get_first_module::<WalletClientModule>();
+        let fees = wallet_module
+            .get_withdraw_fees(address.clone(), amount)
+            .await?;
 
-        let operation_id = client.withdraw(address, amount, fees).await?;
-        let mut updates = client
+        let operation_id = wallet_module.withdraw(address, amount, fees).await?;
+        let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
             .await?
             .into_stream();
