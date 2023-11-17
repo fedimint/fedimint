@@ -82,7 +82,10 @@ async fn await_withdraw_processed(
             .await
         {
             Ok(outcome) => {
-                return Ok(outcome.0);
+                return outcome
+                    .ensure_v0_ref()
+                    .map(|outcome| outcome.0)
+                    .map_err(|e| e.to_string())
             }
             Err(OutputOutcomeError::Federation(e)) if e.is_retryable() => {
                 debug!(

@@ -584,7 +584,7 @@ impl ServerModule for Wallet {
 
         dbtx.insert_new_entry(
             &PegOutBitcoinTransaction(out_point),
-            &WalletOutputOutcome(txid),
+            &WalletOutputOutcome::new_v0(txid),
         )
         .await;
 
@@ -1817,7 +1817,7 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(
             &peg_out_bitcoin_tx,
-            &WalletOutputOutcome(Txid::from_slice(&BYTE_32).unwrap()),
+            &WalletOutputOutcome::new_v0(Txid::from_slice(&BYTE_32).unwrap()),
         )
         .await;
 

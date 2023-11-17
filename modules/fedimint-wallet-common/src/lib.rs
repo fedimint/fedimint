@@ -166,12 +166,24 @@ pub struct PegOut {
     pub fees: PegOutFees,
 }
 
+extensible_associated_module_type!(
+    WalletOutputOutcome,
+    WalletOutputOutcomeV0,
+    UnknownWalletOutputOutcomeVariantError
+);
+
+impl WalletOutputOutcome {
+    pub fn new_v0(txid: bitcoin::Txid) -> WalletOutputOutcome {
+        WalletOutputOutcome::V0(WalletOutputOutcomeV0(txid))
+    }
+}
+
 /// Contains the Bitcoin transaction id of the transaction created by the
 /// withdraw request
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct WalletOutputOutcome(pub bitcoin::Txid);
+pub struct WalletOutputOutcomeV0(pub bitcoin::Txid);
 
-impl std::fmt::Display for WalletOutputOutcome {
+impl std::fmt::Display for WalletOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Wallet PegOut Bitcoin TxId {}", self.0)
     }
