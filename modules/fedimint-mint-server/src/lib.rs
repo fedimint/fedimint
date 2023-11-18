@@ -7,9 +7,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    DatabaseTransactionRef, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -58,7 +56,7 @@ impl ModuleInit for MintInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut mint: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
@@ -302,14 +300,14 @@ impl ServerModule for Mint {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> Vec<MintConsensusItem> {
         Vec::new()
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransactionRef<'b>,
+        _dbtx: &mut DatabaseTransaction<'_, 'b>,
         _consensus_item: MintConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -318,7 +316,7 @@ impl ServerModule for Mint {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'c>,
+        dbtx: &mut DatabaseTransaction<'_, 'c>,
         input: &'b MintInput,
     ) -> Result<InputMeta, MintInputError> {
         let input = input.ensure_v0_ref()?;
@@ -357,7 +355,7 @@ impl ServerModule for Mint {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'b>,
+        dbtx: &mut DatabaseTransaction<'_, 'b>,
         output: &'a MintOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, MintOutputError> {
@@ -385,7 +383,7 @@ impl ServerModule for Mint {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         out_point: OutPoint,
     ) -> Option<MintOutputOutcome> {
         dbtx.get_value(&MintOutputOutcomeKey(out_point)).await
@@ -393,7 +391,7 @@ impl ServerModule for Mint {
 
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -462,7 +460,7 @@ impl ServerModule for Mint {
 impl Mint {
     async fn handle_backup_request(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -492,7 +490,7 @@ impl Mint {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await

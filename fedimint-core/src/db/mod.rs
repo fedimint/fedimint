@@ -37,6 +37,8 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Debug};
+use std::marker::PhantomData;
+use std::ops::{self, DerefMut};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -261,6 +263,11 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
     }
 }
 
+/// Just ignore this type, it's only there to make compiler happy
+///
+/// See <https://users.rust-lang.org/t/argument-requires-that-is-borrowed-for-static/66503/2?u=yandros> for details.
+pub type PhantomBound<'big, 'small> = PhantomData<&'small &'big ()>;
+
 /// A public-facing newtype over `IDatabase`
 ///
 /// Notably carries set of module decoders (`ModuleDecoderRegistry`)
@@ -348,7 +355,7 @@ impl Database {
     }
 
     /// Begin a database transaction
-    pub async fn begin_transaction<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx>
+    pub async fn begin_transaction<'s, 'tx>(&'s self) -> DatabaseTransaction<'static, 'tx>
     where
         's: 'tx,
     {
@@ -385,13 +392,17 @@ impl Database {
     ///
     /// This function panics when the given number of maximum attempts is zero.
     /// `max_attempts` must be greater or equal to one.
-    pub async fn autocommit<'s: 'dt, 'dt, F, T, E>(
+    pub async fn autocommit<'s, 'tx, 'f, F, T, E>(
         &'s self,
         tx_fn: F,
         max_attempts: Option<usize>,
     ) -> Result<T, AutocommitError<E>>
     where
-        for<'a> F: Fn(&'a mut DatabaseTransaction<'dt>) -> BoxFuture<'a, Result<T, E>>,
+        's: 'tx,
+        for<'a> F: Fn(
+            &'a mut DatabaseTransaction<'s, 'tx>,
+            PhantomBound<'tx, 'a>,
+        ) -> BoxFuture<'a, Result<T, E>>,
     {
         assert_ne!(max_attempts, Some(0));
         let mut curr_attempts: usize = 0;
@@ -406,10 +417,10 @@ impl Database {
                 .expect("db autocommit attempt counter overflowed");
 
             let mut dbtx = self.begin_transaction().await;
-
-            match tx_fn(&mut dbtx).await {
+            let tx_fn = tx_fn(&mut dbtx, PhantomData).await;
+            match tx_fn {
                 Ok(val) => {
-                    let _timing /* logs on drop */ = timing::TimeReporter::new("autocmmit - commit_tx");
+                    let _timing /* logs on drop */ = timing::TimeReporter::new("autocommit - commit_tx");
 
                     match dbtx.commit_tx_result().await {
                         Ok(()) => {
@@ -450,7 +461,7 @@ impl Database {
         &'a self,
         key: &K,
         checker: impl Fn(Option<K::Value>) -> Option<T>,
-    ) -> (T, DatabaseTransaction<'a>)
+    ) -> (T, DatabaseTransaction<'static, 'a>)
     where
         K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
     {
@@ -1216,90 +1227,41 @@ impl Drop for CommitTracker {
     }
 }
 
-/// An open [`DatabaseTransaction`] that can not be committed by the owner.
-///
-/// This is used in APIs that require logic to be a part of a larger
-/// database transaction, given that `commit_tx` takes `&mut self` (
-/// not `self`, due to trait/Sized and support for `&mut T` issues).
-pub struct DatabaseTransactionRef<'tx> {
-    tx: Box<dyn IDatabaseTransaction + 'tx>,
-    decoders: ModuleDecoderRegistry,
-    commit_tracker: &'tx mut CommitTracker,
+enum MaybeRef<'a, T> {
+    Owned(T),
+    Borrowed(&'a mut T),
 }
 
-impl<'tx> DatabaseTransactionRef<'tx> {
-    /// Is this `Database` a global, unpartitioned `Database`
-    pub fn is_global(&self) -> bool {
-        self.tx.prefix_len() == 0
-    }
+impl<'a, T> ops::Deref for MaybeRef<'a, T> {
+    type Target = T;
 
-    /// `Err` if [`Self::is_global`] is not true
-    pub fn ensure_global(&self) -> Result<()> {
-        if !self.is_global() {
-            bail!("Database instance not global");
+    fn deref(&self) -> &Self::Target {
+        match self {
+            MaybeRef::Owned(o) => o,
+            MaybeRef::Borrowed(r) => r,
         }
-
-        Ok(())
     }
+}
 
-    /// `Err` if [`Self::is_global`] is true
-    pub fn ensure_isolated(&self) -> Result<()> {
-        if self.is_global() {
-            bail!("Database instance not isolated");
+impl<'a, T> ops::DerefMut for MaybeRef<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            MaybeRef::Owned(o) => o,
+            MaybeRef::Borrowed(r) => r,
         }
-
-        Ok(())
-    }
-}
-
-impl<'a> WithDecoders for DatabaseTransactionRef<'a> {
-    fn decoders(&self) -> &ModuleDecoderRegistry {
-        &self.decoders
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOpsCore for DatabaseTransactionRef<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.commit_tracker.has_writes = true;
-        self.tx.raw_insert_bytes(key, value).await
-    }
-
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.tx.raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.tx.raw_remove_entry(key).await
-    }
-
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
-        self.tx.raw_find_by_prefix(key_prefix).await
-    }
-
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
-        self.tx
-            .raw_find_by_prefix_sorted_descending(key_prefix)
-            .await
-    }
-
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
-        self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
 
 /// A high level database transaction handle
-pub struct DatabaseTransaction<'tx> {
+pub struct DatabaseTransaction<'parent, 'tx> {
     tx: Box<dyn IDatabaseTransaction + 'tx>,
     decoders: ModuleDecoderRegistry,
-    commit_tracker: CommitTracker,
-    on_commit_hooks: Vec<Box<maybe_add_send!(dyn FnOnce())>>,
+    commit_tracker: MaybeRef<'parent, CommitTracker>,
+    on_commit_hooks: MaybeRef<'parent, Vec<Box<maybe_add_send!(dyn FnOnce())>>>,
+    _parent_lifetime: PhantomData<&'parent ()>,
 }
 
-impl<'tx> WithDecoders for DatabaseTransaction<'tx> {
+impl<'parent, 'tx> WithDecoders for DatabaseTransaction<'parent, 'tx> {
     fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.decoders
     }
@@ -1317,39 +1279,38 @@ fn decode_value<V: DatabaseValue>(
     V::from_bytes(value_bytes, decoders)
 }
 
-impl<'tx> DatabaseTransaction<'tx> {
+impl<'parent, 'tx> DatabaseTransaction<'parent, 'tx> {
     pub fn new(
         dbtx: Box<dyn IDatabaseTransaction + 'tx>,
         decoders: ModuleDecoderRegistry,
-    ) -> DatabaseTransaction<'tx> {
+    ) -> DatabaseTransaction<'static, 'tx> {
         DatabaseTransaction {
             tx: dbtx,
             decoders,
-            commit_tracker: CommitTracker {
+            commit_tracker: MaybeRef::Owned(CommitTracker {
                 is_committed: false,
                 has_writes: false,
                 ignore_uncommitted: false,
-            },
-            on_commit_hooks: vec![],
+            }),
+            on_commit_hooks: MaybeRef::Owned(vec![]),
+            _parent_lifetime: PhantomData,
         }
     }
 
     /// Get [`DatabaseTransaction`] isolated to a `prefix`
-    pub fn with_prefix<'a: 'tx>(self, prefix: Vec<u8>) -> DatabaseTransaction<'a>
+    pub fn with_prefix<'a: 'tx>(self, prefix: Vec<u8>) -> DatabaseTransaction<'parent, 'a>
     where
         'tx: 'a,
     {
-        let decoders = self.decoders.clone();
-        let commit_tracker = self.commit_tracker.clone();
-
         DatabaseTransaction {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: self.tx,
                 prefix,
             }),
-            decoders,
-            commit_tracker,
-            on_commit_hooks: vec![],
+            decoders: self.decoders.clone(),
+            commit_tracker: self.commit_tracker,
+            on_commit_hooks: self.on_commit_hooks,
+            _parent_lifetime: PhantomData,
         }
     }
 
@@ -1358,7 +1319,7 @@ impl<'tx> DatabaseTransaction<'tx> {
     pub fn with_prefix_module_id<'a: 'tx>(
         self,
         module_instance_id: ModuleInstanceId,
-    ) -> DatabaseTransaction<'a>
+    ) -> DatabaseTransaction<'parent, 'a>
     where
         'tx: 'a,
     {
@@ -1366,44 +1327,61 @@ impl<'tx> DatabaseTransaction<'tx> {
         self.with_prefix(prefix)
     }
 
-    /// Get [`DatabaseTransactionRef`] to `self`
-    pub fn dbtx_ref<'s, 'a>(&'s mut self) -> DatabaseTransactionRef<'a>
+    /// Get a sub-transaction reference with a shorter lifetime
+    pub fn dbtx_ref<'s, 'a>(&'s mut self) -> DatabaseTransaction<'s, 'a>
     where
         'tx: 'a,
         's: 'a,
     {
-        let decoders = self.decoders.clone();
-
-        DatabaseTransactionRef {
+        DatabaseTransaction {
             tx: Box::new(&mut self.tx),
-            decoders,
-            commit_tracker: &mut self.commit_tracker,
+            decoders: self.decoders.clone(),
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            _parent_lifetime: PhantomData,
         }
     }
 
-    /// Get [`DatabaseTransactionRef`] isolated to a `prefix` of `self`
-    pub fn dbtx_ref_with_prefix<'a>(&'a mut self, prefix: Vec<u8>) -> DatabaseTransactionRef<'a>
+    /// Get [`DatabaseTransaction`] isolated to a `prefix` of `self`
+    pub fn dbtx_ref_with_prefix<'s, 'a>(
+        &'s mut self,
+        prefix: Vec<u8>,
+    ) -> DatabaseTransaction<'s, 'a>
     where
         'tx: 'a,
+        's: 'a,
     {
-        let decoders = self.decoders.clone();
-
-        DatabaseTransactionRef {
+        DatabaseTransaction {
             tx: Box::new(PrefixDatabaseTransaction {
                 inner: &mut self.tx,
                 prefix,
             }),
-            decoders,
-            commit_tracker: &mut self.commit_tracker,
+            decoders: self.decoders.clone(),
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            _parent_lifetime: PhantomData,
         }
     }
 
-    pub fn dbtx_ref_with_prefix_module_id<'a>(
-        &'a mut self,
+    pub fn dbtx_ref_with_prefix_module_id<'s, 'a>(
+        &'s mut self,
         module_instance_id: ModuleInstanceId,
-    ) -> DatabaseTransactionRef<'a>
+    ) -> DatabaseTransaction<'s, 'a>
     where
         'tx: 'a,
+        's: 'a,
     {
         let prefix = module_instance_id_to_byte_prefix(module_instance_id);
         self.dbtx_ref_with_prefix(prefix)
@@ -1444,7 +1422,7 @@ impl<'tx> DatabaseTransaction<'tx> {
 
         // Run commit hooks in case commit was successful
         if commit_result.is_ok() {
-            for hook in self.on_commit_hooks {
+            for hook in self.on_commit_hooks.deref_mut().drain(..) {
                 hook();
             }
         }
@@ -1467,7 +1445,7 @@ impl<'tx> DatabaseTransaction<'tx> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOpsCore for DatabaseTransaction<'a> {
+impl<'parent, 'a> IDatabaseTransactionOpsCore for DatabaseTransaction<'parent, 'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         self.commit_tracker.has_writes = true;
         self.tx.raw_insert_bytes(key, value).await
@@ -1499,8 +1477,10 @@ impl<'a> IDatabaseTransactionOpsCore for DatabaseTransaction<'a> {
         self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
+
+// These operations only available for `'parent == 'static` (top-level) dbtx's
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOps for DatabaseTransaction<'a> {
+impl<'a> IDatabaseTransactionOps for DatabaseTransaction<'static, 'a> {
     async fn set_tx_savepoint(&mut self) -> Result<()> {
         self.tx.set_tx_savepoint().await
     }
@@ -1779,7 +1759,7 @@ macro_rules! push_db_key_items {
 pub type MigrationMap<'a> = BTreeMap<
     DatabaseVersion,
     for<'b> fn(
-        &'b mut DatabaseTransaction<'a>,
+        &'b mut DatabaseTransaction<'_, 'a>,
     ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'b>>,
 >;
 
@@ -2465,7 +2445,7 @@ mod test_utils {
 
     #[allow(dead_code)]
     async fn migrate_test_db_version_0<'a, 'b>(
-        dbtx: &'b mut DatabaseTransaction<'a>,
+        dbtx: &'b mut DatabaseTransaction<'_, 'a>,
     ) -> Result<(), anyhow::Error> {
         let example_keys_v0 = dbtx
             .find_by_prefix(&DbPrefixTestPrefixV0)
@@ -2566,7 +2546,7 @@ mod test_utils {
 
         let db = Database::new(FakeDatabase, ModuleDecoderRegistry::default());
         let err = db
-            .autocommit::<_, _, ()>(|_dbtx| Box::pin(async { Ok(()) }), Some(5))
+            .autocommit::<_, _, ()>(|_dbtx, _| Box::pin(async { Ok(()) }), Some(5))
             .await
             .unwrap_err();
 

@@ -15,9 +15,7 @@ use fedimint_core::block::{Block, SignedBlock};
 use fedimint_core::config::{ClientConfig, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
-use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_BLOCK_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
@@ -258,7 +256,7 @@ impl ConsensusApi {
 
     async fn handle_backup_request<'s, 'dbtx, 'a>(
         &'s self,
-        dbtx: &'dbtx mut DatabaseTransactionRef<'a>,
+        dbtx: &'dbtx mut DatabaseTransaction<'_, 'a>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -288,7 +286,7 @@ impl ConsensusApi {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await

@@ -605,7 +605,7 @@ impl ConsensusServer {
 
     async fn process_consensus_item_with_db_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {

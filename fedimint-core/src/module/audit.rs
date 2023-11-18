@@ -7,7 +7,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::db::{
-    DatabaseKey, DatabaseLookup, DatabaseRecord, DatabaseTransactionRef,
+    DatabaseKey, DatabaseLookup, DatabaseRecord, DatabaseTransaction,
     IDatabaseTransactionOpsCoreTyped,
 };
 use crate::task::{MaybeSend, MaybeSync};
@@ -28,7 +28,7 @@ impl Audit {
 
     pub async fn add_items<KP, F>(
         &mut self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         module_instance_id: ModuleInstanceId,
         key_prefix: &KP,
         to_milli_sat: F,

@@ -96,7 +96,7 @@ where
         self.inner
             .db
             .autocommit(
-                |dbtx| Box::pin(self.add_state_machines_dbtx(dbtx, states.clone())),
+                move |dbtx, _| Box::pin(self.add_state_machines_dbtx(dbtx, states.clone())),
                 MAX_DB_ATTEMPTS,
             )
             .await
@@ -123,7 +123,7 @@ where
     // TODO: remove warning once finality is an inherent state attribute
     pub async fn add_state_machines_dbtx(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         states: Vec<DynState<GC>>,
     ) -> AddStateMachinesResult {
         for state in states {
@@ -454,7 +454,7 @@ where
             let active_or_inactive_state = self
                 .db
                 .autocommit(
-                    |dbtx| {
+                    move |dbtx, _| {
                         let state = state.clone();
                         let transition_fn = transition_fn.clone();
                         let transition_outcome = transition_outcome.clone();

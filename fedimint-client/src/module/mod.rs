@@ -10,7 +10,7 @@ use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, DatabaseTransactionRef};
+use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit, TransactionItemAmount};
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -273,7 +273,7 @@ where
 
     pub async fn add_state_machines(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         dyn_states: Vec<DynState<DynGlobalClientContext>>,
     ) -> AddStateMachinesResult {
         self.client.get().add_state_machines(dbtx, dyn_states).await
@@ -281,7 +281,7 @@ where
 
     pub async fn add_operation_log_entry(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
@@ -399,7 +399,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     async fn backup(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_, '_>,
         _executor: Executor<DynGlobalClientContext>,
         _api: DynGlobalApi,
         _module_instance_id: ModuleInstanceId,
@@ -409,8 +409,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     async fn restore(
         &self,
-        // _dbtx: &mut ModuleDatabaseTransaction<'_>,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut DatabaseTransaction<'_, '_>,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor<DynGlobalClientContext>,
         _api: DynGlobalApi,
@@ -421,7 +420,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     async fn wipe(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_, '_>,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor<DynGlobalClientContext>,
     ) -> anyhow::Result<()> {
@@ -459,7 +458,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// to create the requested input.
     async fn create_sufficient_input(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_, '_>,
         _operation_id: OperationId,
         _min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>> {
@@ -477,7 +476,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ///   of calling `create_change_output` and have to be injected later.
     async fn create_exact_output(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_, '_>,
         _operation_id: OperationId,
         _amount: Amount,
     ) -> Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>> {
@@ -498,7 +497,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Returns the balance held by this module and available for funding
     /// transactions.
-    async fn get_balance(&self, _dbtx: &mut DatabaseTransactionRef<'_>) -> Amount {
+    async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_, '_>) -> Amount {
         unimplemented!()
     }
 
@@ -565,7 +564,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// this should be done on per-module basis, to avoid mistakes.
     async fn leave(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_, '_>,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor<DynGlobalClientContext>,
         _api: DynGlobalApi,
@@ -594,7 +593,7 @@ pub trait IClientModule: Debug {
 
     async fn backup(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
@@ -603,7 +602,7 @@ pub trait IClientModule: Debug {
     async fn restore(
         &self,
         // dbtx: &mut ModuleDatabaseTransaction<'_>,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
@@ -612,7 +611,7 @@ pub trait IClientModule: Debug {
 
     async fn wipe(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
     ) -> anyhow::Result<()>;
@@ -622,7 +621,7 @@ pub trait IClientModule: Debug {
     async fn create_sufficient_input(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput>>;
@@ -630,7 +629,7 @@ pub trait IClientModule: Debug {
     async fn create_exact_output(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         amount: Amount,
     ) -> Vec<ClientOutput>;
@@ -644,7 +643,7 @@ pub trait IClientModule: Debug {
     async fn get_balance(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> Amount;
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
@@ -700,7 +699,7 @@ where
 
     async fn backup(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
@@ -711,7 +710,7 @@ where
     async fn restore(
         &self,
         // dbtx: &mut ModuleDatabaseTransaction<'_>,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
@@ -722,7 +721,7 @@ where
 
     async fn wipe(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
     ) -> anyhow::Result<()> {
@@ -736,7 +735,7 @@ where
     async fn create_sufficient_input(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput>> {
@@ -755,7 +754,7 @@ where
     async fn create_exact_output(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         amount: Amount,
     ) -> Vec<ClientOutput> {
@@ -782,7 +781,7 @@ where
     async fn get_balance(
         &self,
         module_instance: ModuleInstanceId,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> Amount {
         <T as ClientModule>::get_balance(
             self,

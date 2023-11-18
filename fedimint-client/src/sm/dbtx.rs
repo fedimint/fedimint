@@ -1,16 +1,16 @@
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseTransactionRef};
+use fedimint_core::db::DatabaseTransaction;
 
 /// A transaction that acts as isolated for module code but can be accessed as a
 /// normal transaction in this crate.
 pub struct ClientSMDatabaseTransaction<'inner, 'parent> {
-    dbtx: &'inner mut DatabaseTransaction<'parent>,
+    dbtx: &'inner mut DatabaseTransaction<'static, 'parent>,
     module_instance: ModuleInstanceId,
 }
 
 impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     pub fn new(
-        dbtx: &'inner mut DatabaseTransaction<'parent>,
+        dbtx: &'inner mut DatabaseTransaction<'static, 'parent>,
         module_instance: ModuleInstanceId,
     ) -> Self {
         Self {
@@ -20,7 +20,7 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     }
 
     /// Returns the isolated database transaction for the module.
-    pub fn module_tx(&mut self) -> DatabaseTransactionRef<'_> {
+    pub fn module_tx(&mut self) -> DatabaseTransaction<'_, '_> {
         self.dbtx
             .dbtx_ref_with_prefix_module_id(self.module_instance)
     }
@@ -29,7 +29,7 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     /// client internal code. This is useful for submitting Fedimint
     /// transactions from within state transitions.
     #[allow(dead_code)]
-    pub(crate) fn global_tx(&mut self) -> &mut DatabaseTransaction<'parent> {
+    pub(crate) fn global_tx(&mut self) -> &mut DatabaseTransaction<'static, 'parent> {
         self.dbtx
     }
 }

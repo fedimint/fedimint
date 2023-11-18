@@ -53,7 +53,7 @@ impl_db_record!(
 impl_db_lookup!(key = DummyFundsKeyV1, query_prefix = DummyFundsPrefixV1);
 
 /// Example DB migration from version 0 to version 1
-pub async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
+pub async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_, '_>) -> Result<(), anyhow::Error> {
     // Select old entries
     let v0_entries = dbtx
         .find_by_prefix(&DummyFundsKeyPrefixV0)

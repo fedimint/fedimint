@@ -757,7 +757,7 @@ impl Client {
 
     pub async fn add_state_machines(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         states: Vec<DynState<DynGlobalClientContext>>,
     ) -> AddStateMachinesResult {
         self.executor.add_state_machines_dbtx(dbtx, states).await
@@ -775,7 +775,7 @@ impl Client {
     /// Adds funding to a transaction or removes over-funding via change.
     async fn finalize_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(
@@ -848,15 +848,15 @@ impl Client {
     /// The function will panic if the database transaction collides with
     /// other and fails with others too often, this should not happen except for
     /// excessively concurrent scenarios.
-    pub async fn finalize_and_submit_transaction<F, M>(
-        &self,
+    pub async fn finalize_and_submit_transaction<'s, F, M>(
+        &'s self,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: F,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
-        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync,
+        F: Fn(TransactionId, Vec<OutPoint>) -> M + Clone + MaybeSend + MaybeSync + 's,
         M: serde::Serialize + MaybeSend,
     {
         let operation_type = operation_type.to_owned();
@@ -864,7 +864,7 @@ impl Client {
         let autocommit_res = self
             .db
             .autocommit(
-                |dbtx| {
+                |dbtx, _| {
                     let operation_type = operation_type.clone();
                     let tx_builder = tx_builder.clone();
                     let operation_meta = operation_meta.clone();
@@ -907,7 +907,7 @@ impl Client {
 
     async fn finalize_and_submit_transaction_inner(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
@@ -948,7 +948,7 @@ impl Client {
     }
 
     async fn operation_exists(
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
     ) -> bool {
         let active_state_exists = dbtx

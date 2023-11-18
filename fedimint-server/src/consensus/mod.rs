@@ -11,7 +11,7 @@ use fedimint_core::{Amount, OutPoint};
 
 pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut DatabaseTransaction<'_, '_>,
     transaction: Transaction,
 ) -> Result<(), TransactionError> {
     let txid = transaction.tx_hash();

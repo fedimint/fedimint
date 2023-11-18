@@ -31,7 +31,7 @@ impl OperationLog {
 
     pub async fn add_operation_log_entry(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
@@ -109,7 +109,7 @@ impl OperationLog {
     }
 
     async fn get_operation_inner(
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
     ) -> Option<OperationLogEntry> {
         dbtx.get_value(&OperationLogKey { operation_id }).await
