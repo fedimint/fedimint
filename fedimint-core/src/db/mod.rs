@@ -1408,6 +1408,14 @@ impl<'parent, 'tx> DatabaseTransaction<'parent, 'tx> {
         self
     }
 
+    /// Register a hook that will be run after commit succeeds.
+    #[instrument(level = "debug", skip_all, ret)]
+    pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
+        self.on_commit_hooks.push(Box::new(f));
+    }
+}
+
+impl<'tx> DatabaseTransaction<'static, 'tx> {
     pub async fn commit_tx_result(mut self) -> Result<()> {
         self.commit_tracker.is_committed = true;
         let commit_result = self.tx.commit_tx().await;
@@ -1427,12 +1435,6 @@ impl<'parent, 'tx> DatabaseTransaction<'parent, 'tx> {
         self.commit_tx_result()
             .await
             .expect("Unrecoverable error occurred while committing to the database.");
-    }
-
-    /// Register a hook that will be run after commit succeeds.
-    #[instrument(level = "debug", skip_all, ret)]
-    pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
-        self.on_commit_hooks.push(Box::new(f));
     }
 }
 
