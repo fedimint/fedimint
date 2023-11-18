@@ -255,7 +255,7 @@ async fn await_btc_transaction_confirmed(
 }
 
 async fn transition_btc_tx_confirmed(
-    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
     global_context: DynGlobalClientContext,
     old_state: DepositStateMachine,
     txout_proof: TxOutProof,

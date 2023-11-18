@@ -729,7 +729,7 @@ mod fedimint_migration_tests {
     /// in future code versions. This function should not be updated when
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
-    async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+    async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'static, '_>) {
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
         let nonce_key = NonceKey(Nonce(pk.x_only_public_key().0));
         dbtx.insert_new_entry(&nonce_key, &()).await;

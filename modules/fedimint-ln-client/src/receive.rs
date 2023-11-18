@@ -224,7 +224,7 @@ impl LightningReceiveConfirmedInvoice {
         old_state: LightningReceiveStateMachine,
         keypair: KeyPair,
         result: Result<IncomingContractAccount, LightningReceiveError>,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         global_context: DynGlobalClientContext,
     ) -> LightningReceiveStateMachine {
         match result {
@@ -247,7 +247,7 @@ impl LightningReceiveConfirmedInvoice {
     }
 
     async fn claim_incoming_contract(
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         contract: IncomingContractAccount,
         keypair: KeyPair,
         global_context: DynGlobalClientContext,

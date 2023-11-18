@@ -279,7 +279,7 @@ impl DecryptingPreimageState {
     async fn transition_incoming_contract_funded(
         result: Result<Preimage, IncomingSmError>,
         old_state: IncomingStateMachine,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         global_context: DynGlobalClientContext,
         context: LightningClientContext,
     ) -> IncomingStateMachine {
@@ -320,7 +320,7 @@ impl DecryptingPreimageState {
     }
 
     async fn refund_incoming_contract(
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         global_context: DynGlobalClientContext,
         context: LightningClientContext,
         old_state: IncomingStateMachine,

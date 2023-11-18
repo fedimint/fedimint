@@ -633,7 +633,7 @@ impl GatewayPayClaimOutgoingContract {
     }
 
     async fn transition_claim_outgoing_contract(
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         global_context: DynGlobalClientContext,
         context: GatewayClientContext,
         common: GatewayPayCommon,
@@ -810,7 +810,7 @@ impl GatewayPayCancelContract {
     }
 
     async fn transition_canceled(
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         contract: OutgoingContractAccount,
         global_context: DynGlobalClientContext,
         context: GatewayClientContext,

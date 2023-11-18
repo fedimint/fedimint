@@ -131,7 +131,7 @@ async fn await_user_cancels(
 
 async fn transition_user_cancel(
     prev_state: MintOOBStateMachine,
-    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
     global_context: DynGlobalClientContext,
 ) -> MintOOBStateMachine {
     let (amount, spendable_note) = match prev_state.state {
@@ -161,7 +161,7 @@ async fn await_timeout_cancel(deadline: SystemTime) {
 
 async fn transition_timeout_cancel(
     prev_state: MintOOBStateMachine,
-    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
     global_context: DynGlobalClientContext,
 ) -> MintOOBStateMachine {
     let (amount, spendable_note) = match prev_state.state {
@@ -184,7 +184,7 @@ async fn transition_timeout_cancel(
 }
 
 async fn try_cancel_oob_spend(
-    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
     operation_id: OperationId,
     amount: Amount,
     spendable_note: SpendableNote,

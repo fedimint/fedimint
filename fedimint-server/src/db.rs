@@ -128,7 +128,7 @@ mod fedimint_migration_tests {
     /// in future code versions. This function should not be updated when
     /// database keys/values change - instead a new function should be added
     /// that creates a new database backup that can be tested.
-    async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_>) {
+    async fn create_db_with_v0_data(mut dbtx: DatabaseTransaction<'_, '_>) {
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
 
         let (sk, _) = secp256k1::generate_keypair(&mut OsRng);

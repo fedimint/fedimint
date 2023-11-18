@@ -46,7 +46,7 @@ pub async fn prepare_db_migration_snapshot<F>(
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
 where
-    F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
+    F: for<'a> Fn(DatabaseTransaction<'static, 'a>) -> BoxFuture<'a, ()>,
 {
     let project_root = get_project_root().unwrap();
     let snapshot_dir = project_root.join("db/migrations").join(snapshot_name);
@@ -57,7 +57,7 @@ where
         decoders: ModuleDecoderRegistry,
     ) -> anyhow::Result<()>
     where
-        F: for<'a> Fn(DatabaseTransaction<'a>) -> BoxFuture<'a, ()>,
+        F: for<'a> Fn(DatabaseTransaction<'static, 'a>) -> BoxFuture<'a, ()>,
     {
         let db = Database::new(
             RocksDb::open(&snapshot_dir)

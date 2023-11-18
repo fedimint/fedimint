@@ -221,7 +221,7 @@ impl MintOutputStatesCreated {
     }
 
     async fn transition_outcome_ready(
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         output_outcomes_result: Result<BTreeMap<PeerId, MintOutputOutcome>, String>,
         old_state: MintOutputStateMachine,
         mint_keys: Tiered<AggregatePublicKey>,

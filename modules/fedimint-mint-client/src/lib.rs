@@ -33,9 +33,7 @@ use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::{DynGlobalApi, GlobalFederationApi};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{
-    AutocommitError, DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -281,7 +279,7 @@ impl ModuleInit for MintClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut mint_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -493,7 +491,7 @@ impl ClientModule for MintClientModule {
 
     async fn backup(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
         module_instance_id: ModuleInstanceId,
@@ -508,7 +506,7 @@ impl ClientModule for MintClientModule {
     async fn restore(
         &self,
         // dbtx: &mut ModuleDatabaseTransaction<'_>,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
         api: DynGlobalApi,
@@ -575,7 +573,7 @@ impl ClientModule for MintClientModule {
 
     async fn wipe(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         _module_instance_id: ModuleInstanceId,
         _executor: Executor<DynGlobalClientContext>,
     ) -> anyhow::Result<()> {
@@ -591,7 +589,7 @@ impl ClientModule for MintClientModule {
 
     async fn create_sufficient_input(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
@@ -600,7 +598,7 @@ impl ClientModule for MintClientModule {
 
     async fn create_exact_output(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         amount: Amount,
     ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
@@ -616,7 +614,7 @@ impl ClientModule for MintClientModule {
         self.await_output_finalized(operation_id, out_point).await
     }
 
-    async fn get_balance(&self, dbtx: &mut DatabaseTransactionRef<'_>) -> Amount {
+    async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_, '_>) -> Amount {
         self.get_wallet_summary(dbtx).await.total_amount()
     }
 
@@ -656,7 +654,7 @@ impl ClientModule for MintClientModule {
 
     async fn leave(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         module_instance_id: ModuleInstanceId,
         executor: Executor<DynGlobalClientContext>,
         _api: DynGlobalApi,
@@ -680,7 +678,10 @@ impl ClientModule for MintClientModule {
 
 impl MintClientModule {
     /// Returns the number of held e-cash notes per denomination
-    pub async fn get_wallet_summary(&self, dbtx: &mut DatabaseTransactionRef<'_>) -> TieredSummary {
+    pub async fn get_wallet_summary(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
+    ) -> TieredSummary {
         dbtx.find_by_prefix(&NoteKeyPrefix)
             .await
             .fold(
@@ -699,7 +700,7 @@ impl MintClientModule {
     /// e-cash note denomination held.
     pub async fn create_output(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
@@ -790,7 +791,7 @@ impl MintClientModule {
     /// Creates a mint input of at least `min_amount`.
     pub async fn create_input(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
@@ -861,7 +862,7 @@ impl MintClientModule {
 
     async fn spend_notes_oob(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         notes_selector: &impl NotesSelector<SpendableNote>,
         requested_amount: Amount,
         try_cancel_after: Duration,
@@ -959,7 +960,7 @@ impl MintClientModule {
 
     /// Select notes with `requested_amount` using `notes_selector`.
     async fn select_notes(
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         notes_selector: &impl NotesSelector<SpendableNote>,
         requested_amount: Amount,
     ) -> anyhow::Result<TieredMulti<SpendableNote>> {
@@ -973,7 +974,7 @@ impl MintClientModule {
     }
 
     async fn get_all_spendable_notes(
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> TieredMulti<SpendableNote> {
         TieredMulti::from_iter(
             (dbtx
@@ -986,7 +987,7 @@ impl MintClientModule {
         )
     }
 
-    async fn wipe_all_spendable_notes(dbtx: &mut DatabaseTransactionRef<'_>) {
+    async fn wipe_all_spendable_notes(dbtx: &mut DatabaseTransaction<'_, '_>) {
         debug!(target: LOG_TARGET, "Wiping all spendable notes");
         dbtx.remove_by_prefix(&NoteKeyPrefix).await;
         assert!(Self::get_all_spendable_notes(dbtx).await.is_empty());
@@ -994,7 +995,7 @@ impl MintClientModule {
 
     async fn get_next_note_index(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         amount: Amount,
     ) -> NoteIndex {
         NoteIndex(
@@ -1038,7 +1039,7 @@ impl MintClientModule {
     async fn new_note_secret(
         &self,
         amount: Amount,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> DerivableSecret {
         let new_idx = self.get_next_note_index(dbtx, amount).await;
         dbtx.insert_entry(&NextECashNoteIndexKey(amount), &new_idx.next().as_u64())
@@ -1049,7 +1050,7 @@ impl MintClientModule {
     pub async fn new_ecash_note(
         &self,
         amount: Amount,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> (NoteIssuanceRequest, BlindNonce) {
         let secret = self.new_note_secret(amount, dbtx).await;
         NoteIssuanceRequest::new(&self.secp, secret)
@@ -1202,7 +1203,7 @@ impl MintClientModule {
         self.client_ctx
             .global_db()
             .autocommit(
-                move |dbtx| {
+                move |dbtx, _| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async move {
                         let (operation_id, states, notes) = self

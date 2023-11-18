@@ -349,7 +349,7 @@ impl LightningPayFunded {
         old_state: LightningPayStateMachine,
         contract_id: ContractId,
         timelock: u32,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         payment_hash: sha256::Hash,
         common: LightningPayCommon,
     ) -> LightningPayStateMachine {
@@ -431,7 +431,7 @@ impl LightningPayRefundable {
     async fn try_refund_outgoing_contract(
         old_state: LightningPayStateMachine,
         common: LightningPayCommon,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         global_context: DynGlobalClientContext,
     ) -> LightningPayStateMachine {
         let contract_data = common.contract;

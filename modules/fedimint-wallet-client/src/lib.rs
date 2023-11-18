@@ -24,9 +24,7 @@ use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{
-    AutocommitError, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -118,7 +116,7 @@ impl ModuleInit for WalletClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut wallet_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -271,7 +269,7 @@ impl WalletClientModule {
     pub async fn get_deposit_address_inner(
         &self,
         valid_until: SystemTime,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> (OperationId, WalletClientStates, Address) {
         let tweak_key = self
             .module_root_secret
@@ -375,7 +373,7 @@ impl WalletClientModule {
             .client_ctx
             .global_db()
             .autocommit(
-                |dbtx| {
+                |dbtx, _| {
                     Box::pin(async {
                         let (operation_id, sm, address) = self
                             .get_deposit_address_inner(
@@ -648,7 +646,7 @@ fn check_address(address: &Address, network: Network) -> anyhow::Result<()> {
 }
 
 /// Returns the child index to derive the next peg-in tweak key from.
-async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransactionRef<'_>) -> ChildId {
+async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_, '_>) -> ChildId {
     let index = dbtx.get_value(&NextPegInTweakIndexKey).await.unwrap_or(0);
     dbtx.insert_entry(&NextPegInTweakIndexKey, &(index + 1))
         .await;

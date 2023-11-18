@@ -112,7 +112,7 @@ impl MintInputStateCreated {
     async fn transition_success(
         result: Result<(), String>,
         old_state: MintInputStateMachine,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
         assert!(matches!(old_state.state, MintInputStates::Created(_)));
@@ -133,7 +133,7 @@ impl MintInputStateCreated {
     }
 
     async fn refund(
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         old_state: MintInputStateMachine,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {

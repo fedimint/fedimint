@@ -25,9 +25,7 @@ use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{
-    DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
@@ -224,7 +222,7 @@ impl ModuleInit for LightningClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut ln_client_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -377,7 +375,7 @@ impl LightningClientModule {
     async fn get_prev_payment_result(
         &self,
         payment_hash: &sha256::Hash,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
     ) -> PaymentResult {
         let prev_result = dbtx
             .get_value(&PaymentResultKey {
@@ -1340,7 +1338,7 @@ pub struct OutgoingLightningPayment {
 }
 
 async fn set_payment_result(
-    dbtx: &mut DatabaseTransactionRef<'_>,
+    dbtx: &mut DatabaseTransaction<'_, '_>,
     payment_hash: sha256::Hash,
     payment_type: PayType,
     contract_id: ContractId,
