@@ -22,7 +22,7 @@ use fedimint_core::{
 use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
-use crate::sm::{Context, DynContext, DynState, Executor, State};
+use crate::sm::{ActiveState, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
     oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
@@ -146,6 +146,54 @@ where
         self.module_instance_id
     }
 
+    pub fn map_dyn<'s, 'i, 'o, I>(
+        &'s self,
+        typed: impl IntoIterator<Item = I> + 'i,
+    ) -> impl Iterator<Item = <I as IntoDynInstance>::DynType> + 'o
+    where
+        I: IntoDynInstance,
+        'i: 'o,
+        's: 'o,
+    {
+        typed.into_iter().map(move |i| self.make_dyn(i))
+    }
+
+    /// Turn a typed output into a dyn version
+    pub fn make_dyn_output(&self, output: <M::Common as ModuleCommon>::Output) -> DynOutput {
+        self.make_dyn(output)
+    }
+
+    /// Turn a typed input into a dyn version
+    pub fn make_dyn_input(&self, input: <M::Common as ModuleCommon>::Input) -> DynInput {
+        self.make_dyn(input)
+    }
+
+    /// Turn a `typed` into a dyn version
+    pub fn make_dyn<I>(&self, typed: I) -> <I as IntoDynInstance>::DynType
+    where
+        I: IntoDynInstance,
+    {
+        typed.into_dyn(self.module_instance_id())
+    }
+
+    /// Turn a typed [`ClientOutput`] into a dyn version
+    pub fn make_client_output<O, S>(&self, output: ClientOutput<O, S>) -> ClientOutput
+    where
+        O: IntoDynInstance<DynType = DynOutput> + 'static,
+        S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+    {
+        self.make_dyn(output)
+    }
+
+    /// Turn a typed [`ClientInput`] into a dyn version
+    pub fn make_client_input<O, S>(&self, input: ClientInput<O, S>) -> ClientInput
+    where
+        O: IntoDynInstance<DynType = DynInput> + 'static,
+        S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
+    {
+        self.make_dyn(input)
+    }
+
     /// See [`crate::Client::finalize_and_submit_transaction`]
     pub async fn finalize_and_submit_transaction<F, Meta>(
         &self,
@@ -248,6 +296,26 @@ where
 
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
         self.client.get().has_active_states(op_id).await
+    }
+
+    pub async fn get_own_active_states(&self) -> Vec<(M::States, ActiveState)> {
+        self.client
+            .get()
+            .executor
+            .get_active_states()
+            .await
+            .into_iter()
+            .filter(|s| s.0.module_instance_id() == self.module_instance_id())
+            .map(|s| {
+                (
+                    s.0.as_any()
+                        .downcast_ref::<M::States>()
+                        .expect("incorrect output type passed to module plugin")
+                        .clone(),
+                    s.1,
+                )
+            })
+            .collect()
     }
 
     pub fn get_config(&self) -> ClientConfig {
