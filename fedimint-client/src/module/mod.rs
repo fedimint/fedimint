@@ -24,7 +24,10 @@ use secp256k1_zkp::PublicKey;
 use self::init::ClientModuleInit;
 use crate::sm::{Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use crate::{oplog, ClientArc, ClientWeak, DynGlobalClientContext, TransactionUpdates};
+use crate::{
+    oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
+    TransactionUpdates,
+};
 
 pub mod init;
 
@@ -225,7 +228,7 @@ where
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         dyn_states: Vec<DynState<DynGlobalClientContext>>,
-    ) -> anyhow::Result<()> {
+    ) -> AddStateMachinesResult {
         self.client.get().add_state_machines(dbtx, dyn_states).await
     }
 

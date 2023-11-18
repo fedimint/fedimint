@@ -74,11 +74,11 @@ impl Bitcoind {
         // mine blocks
         let blocks = 101;
         let address = client.get_new_address(None, None)?;
-        info!("begin mining {:?} blocks to address {:?}", blocks, &address);
+        info!("Beginning to mine {blocks:?} blocks to address {address:?}");
         client
             .generate_to_address(blocks, &address)
             .context("Failed to generate blocks")?;
-        info!("mined {:?} blocks to address {:?}", blocks, &address);
+        info!("Mined {blocks:?} blocks to address {address:?}");
 
         // wait bitciond is ready
         poll("bitcoind", None, || async {
@@ -360,14 +360,23 @@ impl Lnd {
         Ok((process, client))
     }
 
-    pub async fn client_lock(&self) -> Result<MappedMutexGuard<'_, tonic_lnd::LightningClient>> {
+    pub async fn lightning_client_lock(
+        &self,
+    ) -> Result<MappedMutexGuard<'_, tonic_lnd::LightningClient>> {
         let guard = self.client.lock().await;
         Ok(MutexGuard::map(guard, |client| client.lightning()))
     }
 
+    pub async fn invoices_client_lock(
+        &self,
+    ) -> Result<MappedMutexGuard<'_, tonic_lnd::InvoicesClient>> {
+        let guard = self.client.lock().await;
+        Ok(MutexGuard::map(guard, |client| client.invoices()))
+    }
+
     pub async fn pub_key(&self) -> Result<String> {
         Ok(self
-            .client_lock()
+            .lightning_client_lock()
             .await?
             .get_info(GetInfoRequest {})
             .await?
@@ -378,7 +387,7 @@ impl Lnd {
     pub async fn await_block_processing(&self) -> Result<()> {
         poll("lnd block processing", None, || async {
             let synced = self
-                .client_lock()
+                .lightning_client_lock()
                 .await
                 .map_err(ControlFlow::Break)?
                 .get_info(GetInfoRequest {})

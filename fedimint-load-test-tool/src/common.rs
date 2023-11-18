@@ -72,7 +72,7 @@ pub async fn reissue_notes(
         .into_stream();
     while let Some(update) = updates.next().await {
         if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-            return Err(anyhow::Error::msg(format!("Reissue failed: {e}")));
+            bail!("Reissue failed: {e}")
         }
     }
     event_sender.send(MetricEvent {
@@ -99,7 +99,7 @@ pub async fn do_spend_notes(
             fedimint_mint_client::SpendOOBState::Created
             | fedimint_mint_client::SpendOOBState::Success => {}
             other => {
-                return Err(anyhow::Error::msg(format!("Spend failed: {other:?}")));
+                bail!("Spend failed: {other:?}");
             }
         }
     }
@@ -121,7 +121,7 @@ pub async fn await_spend_notes_finish(
             fedimint_mint_client::SpendOOBState::Created
             | fedimint_mint_client::SpendOOBState::Success => {}
             other => {
-                return Err(anyhow::Error::msg(format!("Spend failed: {other:?}")));
+                bail!("Spend failed: {other:?}");
             }
         }
     }

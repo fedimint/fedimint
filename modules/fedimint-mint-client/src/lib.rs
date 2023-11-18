@@ -473,7 +473,7 @@ impl ClientModule for MintClientModule {
 
                 while let Some(update) = updates.next().await {
                     if let ReissueExternalNotesState::Failed(e) = update {
-                        return Err(anyhow::Error::msg(format!("Reissue failed: {e}")));
+                        bail!("Reissue failed: {e}");
                     }
 
                     info!("Update: {:?}", update);

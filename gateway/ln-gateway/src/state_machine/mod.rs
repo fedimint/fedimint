@@ -13,7 +13,7 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -534,17 +534,25 @@ impl GatewayClientModule {
                             .map(|s| s.into_dyn(self.client_ctx.module_instance_id()))
                             .collect();
 
-                        self.client_ctx.add_state_machines(dbtx, dyn_states).await?;
-                        self.client_ctx
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                KIND.as_str(),
-                                GatewayMeta::Pay,
-                            )
-                            .await;
-
-                        Ok(operation_id)
+                            match self.client_ctx.add_state_machines(dbtx, dyn_states).await {
+                                Ok(()) => {
+                                    self.client_ctx
+                                        .add_operation_log_entry(
+                                            dbtx,
+                                            operation_id,
+                                            KIND.as_str(),
+                                            GatewayMeta::Pay,
+                                        )
+                                        .await;
+                                }
+                                Err(AddStateMachinesError::StateAlreadyExists) => {
+                                    info!("State machine for operation {operation_id} already exists, will not add a new one")
+                                }
+                                Err(other) => {
+                                    anyhow::bail!("Failed to add state machines: {other:?}")
+                                }
+                            }
+                            Ok(operation_id)
                     })
                 },
                 Some(100),

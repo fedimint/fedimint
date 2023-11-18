@@ -292,7 +292,7 @@ impl LightningPayFunded {
             match Self::try_gateway_pay_invoice(gateway.clone(), payload.clone()).await {
                 Ok(preimage) => return Ok(preimage),
                 Err(e) => {
-                    warn!("Error while trying to reach gateway: {}", e);
+                    warn!("Error while trying to reach gateway: {e}");
                     last_error = Some(e);
                     sleep(RETRY_DELAY).await;
                 }
