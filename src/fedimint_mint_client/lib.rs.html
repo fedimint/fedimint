@@ -1771,10 +1771,6 @@
 <a href="#1771" id="1771">1771</a>
 <a href="#1772" id="1772">1772</a>
 <a href="#1773" id="1773">1773</a>
-<a href="#1774" id="1774">1774</a>
-<a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a>
-<a href="#1777" id="1777">1777</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2859,14 +2855,10 @@
         );
 
         <span class="kw">let </span>amount = notes.total_amount();
-        <span class="kw">let </span>mint_input = <span class="self">self
-            </span>.create_input_from_notes(operation_id, notes)
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_iter()
-            .map(|input| input.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()))
-            .collect();
+        <span class="kw">let </span>mint_input = <span class="self">self</span>.create_input_from_notes(operation_id, notes).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_inputs(mint_input);
+        <span class="kw">let </span>tx =
+            TransactionBuilder::new().with_inputs(<span class="self">self</span>.client_ctx.map_dyn(mint_input).collect());
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">&quot;MintClientModule::reissue_external_notes extra_meta is serializable&quot;</span>);

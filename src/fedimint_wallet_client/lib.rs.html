@@ -1228,7 +1228,7 @@
                 </span>.create_withdraw_output(operation_id, address.clone(), amount, fee)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>tx_builder = TransactionBuilder::new()
-                .with_output(withdraw_output.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()));
+                .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
 
             <span class="self">self</span>.client_ctx
                 .finalize_and_submit_transaction(
@@ -1259,7 +1259,7 @@
             </span>.create_rbf_withdraw_output(operation_id, rbf.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>tx_builder = TransactionBuilder::new()
-            .with_output(withdraw_output.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()));
+            .with_output(<span class="self">self</span>.client_ctx.make_client_output(withdraw_output));
 
         <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(

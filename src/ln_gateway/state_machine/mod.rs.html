@@ -750,8 +750,6 @@
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
 <a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -1165,13 +1163,12 @@
             </span>.create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>dyn_client_output = ClientOutput {
+        <span class="kw">let </span>output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
             state_machines: client_output.state_machines,
-        }
-        .into_dyn(<span class="self">self</span>.client_ctx.module_instance_id());
+        };
 
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
         <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
         <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
@@ -1192,13 +1189,12 @@
             </span>.create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>dyn_client_output = ClientOutput {
-            output: LightningOutput::V0(client_output.output),
-            state_machines: client_output.state_machines,
-        }
-        .into_dyn(<span class="self">self</span>.client_ctx.module_instance_id());
-
-        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
+        <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(
+            ClientOutput {
+                output: LightningOutput::V0(client_output.output),
+                state_machines: client_output.state_machines,
+            },
+        ));
         <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>: TransactionId, <span class="kw">_</span>: Vec&lt;OutPoint&gt;| GatewayMeta::Receive;
         <span class="self">self</span>.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
@@ -1285,7 +1281,7 @@
 
                         <span class="kw">let </span>dyn_states = state_machines
                             .into_iter()
-                            .map(|s| s.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()))
+                            .map(|s| <span class="self">self</span>.client_ctx.make_dyn(s))
                             .collect();
 
                             <span class="kw">match </span><span class="self">self</span>.client_ctx.add_state_machines(dbtx, dyn_states).<span class="kw">await </span>{
