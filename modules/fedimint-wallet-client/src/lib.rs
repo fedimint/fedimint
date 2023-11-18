@@ -373,7 +373,7 @@ impl WalletClientModule {
             .client_ctx
             .global_db()
             .autocommit(
-                |dbtx| {
+                |dbtx, _| {
                     Box::pin(async {
                         let (operation_id, sm, address) = self
                             .get_deposit_address_inner(
