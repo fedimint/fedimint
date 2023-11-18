@@ -146,24 +146,6 @@ where
         self.module_instance_id
     }
 
-    /// Turn a typed output into a dyn version
-    pub fn make_dyn_output(&self, output: <M::Common as ModuleCommon>::Output) -> DynOutput {
-        output.into_dyn(self.module_instance_id())
-    }
-
-    /// Turn a typed input into a dyn version
-    pub fn make_dyn_input(&self, input: <M::Common as ModuleCommon>::Input) -> DynInput {
-        input.into_dyn(self.module_instance_id())
-    }
-
-    /// Turn a `typed` into a dyn version
-    pub fn make_dyn<I>(&self, typed: I) -> <I as IntoDynInstance>::DynType
-    where
-        I: IntoDynInstance,
-    {
-        typed.into_dyn(self.module_instance_id())
-    }
-
     pub fn map_dyn<'s, 'i, 'o, I>(
         &'s self,
         typed: impl IntoIterator<Item = I> + 'i,
@@ -175,13 +157,32 @@ where
     {
         typed.into_iter().map(move |i| self.make_dyn(i))
     }
+
+    /// Turn a typed output into a dyn version
+    pub fn make_dyn_output(&self, output: <M::Common as ModuleCommon>::Output) -> DynOutput {
+        self.make_dyn(output)
+    }
+
+    /// Turn a typed input into a dyn version
+    pub fn make_dyn_input(&self, input: <M::Common as ModuleCommon>::Input) -> DynInput {
+        self.make_dyn(input)
+    }
+
+    /// Turn a `typed` into a dyn version
+    pub fn make_dyn<I>(&self, typed: I) -> <I as IntoDynInstance>::DynType
+    where
+        I: IntoDynInstance,
+    {
+        typed.into_dyn(self.module_instance_id())
+    }
+
     /// Turn a typed [`ClientOutput`] into a dyn version
     pub fn make_client_output<O, S>(&self, output: ClientOutput<O, S>) -> ClientOutput
     where
         O: IntoDynInstance<DynType = DynOutput> + 'static,
         S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
     {
-        IntoDynInstance::into_dyn(output, self.module_instance_id())
+        self.make_dyn(output)
     }
 
     /// Turn a typed [`ClientInput`] into a dyn version
@@ -190,7 +191,7 @@ where
         O: IntoDynInstance<DynType = DynInput> + 'static,
         S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
     {
-        IntoDynInstance::into_dyn(input, self.module_instance_id())
+        self.make_dyn(input)
     }
 
     /// See [`crate::Client::finalize_and_submit_transaction`]
