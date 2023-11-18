@@ -1336,6 +1336,7 @@ impl<'a> StatelessWallet<'a> {
             inputs = selected_utxos.len(),
             input_sats = total_selected_value.to_sat(),
             peg_out_sats = peg_out_amount.to_sat(),
+            ?total_weight,
             fees_sats = fees.to_sat(),
             fee_rate = fee_rate.sats_per_kvb,
             change_sats = change.to_sat(),
@@ -1566,8 +1567,11 @@ mod tests {
         let weight = 875;
 
         // not enough SpendableUTXO
+        // tx fee = ceil(875 / 4) * 1 sat/vb = 219
+        // change script dust = 330
+        // spendable sats = 3000 - 219 - 330 = 2451
         let tx = wallet.create_tx(
-            Amount::from_sat(2000),
+            Amount::from_sat(2452),
             recipient.script_pubkey(),
             vec![],
             vec![(UTXOKey(OutPoint::null()), spendable.clone())],

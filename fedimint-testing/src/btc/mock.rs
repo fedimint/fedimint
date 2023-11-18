@@ -272,7 +272,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
     }
 
     async fn get_fee_rate(&self, _confirmation_target: u16) -> BitcoinRpcResult<Option<Feerate>> {
-        Ok(None)
+        Ok(Some(Feerate { sats_per_kvb: 2000 }))
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
