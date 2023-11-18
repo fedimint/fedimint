@@ -94,7 +94,7 @@ type TriggerFuture = Pin<Box<maybe_add_send!(dyn Future<Output = serde_json::Val
 pub(super) type StateTransitionFunction<S> = Arc<
     maybe_add_send_sync!(
         dyn for<'a> Fn(
-            &'a mut ClientSMDatabaseTransaction<'_, '_>,
+            &'a mut ClientSMDatabaseTransaction<'_, '_, '_>,
             serde_json::Value,
             S,
         ) -> BoxFuture<'a, S>
@@ -142,7 +142,7 @@ impl<S> StateTransition<S> {
         S: MaybeSend + MaybeSync + Clone + 'static,
         V: serde::Serialize + serde::de::DeserializeOwned + Send,
         Trigger: Future<Output = V> + MaybeSend + 'static,
-        TransitionFn: for<'a> Fn(&'a mut ClientSMDatabaseTransaction<'_, '_>, V, S) -> BoxFuture<'a, S>
+        TransitionFn: for<'a> Fn(&'a mut ClientSMDatabaseTransaction<'_, '_, '_>, V, S) -> BoxFuture<'a, S>
             + MaybeSend
             + MaybeSync
             + Clone
@@ -188,7 +188,9 @@ where
         .map(|st| StateTransition {
             trigger: st.trigger,
             transition: Arc::new(
-                move |dbtx: &mut ClientSMDatabaseTransaction<'_, '_>, val, state: DynState<GC>| {
+                move |dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
+                      val,
+                      state: DynState<GC>| {
                     let transition = st.transition.clone();
                     Box::pin(async move {
                         let new_state = transition(

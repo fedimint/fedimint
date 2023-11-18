@@ -3,14 +3,14 @@ use fedimint_core::db::DatabaseTransaction;
 
 /// A transaction that acts as isolated for module code but can be accessed as a
 /// normal transaction in this crate.
-pub struct ClientSMDatabaseTransaction<'inner, 'parent> {
-    dbtx: &'inner mut DatabaseTransaction<'static, 'parent>,
+pub struct ClientSMDatabaseTransaction<'parent, 'r, 'tx> {
+    dbtx: &'r mut DatabaseTransaction<'parent, 'tx>,
     module_instance: ModuleInstanceId,
 }
 
-impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
+impl<'parent, 'r, 'tx> ClientSMDatabaseTransaction<'parent, 'r, 'tx> {
     pub fn new(
-        dbtx: &'inner mut DatabaseTransaction<'static, 'parent>,
+        dbtx: &'r mut DatabaseTransaction<'parent, 'tx>,
         module_instance: ModuleInstanceId,
     ) -> Self {
         Self {
@@ -29,7 +29,7 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     /// client internal code. This is useful for submitting Fedimint
     /// transactions from within state transitions.
     #[allow(dead_code)]
-    pub(crate) fn global_tx(&mut self) -> &mut DatabaseTransaction<'static, 'parent> {
+    pub(crate) fn global_tx(&mut self) -> &mut DatabaseTransaction<'parent, 'tx> {
         self.dbtx
     }
 }

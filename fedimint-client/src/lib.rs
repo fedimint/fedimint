@@ -198,7 +198,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// `OutPoint` that represents change if change was added.
     async fn claim_input_dyn(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         input: InstancelessDynClientInput,
     ) -> (TransactionId, Vec<OutPoint>);
 
@@ -208,14 +208,14 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// `OutPoint` that represents change if change was added.
     async fn fund_output_dyn(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         output: InstancelessDynClientOutput,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
 
     /// Adds a state machine to the executor.
     async fn add_state_machine_dyn(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
     ) -> AddStateMachinesResult;
 
@@ -263,7 +263,7 @@ impl DynGlobalClientContext {
     /// should there be any required.
     pub async fn claim_input<I, S>(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         input: ClientInput<I, S>,
     ) -> (TransactionId, Vec<OutPoint>)
     where
@@ -291,7 +291,7 @@ impl DynGlobalClientContext {
     /// required.
     pub async fn fund_output<O, S>(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         output: ClientOutput<O, S>,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
@@ -313,7 +313,7 @@ impl DynGlobalClientContext {
     /// machine from inside which it was spawned.
     pub async fn add_state_machine<S>(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         sm: S,
     ) -> AddStateMachinesResult
     where
@@ -393,7 +393,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
 
     async fn claim_input_dyn(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         input: InstancelessDynClientInput,
     ) -> (TransactionId, Vec<OutPoint>) {
         let instance_input = ClientInput {
@@ -414,7 +414,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
 
     async fn fund_output_dyn(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         output: InstancelessDynClientOutput,
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         let instance_output = ClientOutput {
@@ -433,7 +433,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
 
     async fn add_state_machine_dyn(
         &self,
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_, '_>,
         sm: Box<maybe_add_send_sync!(dyn IState<DynGlobalClientContext>)>,
     ) -> AddStateMachinesResult {
         let state = DynState::from_parts(self.module_instance_id, sm);
