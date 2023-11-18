@@ -1982,6 +1982,10 @@
 <a href="#1982" id="1982">1982</a>
 <a href="#1983" id="1983">1983</a>
 <a href="#1984" id="1984">1984</a>
+<a href="#1985" id="1985">1985</a>
+<a href="#1986" id="1986">1986</a>
+<a href="#1987" id="1987">1987</a>
+<a href="#1988" id="1988">1988</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
@@ -3320,6 +3324,7 @@
             inputs = selected_utxos.len(),
             input_sats = total_selected_value.to_sat(),
             peg_out_sats = peg_out_amount.to_sat(),
+            <span class="question-mark">?</span>total_weight,
             fees_sats = fees.to_sat(),
             fee_rate = fee_rate.sats_per_kvb,
             change_sats = change.to_sat(),
@@ -3550,8 +3555,11 @@
         <span class="kw">let </span>weight = <span class="number">875</span>;
 
         <span class="comment">// not enough SpendableUTXO
+        // tx fee = ceil(875 / 4) * 1 sat/vb = 219
+        // change script dust = 330
+        // spendable sats = 3000 - 219 - 330 = 2451
         </span><span class="kw">let </span>tx = wallet.create_tx(
-            Amount::from_sat(<span class="number">2000</span>),
+            Amount::from_sat(<span class="number">2452</span>),
             recipient.script_pubkey(),
             <span class="macro">vec!</span>[],
             <span class="macro">vec!</span>[(UTXOKey(OutPoint::null()), spendable.clone())],

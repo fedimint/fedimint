@@ -60,10 +60,10 @@ order in which the gateway will respect configurations:</p>
 </div></details><section id="method.remove_client" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#998-1006">source</a><h4 class="code-header">pub async fn <a href="#method.remove_client" class="fn">remove_client</a>(
     &amp;self,
     federation_id: <a class="struct" href="../fedimint_core/config/struct.FederationId.html" title="struct fedimint_core::config::FederationId">FederationId</a>
-) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="../fedimint_client/struct.ClientArc.html" title="struct fedimint_client::ClientArc">ClientArc</a>&gt;</h4></section><section id="method.select_client" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1008-1020">source</a><h4 class="code-header">pub async fn <a href="#method.select_client" class="fn">select_client</a>(
+) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;ClientArc&gt;</h4></section><section id="method.select_client" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1008-1020">source</a><h4 class="code-header">pub async fn <a href="#method.select_client" class="fn">select_client</a>(
     &amp;self,
     federation_id: <a class="struct" href="../fedimint_core/config/struct.FederationId.html" title="struct fedimint_core::config::FederationId">FederationId</a>
-) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="../fedimint_client/struct.ClientArc.html" title="struct fedimint_client::ClientArc">ClientArc</a>&gt;</h4></section><section id="method.load_clients" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1022-1076">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.load_clients" class="fn">load_clients</a>(
+) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;ClientArc&gt;</h4></section><section id="method.load_clients" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1022-1076">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.load_clients" class="fn">load_clients</a>(
     &amp;mut self,
     lnrpc: <a class="struct" href="https://doc.rust-lang.org/1.73.0/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;dyn <a class="trait" href="lnrpc_client/trait.ILnRpcClient.html" title="trait ln_gateway::lnrpc_client::ILnRpcClient">ILnRpcClient</a>&gt;,
     lightning_public_key: PublicKey,
@@ -79,7 +79,7 @@ order in which the gateway will respect configurations:</p>
     num_route_hints: <a class="primitive" href="https://doc.rust-lang.org/1.73.0/std/primitive.u32.html">u32</a>
 ) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.73.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;RouteHint&gt;&gt;</h4></section><section id="method.make_federation_info" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1196-1209">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.make_federation_info" class="fn">make_federation_info</a>(
     &amp;self,
-    client: &amp;<a class="struct" href="../fedimint_client/struct.ClientArc.html" title="struct fedimint_client::ClientArc">ClientArc</a>,
+    client: &amp;ClientArc,
     federation_id: <a class="struct" href="../fedimint_core/config/struct.FederationId.html" title="struct fedimint_core::config::FederationId">FederationId</a>
 ) -&gt; <a class="struct" href="rpc/struct.FederationInfo.html" title="struct ln_gateway::rpc::FederationInfo">FederationInfo</a></h4></section><section id="method.check_federation_network" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1211-1238">source</a><h4 class="code-header">pub(crate) async fn <a href="#method.check_federation_network" class="fn">check_federation_network</a>(
     &amp;self,
