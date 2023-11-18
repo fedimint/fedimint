@@ -1203,7 +1203,7 @@ impl MintClientModule {
         self.client_ctx
             .global_db()
             .autocommit(
-                move |dbtx, _| {
+                move |dbtx| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async move {
                         let (operation_id, states, notes) = self

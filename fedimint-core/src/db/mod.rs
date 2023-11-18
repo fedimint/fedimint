@@ -263,11 +263,6 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
     }
 }
 
-/// Just ignore this type, it's only there to make compiler happy
-///
-/// See <https://users.rust-lang.org/t/argument-requires-that-is-borrowed-for-static/66503/2?u=yandros> for details.
-pub type PhantomBound<'big, 'small> = PhantomData<&'small &'big ()>;
-
 /// A public-facing newtype over `IDatabase`
 ///
 /// Notably carries set of module decoders (`ModuleDecoderRegistry`)
@@ -399,10 +394,7 @@ impl Database {
     ) -> Result<T, AutocommitError<E>>
     where
         's: 'tx,
-        for<'a> F: Fn(
-            &'a mut DatabaseTransaction<'s, 'tx>,
-            PhantomBound<'tx, 'a>,
-        ) -> BoxFuture<'a, Result<T, E>>,
+        for<'a> F: Fn(&'a mut DatabaseTransaction<'s, 'tx>) -> BoxFuture<'a, Result<T, E>>,
     {
         assert_ne!(max_attempts, Some(0));
         let mut curr_attempts: usize = 0;
@@ -417,7 +409,7 @@ impl Database {
                 .expect("db autocommit attempt counter overflowed");
 
             let mut dbtx = self.begin_transaction().await;
-            let tx_fn = tx_fn(&mut dbtx, PhantomData).await;
+            let tx_fn = tx_fn(&mut dbtx).await;
             match tx_fn {
                 Ok(val) => {
                     let _timing /* logs on drop */ = timing::TimeReporter::new("autocommit - commit_tx");
@@ -2546,7 +2538,7 @@ mod test_utils {
 
         let db = Database::new(FakeDatabase, ModuleDecoderRegistry::default());
         let err = db
-            .autocommit::<_, _, ()>(|_dbtx, _| Box::pin(async { Ok(()) }), Some(5))
+            .autocommit::<_, _, ()>(|_dbtx| Box::pin(async { Ok(()) }), Some(5))
             .await
             .unwrap_err();
 

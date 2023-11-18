@@ -864,7 +864,7 @@ impl Client {
         let autocommit_res = self
             .db
             .autocommit(
-                |dbtx, _| {
+                |dbtx| {
                     let operation_type = operation_type.clone();
                     let tx_builder = tx_builder.clone();
                     let operation_meta = operation_meta.clone();

@@ -515,7 +515,7 @@ impl GatewayClientModule {
         self.client_ctx
             .global_db()
             .autocommit(
-                |dbtx, _| {
+                |dbtx| {
                     Box::pin(async {
                         let operation_id = OperationId(payload.contract_id.into_inner());
 
