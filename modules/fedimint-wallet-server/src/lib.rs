@@ -645,7 +645,7 @@ impl ServerModule for Wallet {
                 BLOCK_COUNT_ENDPOINT,
                 async |module: &Wallet, context, _params: ()| -> u32 {
                     // TODO: perhaps change this to an Option
-                    Ok(module.consensus_block_count(&mut context.dbtx()).await.unwrap_or_default())
+                    Ok(module.consensus_block_count( context.dbtx()).await.unwrap_or_default())
                 }
             },
             api_endpoint! {
@@ -658,7 +658,7 @@ impl ServerModule for Wallet {
                 PEG_OUT_FEES_ENDPOINT,
                 async |module: &Wallet, context, params: (Address, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let feerate = module.consensus_fee_rate(&mut context.dbtx()).await;
+                    let feerate = module.consensus_fee_rate( context.dbtx()).await;
 
                     // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
                     let dummy_tweak = [0; 32];
@@ -667,7 +667,7 @@ impl ServerModule for Wallet {
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
                         vec![],
-                        module.available_utxos(&mut context.dbtx()).await,
+                        module.available_utxos( context.dbtx()).await,
                         feerate,
                         &dummy_tweak,
                         None

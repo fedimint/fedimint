@@ -857,14 +857,14 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 BLOCK_COUNT_ENDPOINT,
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
-                    Ok(Some(module.consensus_block_count(&mut context.dbtx()).await))
+                    Ok(Some(module.consensus_block_count(context.dbtx()).await))
                 }
             },
             api_endpoint! {
                 ACCOUNT_ENDPOINT,
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
                     Ok(module
-                        .get_contract_account(&mut context.dbtx(), contract_id)
+                        .get_contract_account(context.dbtx(), contract_id)
                         .await)
                 }
             },
@@ -879,7 +879,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 AWAIT_BLOCK_HEIGHT_ENDPOINT,
                 async |module: &Lightning, context, block_height: u64| -> () {
-                    module.wait_block_height(block_height, &mut context.dbtx()).await;
+                    module.wait_block_height(block_height, context.dbtx()).await;
                     Ok(())
                 }
             },
@@ -899,7 +899,7 @@ impl ServerModule for Lightning {
                 OFFER_ENDPOINT,
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     Ok(module
-                        .get_offer(&mut context.dbtx(), payment_hash)
+                        .get_offer(context.dbtx(), payment_hash)
                         .await)
                }
             },
@@ -914,13 +914,13 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 LIST_GATEWAYS_ENDPOINT,
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
-                    Ok(module.list_gateways(&mut context.dbtx()).await)
+                    Ok(module.list_gateways(context.dbtx()).await)
                 }
             },
             api_endpoint! {
                 REGISTER_GATEWAY_ENDPOINT,
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
-                    module.register_gateway(&mut context.dbtx(), gateway).await;
+                    module.register_gateway(context.dbtx(), gateway).await;
                     Ok(())
                 }
             },

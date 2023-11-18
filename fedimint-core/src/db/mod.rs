@@ -392,16 +392,16 @@ impl Database {
     ///
     /// This function panics when the given number of maximum attempts is zero.
     /// `max_attempts` must be greater or equal to one.
-    pub async fn autocommit<'s, 'tx, 'f, F, T, E>(
+    pub async fn autocommit<'s, 'tx, F, T, E>(
         &'s self,
         tx_fn: F,
         max_attempts: Option<usize>,
     ) -> Result<T, AutocommitError<E>>
     where
         's: 'tx,
-        for<'a> F: Fn(
-            &'a mut DatabaseTransaction<'s, 'tx>,
-            PhantomBound<'tx, 'a>,
+        for<'a, 'b> F: Fn(
+            &'a mut DatabaseTransaction<'b, 'tx>,
+            PhantomBound<'tx, 'b>,
         ) -> BoxFuture<'a, Result<T, E>>,
     {
         assert_ne!(max_attempts, Some(0));
@@ -422,7 +422,7 @@ impl Database {
                 Ok(val) => {
                     let _timing /* logs on drop */ = timing::TimeReporter::new("autocommit - commit_tx");
 
-                    match dbtx.commit_tx_result().await {
+                    match dbtx.commit_tx_result_private().await {
                         Ok(()) => {
                             return Ok(val);
                         }
@@ -1330,8 +1330,9 @@ impl<'parent, 'tx> DatabaseTransaction<'parent, 'tx> {
     /// Get a sub-transaction reference with a shorter lifetime
     pub fn dbtx_ref<'s, 'a>(&'s mut self) -> DatabaseTransaction<'s, 'a>
     where
+        'parent: 'tx,
+        's: 'tx,
         'tx: 'a,
-        's: 'a,
     {
         DatabaseTransaction {
             tx: Box::new(&mut self.tx),
@@ -1421,10 +1422,8 @@ impl<'parent, 'tx> DatabaseTransaction<'parent, 'tx> {
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
         self.on_commit_hooks.push(Box::new(f));
     }
-}
 
-impl<'tx> DatabaseTransaction<'static, 'tx> {
-    pub async fn commit_tx_result(mut self) -> Result<()> {
+    pub(crate) async fn commit_tx_result_private(mut self) -> Result<()> {
         self.commit_tracker.is_committed = true;
         let commit_result = self.tx.commit_tx().await;
 
@@ -1438,11 +1437,21 @@ impl<'tx> DatabaseTransaction<'static, 'tx> {
         commit_result
     }
 
-    pub async fn commit_tx(mut self) {
+    pub(crate) async fn commit_tx_private(mut self) {
         self.commit_tracker.is_committed = true;
-        self.commit_tx_result()
+        self.commit_tx_result_private()
             .await
             .expect("Unrecoverable error occurred while committing to the database.");
+    }
+}
+
+impl<'tx> DatabaseTransaction<'static, 'tx> {
+    pub async fn commit_tx_result(self) -> Result<()> {
+        self.commit_tx_result_private().await
+    }
+
+    pub async fn commit_tx(self) {
+        self.commit_tx_private().await
     }
 }
 

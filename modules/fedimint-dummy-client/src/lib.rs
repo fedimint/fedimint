@@ -245,10 +245,7 @@ impl DummyClientModule {
         // TODO: Building a tx could be easier
         // Create input using our own account
         let inputs = fedimint_client::module::ClientModule::create_sufficient_input(
-            self,
-            &mut dbtx.dbtx_ref(),
-            op_id,
-            amount,
+            self, &mut dbtx, op_id, amount,
         )
         .await?
         .into_iter()

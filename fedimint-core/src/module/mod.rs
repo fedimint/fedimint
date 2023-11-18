@@ -155,16 +155,16 @@ impl ApiError {
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'dbtx> {
     db: Database,
-    dbtx: DatabaseTransaction<'static, 'dbtx>,
+    dbtx: DatabaseTransaction<'dbtx, 'dbtx>,
     has_auth: bool,
     request_auth: Option<ApiAuth>,
 }
 
-impl<'a> ApiEndpointContext<'a> {
+impl<'dbtx> ApiEndpointContext<'dbtx> {
     /// `db` and `dbtx` should be isolated.
     pub fn new(
         db: Database,
-        dbtx: DatabaseTransaction<'static, 'a>,
+        dbtx: DatabaseTransaction<'static, 'dbtx>,
         has_auth: bool,
         request_auth: Option<ApiAuth>,
     ) -> Self {
@@ -177,13 +177,9 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Database tx handle, will be committed
-    pub fn dbtx<'s, 'mtx>(&'s mut self) -> DatabaseTransaction<'_, 'mtx>
-    where
-        'a: 'mtx,
-        's: 'mtx,
-    {
+    pub fn dbtx<'s>(&'s mut self) -> &mut DatabaseTransaction<'dbtx, 'dbtx> {
         // dbtx is already isolated.
-        self.dbtx.dbtx_ref()
+        &mut self.dbtx
     }
 
     /// Returns the auth set on the request (regardless of whether it was
@@ -224,7 +220,7 @@ impl<'a> ApiEndpointContext<'a> {
 
     /// Attempts to commit the dbtx or returns an ApiError
     pub async fn commit_tx_result(self, path: &'static str) -> Result<(), ApiError> {
-        self.dbtx.commit_tx_result().await.map_err(|_err| {
+        self.dbtx.commit_tx_result_private().await.map_err(|_err| {
             tracing::warn!(
                 target: fedimint_logging::LOG_NET_API,
                 path,
@@ -295,7 +291,10 @@ macro_rules! __api_endpoint {
                 $state: &'state Self::State,
                 $context: &'context mut $crate::module::ApiEndpointContext<'dbtx>,
                 $param: Self::Param,
-            ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
+            ) -> ::std::result::Result<Self::Response, $crate::module::ApiError>
+            where
+                'dbtx: 'context,
+            {
                 $body
             }
         }

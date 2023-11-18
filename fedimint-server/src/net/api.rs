@@ -254,9 +254,9 @@ impl ConsensusApi {
         ))
     }
 
-    async fn handle_backup_request<'s, 'dbtx, 'a>(
-        &'s self,
-        dbtx: &'dbtx mut DatabaseTransaction<'_, 'a>,
+    async fn handle_backup_request(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, '_>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -437,7 +437,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             BACKUP_ENDPOINT,
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
                 fedimint
-                    .handle_backup_request(&mut context.dbtx(), request).await?;
+                    .handle_backup_request(context.dbtx(), request).await?;
                 Ok(())
 
             }
@@ -446,7 +446,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             RECOVER_ENDPOINT,
             async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
-                    .handle_recover_request(&mut context.dbtx(), id).await)
+                    .handle_recover_request(context.dbtx(), id).await)
             }
         },
         api_endpoint! {

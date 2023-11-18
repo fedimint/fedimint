@@ -124,7 +124,7 @@ impl GatewayClientBuilder {
     pub async fn save_config(
         &self,
         config: FederationConfig,
-        mut dbtx: DatabaseTransaction<'_, '_>,
+        mut dbtx: DatabaseTransaction<'static, '_>,
     ) -> Result<()> {
         let id = config.invite_code.federation_id();
         dbtx.insert_entry(&FederationIdKey { id }, &config).await;
