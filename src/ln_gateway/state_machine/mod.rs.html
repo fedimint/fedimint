@@ -744,6 +744,14 @@
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
 <a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -759,7 +767,7 @@
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::api::DynModuleApi;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -1280,17 +1288,25 @@
                             .map(|s| s.into_dyn(<span class="self">self</span>.client_ctx.module_instance_id()))
                             .collect();
 
-                        <span class="self">self</span>.client_ctx.add_state_machines(dbtx, dyn_states).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="self">self</span>.client_ctx
-                            .add_operation_log_entry(
-                                dbtx,
-                                operation_id,
-                                KIND.as_str(),
-                                GatewayMeta::Pay,
-                            )
-                            .<span class="kw">await</span>;
-
-                        <span class="prelude-val">Ok</span>(operation_id)
+                            <span class="kw">match </span><span class="self">self</span>.client_ctx.add_state_machines(dbtx, dyn_states).<span class="kw">await </span>{
+                                <span class="prelude-val">Ok</span>(()) =&gt; {
+                                    <span class="self">self</span>.client_ctx
+                                        .add_operation_log_entry(
+                                            dbtx,
+                                            operation_id,
+                                            KIND.as_str(),
+                                            GatewayMeta::Pay,
+                                        )
+                                        .<span class="kw">await</span>;
+                                }
+                                <span class="prelude-val">Err</span>(AddStateMachinesError::StateAlreadyExists) =&gt; {
+                                    <span class="macro">info!</span>(<span class="string">&quot;State machine for operation {operation_id} already exists, will not add a new one&quot;</span>)
+                                }
+                                <span class="prelude-val">Err</span>(other) =&gt; {
+                                    <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Failed to add state machines: {other:?}&quot;</span>)
+                                }
+                            }
+                            <span class="prelude-val">Ok</span>(operation_id)
                     })
                 },
                 <span class="prelude-val">Some</span>(<span class="number">100</span>),

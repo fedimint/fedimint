@@ -2250,7 +2250,7 @@
 
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
                     <span class="kw">if let </span>ReissueExternalNotesState::Failed(e) = update {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(anyhow::Error::msg(<span class="macro">format!</span>(<span class="string">&quot;Reissue failed: {e}&quot;</span>)));
+                        <span class="macro">bail!</span>(<span class="string">&quot;Reissue failed: {e}&quot;</span>);
                     }
 
                     <span class="macro">info!</span>(<span class="string">&quot;Update: {:?}&quot;</span>, update);

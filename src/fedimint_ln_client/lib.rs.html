@@ -1321,6 +1321,43 @@
 <a href="#1321" id="1321">1321</a>
 <a href="#1322" id="1322">1322</a>
 <a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
+<a href="#1331" id="1331">1331</a>
+<a href="#1332" id="1332">1332</a>
+<a href="#1333" id="1333">1333</a>
+<a href="#1334" id="1334">1334</a>
+<a href="#1335" id="1335">1335</a>
+<a href="#1336" id="1336">1336</a>
+<a href="#1337" id="1337">1337</a>
+<a href="#1338" id="1338">1338</a>
+<a href="#1339" id="1339">1339</a>
+<a href="#1340" id="1340">1340</a>
+<a href="#1341" id="1341">1341</a>
+<a href="#1342" id="1342">1342</a>
+<a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
+<a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
+<a href="#1355" id="1355">1355</a>
+<a href="#1356" id="1356">1356</a>
+<a href="#1357" id="1357">1357</a>
+<a href="#1358" id="1358">1358</a>
+<a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>pay;
@@ -1405,13 +1442,29 @@
 /// client can get refund
 </span><span class="kw">const </span>OUTGOING_LN_CONTRACT_TIMELOCK: u64 = <span class="number">500</span>;
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>PayType {
     <span class="comment">// Payment from this client to another user within the federation
     </span>Internal(OperationId),
     <span class="comment">// Payment from this client to another user, facilitated by a gateway
     </span>Lightning(OperationId),
+}
+
+<span class="kw">impl </span>PayType {
+    <span class="kw">pub fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
+        <span class="kw">match </span><span class="self">self </span>{
+            PayType::Internal(operation_id) | PayType::Lightning(operation_id) =&gt; <span class="kw-2">*</span>operation_id,
+        }
+    }
+
+    <span class="kw">pub fn </span>payment_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+        <span class="kw">match </span><span class="self">self </span>{
+            PayType::Internal(<span class="kw">_</span>) =&gt; <span class="string">&quot;internal&quot;</span>,
+            PayType::Lightning(<span class="kw">_</span>) =&gt; <span class="string">&quot;lightning&quot;</span>,
+        }
+        .into()
+    }
 }
 
 <span class="doccomment">/// The high-level state of an pay operation internal to the federation,
@@ -1502,13 +1555,19 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
+</span><span class="kw">pub struct </span>LightningOperationMetaPay {
+    <span class="kw">pub </span>out_point: OutPoint,
+    <span class="kw">pub </span>invoice: Bolt11Invoice,
+    <span class="kw">pub </span>fee: Amount,
+    <span class="kw">pub </span>change: Vec&lt;OutPoint&gt;,
+    <span class="kw">pub </span>is_internal_payment: bool,
+    <span class="kw">pub </span>contract_id: ContractId,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;snake_case&quot;</span>)]
 </span><span class="kw">pub enum </span>LightningOperationMeta {
-    Pay {
-        out_point: OutPoint,
-        invoice: Bolt11Invoice,
-        fee: Amount,
-        change: Vec&lt;OutPoint&gt;,
-    },
+    Pay(LightningOperationMetaPay),
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
@@ -2247,11 +2306,15 @@
         .into_dyn(<span class="self">self</span>.client_ctx.module_instance_id());
 
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(dyn_client_output);
-        <span class="kw">let </span>operation_meta_gen = |txid, change| LightningOperationMeta::Pay {
-            out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
-            invoice: invoice.clone(),
-            fee,
-            change,
+        <span class="kw">let </span>operation_meta_gen = |txid, change| {
+            LightningOperationMeta::Pay(LightningOperationMetaPay {
+                out_point: OutPoint { txid, out_idx: <span class="number">0 </span>},
+                invoice: invoice.clone(),
+                fee,
+                change,
+                is_internal_payment,
+                contract_id,
+            })
         };
 
         <span class="comment">// Write the new payment index into the database, fail the payment if the commit
@@ -2272,6 +2335,17 @@
             contract_id,
             fee,
         })
+    }
+
+    <span class="kw">pub async fn </span>get_ln_pay_details_for(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+    ) -&gt; anyhow::Result&lt;LightningOperationMetaPay&gt; {
+        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation_2(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>LightningOperationMeta::Pay(pay) = operation.meta::&lt;LightningOperationMeta&gt;() <span class="kw">else </span>{
+            <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>)
+        };
+        <span class="prelude-val">Ok</span>(pay)
     }
 
     <span class="kw">pub async fn </span>subscribe_internal_pay(
@@ -2314,12 +2388,12 @@
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt; {
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation_2(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>(out_point, <span class="kw">_</span>, change) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;() {
-            LightningOperationMeta::Pay {
+            LightningOperationMeta::Pay(LightningOperationMetaPay {
                 out_point,
                 invoice,
                 change,
                 ..
-            } =&gt; (out_point, invoice, change),
+            }) =&gt; (out_point, invoice, change),
             <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">&quot;Operation is not a lightning payment&quot;</span>),
         };
 

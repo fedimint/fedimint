@@ -871,7 +871,7 @@
             <span class="kw">match </span><span class="self">Self</span>::try_gateway_pay_invoice(gateway.clone(), payload.clone()).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(preimage) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage),
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Error while trying to reach gateway: {}&quot;</span>, e);
+                    <span class="macro">warn!</span>(<span class="string">&quot;Error while trying to reach gateway: {e}&quot;</span>);
                     last_error = <span class="prelude-val">Some</span>(e);
                     sleep(RETRY_DELAY).<span class="kw">await</span>;
                 }

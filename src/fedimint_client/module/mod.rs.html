@@ -739,6 +739,9 @@
 <a href="#739" id="739">739</a>
 <a href="#740" id="740">740</a>
 <a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -765,7 +768,10 @@
 <span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
 <span class="kw">use </span><span class="kw">crate</span>::sm::{Context, DynContext, DynState, Executor, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-<span class="kw">use crate</span>::{oplog, ClientArc, ClientWeak, DynGlobalClientContext, TransactionUpdates};
+<span class="kw">use crate</span>::{
+    oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
+    TransactionUpdates,
+};
 
 <span class="kw">pub mod </span>init;
 
@@ -966,7 +972,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         dyn_states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    ) -&gt; AddStateMachinesResult {
         <span class="self">self</span>.client.get().add_state_machines(dbtx, dyn_states).<span class="kw">await
     </span>}
 

@@ -1770,6 +1770,17 @@
 <a href="#1770" id="1770">1770</a>
 <a href="#1771" id="1771">1771</a>
 <a href="#1772" id="1772">1772</a>
+<a href="#1773" id="1773">1773</a>
+<a href="#1774" id="1774">1774</a>
+<a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
+<a href="#1783" id="1783">1783</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1886,6 +1897,7 @@
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::DeriveableSecretClientExt;
+<span class="kw">use </span>thiserror::Error;
 <span class="attr">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
 <span class="kw">use </span>tracing::{debug, error, info, warn};
@@ -1936,6 +1948,16 @@
     Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt; + <span class="lifetime">&#39;static</span>)&gt;,
 &gt;;
 
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">pub enum </span>AddStateMachinesError {
+    <span class="attr">#[error(<span class="string">&quot;State already exists in database&quot;</span>)]
+    </span>StateAlreadyExists,
+    <span class="attr">#[error(<span class="string">&quot;Got {0}&quot;</span>)]
+    </span>Other(<span class="attr">#[from] </span>anyhow::Error),
+}
+
+<span class="kw">pub type </span>AddStateMachinesResult = <span class="prelude-ty">Result</span>&lt;(), AddStateMachinesError&gt;;
+
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IGlobalClientContext: Debug + MaybeSend + MaybeSync + <span class="lifetime">&#39;static </span>{
     <span class="doccomment">/// Returned a reference client&#39;s module API client, so that module-specific
@@ -1978,7 +2000,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt;)&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt;;
+    ) -&gt; AddStateMachinesResult;
 
     <span class="kw">async fn </span>transaction_update_stream(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2076,7 +2098,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         sm: S,
-    ) -&gt; anyhow::Result&lt;()&gt;
+    ) -&gt; AddStateMachinesResult
     <span class="kw">where
         </span>S: State&lt;GlobalContext = DynGlobalClientContext&gt; + MaybeSend + MaybeSync + <span class="lifetime">&#39;static</span>,
     {
@@ -2196,7 +2218,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;_</span>&gt;,
         sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState&lt;DynGlobalClientContext&gt;)&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    ) -&gt; AddStateMachinesResult {
         <span class="kw">let </span>state = DynState::from_parts(<span class="self">self</span>.module_instance_id, sm);
 
         <span class="self">self</span>.client
@@ -2520,7 +2542,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         states: Vec&lt;DynState&lt;DynGlobalClientContext&gt;&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    ) -&gt; AddStateMachinesResult {
         <span class="self">self</span>.executor.add_state_machines_dbtx(dbtx, states).<span class="kw">await
     </span>}
 

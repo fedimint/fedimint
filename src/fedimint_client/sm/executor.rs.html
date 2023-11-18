@@ -1126,6 +1126,9 @@
 <a href="#1126" id="1126">1126</a>
 <a href="#1127" id="1127">1127</a>
 <a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
@@ -1133,7 +1136,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
-<span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction,
@@ -1155,6 +1158,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::sm::notifier::Notifier;
 <span class="kw">use </span><span class="kw">crate</span>::sm::state::{DynContext, DynState};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{ClientSMDatabaseTransaction, GlobalContext, State, StateTransition};
+<span class="kw">use crate</span>::{AddStateMachinesError, AddStateMachinesResult};
 
 <span class="doccomment">/// After how many attempts a DB transaction is aborted with an error
 </span><span class="kw">const </span>MAX_DB_ATTEMPTS: <span class="prelude-ty">Option</span>&lt;usize&gt; = <span class="prelude-val">Some</span>(<span class="number">100</span>);
@@ -1232,7 +1236,7 @@
                     last_error,
                     attempts,
                 } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">&quot;Failed to commit after {attempts} attempts&quot;</span>)),
-                AutocommitError::ClosureError { error, .. } =&gt; error,
+                AutocommitError::ClosureError { error, .. } =&gt; <span class="macro">anyhow!</span>(<span class="string">&quot;{error:?}&quot;</span>),
             })<span class="question-mark">?</span>;
 
         <span class="comment">// TODO: notify subscribers to state changes?
@@ -1252,14 +1256,14 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;_</span>&gt;,
         states: Vec&lt;DynState&lt;GC&gt;&gt;,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    ) -&gt; AddStateMachinesResult {
         <span class="kw">for </span>state <span class="kw">in </span>states {
             <span class="kw">if </span>!<span class="self">self
                 </span>.inner
                 .module_contexts
                 .contains_key(<span class="kw-2">&amp;</span>state.module_instance_id())
             {
-                <span class="macro">bail!</span>(<span class="string">&quot;Unknown module&quot;</span>);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(<span class="string">&quot;Unknown module&quot;</span>)));
             }
 
             <span class="kw">let </span>is_active_state = dbtx
@@ -1272,7 +1276,7 @@
                 </span>.is_some();
 
             <span class="kw">if </span>is_active_state || is_inactive_state {
-                <span class="macro">bail!</span>(<span class="string">&quot;State already exists in database!&quot;</span>)
+                <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::StateAlreadyExists);
             }
 
             <span class="kw">let </span>context = {
@@ -1290,7 +1294,9 @@
                     .expect(<span class="string">&quot;No such module&quot;</span>),
                 <span class="kw-2">&amp;</span>context,
             ) {
-                <span class="macro">bail!</span>(<span class="string">&quot;State is already terminal, adding it to the executor doesn&#39;t make sense.&quot;</span>)
+                <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(
+                    <span class="string">&quot;State is already terminal, adding it to the executor doesn&#39;t make sense.&quot;
+                </span>)));
             }
 
             dbtx.insert_entry(

@@ -845,6 +845,19 @@
 <a href="#845" id="845">845</a>
 <a href="#846" id="846">846</a>
 <a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -896,7 +909,7 @@
 ///    CancelContract -- cancel tx submission successful --&gt; Canceled
 ///    CancelContract -- cancel tx submission unsuccessful --&gt; Failed
 /// ```
-</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
     CancelContract(Box&lt;GatewayPayCancelContract&gt;),
@@ -915,12 +928,12 @@
     },
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayPayCommon {
     <span class="kw">pub </span>operation_id: OperationId,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayPayStateMachine {
     <span class="kw">pub </span>common: GatewayPayCommon,
     <span class="kw">pub </span>state: GatewayPayStates,
@@ -1015,7 +1028,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayPayInvoice {
     <span class="kw">pub </span>pay_invoice_payload: PayInvoicePayload,
 }
@@ -1029,20 +1042,104 @@
     ) -&gt; Vec&lt;StateTransition&lt;GatewayPayStateMachine&gt;&gt; {
         <span class="kw">let </span>payload = <span class="self">self</span>.pay_invoice_payload.clone();
         <span class="macro">vec!</span>[StateTransition::new(
-            <span class="self">Self</span>::await_get_payment_parameters(
+            <span class="self">Self</span>::fetch_parameters_and_pay(
                 global_context,
-                <span class="self">self</span>.pay_invoice_payload.contract_id,
+                payload.clone(),
                 context.clone(),
+                common.clone(),
             ),
-            <span class="kw">move </span>|_dbtx, result, _old_state| {
-                Box::pin(<span class="self">Self</span>::transition_buy_preimage(
-                    context.clone(),
-                    result,
-                    common.clone(),
-                    payload.clone(),
-                ))
-            },
+            <span class="kw">move </span>|_dbtx, result, _old_state| Box::pin(futures::future::ready(result)),
         )]
+    }
+
+    <span class="kw">async fn </span>fetch_parameters_and_pay(
+        global_context: DynGlobalClientContext,
+        pay_invoice_payload: PayInvoicePayload,
+        context: GatewayClientContext,
+        common: GatewayPayCommon,
+    ) -&gt; GatewayPayStateMachine {
+        <span class="kw">match </span><span class="self">Self</span>::await_get_payment_parameters(
+            global_context,
+            pay_invoice_payload.contract_id,
+            context.clone(),
+        )
+        .<span class="kw">await
+        </span>{
+            <span class="prelude-val">Ok</span>((contract, payment_parameters)) =&gt; {
+                <span class="self">Self</span>::buy_preimage(
+                    context.clone(),
+                    contract.clone(),
+                    payment_parameters.clone(),
+                    common.clone(),
+                    pay_invoice_payload.clone(),
+                )
+                .<span class="kw">await
+            </span>}
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">warn!</span>(<span class="string">&quot;Failed to get payment parameters: {e:?}&quot;</span>);
+                <span class="kw">match </span>e.contract.clone() {
+                    <span class="prelude-val">Some</span>(contract) =&gt; GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract { contract, error: e },
+                        )),
+                    },
+                    <span class="prelude-val">None </span>=&gt; GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                    },
+                }
+            }
+        }
+    }
+
+    <span class="kw">async fn </span>buy_preimage(
+        context: GatewayClientContext,
+        contract: OutgoingContractAccount,
+        payment_parameters: PaymentParameters,
+        common: GatewayPayCommon,
+        payload: PayInvoicePayload,
+    ) -&gt; GatewayPayStateMachine {
+        <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage contract {contract:?}&quot;</span>);
+        <span class="comment">// Verify that this client is authorized to receive the preimage.
+        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">Self</span>::verify_preimage_authentication(
+            <span class="kw-2">&amp;</span>context,
+            payload.payment_hash,
+            payload.preimage_auth,
+            contract.clone(),
+        )
+        .<span class="kw">await
+        </span>{
+            <span class="macro">warn!</span>(<span class="string">&quot;Preimage authentication failed: {err} for contract {contract:?}&quot;</span>);
+            <span class="kw">return </span>GatewayPayStateMachine {
+                common,
+                state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                    contract,
+                    error: err,
+                })),
+            };
+        }
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(client) =
+            <span class="self">Self</span>::check_swap_to_federation(context.clone(), payment_parameters.invoice.clone())
+                .<span class="kw">await
+        </span>{
+            <span class="self">Self</span>::buy_preimage_via_direct_swap(
+                client,
+                payment_parameters.invoice.clone(),
+                contract.clone(),
+                common.clone(),
+            )
+            .<span class="kw">await
+        </span>} <span class="kw">else </span>{
+            <span class="self">Self</span>::buy_preimage_over_lightning(
+                context,
+                payment_parameters,
+                contract.clone(),
+                common.clone(),
+            )
+            .<span class="kw">await
+        </span>}
     }
 
     <span class="kw">async fn </span>await_get_payment_parameters(
@@ -1236,77 +1333,6 @@
         }
     }
 
-    <span class="kw">async fn </span>transition_buy_preimage(
-        context: GatewayClientContext,
-        result: <span class="prelude-ty">Result</span>&lt;(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError&gt;,
-        common: GatewayPayCommon,
-        payload: PayInvoicePayload,
-    ) -&gt; GatewayPayStateMachine {
-        <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>((contract, payment_parameters)) =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;Buying preimage contract {contract:?}&quot;</span>);
-                <span class="comment">// Verify that this client is authorized to receive the preimage.
-                </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">Self</span>::verify_preimage_authentication(
-                    <span class="kw-2">&amp;</span>context,
-                    payload.payment_hash,
-                    payload.preimage_auth,
-                    contract.clone(),
-                )
-                .<span class="kw">await
-                </span>{
-                    <span class="macro">warn!</span>(<span class="string">&quot;Preimage authentication failed: {err} for contract {contract:?}&quot;</span>);
-                    <span class="kw">return </span>GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::CancelContract(Box::new(
-                            GatewayPayCancelContract {
-                                contract,
-                                error: err,
-                            },
-                        )),
-                    };
-                }
-
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = <span class="self">Self</span>::check_swap_to_federation(
-                    context.clone(),
-                    payment_parameters.invoice.clone(),
-                )
-                .<span class="kw">await
-                </span>{
-                    <span class="self">Self</span>::buy_preimage_via_direct_swap(
-                        client,
-                        payment_parameters.invoice.clone(),
-                        contract.clone(),
-                        common.clone(),
-                    )
-                    .<span class="kw">await
-                </span>} <span class="kw">else </span>{
-                    <span class="self">Self</span>::buy_preimage_over_lightning(
-                        context,
-                        payment_parameters,
-                        contract.clone(),
-                        common.clone(),
-                    )
-                    .<span class="kw">await
-                </span>}
-            }
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">warn!</span>(<span class="string">&quot;Failed to get payment parameters: {e:?}&quot;</span>);
-                <span class="kw">match </span>e.contract.clone() {
-                    <span class="prelude-val">Some</span>(contract) =&gt; GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::CancelContract(Box::new(
-                            GatewayPayCancelContract { contract, error: e },
-                        )),
-                    },
-                    <span class="prelude-val">None </span>=&gt; GatewayPayStateMachine {
-                        common,
-                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
-                    },
-                }
-            }
-        }
-    }
-
     <span class="doccomment">/// Verifies that the supplied `preimage_auth` is the same as the
     /// `preimage_auth` that initiated the payment. If it is not, then this
     /// will return an error because this client is not authorized to receive
@@ -1436,7 +1462,7 @@
     invoice: lightning_invoice::Bolt11Invoice,
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayPayClaimOutgoingContract {
     contract: OutgoingContractAccount,
     preimage: Preimage,
@@ -1491,7 +1517,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayPayWaitForSwapPreimage {
     contract: OutgoingContractAccount,
     federation_id: FederationId,
@@ -1613,7 +1639,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>GatewayPayCancelContract {
     contract: OutgoingContractAccount,
     error: OutgoingPaymentError,
