@@ -27,8 +27,8 @@ use crate::core::{
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 use crate::db::{
-    Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    DatabaseTransactionRef, DatabaseVersion, MigrationMap,
+    Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    DatabaseVersion, MigrationMap,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::audit::Audit;
@@ -155,7 +155,7 @@ impl ApiError {
 /// State made available to all API endpoints for handling a request
 pub struct ApiEndpointContext<'dbtx> {
     db: Database,
-    dbtx: DatabaseTransaction<'dbtx>,
+    dbtx: DatabaseTransaction<'dbtx, Committable>,
     has_auth: bool,
     request_auth: Option<ApiAuth>,
 }
@@ -164,7 +164,7 @@ impl<'a> ApiEndpointContext<'a> {
     /// `db` and `dbtx` should be isolated.
     pub fn new(
         db: Database,
-        dbtx: DatabaseTransaction<'a>,
+        dbtx: DatabaseTransaction<'a, Committable>,
         has_auth: bool,
         request_auth: Option<ApiAuth>,
     ) -> Self {
@@ -177,13 +177,13 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Database tx handle, will be committed
-    pub fn dbtx<'s, 'mtx>(&'s mut self) -> DatabaseTransactionRef<'mtx>
+    pub fn dbtx<'s, 'mtx>(&'s mut self) -> DatabaseTransaction<'mtx, Committable>
     where
         'a: 'mtx,
         's: 'mtx,
     {
         // dbtx is already isolated.
-        self.dbtx.dbtx_ref()
+        self.dbtx.to_ref()
     }
 
     /// Returns the auth set on the request (regardless of whether it was
@@ -401,7 +401,7 @@ pub trait IDynCommonModuleInit: Debug {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
@@ -413,7 +413,7 @@ pub trait ModuleInit: Debug + Clone + Send + Sync + 'static {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_>;
 }
@@ -437,7 +437,7 @@ where
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         <Self as ModuleInit>::dump_database(self, dbtx, prefix_names).await
@@ -776,7 +776,7 @@ pub trait ServerModule: Debug + Sized {
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<<Self::Common as ModuleCommon>::ConsensusItem>;
 
     /// This function is called once for every consensus item. The function
@@ -784,7 +784,7 @@ pub trait ServerModule: Debug + Sized {
     /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: <Self::Common as ModuleCommon>::ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
@@ -795,7 +795,7 @@ pub trait ServerModule: Debug + Sized {
     /// no effect.
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'c>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b <Self::Common as ModuleCommon>::Input,
     ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
 
@@ -809,7 +809,7 @@ pub trait ServerModule: Debug + Sized {
     /// `output_status`.
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError>;
@@ -820,7 +820,7 @@ pub trait ServerModule: Debug + Sized {
     /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<<Self::Common as ModuleCommon>::OutputOutcome>;
 
@@ -831,7 +831,7 @@ pub trait ServerModule: Debug + Sized {
     /// occurred in the database and consensus should halt.
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     );

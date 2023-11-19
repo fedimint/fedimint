@@ -14,7 +14,7 @@ use crate::core::{
     Any, Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
     DynOutputOutcome,
 };
-use crate::db::DatabaseTransactionRef;
+use crate::db::DatabaseTransaction;
 use crate::dyn_newtype_define;
 use crate::module::registry::ModuleInstanceId;
 use crate::module::{
@@ -35,7 +35,7 @@ pub trait IServerModule: Debug {
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<DynModuleConsensusItem>;
 
@@ -44,7 +44,7 @@ pub trait IServerModule: Debug {
     /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a>(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: DynModuleConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
@@ -55,7 +55,7 @@ pub trait IServerModule: Debug {
     /// no effect.
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'c>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
         module_instance_id: ModuleInstanceId,
     ) -> Result<InputMeta, DynInputError>;
@@ -70,7 +70,7 @@ pub trait IServerModule: Debug {
     /// `output_status`.
     async fn process_output<'a>(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
@@ -82,7 +82,7 @@ pub trait IServerModule: Debug {
     /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome>;
@@ -94,7 +94,7 @@ pub trait IServerModule: Debug {
     /// occurred in the database and consensus should halt.
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     );
@@ -127,7 +127,7 @@ where
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         module_instance_id: ModuleInstanceId,
     ) -> Vec<DynModuleConsensusItem> {
         <Self as ServerModule>::consensus_proposal(self, dbtx)
@@ -142,7 +142,7 @@ where
     /// our state and therefore may be safely discarded by the atomic broadcast.
     async fn process_consensus_item<'a>(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: DynModuleConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -165,7 +165,7 @@ where
     /// no effect.
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'c>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
         module_instance_id: ModuleInstanceId,
     ) -> Result<InputMeta, DynInputError> {
@@ -192,7 +192,7 @@ where
     /// `output_status`.
     async fn process_output<'a>(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
@@ -216,7 +216,7 @@ where
     /// output is unknown, **NOT** if it is just not ready yet.
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
         module_instance_id: ModuleInstanceId,
     ) -> Option<DynOutputOutcome> {
@@ -232,7 +232,7 @@ where
     /// occurred in the database and consensus should halt.
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {

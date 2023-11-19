@@ -146,7 +146,7 @@ impl Client {
             if module.supports_backup() {
                 let backup = module
                     .backup(
-                        &mut dbtx.dbtx_ref_with_prefix_module_id(id),
+                        &mut dbtx.to_ref_with_prefix_module_id(id).into_non_committable(),
                         self.executor.clone(),
                         self.api.clone(),
                         id,
@@ -205,7 +205,7 @@ impl Client {
             );
             module
                 .wipe(
-                    &mut dbtx.dbtx_ref_with_prefix_module_id(id),
+                    &mut dbtx.to_ref_with_prefix_module_id(id).into_non_committable(),
                     id,
                     self.executor.clone(),
                 )
@@ -277,7 +277,7 @@ impl Client {
             );
             module
                 .restore(
-                    &mut dbtx,
+                    &mut dbtx.to_ref_non_committable(),
                     id,
                     self.executor.clone(),
                     self.api.clone(),

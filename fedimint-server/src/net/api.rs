@@ -16,7 +16,7 @@ use fedimint_core::config::{ClientConfig, JsonWithKind};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped,
+    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_BLOCK_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
@@ -121,7 +121,12 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, transaction.clone()).await?;
+        process_transaction_with_dbtx(
+            self.modules.clone(),
+            &mut dbtx.into_non_committable(),
+            transaction.clone(),
+        )
+        .await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
@@ -134,7 +139,7 @@ impl ConsensusApi {
     pub async fn await_transaction(
         &self,
         txid: TransactionId,
-    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction) {
+    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction<'_, Committable>) {
         self.db
             .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
             .await
@@ -155,7 +160,9 @@ impl ConsensusApi {
             .modules
             .get_expect(module_id)
             .output_status(
-                &mut dbtx.dbtx_ref_with_prefix_module_id(module_id),
+                &mut dbtx
+                    .to_ref_with_prefix_module_id(module_id)
+                    .into_non_committable(),
                 outpoint,
                 module_id,
             )
@@ -244,7 +251,9 @@ impl ConsensusApi {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
                 .audit(
-                    &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+                    &mut dbtx
+                        .to_ref_with_prefix_module_id(module_instance_id)
+                        .into_non_committable(),
                     &mut audit,
                     module_instance_id,
                 )
@@ -258,7 +267,7 @@ impl ConsensusApi {
 
     async fn handle_backup_request<'s, 'dbtx, 'a>(
         &'s self,
-        dbtx: &'dbtx mut DatabaseTransactionRef<'a>,
+        dbtx: &'dbtx mut DatabaseTransaction<'a>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -288,7 +297,7 @@ impl ConsensusApi {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         id: secp256k1_zkp::XOnlyPublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
@@ -439,7 +448,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             BACKUP_ENDPOINT,
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
                 fedimint
-                    .handle_backup_request(&mut context.dbtx(), request).await?;
+                    .handle_backup_request(&mut context.dbtx().into_non_committable(), request).await?;
                 Ok(())
 
             }
@@ -448,7 +457,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             RECOVER_ENDPOINT,
             async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::XOnlyPublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
-                    .handle_recover_request(&mut context.dbtx(), id).await)
+                    .handle_recover_request(&mut context.dbtx().into_non_committable(), id).await)
             }
         },
         api_endpoint! {

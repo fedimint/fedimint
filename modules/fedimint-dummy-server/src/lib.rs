@@ -9,7 +9,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransactionRef, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationMap,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -49,7 +49,7 @@ impl ModuleInit for DummyInit {
     /// Dumps all database items for debugging
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         // TODO: Boilerplate-code
@@ -194,14 +194,14 @@ impl ServerModule for Dummy {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<DummyConsensusItem> {
         Vec::new()
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransactionRef<'b>,
+        _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_item: DummyConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -210,7 +210,7 @@ impl ServerModule for Dummy {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'c>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DummyInput,
     ) -> Result<InputMeta, DummyInputError> {
         let current_funds = dbtx
@@ -251,7 +251,7 @@ impl ServerModule for Dummy {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransactionRef<'b>,
+        dbtx: &mut DatabaseTransaction<'b>,
         output: &'a DummyOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, DummyOutputError> {
@@ -274,7 +274,7 @@ impl ServerModule for Dummy {
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
     ) -> Option<DummyOutputOutcome> {
         // check whether or not the output has been processed
@@ -283,7 +283,7 @@ impl ServerModule for Dummy {
 
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {

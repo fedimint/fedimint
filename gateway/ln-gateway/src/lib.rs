@@ -37,7 +37,7 @@ use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::task::{sleep, RwLock, TaskGroup, TaskHandle, TaskShutdownToken};
@@ -346,7 +346,7 @@ impl Gateway {
     }
 
     pub async fn dump_database<'a>(
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + 'a> {
         let mut gateway_items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
@@ -1027,7 +1027,10 @@ impl Gateway {
     ) -> Result<()> {
         if let GatewayState::Connected = self.state.read().await.clone() {
             let dbtx = self.gateway_db.begin_transaction().await;
-            let configs = self.client_builder.load_configs(dbtx).await?;
+            let configs = self
+                .client_builder
+                .load_configs(dbtx.into_non_committable())
+                .await?;
             let channel_id_generator = self.channel_id_generator.lock().await;
             let mut next_channel_id = channel_id_generator.load(Ordering::SeqCst);
 

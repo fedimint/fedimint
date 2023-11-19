@@ -9,7 +9,7 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientArc;
 use fedimint_core::bitcoinrpc::BitcoinRpcConfig;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{DatabaseTransactionRef, IRawDatabaseExt};
+use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{sats, Amount, Feerate, PeerId, ServerModule};
@@ -460,7 +460,9 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 
     let block_count = dyn_bitcoin_rpc.get_block_count().await?;
     sync_wallet_to_block(
-        &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+        &mut dbtx
+            .to_ref_with_prefix_module_id(module_instance_id)
+            .into_non_committable(),
         &mut wallet,
         block_count.try_into()?,
     )
@@ -491,7 +493,9 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 
     match wallet
         .process_input(
-            &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+            &mut dbtx
+                .to_ref_with_prefix_module_id(module_instance_id)
+                .into_non_committable(),
             &input,
         )
         .await
@@ -508,7 +512,9 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         .await;
     let block_count = dyn_bitcoin_rpc.get_block_count().await?;
     sync_wallet_to_block(
-        &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+        &mut dbtx
+            .to_ref_with_prefix_module_id(module_instance_id)
+            .into_non_committable(),
         &mut wallet,
         block_count.try_into()?,
     )
@@ -517,7 +523,9 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     assert_matches!(
         wallet
             .process_input(
-                &mut dbtx.dbtx_ref_with_prefix_module_id(module_instance_id),
+                &mut dbtx
+                    .to_ref_with_prefix_module_id(module_instance_id)
+                    .into_non_committable(),
                 &input,
             )
             .await,
@@ -528,7 +536,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 }
 
 async fn sync_wallet_to_block(
-    dbtx: &mut DatabaseTransactionRef<'_>,
+    dbtx: &mut DatabaseTransaction<'_>,
     wallet: &mut fedimint_wallet_server::Wallet,
     block_count: u32,
 ) -> anyhow::Result<()> {

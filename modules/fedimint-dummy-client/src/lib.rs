@@ -12,7 +12,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::api::GlobalFederationApi;
 use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, OperationId};
-use fedimint_core::db::{Database, DatabaseTransactionRef, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
@@ -92,7 +92,7 @@ impl ClientModule for DummyClientModule {
 
     async fn create_sufficient_input(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         id: OperationId,
         amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>> {
@@ -121,7 +121,7 @@ impl ClientModule for DummyClientModule {
 
     async fn create_exact_output(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_>,
         id: OperationId,
         amount: Amount,
     ) -> Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>> {
@@ -161,7 +161,7 @@ impl ClientModule for DummyClientModule {
         stream.next_or_pending().await
     }
 
-    async fn get_balance(&self, dbtc: &mut DatabaseTransactionRef<'_>) -> Amount {
+    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>) -> Amount {
         get_funds(dbtc).await
     }
 
@@ -246,7 +246,7 @@ impl DummyClientModule {
         // Create input using our own account
         let inputs = fedimint_client::module::ClientModule::create_sufficient_input(
             self,
-            &mut dbtx.dbtx_ref(),
+            &mut dbtx.to_ref_non_committable(),
             op_id,
             amount,
         )
@@ -309,7 +309,7 @@ impl DummyClientModule {
     }
 }
 
-async fn get_funds(dbtx: &mut DatabaseTransactionRef<'_>) -> Amount {
+async fn get_funds(dbtx: &mut DatabaseTransaction<'_>) -> Amount {
     let funds = dbtx.get_value(&DummyClientFundsKeyV0).await;
     funds.unwrap_or(Amount::ZERO)
 }
@@ -324,7 +324,7 @@ impl ModuleInit for DummyClientInit {
 
     async fn dump_database(
         &self,
-        dbtx: &mut DatabaseTransactionRef<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();

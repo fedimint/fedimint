@@ -105,7 +105,11 @@ impl OperationLog {
     }
 
     pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
-        Self::get_operation_inner(&mut self.db.begin_transaction().await, operation_id).await
+        Self::get_operation_inner(
+            &mut self.db.begin_transaction().await.into_non_committable(),
+            operation_id,
+        )
+        .await
     }
 
     async fn get_operation_inner(
@@ -125,9 +129,10 @@ impl OperationLog {
         let outcome_json = serde_json::to_value(outcome).expect("Outcome is not serializable");
 
         let mut dbtx = db.begin_transaction().await;
-        let mut operation = Self::get_operation_inner(&mut dbtx, operation_id)
-            .await
-            .expect("Operation exists");
+        let mut operation =
+            Self::get_operation_inner(&mut dbtx.to_ref_non_committable(), operation_id)
+                .await
+                .expect("Operation exists");
         operation.outcome = Some(outcome_json);
         dbtx.insert_entry(&OperationLogKey { operation_id }, &operation)
             .await;
@@ -389,7 +394,7 @@ mod tests {
 
         let mut dbtx = db.begin_transaction().await;
         op_log
-            .add_operation_log_entry(&mut dbtx, op_id, "foo", "bar")
+            .add_operation_log_entry(&mut dbtx.to_ref_non_committable(), op_id, "foo", "bar")
             .await;
         dbtx.commit_tx().await;
 
@@ -427,7 +432,7 @@ mod tests {
 
         let mut dbtx = db.begin_transaction().await;
         op_log
-            .add_operation_log_entry(&mut dbtx, op_id, "foo", "bar")
+            .add_operation_log_entry(&mut dbtx.to_ref_non_committable(), op_id, "foo", "bar")
             .await;
         dbtx.commit_tx().await;
 
@@ -453,7 +458,7 @@ mod tests {
             let mut dbtx = db.begin_transaction().await;
             op_log
                 .add_operation_log_entry(
-                    &mut dbtx,
+                    &mut dbtx.to_ref_non_committable(),
                     OperationId([operation_idx; 32]),
                     "foo",
                     operation_idx,

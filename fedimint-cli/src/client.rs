@@ -590,7 +590,8 @@ async fn get_note_summary(client: &ClientArc) -> anyhow::Result<serde_json::Valu
                 .db()
                 .begin_transaction()
                 .await
-                .dbtx_ref_with_prefix_module_id(1),
+                .to_ref_with_prefix_module_id(1)
+                .into_non_committable(),
         )
         .await;
     Ok(serde_json::to_value(InfoResponse {

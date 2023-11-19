@@ -17,7 +17,7 @@ use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlo
 use fedimint_core::api::DynModuleApi;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{AutocommitError, Database, DatabaseTransactionRef};
+use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
 use fedimint_core::util::SafeUrl;
@@ -125,7 +125,7 @@ impl ModuleInit for GatewayClientInit {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransactionRef<'_>,
+        _dbtx: &mut DatabaseTransaction<'_>,
         _prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         Box::new(vec![].into_iter())
@@ -515,7 +515,7 @@ impl GatewayClientModule {
         self.client_ctx
             .global_db()
             .autocommit(
-                |dbtx| {
+                |dbtx, _| {
                     Box::pin(async {
                         let operation_id = OperationId(payload.contract_id.into_inner());
 

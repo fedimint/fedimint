@@ -64,8 +64,9 @@ where
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
         );
-        let dbtx = db.begin_transaction().await;
-        prepare_fn(dbtx).await;
+        let mut dbtx = db.begin_transaction().await;
+        prepare_fn(dbtx.to_ref_non_committable()).await;
+        dbtx.commit_tx().await;
         Ok(())
     }
 

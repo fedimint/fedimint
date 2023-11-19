@@ -96,7 +96,7 @@ where
         self.inner
             .db
             .autocommit(
-                |dbtx| Box::pin(self.add_state_machines_dbtx(dbtx, states.clone())),
+                |dbtx, _| Box::pin(self.add_state_machines_dbtx(dbtx, states.clone())),
                 MAX_DB_ATTEMPTS,
             )
             .await
@@ -454,14 +454,14 @@ where
             let active_or_inactive_state = self
                 .db
                 .autocommit(
-                    |dbtx| {
+                    |dbtx, _| {
                         let state = state.clone();
                         let transition_fn = transition_fn.clone();
                         let transition_outcome = transition_outcome.clone();
                         Box::pin(async move {
                             let new_state = transition_fn(
                                 &mut ClientSMDatabaseTransaction::new(
-                                    dbtx,
+                                    &mut dbtx.to_ref(),
                                     state.module_instance_id(),
                                 ),
                                 transition_outcome,
