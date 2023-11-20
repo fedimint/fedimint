@@ -23,7 +23,7 @@ use fedimint_core::{
 use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
-use crate::sm::{ActiveState, Context, DynContext, DynState, Executor, State};
+use crate::sm::{self, ActiveState, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use crate::{
     oplog, AddStateMachinesResult, ClientArc, ClientWeak, DynGlobalClientContext,
@@ -126,7 +126,7 @@ where
     /// Get a reference to [`DatabaseTransaction`] isolated database transaction
     pub fn module_dbtx(&mut self) -> DatabaseTransaction<'_> {
         self.dbtx
-            .to_ref_with_prefix_module_id(self.client.module_instance_id())
+            .to_ref_with_prefix_module_id(self.client.module_instance_id)
     }
 
     pub async fn add_state_machines(
@@ -183,13 +183,6 @@ where
         self.client.get().api_clone()
     }
 
-    /// Get own [`ModuleInstanceId`]
-    // TODO: we would like to eventually get rid of that
-    // and make it entirely internal.
-    pub fn module_instance_id(&self) -> ModuleInstanceId {
-        self.module_instance_id
-    }
-
     pub fn map_dyn<'s, 'i, 'o, I>(
         &'s self,
         typed: impl IntoIterator<Item = I> + 'i,
@@ -217,7 +210,7 @@ where
     where
         I: IntoDynInstance,
     {
-        typed.into_dyn(self.module_instance_id())
+        typed.into_dyn(self.module_instance_id)
     }
 
     /// Turn a typed [`ClientOutput`] into a dyn version
@@ -236,6 +229,13 @@ where
         S: IntoDynInstance<DynType = DynState<DynGlobalClientContext>> + 'static,
     {
         self.make_dyn(input)
+    }
+
+    pub fn make_dyn_state<GC, S>(&self, sm: S) -> DynState<GC>
+    where
+        S: sm::IState<GC> + 'static,
+    {
+        DynState::from_typed(self.module_instance_id, sm)
     }
 
     /// An [`Database::autocommit`] on module's own database partition
@@ -354,7 +354,7 @@ where
             .get_active_states()
             .await
             .into_iter()
-            .filter(|s| s.0.module_instance_id() == self.module_instance_id())
+            .filter(|s| s.0.module_instance_id() == self.module_instance_id)
             .map(|s| {
                 (
                     s.0.as_any()

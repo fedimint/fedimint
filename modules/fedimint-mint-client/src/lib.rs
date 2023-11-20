@@ -1176,7 +1176,6 @@ impl MintClientModule {
         try_cancel_after: Duration,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
-        let mint_id = self.client_ctx.module_instance_id();
         let federation_id_prefix = self.federation_id.to_prefix();
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::spend_notes extra_meta is serializable");
@@ -1196,9 +1195,8 @@ impl MintClientModule {
                             .await?;
                         let oob_notes = OOBNotes::new(federation_id_prefix, notes);
 
-                        let dyn_states = states.into_iter().map(|s| s.into_dyn(mint_id)).collect();
-
-                        dbtx.add_state_machines(dyn_states).await?;
+                        dbtx.add_state_machines(self.client_ctx.map_dyn(states).collect())
+                            .await?;
                         dbtx.add_operation_log_entry(
                             operation_id,
                             MintCommonInit::KIND.as_str(),

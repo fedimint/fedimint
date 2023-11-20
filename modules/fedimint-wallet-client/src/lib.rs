@@ -383,11 +383,9 @@ impl WalletClientModule {
                             .watch_script_history(&address.script_pubkey())
                             .await?;
 
-                        dbtx.add_state_machines(vec![DynState::from_typed(
-                            self.client_ctx.module_instance_id(),
-                            sm,
-                        )])
-                        .await?;
+                        dbtx.add_state_machines(vec![self.client_ctx.make_dyn_state(sm)])
+                            .await?;
+
                         dbtx.add_operation_log_entry(
                             operation_id,
                             WalletCommonInit::KIND.as_str(),
