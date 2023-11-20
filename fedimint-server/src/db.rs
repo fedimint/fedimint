@@ -151,7 +151,7 @@ mod fedimint_migration_tests {
                 },
             )],
             nonce: [0x42; 8],
-            signature: Some(schnorr),
+            signatures: vec![schnorr],
         };
 
         let module_ids = transaction

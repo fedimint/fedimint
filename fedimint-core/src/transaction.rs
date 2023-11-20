@@ -1,12 +1,10 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
-use bitcoin_hashes::hex::ToHex;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::{Amount, TransactionId};
-use rand::Rng;
-use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
+use secp256k1_zkp::schnorr;
 use thiserror::Error;
 
 use crate::core::{DynInputError, DynOutputError};
@@ -30,8 +28,8 @@ pub struct Transaction {
     /// In the future the nonce can be used for grinding a tx hash that fulfills
     /// certain PoW requirements.
     pub nonce: [u8; 8],
-    /// Aggregated MuSig2 signature over all the public keys of the inputs
-    pub signature: Option<schnorr::Signature>,
+    /// signatures for all the public keys of the inputs
+    pub signatures: Vec<schnorr::Signature>,
 }
 
 pub type SerdeTransaction = SerdeModuleEncoding<Transaction>;
@@ -65,116 +63,37 @@ impl Transaction {
         TransactionId::from_engine(engine)
     }
 
-    /// Validate the aggregated Schnorr Signature signed over the `tx_hash`
-    pub fn validate_signature(
+    /// Validate the schnorr signatures signed over the `tx_hash`
+    pub fn validate_signatures(
         &self,
-        keys: impl Iterator<Item = XOnlyPublicKey>,
+        pub_keys: Vec<XOnlyPublicKey>,
     ) -> Result<(), TransactionError> {
-        let keys = keys.collect::<Vec<_>>();
-
-        // If there are no keys from inputs there are no inputs to protect from
-        // re-binding. This behavior is useful for non-monetary transactions
-        // that just announce something, like LN incoming contract offers.
-        if keys.is_empty() {
-            return Ok(());
+        if pub_keys.len() != self.signatures.len() {
+            return Err(TransactionError::InvalidWitnessLength);
         }
 
-        // Unless keys were empty we require a signature
-        let signature = self
-            .signature
-            .as_ref()
-            .ok_or(TransactionError::MissingSignature)?;
+        let txid = self.tx_hash();
+        let msg = secp256k1_zkp::Message::from_slice(&txid[..]).expect("txid has right length");
 
-        let agg_pub_key = agg_keys(&keys);
-        let msg =
-            secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
-
-        if secp256k1_zkp::global::SECP256K1
-            .verify_schnorr(signature, &msg, &agg_pub_key)
-            .is_ok()
-        {
-            Ok(())
-        } else {
-            Err(TransactionError::InvalidSignature {
-                tx: self.consensus_encode_to_hex().expect("Can't fail"),
-                hash: self.tx_hash().to_hex(),
-                sig: signature.consensus_encode_to_hex().expect("Can't fail"),
-                key: agg_pub_key.consensus_encode_to_hex().expect("Can't fail"),
-            })
+        for (pk, signature) in pub_keys.iter().zip(&self.signatures) {
+            if secp256k1_zkp::global::SECP256K1
+                .verify_schnorr(signature, &msg, pk)
+                .is_err()
+            {
+                return Err(TransactionError::InvalidSignature {
+                    tx: self.consensus_encode_to_hex().expect("Can't fail"),
+                    hash: self
+                        .tx_hash()
+                        .consensus_encode_to_hex()
+                        .expect("Can't fail"),
+                    sig: signature.consensus_encode_to_hex().expect("Can't fail"),
+                    key: pk.consensus_encode_to_hex().expect("Can't fail"),
+                });
+            }
         }
+
+        Ok(())
     }
-}
-
-/// Aggregate a stream of public keys.
-///
-/// Be aware that the order of the keys matters for the aggregation result.
-/// # Panics
-/// * If the `keys` iterator does not yield any keys
-pub fn agg_keys(keys: &[XOnlyPublicKey]) -> XOnlyPublicKey {
-    new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
-}
-
-/// Precompute a combined public key and the hash of the given public keys for
-/// Musig2.
-fn new_pre_session<C>(
-    keys: &[XOnlyPublicKey],
-    ctx: &Secp256k1<C>,
-) -> secp256k1_zkp::MusigKeyAggCache
-where
-    C: Signing + Verification,
-{
-    assert!(
-        !keys.is_empty(),
-        "Must supply more than 0 keys for aggregation"
-    );
-    secp256k1_zkp::MusigKeyAggCache::new(ctx, keys)
-}
-
-/// Create an aggregated signature over the `msg`
-pub fn agg_sign<R, C, M>(
-    keys: &[bitcoin::KeyPair],
-    msg: M,
-    ctx: &Secp256k1<C>,
-    mut rng: R,
-) -> schnorr::Signature
-where
-    R: rand::RngCore + rand::CryptoRng,
-    C: Signing + Verification,
-    M: Into<secp256k1_zkp::Message>,
-{
-    let msg = msg.into();
-    let pub_keys = keys
-        .iter()
-        .map(|key| key.x_only_public_key().0)
-        .collect::<Vec<_>>();
-    let pre_session = new_pre_session(&pub_keys, ctx);
-
-    let session_id: [u8; 32] = rng.gen();
-    let (sec_nonces, pub_nonces): (Vec<_>, Vec<_>) = keys
-        .iter()
-        .map(|key| {
-            // FIXME: upstream
-            pre_session
-                .nonce_gen(ctx, session_id, key.into(), msg, None)
-                .expect("should not fail for valid inputs (ensured by type system)")
-        })
-        .unzip();
-
-    let agg_nonce = secp256k1_zkp::MusigAggNonce::new(ctx, &pub_nonces);
-
-    let session = secp256k1_zkp::MusigSession::new(ctx, &pre_session, agg_nonce, msg, None);
-
-    let partial_sigs = sec_nonces
-        .into_iter()
-        .zip(keys.iter())
-        .map(|(mut nonce, key)| {
-            session
-                .partial_sign(ctx, &mut nonce, key, &pre_session)
-                .expect("Should not fail for cooperative protocol runs")
-        })
-        .collect::<Vec<_>>();
-
-    session.partial_sig_agg(&partial_sigs)
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
@@ -192,8 +111,8 @@ pub enum TransactionError {
         sig: String,
         key: String,
     },
-    #[error("The transaction did not have a signature although there were inputs to be signed")]
-    MissingSignature,
+    #[error("The transaction did not have the correct number of signatures")]
+    InvalidWitnessLength,
     #[error("The transaction had an invalid input")]
     Input(DynInputError),
     #[error("The transaction had an invalid output")]

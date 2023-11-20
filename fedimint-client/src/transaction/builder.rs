@@ -114,22 +114,19 @@ impl TransactionBuilder {
         let nonce: [u8; 8] = rng.gen();
 
         let txid = Transaction::tx_hash_from_parts(&inputs, &outputs, nonce);
+        let msg = secp256k1_zkp::Message::from_slice(&txid[..]).expect("txid has right length");
 
-        let signature = if !input_keys.is_empty() {
-            let keys = input_keys.into_iter().flatten().collect::<Vec<_>>();
-
-            let signature =
-                fedimint_core::transaction::agg_sign(&keys, txid.as_hash(), secp_ctx, &mut rng);
-            Some(signature)
-        } else {
-            None
-        };
+        let signatures = input_keys
+            .into_iter()
+            .flatten()
+            .map(|keypair| secp_ctx.sign_schnorr(&msg, &keypair))
+            .collect();
 
         let transaction = Transaction {
             inputs,
             outputs,
             nonce,
-            signature,
+            signatures,
         };
 
         let states = input_states
