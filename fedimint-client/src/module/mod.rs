@@ -564,13 +564,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Calling code should allow the user to override and ignore any
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
-    async fn leave(
-        &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _module_instance_id: ModuleInstanceId,
-        _executor: Executor<DynGlobalClientContext>,
-        _api: DynGlobalApi,
-    ) -> anyhow::Result<()> {
+    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         bail!("Unable to determine if safe to leave the federation: Not implemented")
     }
 }
